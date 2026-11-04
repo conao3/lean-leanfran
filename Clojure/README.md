@@ -40,10 +40,10 @@ Lean source of the block.
 
 ## Installation
 
-Add lean-clj as a git dependency in `deps.edn`:
+Add lean-clj to `deps.edn` ([Clojars](https://clojars.org/io.github.conao3/lean-clj)):
 
 ```clojure
-{:deps {io.github.conao3/lean-clj {:git/tag "v0.1.0" :git/sha "aa1bdb5"}}}
+{:deps {io.github.conao3/lean-clj {:mvn/version "0.1.0"}}}
 ```
 
 Expanding a `deflean` block for the first time needs Lean 4.35.0 (`lean`,
