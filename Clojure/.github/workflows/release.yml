@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: clojars
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: cachix/install-nix-action@v31.11.3
+      - id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          version=$(nix develop --command clojure -T:build bump :part "$BUMP" | tail -n 1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: nix develop --command make check
+      - run: nix build
+      - env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "release v$VERSION"
+          git tag -a "v$VERSION" -m "v$VERSION"
+          git push --atomic origin HEAD:master "refs/tags/v$VERSION"
+      - env:
+          CLOJARS_USERNAME: conao3
+          CLOJARS_PASSWORD: ${{ secrets.CLOJARS_DEPLOY_TOKEN }}
+        run: nix develop --command make deploy
