@@ -1,4 +1,4 @@
-SAMPLES := todo-cli
+SAMPLES := todo-cli word-count roman-numerals
 
 .PHONY: test
 test:

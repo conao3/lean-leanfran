@@ -137,9 +137,9 @@ clj-kondo picks up the names a block defines through the hook exported in
 
 ## Samples
 
-[`samples/`](samples) holds programs built with lean-clj, starting with
-[`todo-cli`](samples/todo-cli), a command-line todo list whose operations are
-Lean definitions with proofs.
+[`samples/`](samples) holds small programs built with lean-clj: a todo CLI,
+a word counter, and Roman numerals generated from a lake project. See
+[`samples/README.md`](samples/README.md).
 
 ## Development
 
