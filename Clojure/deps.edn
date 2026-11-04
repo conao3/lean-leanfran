@@ -1,0 +1,9 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.6"}}
+ :aliases
+ {:dev {:extra-paths ["dev"]
+        :jvm-opts ["-Djdk.attach.allowAttachSelf"]}
+  :test-out {:extra-paths ["test-out"]}
+  :test {:extra-paths ["test" "test-out"]
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         :main-opts ["-m" "kaocha.runner"]}}}

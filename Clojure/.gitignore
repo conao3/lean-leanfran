@@ -1,0 +1,9 @@
+/result
+/.lake/
+/.lean-clj/
+/.cpcache/
+/.nrepl-port
+/.lsp/
+/.clj-kondo/*
+!/.clj-kondo/config.edn
+/test-out/
