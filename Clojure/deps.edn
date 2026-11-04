@@ -6,4 +6,12 @@
   :test-out {:extra-paths ["test-out"]}
   :test {:extra-paths ["test" "test-out"]
          :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
-         :main-opts ["-m" "kaocha.runner"]}}}
+         :main-opts ["-m" "kaocha.runner"]}
+  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.10.14" :git/sha "1176afd"}
+                 slipset/deps-deploy {:mvn/version "0.2.5"}}
+          :ns-default build
+          :build/project {:lib io.github.conao3/lean-clj
+                          :version "0.1.0"
+                          :description "Write and prove functions in Lean 4, run them on the JVM from Clojure."
+                          :url "https://github.com/conao3/lean-clj"
+                          :license "Apache-2.0"}}}}

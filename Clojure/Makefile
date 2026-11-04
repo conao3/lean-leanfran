@@ -27,3 +27,11 @@ test: build
 
 .PHONY: check
 check: format-check lint test
+
+.PHONY: jar
+jar:
+	clojure -T:build jar
+
+.PHONY: deploy
+deploy:
+	clojure -T:build deploy
