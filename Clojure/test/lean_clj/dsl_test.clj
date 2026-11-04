@@ -29,6 +29,7 @@
   (t/is (= "(Nat → Nat → Bool)" (dsl/term '(-> Nat Nat Bool))))
   (t/is (= "(∀ (n : Nat), (n ≥ 0))" (dsl/term '(forall [n Nat] (>= n 0)))))
   (t/is (= "(3 : Int)" (dsl/term '(the Int 3))))
+  (t/is (= "(x ∈ xs)" (dsl/term '(in x xs))))
   (t/is (= "\"a\\\"b\\n\"" (dsl/term "a\"b\n")))
   (t/is (= "'x'" (dsl/term \x)))
   (t/is (= "xs.length" (dsl/term '(lean "xs.length")))))

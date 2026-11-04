@@ -122,7 +122,7 @@ names are written as they are (`Nat.add_comm`). Binder vectors take
 `(implicit α Type)` and `(inst (BEq α))`; metadata on a name adds modifiers
 (`^:partial`, `^:private`, `^{:attrs [simp]}`). Binary operators: `+ - * / %
 pow ++ = == != not= < <= > >= and or iff && || band bor land lor xor <<< >>>
-cons |> <| >>= <$> comp`. Inside `by`, a tactic name's `-` becomes `_`
+in not-in cons |> <| >>= <$> comp`. Inside `by`, a tactic name's `-` becomes `_`
 (`all-goals` → `all_goals`); `(on-all t1 t2)` is `t1 <;> t2` and
 `(case tag [x] t ...)` is `case tag x => ...`.
 
@@ -134,6 +134,12 @@ Lean source; with the cache present, expanding the block does not need Lean.
 
 clj-kondo picks up the names a block defines through the hook exported in
 `resources/clj-kondo.exports/io.github.conao3/lean-clj`.
+
+## Samples
+
+[`samples/`](samples) holds programs built with lean-clj, starting with
+[`todo-cli`](samples/todo-cli), a command-line todo list whose operations are
+Lean definitions with proofs.
 
 ## Development
 

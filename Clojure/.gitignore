@@ -1,7 +1,7 @@
 /result
 /.lake/
-/.lean-clj/
-/.cpcache/
+.lean-clj/
+.cpcache/
 /.nrepl-port
 /.lsp/
 /.clj-kondo/*

@@ -1,0 +1,10 @@
+{"Task":{"TaskId":1,"Title":"Buy milk","Done":false}}
+{"Task":{"TaskId":2,"Title":"Write the report","Done":false}}
+{"Task":{"TaskId":1,"Title":"Buy milk","Done":true}}
+{"Tasks":[{"TaskId":2,"Title":"Write the report","Done":false}]}
+1	[x]	Buy milk
+2	[ ]	Write the report
+{"TaskId":1}
+2	[ ]	Write the report
+todo: no task 9
+exit 254
