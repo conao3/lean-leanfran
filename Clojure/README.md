@@ -38,14 +38,25 @@ lean-clj has two parts:
 A block whose proof fails stops compilation with Lean's error messages and the
 Lean source of the block.
 
-## Requirements
+## Installation
 
-- Lean 4.35.0 (`lean`, `lake`) and the `lean-clj` CLI on `PATH` when a
-  `deflean` block is expanded for the first time.
-- Clojure 1.12 on JDK 21 or later.
+Add lean-clj as a git dependency in `deps.edn`:
 
-`nix develop` provides all of them except the CLI, which `make build` puts in
-`.lake/build/bin`. `nix run github:conao3/lean-clj` runs the CLI directly.
+```clojure
+{:deps {io.github.conao3/lean-clj {:git/tag "v0.1.0" :git/sha "aa1bdb5"}}}
+```
+
+Expanding a `deflean` block for the first time needs Lean 4.35.0 (`lean`,
+`lake`) and the `lean-clj` CLI on `PATH`:
+
+```
+nix profile install github:conao3/lean-clj/v0.1.0
+```
+
+Lean comes from elan (`elan default v4.35.0`) or from `nix develop`
+of this repository, which also provides Clojure and a JDK. Running the
+generated code, and expanding a block whose output is in `.lean-clj/cache/`,
+needs only Clojure 1.12 on JDK 21 or later.
 
 ## The CLI
 
