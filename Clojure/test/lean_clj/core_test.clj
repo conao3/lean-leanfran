@@ -7,44 +7,51 @@
 
 
 (lean/deflean arith
-              "def double (n : Nat) : Nat := n + n
+              (def double
+                [n Nat] Nat
+                (+ n n))
 
-   theorem double_eq (n : Nat) : double n = 2 * n := by
-     unfold double; omega
+              (theorem double_eq [n Nat] (= (double n) (* 2 n))
+                       (by (unfold double) omega))
 
-   def isPrime (n : Nat) : Bool :=
-     n ≥ 2 && (List.range (n - 2)).all fun i => n % (i + 2) != 0
+              (def is-prime
+                [n Nat] Bool
+                (&& (>= n 2)
+                    (.all (List.range (- n 2)) (fn [i] (!= (% n (+ i 2)) 0)))))
 
-   structure Account where
-     owner : String
-     balance : Nat
-     frozen : Bool
+              (structure Account [owner String balance Nat frozen Bool])
 
-   def deposit (a : Account) (amount : Nat) : Account :=
-     if a.frozen then a else { a with balance := a.balance + amount }
+              (def deposit
+                [a Account amount Nat] Account
+                (if (.frozen a) a (with a {:balance (+ (.balance a) amount)})))
 
-   theorem deposit_frozen (a : Account) (n : Nat) (h : a.frozen = true) :
-       deposit a n = a := by
-     simp [deposit, h]
+              (theorem deposit_frozen [a Account n Nat h (= (.frozen a) true)]
+                       (= (deposit a n) a)
+                       (by (simp [deposit h])))
 
-   inductive Suit where
-     | hearts | spades
-     deriving Repr
+              (inductive Suit hearts spades (deriving Repr))
 
-   def flip : Suit → Suit
-     | .hearts => .spades
-     | .spades => .hearts
+              (def flip
+                [s Suit] Suit
+                (match s
+                  .hearts .spades
+                  .spades .hearts))
 
-   def primesBelow (n : Nat) : List Nat := (List.range n).filter isPrime")
+              (def primes-below
+                [n Nat] (List Nat)
+                (.filter (List.range n) is-prime)))
 
 
 (lean/deflean collections
               {:imports ["Std.Data.HashMap"]}
-              "def histogram (xs : List String) : List (String × Nat) :=
-     let m : Std.HashMap String Nat := xs.foldl (fun m x => m.insert x (m.getD x 0 + 1)) {}
-     (m.toArray.qsort (fun a b => a.1 < b.1)).toList
+              (def histogram
+                [xs (List String)] (List (Prod String Nat))
+                (let [m (the (Std.HashMap String Nat)
+                             (.foldl xs (fn [m x] (.insert m x (+ (.getD m x 0) 1))) {}))]
+                  (.toList (.qsort (.toArray m) (fn [a b] (< (.fst a) (.fst b)))))))
 
-   def safeDiv (a b : Nat) : Option Nat := if b == 0 then none else some (a / b)")
+              "def safeDiv (a b : Nat) : Option Nat :=
+     if b == 0 then none else some (a / b)")
 
 
 (t/deftest deflean-defines-functions
@@ -63,24 +70,27 @@
   (t/is (= :spades (flip :hearts))))
 
 
-(t/deftest deflean-imports
+(t/deftest deflean-mixes-forms-and-lean-source
   (t/is (= [["a" 2] ["b" 1]] (vec (histogram ["b" "a" "a"]))))
   (t/is (= 3 (safe-div 7 2)))
   (t/is (nil? (safe-div 7 0))))
 
 
 (t/deftest deflean-rejects-a-wrong-proof
-  (let [e (try
-            (lean/expand 'lean-clj.core-test 'wrong {} "theorem bad : 1 + 1 = 3 := by decide")
+  (let [src (lean/source '[(theorem bad [] (= (+ 1 1) 3) (by decide))])
+        e (try
+            (lean/expand 'lean-clj.core-test 'wrong {} src)
             nil
             (catch clojure.lang.ExceptionInfo e e))]
     (t/is (some? e))
     (t/is (re-find #"Lean rejected deflean wrong" (ex-message e)))
-    (t/is (re-find #"deflean wrong:1:" (ex-message e)))))
+    (t/is (re-find #"deflean wrong:1:" (ex-message e)))
+    (t/is (re-find #"1 \| theorem bad : \(\(1 \+ 1\) = 3\)" (ex-message e)))))
 
 
 (t/deftest deflean-caches-generated-code
-  (let [cache (io/file lean/*workspace* "cache")]
+  (let [cache (io/file lean/*workspace* "cache")
+        src (lean/source '[(def triple [n Nat] Nat (* 3 n))])]
     (t/is (seq (.listFiles cache)))
-    (t/is (= (lean/expand 'lean-clj.core-test 'arith2 {} "def triple (n : Nat) : Nat := 3 * n")
-             (lean/expand 'lean-clj.core-test 'arith2 {} "def triple (n : Nat) : Nat := 3 * n")))))
+    (t/is (= (lean/expand 'lean-clj.core-test 'arith2 {} src)
+             (lean/expand 'lean-clj.core-test 'arith2 {} src)))))

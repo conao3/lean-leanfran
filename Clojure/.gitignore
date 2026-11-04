@@ -7,3 +7,4 @@
 /.clj-kondo/*
 !/.clj-kondo/config.edn
 /test-out/
+!/resources/clj-kondo.exports/io.github.conao3/

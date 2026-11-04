@@ -8,6 +8,7 @@
     [clojure.java.io :as io]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
+    [lean-clj.dsl :as dsl]
     [lean-clj.runtime])
   (:import
     (java.io
@@ -103,10 +104,18 @@
 (defn- relocate-messages
   "Rewrite `<file>:<line>:<col>` in Lean's output to lines of the block."
   [out ^String path offset block]
-  (str/replace out
-               (re-pattern (str (java.util.regex.Pattern/quote path) ":(\\d+):(\\d+)"))
-               (fn [[_ line col]]
-                 (str "deflean " block ":" (- (parse-long line) offset) ":" col))))
+  (-> out
+      (str/replace #"(?m)^(✖|trace:|Some required targets|- LeanCljEmbed|error: build failed).*\n?" "")
+      (str/replace (re-pattern (str (java.util.regex.Pattern/quote path) ":(\\d+):(\\d+)"))
+                   (fn [[_ line col]]
+                     (str "deflean " block ":" (- (parse-long line) offset) ":" col)))))
+
+
+(defn- numbered
+  [src]
+  (->> (str/split-lines src)
+       (map-indexed (fn [i l] (format "%4d | %s" (inc i) l)))
+       (str/join "\n")))
 
 
 (defn- generate!
@@ -122,7 +131,8 @@
     (let [{:keys [exit] :as r} (sh! ws (find-exe "lake") "build" module)]
       (when-not (zero? exit)
         (throw (ex-info (str "lean-clj: Lean rejected deflean " block "\n"
-                             (relocate-messages (str (:out r) (:err r)) rel offset block))
+                             (relocate-messages (str (:out r) (:err r)) rel offset block)
+                             "\nLean source of the block:\n" (numbered src))
                         {:block block :module module :exit exit}))))
     (let [{:keys [exit err]} (sh! ws (find-exe "lean-clj")
                                   "module" "generate-namespace"
@@ -147,11 +157,11 @@
 
 
 (defn expand
-  "Clojure forms for the deflean block `block` in `ns-name`. Generated code is
-  cached in `*workspace*`/cache under a hash of the inputs."
+  "Clojure forms for the deflean block `block` in `ns-name`, given its Lean
+  source. Generated code is cached in `*workspace*`/cache under a hash of the
+  inputs."
   [ns-name block opts src]
-  (let [src (dedent src)
-        key (sha256 (pr-str [generator-version (str ns-name) (str block) (:imports opts) src]))
+  (let [key (sha256 (pr-str [generator-version (str ns-name) (str block) (:imports opts) src]))
         cached (io/file *workspace* "cache" (str key ".clj"))
         text (if (.exists cached)
                (slurp cached)
@@ -162,22 +172,31 @@
     (read-forms text)))
 
 
+(defn source
+  "Lean source of a deflean body: strings are Lean source (dedented), other
+  forms are commands of `lean-clj.dsl`."
+  [body]
+  (->> body
+       (map #(if (string? %) (dedent %) (dsl/command %)))
+       (str/join "\n\n")))
+
+
 (defmacro deflean
-  "Define the functions of a block of Lean source in the current namespace.
+  "Define the functions of a block of Lean in the current namespace.
 
     (deflean arith
-      \"def double (n : Nat) : Nat := n + n
+      (def double [n Nat] Nat
+        (+ n n))
 
-       theorem double_eq (n : Nat) : double n = 2 * n := by
-         unfold double; omega\")
+      (theorem double_eq [n Nat] (= (double n) (* 2 n))
+        (by (unfold double) omega)))
 
-  An optional map before the source takes `:imports`, a vector of Lean
-  modules to import. The block becomes the Lean module returned by
-  `module-name`, whose definitions are wrapped in a namespace of the same
-  name. Lean checks the whole block, proofs included, when the macro expands;
-  a rejected block stops compilation with Lean's messages."
+  The body is a sequence of `lean-clj.dsl` commands; a string in the body is
+  Lean source taken as is. An optional map before the body takes `:imports`,
+  a vector of Lean modules to import. The block becomes the Lean module
+  returned by `module-name`, whose definitions are wrapped in a namespace of
+  the same name. Lean checks the whole block, proofs included, when the macro
+  expands; a rejected block stops compilation with Lean's messages."
   [block & args]
-  (let [[opts src] (if (map? (first args)) args [{} (first args)])]
-    (when-not (string? src)
-      (throw (ex-info "lean-clj: deflean expects the Lean source as a string literal" {:block block})))
-    `(do ~@(expand (ns-name *ns*) block opts src))))
+  (let [[opts body] (if (map? (first args)) [(first args) (rest args)] [{} args])]
+    `(do ~@(expand (ns-name *ns*) block opts (source body)))))

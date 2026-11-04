@@ -1,0 +1,1 @@
+{:hooks {:analyze-call {lean-clj.core/deflean hooks.lean-clj/deflean}}}

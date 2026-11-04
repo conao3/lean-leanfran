@@ -13,6 +13,7 @@ in Clojure (`src/lean_clj/core.clj`). See README.md for usage.
   symbols of Lean externs; generated code checks at load time that every
   symbol it uses exists (`check-symbols!`).
 - `src/lean_clj/core.clj`: `deflean`.
+- `src/lean_clj/dsl.clj`: S-expressions → Lean source for `deflean`.
 - `LeanCljTest/`: Lean test programs. `Vectors.lean` holds the diff-test
   cases; `OracleMain.lean` is the native oracle.
 - `test/`: Clojure tests. `test-out/` holds generated code (ignored by git).

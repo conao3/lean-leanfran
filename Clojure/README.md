@@ -9,9 +9,10 @@ lean-clj has two parts:
   the Lean compiler, so the generated code is the same program the C backend
   compiles. A hand-written runtime (`lean-clj.runtime`) provides the C symbols
   of Lean's `@[extern]` declarations.
-- **`deflean`, Lean embedded in Clojure.** Write Lean in a Clojure file; the
-  macro checks it, proofs included, with `lake build` when the form is
-  compiled, and defines the functions in the current namespace.
+- **`deflean`, Lean embedded in Clojure.** Write Lean in a Clojure file as
+  S-expressions (or as Lean source in a string); the macro checks it, proofs
+  included, with `lake build` when the form is compiled, and defines the
+  functions in the current namespace.
 
 ```clojure
 (ns demo.core
@@ -19,24 +20,23 @@ lean-clj has two parts:
   (:require [lean-clj.core :refer [deflean]]))
 
 (deflean arith
-  "def double (n : Nat) : Nat := n + n
+  (def double [n Nat] Nat
+    (+ n n))
 
-   theorem double_eq (n : Nat) : double n = 2 * n := by
-     unfold double; omega
+  (theorem double_eq [n Nat] (= (double n) (* 2 n))
+    (by (unfold double) omega))
 
-   structure Account where
-     owner : String
-     balance : Nat
+  (structure Account [owner String balance Nat])
 
-   def deposit (a : Account) (n : Nat) : Account :=
-     { a with balance := a.balance + n }")
+  (def deposit [a Account n Nat] Account
+    (with a {:balance (+ (.balance a) n)})))
 
 (double 21)                                ;=> 42
 (deposit {:owner "ann" :balance 10} 5)     ;=> {:owner "ann", :balance 15}
 ```
 
-A block whose proof fails stops compilation with Lean's error messages, with
-line numbers relative to the block.
+A block whose proof fails stops compilation with Lean's error messages and the
+Lean source of the block.
 
 ## Requirements
 
@@ -93,14 +93,44 @@ persistent vector.
 ## `deflean`
 
 ```clojure
-(deflean <block> [{:imports ["Std.Data.HashMap"]}] "<Lean source>")
+(deflean <block> [{:imports ["Std.Data.HashMap"]}] <command> ...)
 ```
+
+Each command is an S-expression of `lean-clj.dsl` or a string of Lean source;
+`lean-clj.dsl/render` shows the Lean source of a sequence of commands.
+
+| S-expression | Lean |
+|---|---|
+| `(def f [x T y U] R body)` | `def f (x : T) (y : U) : R := body` |
+| `(theorem t [x T] P proof)` | `theorem t (x : T) : P := proof` |
+| `(structure S [f T g U] (deriving Repr))` | `structure S where f : T ...` |
+| `(inductive I a (b [x T]))` | `inductive I where \| a \| b (x : T)` |
+| `(instance C body)`, `(mutual ...)`, `(namespace N ...)`, `(open N)` | the same commands |
+| `(f a b)`, `(+ a b c)`, `(- a)`, `(not p)` | `(f a b)`, `(a + b + c)`, `(-a)`, `(¬p)` |
+| `(if c t e)`, `(let [x v] e)`, `(fn [x] e)` | `if`, `let`, `fun` |
+| `(match x p1 e1 p2 e2)`, `(match [x y] [p q] e)` | `match x with \| p1 => e1 ...` |
+| `(.field x)`, `(.method x a)` | `x.field`, `(x.method a)` |
+| `{:x 1}`, `(with s {:x 1})`, `(<> a b)` | `{ x := 1 }`, `{ s with x := 1 }`, `⟨a, b⟩` |
+| `[a b]`, `(array a b)` | `[a, b]`, `#[a, b]` |
+| `(the T e)`, `(-> A B)`, `(forall [x T] P)`, `(exists [x T] P)` | `(e : T)`, `A → B`, `∀`, `∃` |
+| `(by (simp [a b]) omega)` | `(by simp [a, b]; omega)` |
+| `(lean "...")` | Lean source as is |
+
+Symbols with a `-` become lowerCamelCase in Lean (`is-prime` → `isPrime`), and
+the public Clojure name converts back (`is-prime`); `_` is kept, so Lean lemma
+names are written as they are (`Nat.add_comm`). Binder vectors take
+`(implicit α Type)` and `(inst (BEq α))`; metadata on a name adds modifiers
+(`^:partial`, `^:private`, `^{:attrs [simp]}`). Binary operators: `+ - * / %
+pow ++ = == != not= < <= > >= and or iff && || band bor land lor xor <<< >>>
+cons |> <| >>= <$> comp`. Inside `by`, a tactic name's `-` becomes `_`
+(`all-goals` → `all_goals`); `(on-all t1 t2)` is `t1 <;> t2` and
+`(case tag [x] t ...)` is `case tag x => ...`.
 
 The block becomes the Lean module `LeanCljEmbed.<Namespace>.<Block>` (for
 `demo.core` and `arith`: `LeanCljEmbed.Demo.Core.Arith`) in the lake workspace
 `.lean-clj/` of the working directory. The generated code is cached in
 `.lean-clj/cache/` under a hash of the namespace, block name, imports, and
-source; with the cache present, expanding the block does not need Lean.
+Lean source; with the cache present, expanding the block does not need Lean.
 
 clj-kondo picks up the names a block defines through the hook exported in
 `resources/clj-kondo.exports/io.github.conao3/lean-clj`.
