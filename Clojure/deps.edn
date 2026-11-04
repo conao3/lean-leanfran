@@ -11,7 +11,7 @@
                  slipset/deps-deploy {:mvn/version "0.2.5"}}
           :ns-default build
           :build/project {:lib io.github.conao3/lean-clj
-                          :version "0.1.0"
+                          :version "0.1.1"
                           :description "Write and prove functions in Lean 4, run them on the JVM from Clojure."
                           :url "https://github.com/conao3/lean-clj"
                           :license "Apache-2.0"}}}}

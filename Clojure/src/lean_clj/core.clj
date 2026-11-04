@@ -25,7 +25,7 @@
 (def generator-version
   "Part of the cache key, so that cached output is regenerated when the
   generator changes."
-  "0.1.0")
+  "0.1.1")
 
 
 (def ^:dynamic *workspace*
