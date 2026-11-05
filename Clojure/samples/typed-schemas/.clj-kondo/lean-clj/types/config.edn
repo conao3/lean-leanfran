@@ -1,0 +1,6 @@
+{:linters
+ {:type-mismatch
+  {:namespaces
+   {accounts.core
+    {deposit {:arities {2 {:args [:map :nat-int], :ret :map}}},
+     owner-name {:arities {1 {:args [:map], :ret :string}}}}}}}}

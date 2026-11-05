@@ -252,15 +252,14 @@ has the symbols it uses.
 [`samples/`](samples) holds small programs built with lean-clj. Each one is a
 Clojure project with its own README and a `make test`.
 
-| Sample | What it shows |
+| Use | Samples |
 |---|---|
-| [`todo-cli`](samples/todo-cli) | `deflean` in S-expressions: structures and theorems about the list operations, behind a Clojure CLI |
-| [`word-count`](samples/word-count) | `deflean` with `:imports` (`Std.HashMap`) and Lean source in a string next to S-expressions, for `do` notation |
-| [`roman-numerals`](samples/roman-numerals) | a lake project compiled with the `lean-clj` CLI to a committed Clojure namespace that runs without Lean |
-| [`verified-clojure`](samples/verified-clojure) | Clojure functions written with `lean-clj.typed/defn` and proved in Lean, and a Lean specification that runs as a Clojure closed form through `@[csimp]` |
+| Write functions in Lean and call them from Clojure (`deflean`) | [`todo-cli`](samples/todo-cli), [`word-count`](samples/word-count) |
+| Compile a Lean project to a Clojure namespace (the CLI) | [`roman-numerals`](samples/roman-numerals) |
+| Write functions in Clojure and verify them in Lean (`lean-clj.typed`) | [`verified-clojure`](samples/verified-clojure), [`sorted-search`](samples/sorted-search), [`typed-schemas`](samples/typed-schemas) |
 
-Start with `todo-cli`. See [`samples/README.md`](samples/README.md) for how to
-run them.
+[`samples/README.md`](samples/README.md) describes what each sample shows and
+where to start.
 
 ## Development
 
