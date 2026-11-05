@@ -20,6 +20,8 @@
   (t/is (= "(if h : (n = 0) then 1 else n)" (dsl/term '(if h (= n 0) 1 n))))
   (t/is (= "(match h : xs.head? with | (some x) => x | none => 0)" (dsl/term '(match-eq h (.head? xs) (some x) x none 0))))
   (t/is (= "(f (-3))" (dsl/term '(f -3))))
+  (t/is (= "(match s with | (.circle r) => r | .point => 0)" (dsl/term '(match s (.circle r) r .point 0))))
+  (t/is (= "{n : Nat // (n > 0)}" (dsl/term '(Subtype n Nat (> n 0)))))
   (t/is (= "(let x := 1; let y := 2; (x + y))" (dsl/term '(let [x 1 y 2] (+ x y)))))
   (t/is (= "(fun x y => (x * y))" (dsl/term '(fn [x y] (* x y)))))
   (t/is (= "(match n with | 0 => 1 | (k + 1) => k)" (dsl/term '(match n 0 1 (+ k 1) k))))

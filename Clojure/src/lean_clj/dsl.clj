@@ -99,12 +99,22 @@
   (str/join ", " (map (fn [[k v]] (str (ident k) " := " (term v))) m)))
 
 
+(defn- pattern
+  "A match pattern: `(.circle r)` is the constructor `.circle` applied to `r`."
+  [p]
+  (cond
+    (vector? p) (comma p)
+    (and (seq? p) (symbol? (first p)) (str/starts-with? (name (first p)) "."))
+    (str "(" (ident (first p)) (apply str (map #(str " " (pattern %)) (rest p))) ")")
+    :else (term p)))
+
+
 (defn- match-arms
   [clauses]
   (when (odd? (count clauses))
     (throw (ex-info "lean-clj.dsl: match needs pattern/result pairs" {:clauses clauses})))
   (->> (partition 2 clauses)
-       (map (fn [[p e]] (str " | " (if (vector? p) (comma p) (term p)) " => " (term e))))
+       (map (fn [[p e]] (str " | " (pattern p) " => " (term e))))
        (apply str)))
 
 
@@ -143,6 +153,7 @@
                      (when decreasing-by (str "\n  decreasing_by " (tactic-block decreasing-by)))
                      "\n  ; " (term rest) ")"))
       the (let [[t e] args] (str "(" (term e) " : " (term t) ")"))
+      Subtype (let [[x t p] args] (str "{" (term x) " : " (term t) " // " (term p) "}"))
       -> (str "(" (str/join " → " (map term args)) ")")
       forall (let [[bs p] args] (str "(∀ " (binders bs) ", " (term p) ")"))
       exists (let [[bs p] args] (str "(∃ " (binders bs) ", " (term p) ")"))
