@@ -104,6 +104,10 @@ structure Ctx where
   /-- Join points with a single `jmp`, expanded at that site. -/
   inlineSet : Std.HashSet Nat := {}
   inlineJps : Std.HashMap Nat (Array Param × FnBody) := {}
+  /-- Externs to Clojure vars (`@[extern "clj:<ns>/<name>"]`): the var, and the
+      marshalling descriptors of each IR parameter (`none` when erased) and of
+      the result. -/
+  cljExterns : Std.HashMap Name (String × Array (Option Sx) × Sx) := {}
 
 abbrev EmitM := ReaderT Ctx (Except String)
 
@@ -115,6 +119,16 @@ def isRelevant (p : Param) : Bool := !p.ty.isErased && !p.ty.isVoid
 
 def externSymbol (env : Environment) (c : Name) : Option String :=
   getExternNameFor env `c c
+
+/-- The Clojure var of an extern symbol `clj:<ns>/<name>`. -/
+def cljVar (sym : String) : Option String :=
+  if sym.startsWith "clj:" then some (String.ofList (sym.toList.drop 4)) else none
+
+/-- A call of a Clojure var on Lean runtime values: arguments go through
+    `to-clj` and the result through `from-clj`. -/
+def cljCall (var : String) (params : Array (Option Sx)) (result : Sx) (args : List Sx) : Sx :=
+  let xs := (params.toList.zip args).filterMap fun (d, a) => d.map fun desc => rtCall "to-clj" [desc, a]
+  rtCall "from-clj" [result, .list (.atom var :: xs)]
 
 def relevantArgs (ps : Array Param) (ys : Array Arg) : List Sx := Id.run do
   let mut acc := #[]
@@ -133,6 +147,8 @@ def emitFap (c : Name) (ys : Array Arg) : EmitM Sx := do
   let ctx ← read
   match ctx.decls[c]? with
   | some d@(.extern _ ps _ _) =>
+    if let some (var, params, result) := ctx.cljExterns[c]? then
+      return cljCall var params result (ys.toList.map argSx)
     match externSymbol ctx.env c with
     | some sym => return rtCall sym (relevantArgs ps ys)
     | none => throw s!"extern without a C symbol: {d.name}"
@@ -158,10 +174,13 @@ def emitPap (c : Name) (ys : Array Arg) : EmitM Sx := do
   let ctx ← read
   match ctx.decls[c]? with
   | some (.extern _ ps _ _) =>
-    let some sym := externSymbol ctx.env c | throw s!"extern without a C symbol: {c}"
     let xs := (List.range ps.size).map fun i => Sx.atom s!"a_{i}"
-    let rel := (xs.zip ps.toList).filterMap fun (x, p) => if isRelevant p then some x else none
-    let body := rtCall sym rel
+    let body ← if let some (var, params, result) := ctx.cljExterns[c]? then
+        pure (cljCall var params result xs)
+      else
+        let some sym := externSymbol ctx.env c | throw s!"extern without a C symbol: {c}"
+        let rel := (xs.zip ps.toList).filterMap fun (x, p) => if isRelevant p then some x else none
+        pure (rtCall sym rel)
     return rtCall "closure" [call (.atom "fn") [.vec xs, body], .atom (toString ps.size), .vec (ys.toList.map argSx)]
   | some d =>
     let fn := Sx.atom (internalName c)
@@ -354,7 +373,7 @@ end
 def paramVec (ps : Array Param) : Sx := .vec (ps.toList.map fun p => .atom (varName p.x))
 
 def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (tcSet : Std.HashSet Name)
-    (d : Decl) : Except String (List Sx) := do
+    (cljExterns : Std.HashMap Name (String × Array (Option Sx) × Sx)) (d : Decl) : Except String (List Sx) := do
   let .fdecl f ps _ body _ := d | return []
   if ps.size > 20 then throw s!"functions with more than 20 parameters are not supported: {f}"
   let loopMode := (tailTargets body).contains f
@@ -363,7 +382,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (tcSet : Std.Ha
   let inlBodies := jps.fold (fun m i (v, n) => if n == 1 then m.insert i v else m) {}
   let restartMode := loopMode &&
     jps.toList.any fun (i, (v, _)) => !inlineSet.contains i && hasRecur f inlBodies v
-  let ctx : Ctx := { env, decls, tcSet, self := f, selfParams := ps, loopMode, restartMode, inlineSet }
+  let ctx : Ctx := { env, decls, tcSet, self := f, selfParams := ps, loopMode, restartMode, inlineSet, cljExterns }
   let b ← (emitBody body).run ctx
   let loopVec := Sx.vec (ps.toList.flatMap fun p => [.atom (varName p.x), .atom (varName p.x)])
   let b := if restartMode then
@@ -537,16 +556,31 @@ def publicSig (name : Name) (ps : Array Param) : MarshalM PublicSig := do
         params := params.push (some (← descOf ldecl.type))
     return { params, result := ← descOf body }
 
-def emitPublic (strip : Name) (name : Name) (ps : Array Param) (sig : PublicSig) : Sx :=
+/-- The function compiled code runs for `name`: the target of a `@[csimp]`
+    lemma `@name = @target` in the module of `name`, or `name` itself. -/
+def csimpTarget (env : Environment) (name : Name) : Name := Id.run do
+  let some idx := env.getModuleIdxFor? name | return name
+  for e in Compiler.CSimp.ext.ext.getModuleEntries env idx do
+    match e with
+    | .global e | .scoped _ e => if e.fromDeclName == name then return e.toDeclName
+  return name
+
+/-- The public function `name`, which runs `target`. A target that is an
+    extern to a Clojure var is called with the Clojure arguments as they are. -/
+def emitPublic (strip : Name) (name target : Name) (ps : Array Param) (sig : PublicSig)
+    (cljExterns : Std.HashMap Name (String × Array (Option Sx) × Sx)) : Sx :=
   let pub := publicName strip name
   let argNames := (sig.params.toList.zipIdx).filterMap fun (d, i) => d.map fun _ => Sx.atom s!"a{i}"
-  let callArgs := (sig.params.toList.zipIdx).map fun (d, i) =>
-    match d with
-    | some desc => rtCall "from-clj" [desc.toSx, .atom s!"a{i}"]
-    | none => .atom "nil"
-  let inner := if ps.isEmpty then call (.atom "force") [.atom (internalName name)]
-    else .list (.atom (internalName name) :: callArgs)
-  .list [.atom "clojure.core/defn", .atom pub, .vec argNames, rtCall "to-clj" [sig.result.toSx, inner]]
+  match cljExterns[target]? with
+  | some (var, _, _) => .list [.atom "clojure.core/defn", .atom pub, .vec argNames, .list (.atom var :: argNames)]
+  | none =>
+    let callArgs := (sig.params.toList.zipIdx).map fun (d, i) =>
+      match d with
+      | some desc => rtCall "from-clj" [desc.toSx, .atom s!"a{i}"]
+      | none => .atom "nil"
+    let inner := if ps.isEmpty then call (.atom "force") [.atom (internalName target)]
+      else .list (.atom (internalName target) :: callArgs)
+    .list [.atom "clojure.core/defn", .atom pub, .vec argNames, rtCall "to-clj" [sig.result.toSx, inner]]
 
 /-! ## Rendering -/
 
@@ -559,17 +593,37 @@ structure Output where
 
 def generate (roots : Array Name) (strip : Name) : MetaM Output := do
   let env ← getEnv
-  let decls ← match collect env roots with
+  let targets := roots.map (csimpTarget env)
+  let decls ← match collect env (roots ++ targets) with
     | .ok ds => pure ds
     | .error e => throwError e
   let declMap := decls.foldl (fun m d => m.insert d.name d) ({} : Std.HashMap Name Decl)
   let tcSet := tailCycleMembers decls
   let mut externs : Array String := #[]
+  let mut cljNss : Array String := #[]
   for d in decls do
     if let .extern f .. := d then
       match externSymbol env f with
-      | some s => unless externs.contains s do externs := externs.push s
+      | some s =>
+        match cljVar s with
+        | some v =>
+          let ns := (v.splitOn "/").head!
+          unless cljNss.contains ns do cljNss := cljNss.push ns
+        | none => unless externs.contains s do externs := externs.push s
       | none => throwError "extern without a C symbol: {f}"
+  let ((cljExterns, pubForms), st) ← (do
+      let mut cljExterns : Std.HashMap Name (String × Array (Option Sx) × Sx) := {}
+      for d in decls do
+        if let .extern f ps .. := d then
+          if let some v := (externSymbol env f).bind cljVar then
+            let sig ← publicSig f ps
+            cljExterns := cljExterns.insert f (v, sig.params.map (·.map Desc.toSx), sig.result.toSx)
+      let mut acc := #[]
+      for (r, t) in roots.zip targets do
+        let some d := declMap[r]? | throwError "unknown root {r}"
+        let sig ← publicSig r d.params
+        acc := acc.push (emitPublic strip r t d.params sig cljExterns)
+      return (cljExterns, acc) : MarshalM _).run {}
   let mut body : Array Sx := #[]
   let mut names : Array Sx := #[]
   for d in decls do
@@ -577,18 +631,14 @@ def generate (roots : Array Name) (strip : Name) : MetaM Output := do
       names := names.push (.atom (internalName f))
       if tcSet.contains f && !ps.isEmpty then names := names.push (.atom (coreName f))
   for d in decls.reverse do
-    match emitDecl env declMap tcSet d with
+    match emitDecl env declMap tcSet cljExterns d with
     | .ok fs => body := body ++ fs.toArray
     | .error e => throwError e
-  let (pubForms, st) ← (do
-      let mut acc := #[]
-      for r in roots do
-        let some d := declMap[r]? | throwError "unknown root {r}"
-        let sig ← publicSig r d.params
-        acc := acc.push (emitPublic strip r d.params sig)
-      return acc : MarshalM (Array Sx)).run {}
+  let quoted (ns : String) := Sx.list [.atom "quote", .atom ns]
   let header : Array Sx := #[
     rtCall "check-symbols!" [.vec (externs.toList.map fun s => .atom (quoteString s))]] ++
+    cljNss.map (fun ns => .list [.atom "clojure.core/when-not", .list [.atom "clojure.core/find-ns", quoted ns],
+      .list [.atom "clojure.core/require", quoted ns]]) ++
     st.types.map (fun (k, sx) => rtCall "register-type!" [.atom (quoteString k), sx]) ++
     (if names.isEmpty then #[] else #[.list (.atom "declare" :: names.toList)])
   return {

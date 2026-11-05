@@ -72,6 +72,7 @@ def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
     if n.isInternal || isPrivateName n || underInstance n then continue
     let some (.defnInfo _) := env.find? n | continue
     if (IR.findEnvDecl env n).isNone then continue
+    if ((LeanClj.externSymbol env n).bind LeanClj.cljVar).isSome then continue
     out := out.push n
   return out
 
