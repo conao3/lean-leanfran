@@ -58,7 +58,7 @@
          lean--_private-Roman-0-Roman-value)
 
 
-(defn- lean--_private-Roman-0-Roman-value
+(clojure.core/defn- lean--_private-Roman-0-Roman-value
   [x_1]
   (let [x_2 73
         x_3 (lean-clj.runtime/lean_uint32_dec_eq x_1 x_2)]
@@ -77,15 +77,18 @@
                 (case (long x_9)
                   0
                   (let [x_10 67
-                        x_11 (lean-clj.runtime/lean_uint32_dec_eq x_1 x_10)]
+                        x_11 (lean-clj.runtime/lean_uint32_dec_eq x_1
+                                                                  x_10)]
                     (case (long x_11)
                       0
                       (let [x_12 68
-                            x_13 (lean-clj.runtime/lean_uint32_dec_eq x_1 x_12)]
+                            x_13 (lean-clj.runtime/lean_uint32_dec_eq x_1
+                                                                      x_12)]
                         (case (long x_13)
                           0
                           (let [x_14 77
-                                x_15 (lean-clj.runtime/lean_uint32_dec_eq x_1 x_14)]
+                                x_15 (lean-clj.runtime/lean_uint32_dec_eq x_1
+                                                                          x_14)]
                             (case (long x_15)
                               0 (let [x_16 0] x_16)
                               1 (let [x_17 1000] x_17)
@@ -108,7 +111,7 @@
   (delay (let [x_1 0 x_2 (lean-clj.runtime/ctor 1 1 0 x_1)] x_2)))
 
 
-(defn- lean--_private-Roman-0-Roman-fromRomanAux
+(clojure.core/defn- lean--_private-Roman-0-Roman-fromRomanAux
   [x_1]
   (case (lean-clj.runtime/tag x_1)
     0 (force lean--_private-Roman-0-Roman-fromRomanAux-_closed_0)
@@ -162,7 +165,7 @@
     (lean-clj.runtime/unreachable)))
 
 
-(defn- lean--Roman-fromRoman
+(clojure.core/defn- lean--Roman-fromRoman
   [x_1]
   (let [x_2 (lean-clj.runtime/lean_string_utf8_byte_size x_1)
         x_3 0
@@ -178,7 +181,7 @@
 (def ^:private lean--_private-Roman-0-Roman-toRomanAux-_closed_0 (delay (let [x_1 ""] x_1)))
 
 
-(defn- lean--_private-Roman-0-Roman-toRomanAux
+(clojure.core/defn- lean--_private-Roman-0-Roman-toRomanAux
   [x_1 x_2 x_3]
   (loop [x_1 x_1
          x_2 x_2
@@ -202,7 +205,9 @@
               0 (recur x_13 x_9 x_3)
               1
               (let [x_16 (lean-clj.runtime/lean_nat_sub x_3 x_10)
-                    x_17 (lean--_private-Roman-0-Roman-toRomanAux x_13 x_2 x_16)]
+                    x_17 (lean--_private-Roman-0-Roman-toRomanAux x_13
+                                                                  x_2
+                                                                  x_16)]
                 (lean-clj.runtime/lean_string_append x_11 x_17))
               (lean-clj.runtime/unreachable)))
           (lean-clj.runtime/unreachable))
@@ -434,7 +439,7 @@
   (delay (force lean--_private-Roman-0-Roman-numerals-_closed_38)))
 
 
-(defn- lean--Roman-toRoman
+(clojure.core/defn- lean--Roman-toRoman
   [x_1]
   (let [x_2 13
         x_3 (lean-clj.runtime/lean_nat_add x_1 x_2)
@@ -442,12 +447,14 @@
     (lean--_private-Roman-0-Roman-toRomanAux x_3 x_4 x_1)))
 
 
-(defn to-roman
+(clojure.core/defn to-roman
   [a0]
-  (lean-clj.runtime/to-clj :string (lean--Roman-toRoman (lean-clj.runtime/from-clj :nat a0))))
+  (lean-clj.runtime/to-clj :string
+                           (lean--Roman-toRoman (lean-clj.runtime/from-clj :nat a0))))
 
 
-(defn from-roman
+(clojure.core/defn from-roman
   [a0]
   (lean-clj.runtime/to-clj [:option :nat]
-                           (lean--Roman-fromRoman (lean-clj.runtime/from-clj :string a0))))
+                           (lean--Roman-fromRoman (lean-clj.runtime/from-clj :string
+                                                                             a0))))

@@ -378,10 +378,10 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (tcSet : Std.Ha
   if tcSet.contains f then
     let args := ps.toList.map fun p => Sx.atom (varName p.x)
     return [
-      .list [.atom "defn-", .atom (coreName f), paramVec ps, b],
-      .list [.atom "defn-", .atom (internalName f), paramVec ps,
+      .list [.atom "clojure.core/defn-", .atom (coreName f), paramVec ps, b],
+      .list [.atom "clojure.core/defn-", .atom (internalName f), paramVec ps,
         rtCall "trampoline" [.list (.atom (coreName f) :: args)]]]
-  return [.list [.atom "defn-", .atom (internalName f), paramVec ps, b]]
+  return [.list [.atom "clojure.core/defn-", .atom (internalName f), paramVec ps, b]]
 
 /-! ## Collection -/
 
@@ -546,7 +546,7 @@ def emitPublic (strip : Name) (name : Name) (ps : Array Param) (sig : PublicSig)
     | none => .atom "nil"
   let inner := if ps.isEmpty then call (.atom "force") [.atom (internalName name)]
     else .list (.atom (internalName name) :: callArgs)
-  .list [.atom "defn", .atom pub, .vec argNames, rtCall "to-clj" [sig.result.toSx, inner]]
+  .list [.atom "clojure.core/defn", .atom pub, .vec argNames, rtCall "to-clj" [sig.result.toSx, inner]]
 
 /-! ## Rendering -/
 
