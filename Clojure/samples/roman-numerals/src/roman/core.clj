@@ -447,13 +447,13 @@
     (lean--_private-Roman-0-Roman-toRomanAux x_3 x_4 x_1)))
 
 
-(clojure.core/defn to-roman
+(clojure.core/defn ^{:lean/name "Roman.toRoman" :lean/module "Roman"} to-roman
   [a0]
   (lean-clj.runtime/to-clj :string
                            (lean--Roman-toRoman (lean-clj.runtime/from-clj :nat a0))))
 
 
-(clojure.core/defn from-roman
+(clojure.core/defn ^{:lean/name "Roman.fromRoman" :lean/module "Roman"} from-roman
   [a0]
   (lean-clj.runtime/to-clj [:option :nat]
                            (lean--Roman-fromRoman (lean-clj.runtime/from-clj :string

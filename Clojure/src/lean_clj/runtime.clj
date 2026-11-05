@@ -976,6 +976,13 @@
   (swap! types assoc k desc))
 
 
+(defn registered-types
+  "The structures and enumerations generated code has registered, by full
+  Lean name."
+  []
+  @types)
+
+
 (defn- lean-list->seq
   [l]
   (loop [l l acc (transient [])]
@@ -1021,6 +1028,7 @@
       :array (mapv #(to-clj (second d) %) v)
       :option (when (instance? Ctor v) (to-clj (second d) (proj v 0)))
       :prod [(to-clj (nth d 1) (proj v 0)) (to-clj (nth d 2) (proj v 1))]
+      :field1 {(nth d 1) (to-clj (nth d 2) v)}
       :ref (let [t (get @types (second d))]
              (case (:kind t)
                :struct (struct->map t v)
@@ -1045,6 +1053,7 @@
       :array (mapv #(from-clj (second d) %) v)
       :option (if (nil? v) 0 (ctor 1 1 0 (from-clj (second d) v)))
       :prod (ctor 0 2 0 (from-clj (nth d 1) (nth v 0)) (from-clj (nth d 2) (nth v 1)))
+      :field1 (from-clj (nth d 2) (get v (nth d 1)))
       :ref (let [t (get @types (second d))]
              (case (:kind t)
                :struct (map->struct t v)

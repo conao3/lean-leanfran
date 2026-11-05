@@ -70,6 +70,7 @@ def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
   let mut out := #[]
   for n in env.header.moduleData[idx.toNat]!.constNames do
     if n.isInternal || isPrivateName n || underInstance n then continue
+    if let some (.defnInfo _) := env.find? n.getPrefix then continue
     let some (.defnInfo _) := env.find? n | continue
     if (IR.findEnvDecl env n).isNone then continue
     if ((LeanClj.externSymbol env n).bind LeanClj.cljVar).isSome then continue
@@ -94,11 +95,11 @@ def runGenerate (o : Opts) : IO UInt32 := do
       let mut ok := #[]
       for r in roots do
         let some d := IR.findEnvDecl (← getEnv) r | continue
-        let r' ← try
-            discard <| (publicSig r d.params).run {}
-            pure (some r)
-          catch _ => pure none
-        if let some r := r' then ok := ok.push r
+        try
+          discard <| (publicSig r d.params).run {}
+          ok := ok.push r
+        catch e =>
+          IO.eprintln s!"lean-clj: skipped {r}: {← e.toMessageData.toString}"
       generate ok strip
   let (out, _) ← (act.run' {}).toIO ctx { env }
   let body := renderForms out.forms

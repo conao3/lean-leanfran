@@ -432,6 +432,13 @@ def collect (env : Environment) (roots : Array Name) : Except String (Array Decl
         unless seen.contains c do stack := stack.push c
   return out
 
+/-- The module that declares `c`, or the empty string for a declaration of the
+    current module. -/
+def moduleOf (env : Environment) (c : Name) : String :=
+  match env.getModuleIdxFor? c with
+  | some idx => toString env.header.moduleNames[idx.toNat]!
+  | none => ""
+
 /-! ## Marshalling between Clojure values and Lean values -/
 
 /-- A marshalling descriptor, emitted as Clojure data and interpreted by
@@ -443,6 +450,9 @@ inductive Desc where
   | option (d : Desc)
   | prod (a b : Desc)
   | ref (key : String)
+  /-- A structure with one relevant field, represented at runtime by the field
+      and in Clojure by a map with that one key. -/
+  | field1 (key : String) (d : Desc)
   deriving Inhabited
 
 partial def Desc.toSx : Desc → Sx
@@ -452,6 +462,7 @@ partial def Desc.toSx : Desc → Sx
   | .option d => .vec [.atom ":option", d.toSx]
   | .prod a b => .vec [.atom ":prod", a.toSx, b.toSx]
   | .ref k => .vec [.atom ":ref", .atom (quoteString k)]
+  | .field1 k d => .vec [.atom ":field1", .atom k, d.toSx]
 
 structure MarshalState where
   /-- Registered named types (structures, enums) in registration order. -/
@@ -501,7 +512,7 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
       if ci.numFields != 0 then allNullary := false
     if allNullary then
       let names := ind.ctors.map fun n => Sx.atom s!":{kebab n.getString!}"
-      modify fun s => { s with types := s.types.push (key, .map [.atom ":kind", .atom ":enum", .atom ":ctors", .vec names]) }
+      modify fun s => { s with types := s.types.push (key, .map [.atom ":kind", .atom ":enum", .atom ":module", .atom (quoteString (moduleOf env c)), .atom ":ctors", .vec names]) }
       return .ref key
     if !isStructure env c then return .kw "raw"
     let [ctor] := ind.ctors | return .kw "raw"
@@ -521,13 +532,14 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
       | .scalar _ off _ => relevant := relevant + 1; fields := fields.push (.vec [name, .vec [.atom ":scalar", .atom (toString off)], d])
       | .erased | .void => pure ()
     if relevant == 1 then
-      -- a structure with one relevant field is represented by that field
       for h : i in [0:layout.fieldInfo.size] do
         match layout.fieldInfo[i] with
         | .erased | .void => pure ()
-        | _ => return fieldDescs[i]!
+        | _ =>
+          modify fun s => { s with seen := s.seen.erase key }
+          return .field1 s!":{kebab (fieldNames[i]!.toString (escape := false))}" fieldDescs[i]!
     let info := layout.ctorInfo
-    let sx := Sx.map [.atom ":kind", .atom ":struct", .atom ":tag", .atom (toString info.cidx),
+    let sx := Sx.map [.atom ":kind", .atom ":struct", .atom ":module", .atom (quoteString (moduleOf env c)), .atom ":tag", .atom (toString info.cidx),
       .atom ":size", .atom (toString (info.size + info.usize)), .atom ":ssize", .atom (toString info.ssize),
       .atom ":fields", .vec fields.toList]
     modify fun s => { s with types := s.types.push (key, sx) }
@@ -567,12 +579,12 @@ def csimpTarget (env : Environment) (name : Name) : Name := Id.run do
 
 /-- The public function `name`, which runs `target`. A target that is an
     extern to a Clojure var is called with the Clojure arguments as they are. -/
-def emitPublic (strip : Name) (name target : Name) (ps : Array Param) (sig : PublicSig)
+def emitPublic (strip : Name) (name target : Name) (module : String) (ps : Array Param) (sig : PublicSig)
     (cljExterns : Std.HashMap Name (String × Array (Option Sx) × Sx)) : Sx :=
-  let pub := publicName strip name
+  let pub := Sx.atom ("^{:lean/name " ++ quoteString (toString name) ++ " :lean/module " ++ quoteString module ++ "} " ++ publicName strip name)
   let argNames := (sig.params.toList.zipIdx).filterMap fun (d, i) => d.map fun _ => Sx.atom s!"a{i}"
   match cljExterns[target]? with
-  | some (var, _, _) => .list [.atom "clojure.core/defn", .atom pub, .vec argNames, .list (.atom var :: argNames)]
+  | some (var, _, _) => .list [.atom "clojure.core/defn", pub, .vec argNames, .list (.atom var :: argNames)]
   | none =>
     let callArgs := (sig.params.toList.zipIdx).map fun (d, i) =>
       match d with
@@ -580,7 +592,7 @@ def emitPublic (strip : Name) (name target : Name) (ps : Array Param) (sig : Pub
       | none => .atom "nil"
     let inner := if ps.isEmpty then call (.atom "force") [.atom (internalName target)]
       else .list (.atom (internalName target) :: callArgs)
-    .list [.atom "clojure.core/defn", .atom pub, .vec argNames, rtCall "to-clj" [sig.result.toSx, inner]]
+    .list [.atom "clojure.core/defn", pub, .vec argNames, rtCall "to-clj" [sig.result.toSx, inner]]
 
 /-! ## Rendering -/
 
@@ -622,7 +634,7 @@ def generate (roots : Array Name) (strip : Name) : MetaM Output := do
       for (r, t) in roots.zip targets do
         let some d := declMap[r]? | throwError "unknown root {r}"
         let sig ← publicSig r d.params
-        acc := acc.push (emitPublic strip r t d.params sig cljExterns)
+        acc := acc.push (emitPublic strip r t (moduleOf env r) d.params sig cljExterns)
       return (cljExterns, acc) : MarshalM _).run {}
   let mut body : Array Sx := #[]
   let mut names : Array Sx := #[]
