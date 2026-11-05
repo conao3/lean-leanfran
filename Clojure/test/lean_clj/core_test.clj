@@ -94,3 +94,8 @@
     (t/is (seq (.listFiles cache)))
     (t/is (= (lean/expand 'lean-clj.core-test 'arith2 {} src)
              (lean/expand 'lean-clj.core-test 'arith2 {} src)))))
+
+
+(t/deftest module-names-are-lean-module-names
+  (t/is (= "LeanCljEmbed.Demo.WordCount.Arith" (lean/module-name 'demo.word-count 'arith)))
+  (t/is (= "LeanCljEmbed.Check.SortedMemberQmark" (lean/module-name 'check 'sorted-member?))))

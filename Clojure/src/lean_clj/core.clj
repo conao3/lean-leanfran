@@ -37,7 +37,7 @@
 
 (defn- camel
   [s]
-  (->> (str/split (str s) #"[-_]")
+  (->> (str/split (munge (str s)) #"[-_]")
        (remove str/blank?)
        (map str/capitalize)
        (apply str)))
