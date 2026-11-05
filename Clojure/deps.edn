@@ -6,7 +6,8 @@
         :jvm-opts ["-Djdk.attach.allowAttachSelf"]}
   :test-out {:extra-paths ["test-out"]}
   :test {:extra-paths ["test" "test-out"]
-         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+                      metosin/malli {:mvn/version "0.20.3"}}
          :main-opts ["-m" "kaocha.runner"]}
   :build {:deps {io.github.clojure/tools.build {:git/tag "v0.10.14" :git/sha "1176afd"}
                  slipset/deps-deploy {:mvn/version "0.2.5"}}

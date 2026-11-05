@@ -1,10 +1,13 @@
 (ns lean-clj.types
   "Lean types written as `lean-clj.dsl` terms, and what lean-clj derives from
-  them: test.check generators of the Clojure values that correspond to a type.
+  them: test.check generators of the Clojure values that correspond to a type,
+  a check of such values, malli schemas, and clj-kondo types.
 
   Structures and enumerations are known by the Lean name they are written
   with in a `deflean` block (`register-commands!`)."
   (:require
+    [clojure.java.io :as io]
+    [clojure.pprint :as pprint]
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
     [lean-clj.dsl :as dsl]))
@@ -148,3 +151,98 @@
         (unsupported t)))
 
     :else (unsupported t)))
+
+
+(defn malli-schema
+  "malli schema of the Clojure values of the Lean type `t`, as data."
+  [t]
+  (cond
+    (symbol? t)
+    (case t
+      Nat [:and 'integer? [:>= 0]]
+      Int 'integer?
+      Bool :boolean
+      String :string
+      Char 'char?
+      (let [{:keys [kind fields ctors]} (lookup t)]
+        (case kind
+          :struct (into [:map {:closed true}] (map (fn [[f ft]] [(field-key f) (malli-schema ft)]) fields))
+          :enum (into [:enum] (map field-key ctors)))))
+
+    (seq? t)
+    (let [[head a b] t]
+      (case head
+        List [:sequential (malli-schema a)]
+        Array [:vector (malli-schema a)]
+        Option (if (and (seq? a) (= 'Option (first a)))
+                 (unsupported t)
+                 [:maybe (malli-schema a)])
+        Prod [:tuple (malli-schema a) (malli-schema b)]
+        (unsupported t)))
+
+    :else (unsupported t)))
+
+
+(defn fn-schema
+  "malli function schema `[:=> [:cat T ...] R]` of a `lean-clj.typed/defn`
+  var, for `malli.core/=>`."
+  [v]
+  (let [{:keys [binders ret]} (:lean/sig (meta v))]
+    [:=> (into [:cat] (map malli-schema (take-nth 2 (rest binders)))) (malli-schema ret)]))
+
+
+(defn kondo-type
+  "clj-kondo type of the Clojure values of the Lean type `t`."
+  [t]
+  (cond
+    (symbol? t)
+    (case t
+      Nat :nat-int
+      Int :int
+      Bool :boolean
+      String :string
+      Char :char
+      (case (:kind (lookup t))
+        :struct :map
+        :enum :keyword))
+
+    (seq? t)
+    (let [[head a] t]
+      (case head
+        List :seq
+        Array :vector
+        Prod :vector
+        Option (if (and (seq? a) (= 'Option (first a)))
+                 (unsupported t)
+                 (keyword "nilable" (name (kondo-type a))))
+        (unsupported t)))
+
+    :else (unsupported t)))
+
+
+(defn kondo-config
+  "clj-kondo `:type-mismatch` config of the `lean-clj.typed/defn` functions
+  in the namespaces `nss`."
+  [nss]
+  {:linters
+   {:type-mismatch
+    {:namespaces
+     (into (sorted-map)
+           (for [ns nss]
+             [(ns-name ns)
+              (into (sorted-map)
+                    (for [[sym v] (ns-interns ns)
+                          :let [{:keys [binders ret]} (:lean/sig (meta v))]
+                          :when binders
+                          :let [args (take-nth 2 (rest binders))]]
+                      [sym {:arities {(count args) {:args (mapv kondo-type args) :ret (kondo-type ret)}}}]))]))}}})
+
+
+(defn write-kondo-config!
+  "Write `kondo-config` of `nss` to `.clj-kondo/lean-clj/types/config.edn`,
+  where clj-kondo picks it up."
+  [nss]
+  (let [f (io/file ".clj-kondo" "lean-clj" "types" "config.edn")]
+    (io/make-parents f)
+    (spit f (with-out-str (pprint/pprint (kondo-config nss))))
+    (str f)))
