@@ -24,15 +24,24 @@
     (apply str head (map #(if (seq %) (str (str/upper-case (subs % 0 1)) (subs % 1)) "") tail))))
 
 
+(defn- ident-part
+  [s]
+  (let [s (if (re-matches #"[\p{L}\p{N}_'!?]+(-[\p{L}\p{N}_'!?]+)+" s) (camel-part s) s)]
+    (if (or (not (re-find #"[\p{L}\p{N}]" s)) (re-matches #"[\p{L}_][\p{L}\p{N}_'!?₀-₉]*|[0-9]+" s))
+      s
+      (str "«" s "»"))))
+
+
 (defn ident
   "Lean identifier of a symbol or keyword: each `.`-separated part with a `-`
-  becomes lowerCamelCase."
+  becomes lowerCamelCase, and a part that mixes letters with characters
+  Lean identifiers do not take is written in `«»` (operators stay as they are)."
   [x]
   (let [s (if (keyword? x) (name x) (str x))]
-    (if (or (= s ".") (= s "..") (not (str/includes? s "-")))
+    (if (or (= s ".") (= s ".."))
       s
       (->> (str/split s #"\." -1)
-           (map camel-part)
+           (map ident-part)
            (str/join ".")))))
 
 
@@ -111,7 +120,9 @@
     :else
     (case head
       lean (first args)
-      if (let [[c t e] args] (str "(if " (term c) " then " (term t) " else " (term e) ")"))
+      if (if (= 4 (count args))
+           (let [[h c t e] args] (str "(if " (term h) " : " (term c) " then " (term t) " else " (term e) ")"))
+           (let [[c t e] args] (str "(if " (term c) " then " (term t) " else " (term e) ")")))
       let (let [[bs body] args]
             (str "("
                  (->> (partition 2 bs)
@@ -122,6 +133,8 @@
                  (str "(fun " (str/join " " (map term params)) " => " (term body) ")"))
       match (let [[d & clauses] args]
               (str "(match " (if (vector? d) (comma d) (term d)) " with" (match-arms clauses) ")"))
+      match-eq (let [[h d & clauses] args]
+                 (str "(match " (term h) " : " (term d) " with" (match-arms clauses) ")"))
       the (let [[t e] args] (str "(" (term e) " : " (term t) ")"))
       -> (str "(" (str/join " → " (map term args)) ")")
       forall (let [[bs p] args] (str "(∀ " (binders bs) ", " (term p) ")"))
@@ -154,7 +167,7 @@
     (char? x) (lean-char x)
     (boolean? x) (str x)
     (ratio? x) (throw (ex-info "lean-clj.dsl: ratios have no Lean literal" {:value x}))
-    (number? x) (str x)
+    (number? x) (if (neg? x) (str "(" x ")") (str x))
     :else (throw (ex-info (str "lean-clj.dsl: cannot render " (pr-str x)) {:value x}))))
 
 
@@ -230,10 +243,16 @@
 
 (defn- def-like
   [kw [nm bs & more]]
-  (let [[ty body] (if (= 2 (count more)) more [nil (first more)])]
+  (let [[ty body] (if (= 2 (count more)) more [nil (first more)])
+        {:keys [termination-by decreasing-by]} (meta nm)]
     (str (modifiers nm) kw " " (ident nm) (head-binders bs)
          (when ty (str " : " (term ty)))
-         " := " (term body))))
+         " := " (term body)
+         (when termination-by (str "\ntermination_by " (term termination-by)))
+         (when decreasing-by
+           (str "\ndecreasing_by " (if (and (seq? decreasing-by) (= 'by (first decreasing-by)))
+                                     (str "(" (str/join "; " (map tactic (rest decreasing-by))) ")")
+                                     (tactic decreasing-by)))))))
 
 
 (defn- deriving?

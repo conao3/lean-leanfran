@@ -8,13 +8,18 @@
   (t/is (= "isPrime?" (dsl/ident 'is-prime?)))
   (t/is (= "xs.foldLeft" (dsl/ident 'xs.fold-left)))
   (t/is (= "Nat.add_comm" (dsl/ident 'Nat.add_comm)))
-  (t/is (= "fieldName" (dsl/ident :field-name))))
+  (t/is (= "fieldName" (dsl/ident :field-name)))
+  (t/is (= "«->x»" (dsl/ident '->x)))
+  (t/is (= "*" (dsl/ident '*))))
 
 
 (t/deftest terms
   (t/is (= "((a + b) * 2)" (dsl/term '(* (+ a b) 2))))
   (t/is (= "(-x)" (dsl/term '(- x))))
   (t/is (= "(if (n = 0) then 1 else n)" (dsl/term '(if (= n 0) 1 n))))
+  (t/is (= "(if h : (n = 0) then 1 else n)" (dsl/term '(if h (= n 0) 1 n))))
+  (t/is (= "(match h : xs.head? with | (some x) => x | none => 0)" (dsl/term '(match-eq h (.head? xs) (some x) x none 0))))
+  (t/is (= "(f (-3))" (dsl/term '(f -3))))
   (t/is (= "(let x := 1; let y := 2; (x + y))" (dsl/term '(let [x 1 y 2] (+ x y)))))
   (t/is (= "(fun x y => (x * y))" (dsl/term '(fn [x y] (* x y)))))
   (t/is (= "(match n with | 0 => 1 | (k + 1) => k)" (dsl/term '(match n 0 1 (+ k 1) k))))
@@ -46,6 +51,8 @@
   (t/is (= "def answer := 42" (dsl/command '(def answer [] 42))))
   (t/is (= "@[simp] partial def f {α : Type} [BEq α] (x : α) : Bool := (x == x)"
            (dsl/command '(def ^{:attrs [simp] :partial true} f [(implicit α Type) (inst (BEq α)) x α] Bool (== x x)))))
+  (t/is (= "def f (n : Nat) : Nat := (f (n - 1))\ntermination_by n\ndecreasing_by (simp_wf; omega)"
+           (dsl/command '(def ^{:termination-by n :decreasing-by (by simp-wf omega)} f [n Nat] Nat (f (- n 1))))))
   (t/is (= "theorem t (n : Nat) : (n = n) := rfl" (dsl/command '(theorem t [n Nat] (= n n) rfl))))
   (t/is (= "structure P where\n  x : Nat\n  y : Int\n  deriving Repr"
            (dsl/command '(structure P [x Nat y Int] (deriving Repr)))))
