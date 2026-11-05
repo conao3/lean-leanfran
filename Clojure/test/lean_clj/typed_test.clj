@@ -32,11 +32,11 @@
 
 (t/deftest defn-records-the-signature
   (let [sig (:lean/sig (meta #'sum-list))]
-    (t/is (= '[xs (List Int)] (:binders sig)))
-    (t/is (= 'Int (:ret sig)))
+    (t/is (= '[xs (List Int)] (:binders (first (:arities sig)))))
+    (t/is (= 'Int (:ret (first (:arities sig)))))
     (t/is (= 'lean-clj.typed-test (:ns sig)))
     (t/is (= '(.length xs) (:termination-by sig)))
-    (t/is (= '(if-let [x (first xs)] (+ x (sum-list (rest xs))) 0) (:body sig))))
+    (t/is (= '(if-let [x (first xs)] (+ x (sum-list (rest xs))) 0) (:body (first (:arities sig))))))
   (t/is (not (contains? (meta #'sum-list) :termination-by))))
 
 

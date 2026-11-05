@@ -8,6 +8,7 @@
     [clojure.java.io :as io]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
+    [clojure.walk :as walk]
     [lean-clj.dsl :as dsl]
     [lean-clj.runtime]
     [lean-clj.translate :as translate]
@@ -250,14 +251,36 @@
      (read-forms text))))
 
 
+(defn- export-command
+  "`(export f {:at {α Int} :as name})`: a monomorphic definition that calls
+  the polymorphic definition `f` of the block, which Clojure can call."
+  [body [_ f {:keys [at as]} :as cmd]]
+  (let [d (first (filter #(and (seq? %) (#{'def 'abbrev} (first %)) (= (name (second %)) (name f))) body))
+        _ (when-not d (throw (ex-info (str "lean-clj: export names no definition of the block: " f) {:command cmd})))
+        [_ _ bs & more] d
+        _ (when-not (= 2 (count more)) (throw (ex-info (str "lean-clj: export needs the return type of " f) {:command cmd})))
+        ret (first more)
+        {:keys [params type-vars]} (types/binder-parts bs)
+        at (merge (zipmap type-vars (repeat 'Int)) at)
+        s (fn [t] (walk/postwalk #(if (and (symbol? %) (contains? at %)) (get at %) %) t))
+        nm (or as (symbol (str f "-" (str/join "-" (map #(str/lower-case (str %)) (vals at))))))]
+    (list 'def nm (vec (mapcat (fn [[x t]] [x (s t)]) params)) (s ret) (list* f (map first params)))))
+
+
+(defn- export-command?
+  [x]
+  (and (seq? x) (= 'export (first x))))
+
+
 (defn- render-body
   [ns block body extern?]
   (types/register-commands! (module-name (ns-name ns) block)
-                            (remove #(or (string? %) (translate/clojure-command? %)) body))
+                            (remove #(or (string? %) (translate/clojure-command? %) (export-command? %)) body))
   (mapv (fn [x]
           (merge (cond
                    (string? x) {:text (dedent x)}
                    (translate/clojure-command? x) (translate/render-command ns x extern?)
+                   (export-command? x) {:text (dsl/command (export-command body x))}
                    :else {:text (dsl/command x)})
                  {:line (:line (meta x))
                   :verbatim (string? x)}))

@@ -10,6 +10,7 @@
     [clojure.pprint :as pprint]
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
+    [clojure.walk :as walk]
     [lean-clj.dsl :as dsl]
     [lean-clj.runtime :as runtime]))
 
@@ -294,6 +295,8 @@
   "malli schema of the Clojure values of the Lean type `t`, as data."
   [t]
   (cond
+    (= '_ t) :any
+
     (symbol? t)
     (case t
       Nat [:and 'integer? [:>= 0]]
@@ -331,18 +334,57 @@
     :else (unsupported t)))
 
 
+(defn binder-parts
+  "The parts of a `lean-clj.typed` binder vector `[x T ... & xs (List T)]`:
+  `:params`, the `[name type]` pairs of the fixed parameters, `:rest`, the pair
+  after `&`, `:type-params`, the binder lists (`(implicit α Type)`,
+  `(inst (BEq α))`) that are not Clojure parameters, `:type-vars`, the names
+  they bind, and `:args`, the Clojure argument vector."
+  [bs]
+  (loop [bs (seq bs) params [] specials [] rest-param nil]
+    (if-not bs
+      {:params params
+       :rest rest-param
+       :type-params specials
+       :type-vars (set (keep (fn [[kind x]] (when (#{'implicit 'strict} kind) x)) specials))
+       :args (vec (concat (map first params) (when rest-param ['& (first rest-param)])))}
+      (let [b (first bs)]
+        (cond
+          (seq? b) (recur (next bs) params (conj specials b) rest-param)
+          (= '& b) (let [[_ n t & more] bs]
+                     (when (or (nil? t) (seq more))
+                       (throw (ex-info "lean-clj.types: & takes one name and its List type, last" {:binders bs})))
+                     (recur nil params specials [n t]))
+          (nil? (next bs)) (throw (ex-info (str "lean-clj.types: binder " b " has no type") {:binders bs}))
+          :else (recur (nnext bs) (conj params [b (second bs)]) specials rest-param))))))
+
+
+(defn- with-vars
+  "`f` of a type whose type variables `vars` stand for any value."
+  [f vars _ t]
+  (f (walk/postwalk #(if (and (symbol? %) (contains? vars %)) '_ %) t)))
+
+
 (defn fn-schema
-  "malli function schema `[:=> [:cat T ...] R]` of a `lean-clj.typed/defn`
-  var, for `malli.core/=>`."
+  "malli function schema of a `lean-clj.typed/defn` var, for
+  `malli.core/=>`: `[:=> [:cat T ...] R]`, or `[:function ...]` of one per
+  arity. Type variables become `:any`."
   [v]
-  (let [{:keys [binders ret]} (:lean/sig (meta v))]
-    [:=> (into [:cat] (map malli-schema (take-nth 2 (rest binders)))) (malli-schema ret)]))
+  (let [schemas (for [{:keys [binders ret]} (:arities (:lean/sig (meta v)))
+                      :let [{:keys [params rest type-vars]} (binder-parts binders)
+                            s (partial with-vars malli-schema type-vars :any)]]
+                  [:=> (cond-> (into [:cat] (map (comp s second) params))
+                         rest (conj [:* (s (second (second rest)))]))
+                   (s ret)])]
+    (if (= 1 (count schemas)) (first schemas) (into [:function] schemas))))
 
 
 (defn kondo-type
   "clj-kondo type of the Clojure values of the Lean type `t`."
   [t]
   (cond
+    (= '_ t) :any
+
     (symbol? t)
     (case t
       Nat :nat-int
@@ -387,10 +429,19 @@
              [(ns-name ns)
               (into (sorted-map)
                     (for [[sym v] (ns-interns ns)
-                          :let [{:keys [binders ret]} (:lean/sig (meta v))]
-                          :when binders
-                          :let [args (take-nth 2 (rest binders))]]
-                      [sym {:arities {(count args) {:args (mapv kondo-type args) :ret (kondo-type ret)}}}]))]))}}})
+                          :let [arities (:arities (:lean/sig (meta v)))]
+                          :when arities]
+                      [sym {:arities
+                            (into {}
+                                  (for [{:keys [binders ret]} arities
+                                        :let [{:keys [params rest type-vars]} (binder-parts binders)
+                                              k (partial with-vars kondo-type type-vars :any)
+                                              args (mapv (comp k second) params)]]
+                                    (if rest
+                                      [:varargs {:args (conj args {:op :rest :spec (k (second (second rest)))})
+                                                 :min-arity (count params)
+                                                 :ret (k ret)}]
+                                      [(count params) {:args args :ret (k ret)}])))}]))]))}}})
 
 
 (defn write-kondo-config!

@@ -37,6 +37,8 @@
     (string? form) (map #(str prefix %) (names-in-source form))
     (seq? form) (case (first form)
                   (def abbrev) [(str prefix (second form))]
+                  export (let [[_ f {:keys [at as]}] form]
+                           [(str prefix (or as (str f "-" (str/join "-" (map #(str/lower-case (str %)) (vals (merge {'α 'Int} at)))))))])
                   mutual (mapcat #(names-in-form prefix %) (rest form))
                   namespace (mapcat #(names-in-form (str prefix (second form) ".") %) (nnext form))
                   nil)
@@ -58,16 +60,29 @@
                       (api/list-node [(api/token-node 'declare) (api/token-node (symbol n))]))))}))
 
 
+(defn- clojure-args
+  "The Clojure parameters of a binder vector node: names before their types,
+  `&` and the rest name, without the type-parameter lists."
+  [bs]
+  (loop [cs (:children bs) acc []]
+    (if-let [c (first cs)]
+      (cond
+        (api/list-node? c) (recur (rest cs) acc)
+        (= '& (api/sexpr c)) (recur (drop 3 cs) (conj acc c (second cs)))
+        :else (recur (drop 2 cs) (conj acc c)))
+      (api/vector-node acc))))
+
+
 (defn typed-defn
   [{:keys [node]}]
   (let [[_ nm & more] (:children node)
         [doc more] (if (api/string-node? (first more)) [(first more) (rest more)] [nil more])
-        [bs _ret & body] more]
+        arities (if (api/vector-node? (first more)) [more] (map :children more))]
     {:node (api/list-node
              (concat [(api/token-node 'clojure.core/defn) (api/token-node (with-meta (api/sexpr nm) nil))]
                      (when doc [doc])
-                     [(api/vector-node (take-nth 2 (:children bs)))]
-                     body))}))
+                     (for [[bs _ret & body] arities]
+                       (api/list-node (cons (clojure-args bs) body)))))}))
 
 
 (defn typed-loop

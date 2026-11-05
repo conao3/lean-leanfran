@@ -7,7 +7,8 @@
   the syntax."
   (:require
     [clojure.string :as str]
-    [lean-clj.dsl :as dsl]))
+    [lean-clj.dsl :as dsl]
+    [lean-clj.types :as types]))
 
 
 (set! *warn-on-reflection* true)
@@ -195,7 +196,7 @@
   (update ctx :locals merge (zipmap xs (repeat nil))))
 
 
-(declare tr tr-test)
+(declare tr tr-test typed-call pick-arity arity-name)
 
 
 (defn- tr-all
@@ -564,8 +565,7 @@
                         1 (list (field head) (tr ctx (first args)))
                         2 (list (field head) (tr ctx (first args)))
                         (fail "a keyword takes a map and an optional default" form))
-      (and v (typed-var? v)) (do (swap! (:deps ctx) conj v)
-                                 (list* (:name (:lean/sig (meta v))) (tr-all ctx args)))
+      (and v (typed-var? v)) (typed-call ctx v args form)
       (and v (lean-var? v)) (do (swap! (:modules ctx) conj (:lean/module (meta v)))
                                 (list* (symbol (:lean/name (meta v))) (tr-all ctx args)))
       (and v (string-var? v)) (tr-string ctx (.sym ^clojure.lang.Var v) args form)
@@ -670,7 +670,9 @@
                   (let [v (resolve-var ctx x)]
                     (cond
                       (nil? v) (fail "unresolved symbol" x)
-                      (typed-var? v) (do (swap! (:deps ctx) conj v) (:name (:lean/sig (meta v))))
+                      (typed-var? v) (do (swap! (:deps ctx) conj v)
+                                         (let [sig (:lean/sig (meta v))]
+                                           (arity-name sig (pick-arity sig 1 x))))
                       (lean-var? v) (do (swap! (:modules ctx) conj (:lean/module (meta v)))
                                         (symbol (:lean/name (meta v))))
                       (string-var? v) (or (:model (string-fns (.sym ^clojure.lang.Var v)))
@@ -693,36 +695,84 @@
 
 ;; Models
 
+(defn- arity-parts
+  [a]
+  (types/binder-parts (:binders a)))
+
+
+(defn- arity-name
+  "Lean name of the model of the arity `a` of a translated function."
+  [{:keys [name arities]} a]
+  (if (= 1 (count arities))
+    name
+    (let [{:keys [params rest]} (arity-parts a)]
+      (symbol (str name ".arity" (count params) (when rest "v"))))))
+
+
+(defn- pick-arity
+  "The arity of `sig` that a call with `n` arguments takes: a fixed one, else
+  the one with rest arguments."
+  [sig n form]
+  (let [fits (fn [a]
+               (let [{:keys [params rest]} (arity-parts a)]
+                 (if rest (>= n (count params)) (= n (count params)))))]
+    (or (first (filter #(and (fits %) (not (:rest (arity-parts %)))) (:arities sig)))
+        (first (filter fits (:arities sig)))
+        (fail (str (:name sig) " has no arity for " n " arguments") form))))
+
+
+(defn- typed-call
+  [ctx v args form]
+  (swap! (:deps ctx) conj v)
+  (let [sig (:lean/sig (meta v))
+        a (pick-arity sig (count args) form)
+        {:keys [params rest]} (arity-parts a)
+        [fixed more] (split-at (count params) args)]
+    (list* (arity-name sig a)
+           (concat (tr-all ctx fixed) (when rest [(tr-all ctx more)])))))
+
+
 (defn- extern-name
-  [{:keys [ns name]}]
-  (str "clj:" ns "/" name))
+  [{:keys [ns name]} variadic?]
+  (str (if variadic? "clj&:" "clj:") ns "/" name))
 
 
 (defn- model-of
-  "The model of the function `v`: its command, the translated functions it
-  calls, and the Lean modules of the functions from Lean it calls."
+  "The models of the arities of the function `v`: their commands, the
+  translated functions they call, and the Lean modules of the functions from
+  Lean they call. A polymorphic arity has no `@[extern]`: its type arguments
+  have no Clojure value to pass."
   [v extern?]
-  (let [{:keys [binders ret body name] :as sig} (:lean/sig (meta v))
-        counter (atom 0)
-        pairs (partition 2 binders)
-        params (mapv (fn [[p _]] (if (symbol? p) p (symbol (str "arg" (swap! counter inc))))) pairs)
-        destr (mapcat (fn [[p _] x] (when-not (symbol? p) [p x])) pairs params)
-        ctx {:ns (:ns sig)
-             :name name
-             :ret ret
-             :locals (zipmap params (repeat nil))
-             :recur {:helper name :arity (count params)}
-             :counter counter
-             :deps (atom #{})
-             :modules (atom #{})}
-        body (if (seq destr) (list 'clojure.core/let (vec destr) body) body)
-        body' (binding [*where* (select-keys sig [:file :line :name])] (tr ctx body))
-        m (cond-> (select-keys sig [:termination-by :decreasing-by])
-            extern? (assoc :attrs [(str "extern \"" (extern-name sig) "\"")]))]
-    {:command (list 'def (with-meta name m) (vec (mapcat (fn [x [_ t]] [x t]) params pairs)) ret body')
-     :deps (disj @(:deps ctx) v)
-     :self? (contains? @(:deps ctx) v)
-     :modules @(:modules ctx)}))
+  (let [{:keys [arities] :as sig} (:lean/sig (meta v))
+        deps (atom #{})
+        modules (atom #{})
+        commands
+        (vec (for [a arities]
+               (let [{:keys [params rest type-params]} (arity-parts a)
+                     counter (atom 0)
+                     pairs (cond-> params rest (conj rest))
+                     xs (mapv (fn [[p _]] (if (symbol? p) p (symbol (str "arg" (swap! counter inc))))) pairs)
+                     destr (mapcat (fn [[p _] x] (when-not (symbol? p) [p x])) pairs xs)
+                     model (arity-name sig a)
+                     ctx {:ns (:ns sig)
+                          :name model
+                          :ret (:ret a)
+                          :locals (zipmap xs (repeat nil))
+                          :recur {:helper model :arity (count xs)}
+                          :counter counter
+                          :deps deps
+                          :modules modules}
+                     body (if (seq destr) (list 'clojure.core/let (vec destr) (:body a)) (:body a))
+                     body' (binding [*where* (select-keys sig [:file :line :name])] (tr ctx body))
+                     m (cond-> (select-keys sig [:termination-by :decreasing-by])
+                         (seq type-params) (assoc :private true)
+                         (and extern? (empty? type-params)) (assoc :attrs [(str "extern \"" (extern-name sig rest) "\"")]))]
+                 (list 'def (with-meta model m)
+                       (vec (concat type-params (mapcat (fn [x [_ t]] [x t]) xs pairs)))
+                       (:ret a) body'))))]
+    {:commands commands
+     :deps (disj @deps v)
+     :modules @modules}))
 
 
 (defn- sccs
@@ -771,8 +821,10 @@
       (throw (ex-info "lean-clj.translate: two translated functions share a name" {:names names})))
     {:commands (vec (for [c (sccs (sort-by str (keys found)) #(sort-by str (:deps (found %))))]
                       (if (= 1 (count c))
-                        (:command (found (first c)))
-                        (list* 'mutual (map #(:command (found %)) (sort-by str c))))))
+                        (if (= 1 (count (:commands (found (first c)))))
+                          (first (:commands (found (first c))))
+                          (list* 'mutual (:commands (found (first c)))))
+                        (list* 'mutual (mapcat #(:commands (found %)) (sort-by str c))))))
      :modules (set (mapcat :modules (vals found)))}))
 
 
