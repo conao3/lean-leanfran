@@ -223,14 +223,21 @@
   (list '= (list 'Clj.truthy (tr-test ctx c)) true))
 
 
+(defn- lifted
+  "A branch whose other branch is `nil`: coerced to `Option`, so that Lean
+  settles its type before lifting it."
+  [x other]
+  (if (and (nil? other) (some? x)) (list 'coe x) x))
+
+
 (defn- tr-if
   "`(if c t e)`. When `c` is a local, it stands for its non-nil value in `t`."
   [ctx c t e]
   (let [h (fresh! ctx "_h")
         then (if (and (symbol? c) (local? ctx c))
-               (list 'let [c (list 'Clj.Unwrap.unwrap c h)] (tr ctx t))
-               (tr ctx t))]
-    (list 'if h (condition ctx c) then (tr ctx e))))
+               (list 'let [c (list 'Clj.Unwrap.unwrap c h)] (lifted (tr ctx t) e))
+               (lifted (tr ctx t) e))]
+    (list 'if h (condition ctx c) then (lifted (tr ctx e) t))))
 
 
 (defn- tr-cond
@@ -337,8 +344,8 @@
   (when-not (and (vector? bs) (= 2 (count bs))) (fail "needs one binding" form))
   (let [[b v] bs
         x (if (symbol? b) b (fresh! ctx "d"))
-        body (tr (bind ctx [x]) (if (symbol? b) t (list 'clojure.core/let [b x] t)))
-        else (tr ctx e)]
+        body (lifted (tr (bind ctx [x]) (if (symbol? b) t (list 'clojure.core/let [b x] t))) e)
+        else (lifted (tr ctx e) t)]
     (list 'match-eq (fresh! ctx "_h") (tr ctx v)
           (list 'some x) (if truthy? (list 'if (list 'Clj.truthy x) body else) body)
           'none else)))
@@ -741,7 +748,9 @@
   "The models of the arities of the function `v`: their commands, the
   translated functions they call, and the Lean modules of the functions from
   Lean they call. A polymorphic arity has no `@[extern]`: its type arguments
-  have no Clojure value to pass."
+  have no Clojure value to pass. It takes `[Clj.Truthy α]` for each type
+  variable, so that a Clojure test of an `α` value uses the truthiness of the
+  type the caller instantiates `α` with."
   [v extern?]
   (let [{:keys [arities] :as sig} (:lean/sig (meta v))
         deps (atom #{})
@@ -768,7 +777,9 @@
                          (seq type-params) (assoc :private true)
                          (and extern? (empty? type-params)) (assoc :attrs [(str "extern \"" (extern-name sig rest) "\"")]))]
                  (list 'def (with-meta model m)
-                       (vec (concat type-params (mapcat (fn [x [_ t]] [x t]) xs pairs)))
+                       (vec (concat type-params
+                                    (for [[kind tv] type-params :when (= 'implicit kind)] (list 'inst (list 'Clj.Truthy tv)))
+                                    (mapcat (fn [x [_ t]] [x t]) xs pairs)))
                        (:ret a) body'))))]
     {:commands commands
      :deps (disj @deps v)

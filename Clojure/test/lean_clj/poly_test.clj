@@ -35,7 +35,7 @@
 (lean/deflean proofs
               (clojure member? clamp total uses-member)
 
-              (theorem member-nil [(implicit α Type) (inst (BEq α)) x α] (= (member? x []) false)
+              (theorem member-nil [(implicit α Type) (inst (BEq α)) (inst (Clj.Truthy α)) x α] (= (member? x []) false)
                        (by (simp [member?])))
 
               (theorem clamp-default [x Int] (= (clamp.arity1 x) (clamp.arity3 x 0 100))

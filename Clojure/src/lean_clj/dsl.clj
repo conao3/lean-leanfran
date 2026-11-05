@@ -64,7 +64,7 @@
 
 
 (def ^:private unops
-  {'- "-", 'not "¬", '! "!"})
+  {'- "-", 'not "¬", '! "!", 'coe "↑"})
 
 
 (defn- lean-string

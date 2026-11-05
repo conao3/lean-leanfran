@@ -58,10 +58,12 @@ def not [Truthy α] (x : α) : Bool := !truthy x
 class Unwrap (α : Type u) (β : outParam (Type u)) [Truthy α] where
   unwrap : (x : α) → truthy x = true → β
 
-instance (priority := low) [Truthy α] : Unwrap α α := ⟨fun x _ => x⟩
+instance (priority := low) unwrapSelf [Truthy α] : Unwrap α α := ⟨fun x _ => x⟩
 instance : Unwrap (Option α) α := ⟨fun x h => x.get (by simpa [Truthy.truthy] using h)⟩
 
 @[simp, clj_simp] theorem unwrap_some (a : α) (h : truthy (some a) = true) : Unwrap.unwrap (some a) h = a := rfl
+@[simp, clj_simp] theorem unwrap_self [Truthy α] (x : α) (h : truthy x = true) :
+    @Unwrap.unwrap α α _ unwrapSelf x h = x := rfl
 
 /-! ## Equality -/
 
@@ -533,9 +535,7 @@ def empty : Map κ ν := ⟨[]⟩
 def get [BEq κ] (m : Map κ ν) (k : κ) : Option ν := (m.entries.find? fun e => e.1 == k).map (·.2)
 def contains [BEq κ] (m : Map κ ν) (k : κ) : Bool := m.entries.any fun e => e.1 == k
 def erase [BEq κ] (m : Map κ ν) (k : κ) : Map κ ν := ⟨m.entries.filter fun e => !(e.1 == k)⟩
-def insert [BEq κ] (m : Map κ ν) (k : κ) (v : ν) : Map κ ν :=
-  if m.contains k then ⟨m.entries.map fun e => if e.1 == k then (k, v) else e⟩
-  else ⟨m.entries ++ [(k, v)]⟩
+def insert [BEq κ] (m : Map κ ν) (k : κ) (v : ν) : Map κ ν := ⟨(k, v) :: (m.erase k).entries⟩
 def ofList [BEq κ] (kvs : List (κ × ν)) : Map κ ν := kvs.foldl (fun m e => m.insert e.1 e.2) empty
 
 end Map
@@ -554,6 +554,29 @@ instance [BEq κ] [BEq ν] : BEq (Map κ ν) :=
   ⟨fun a b => a.entries.length == b.entries.length && a.entries.all fun e => b.get e.1 == some e.2⟩
 instance [BEq α] : BEq (Set α) :=
   ⟨fun a b => a.elems.length == b.elems.length && a.elems.all b.contains⟩
+namespace Map
+
+@[simp, clj_simp] theorem get_empty [BEq κ] (k : κ) : (empty : Map κ ν).get k = none := rfl
+
+@[simp, clj_simp] theorem get_insert_self [BEq κ] [ReflBEq κ] (m : Map κ ν) (k : κ) (v : ν) :
+    (m.insert k v).get k = some v := by
+  simp [insert, get]
+
+@[simp, clj_simp] theorem get_insert_ne [BEq κ] [LawfulBEq κ] (m : Map κ ν) {k k' : κ} (v : ν) (h : k ≠ k') :
+    (m.insert k v).get k' = m.get k' := by
+  simp only [insert, get, erase, List.find?_cons]
+  have hk : (k == k') = false := by simpa using h
+  simp only [hk]
+  congr 1
+  induction m.entries with
+  | nil => rfl
+  | cons a t ih =>
+    by_cases ha : a.1 = k
+    · subst ha; simp [hk, ih]
+    · simp [List.find?_cons, ha, ih]
+
+end Map
+
 instance : Inhabited (Map κ ν) := ⟨Map.empty⟩
 instance : Inhabited (Set α) := ⟨Set.empty⟩
 
