@@ -1,0 +1,7 @@
+true false
+100 10
+1 6
+member? at Int true
+member? at String true
+clamp true
+total true

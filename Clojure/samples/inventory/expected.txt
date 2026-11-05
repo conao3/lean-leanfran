@@ -1,0 +1,8 @@
+{"apple" 5, "pear" 2}
+{"apple" 2, "pear" 2}
+nil
+{"apple" 4, "pear" 0}
+nil
+inventory.core/restock true
+inventory.core/take-out true
+inventory.core/fill-order true

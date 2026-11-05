@@ -40,7 +40,14 @@ specification each have a sample:
 | The specification runs as it is | use 1: a `deflean` definition is the program |
 | A faster implementation equals the specification on every input, and `@[csimp]` runs the implementation in its place | [`verified-clojure`](verified-clojure) (`sum-to`) |
 | A faster implementation equals the specification under an assumption, and callers that meet it call the implementation | [`sorted-search`](sorted-search) |
-| The implementation satisfies a property of its result | [`verified-clojure`](verified-clojure) (insertion sort is sorted) |
+| The implementation satisfies a property of its result | [`verified-clojure`](verified-clojure) (insertion sort is sorted), [`inventory`](inventory) (how operations change a map) |
+
+The samples also cover the Clojure that such functions are written in:
+
+| Sample | What it shows |
+|---|---|
+| [`inventory`](inventory) | maps (`(Map K V)`), `update` and `get` with defaults, `when` returning `nil`, and destructuring |
+| [`generic-search`](generic-search) | a polymorphic function, a function with two arities, and rest arguments |
 
 The signatures also serve Clojure tools without any proof:
 

@@ -1,4 +1,4 @@
-SAMPLES := todo-cli word-count roman-numerals verified-clojure sorted-search typed-schemas
+SAMPLES := todo-cli word-count roman-numerals verified-clojure sorted-search inventory generic-search typed-schemas
 
 .PHONY: test
 test:
