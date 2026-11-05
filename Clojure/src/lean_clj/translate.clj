@@ -67,7 +67,48 @@
    'into {:model 'Clj.into :arity #{2}}
    'contains? {:model 'Clj.contains? :arity #{2}}
    'nthnext {:model 'Clj.nthnext :arity #{2}}
-   'nthrest {:model 'Clj.nthrest :arity #{2}}})
+   'nthrest {:model 'Clj.nthrest :arity #{2}}
+   'some {:model 'Clj.someBy :arity #{2} :fn-args #{0}}
+   'every? {:model 'Clj.every? :arity #{2} :fn-args #{0}}
+   'not-every? {:model 'Clj.notEvery? :arity #{2} :fn-args #{0}}
+   'not-any? {:model 'Clj.notAny? :arity #{2} :fn-args #{0}}
+   'mapcat {:model 'Clj.mapcat :arity #{2} :fn-args #{0}}
+   'keep {:model 'Clj.keep :arity #{2} :fn-args #{0}}
+   'map-indexed {:model 'Clj.mapIndexed :arity #{2} :fn-args #{0}}
+   'keep-indexed {:model 'Clj.keepIndexed :arity #{2} :fn-args #{0}}
+   'last {:model 'Clj.last :arity #{1}}
+   'butlast {:model 'Clj.butlast :arity #{1}}
+   'take-while {:model 'Clj.takeWhile :arity #{2} :fn-args #{0}}
+   'drop-while {:model 'Clj.dropWhile :arity #{2} :fn-args #{0}}
+   'split-at {:model 'Clj.splitAt :arity #{2}}
+   'interpose {:model 'Clj.interpose :arity #{2}}
+   'interleave {:model 'Clj.interleave :arity #{2}}
+   'distinct {:model 'Clj.distinct :arity #{1}}
+   'mapv {:model 'Clj.mapv :arity #{2} :fn-args #{0}}
+   'filterv {:model 'Clj.filterv :arity #{2} :fn-args #{0}}
+   'partition {:model 'Clj.partition :arity #{2}}
+   'partition-all {:model 'Clj.partitionAll :arity #{2}}
+   'sort {:model 'Clj.sort :arity #{1}}
+   'sort-by {:model 'Clj.sortBy :arity #{2} :fn-args #{0}}
+   'max-key {:model 'Clj.maxKey :arity #{3} :fn-args #{0}}
+   'min-key {:model 'Clj.minKey :arity #{3} :fn-args #{0}}
+   'not-empty {:model 'Clj.notEmpty :arity #{1}}
+   'empty {:model 'Clj.empty :arity #{1}}
+   'subvec {:model 'Clj.subvec :arity #{3}}})
+
+
+(def ^:private string-fns
+  "clojure.string functions that are one model in `Clj.Str'`."
+  {'upper-case {:model 'Clj.Str'.upperCase :arity #{1}}
+   'lower-case {:model 'Clj.Str'.lowerCase :arity #{1}}
+   'trim {:model 'Clj.Str'.trim :arity #{1}}
+   'triml {:model 'Clj.Str'.triml :arity #{1}}
+   'trimr {:model 'Clj.Str'.trimr :arity #{1}}
+   'blank? {:model 'Clj.Str'.blank? :arity #{1}}
+   'starts-with? {:model 'Clj.Str'.startsWith? :arity #{2}}
+   'ends-with? {:model 'Clj.Str'.endsWith? :arity #{2}}
+   'includes? {:model 'Clj.Str'.includes? :arity #{2}}
+   'replace {:model 'Clj.Str'.replace :arity #{3}}})
 
 
 (def ^:private folds
@@ -92,6 +133,7 @@
       (folds sym)
       (chains sym)
       (values sym)
+      (when (= 'identity sym) (list 'fn ['x0] 'x0))
       (fail (str "clojure.core/" sym " has no model in Clj") form)))
 
 
@@ -387,6 +429,37 @@
                       (fail "needs at least two arguments" form)
                       (list 'not (tr-core ctx '= args form)))
       (= 'str sym) (if (zero? n) "" (fold '++ (map #(list 'Clj.str %) (tr-all ctx args))))
+      (= '/ sym) (case n
+                   0 (fail "needs at least one argument" form)
+                   1 (list 'Clj.div 1.0 (tr ctx (first args)))
+                   (fold 'Clj.div (tr-all ctx args)))
+      (and (= 'reduce sym) (= 2 n)) (let [[f coll] args
+                                          coll' (tr ctx coll)]
+                                      (cond
+                                        (var-is? ctx f 'clojure.core/+) (list 'Clj.reduce 'Clj.add 0 coll')
+                                        (var-is? ctx f 'clojure.core/*) (list 'Clj.reduce 'Clj.mul 1 coll')
+                                        (var-is? ctx f 'clojure.core/str) (list 'Clj.Str'.join1 coll')
+                                        :else (list 'Clj.reduce1 (tr-arg ctx #{0} 0 f) coll')))
+      (= 'apply sym) (let [[f coll & more] args]
+                       (when (seq more) (fail "apply takes a function and one collection" form))
+                       (cond
+                         (var-is? ctx f 'clojure.core/+) (list 'Clj.reduce 'Clj.add 0 (tr ctx coll))
+                         (var-is? ctx f 'clojure.core/*) (list 'Clj.reduce 'Clj.mul 1 (tr ctx coll))
+                         (var-is? ctx f 'clojure.core/str) (list 'Clj.Str'.join1 (tr ctx coll))
+                         (var-is? ctx f 'clojure.core/max) (list 'Clj.reduce1 'Clj.max (tr ctx coll))
+                         (var-is? ctx f 'clojure.core/min) (list 'Clj.reduce1 'Clj.min (tr ctx coll))
+                         :else (fail "apply takes +, *, str, max, or min, whose models fold a collection" form)))
+      (= 'identity sym) (if (= 1 n) (tr ctx (first args)) (fail "identity takes one argument" form))
+      (= 'comp sym) (let [x (fresh! ctx "x")]
+                      (list 'fn [x] (reduce (fn [acc f] (list (tr-arg ctx #{0} 0 f) acc)) x (reverse args))))
+      (= 'partial sym) (let [[f & bound] args
+                             x (fresh! ctx "x")]
+                         (list 'fn [x] (concat (list (tr-arg ctx #{0} 0 f)) (tr-all ctx bound) [x])))
+      (= 'constantly sym) (list 'fn [(fresh! ctx "_x")] (tr ctx (first args)))
+      (= 'subs sym) (case n
+                      2 (list* 'Clj.subsFrom (tr-all ctx args))
+                      3 (list* 'Clj.subs (tr-all ctx args))
+                      (fail "subs takes two or three arguments" form))
       (= 'list sym) (tr-all ctx args)
       (= 'vector sym) (tr ctx (vec args))
       (= 'range sym) (case n
@@ -419,6 +492,39 @@
       :else (fail (str "clojure.core/" sym " has no model in Clj") form))))
 
 
+(defn- string-var?
+  [^clojure.lang.Var v]
+  (= 'clojure.string (ns-name (.ns v))))
+
+
+(defn- plain-regex
+  "The string a regular expression literal matches, when it has no
+  metacharacters."
+  [x form]
+  (let [s (str x)]
+    (if (and (instance? java.util.regex.Pattern x) (not (re-find #"[\\.\[\]{}()*+?^$|]" s)))
+      s
+      (fail "split takes a regular expression literal of plain characters" form))))
+
+
+(defn- tr-string
+  [ctx sym args form]
+  (let [n (count args)]
+    (cond
+      (= 'join sym) (case n
+                      1 (list 'Clj.Str'.join1 (tr ctx (first args)))
+                      2 (list 'Clj.Str'.join (tr ctx (first args)) (tr ctx (second args)))
+                      (fail "join takes one or two arguments" form))
+      (= 'split sym) (if (= 2 n)
+                       (list 'Clj.Str'.split (tr ctx (first args)) (plain-regex (second args) form))
+                       (fail "split takes a string and a regular expression" form))
+      (string-fns sym) (let [{:keys [model arity]} (string-fns sym)]
+                         (if (contains? arity n)
+                           (list* model (tr-all ctx args))
+                           (fail (str "the model of clojure.string/" sym " takes " (str/join " or " (sort arity)) " arguments") form)))
+      :else (fail (str "clojure.string/" sym " has no model in Clj") form))))
+
+
 (defn- tr-call
   [ctx [head & args :as form]]
   (let [v (when (symbol? head) (resolve-var ctx head))]
@@ -431,6 +537,7 @@
                                  (list* (:name (:lean/sig (meta v))) (tr-all ctx args)))
       (and v (lean-var? v)) (do (swap! (:modules ctx) conj (:lean/module (meta v)))
                                 (list* (symbol (:lean/name (meta v))) (tr-all ctx args)))
+      (and v (string-var? v)) (tr-string ctx (.sym ^clojure.lang.Var v) args form)
       (and v (core-var? v)) (tr-core ctx (.sym ^clojure.lang.Var v) args form)
       v (fail (str head " is not a lean-clj.typed/defn function, a function from Lean, or modelled in Clj") form)
       (local? ctx head) (list* head (tr-all ctx args))
@@ -530,9 +637,12 @@
                       (typed-var? v) (do (swap! (:deps ctx) conj v) (:name (:lean/sig (meta v))))
                       (lean-var? v) (do (swap! (:modules ctx) conj (:lean/module (meta v)))
                                         (symbol (:lean/name (meta v))))
+                      (string-var? v) (or (:model (string-fns (.sym ^clojure.lang.Var v)))
+                                          (fail (str "clojure.string/" (.sym ^clojure.lang.Var v) " has no model in Clj") x))
                       (core-var? v) (value-of-core (.sym ^clojure.lang.Var v) x)
                       :else (fail (str x " is not a lean-clj.typed/defn function, a function from Lean, or modelled in Clj") x))))
     (or (string? x) (char? x) (boolean? x) (integer? x)) x
+    (double? x) (if (Double/isFinite x) x (fail "a model takes finite floating-point literals" x))
     (vector? x) (case (count x)
                   0 (list 'array)
                   2 (list* 'Clj.vec2 (tr-all ctx x))

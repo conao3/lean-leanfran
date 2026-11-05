@@ -82,7 +82,7 @@
   one without a Clojure value form here."
   [d]
   (if (keyword? d)
-    ({:nat 'Nat :int 'Int :bool 'Bool :string 'String :char 'Char} d)
+    ({:nat 'Nat :int 'Int :bool 'Bool :string 'String :char 'Char :float 'Float} d)
     (let [[k a b] d
           ta (when (some? a) (if (string? a) (symbol a) (desc-type a)))]
       (case k
@@ -155,6 +155,10 @@
   (gen/fmap #(+ (bigint Long/MAX_VALUE) 1 %) gen/nat))
 
 
+(def ^:private big-neg
+  (gen/fmap #(- (bigint Long/MIN_VALUE) 1 %) gen/nat))
+
+
 (def ^:dynamic *big-ints*
   "Whether `gen` mixes in integers beyond `Long`."
   true)
@@ -168,10 +172,11 @@
     (symbol? t)
     (case t
       Nat (if *big-ints* (gen/frequency [[9 gen/nat] [1 big-nat]]) gen/nat)
-      Int (if *big-ints* (gen/frequency [[9 gen/small-integer] [1 big-nat] [1 (gen/fmap - big-nat)]]) gen/small-integer)
+      Int (if *big-ints* (gen/frequency [[9 gen/small-integer] [1 big-nat] [1 big-neg]]) gen/small-integer)
       Bool gen/boolean
       String gen/string-ascii
       Char gen/char-ascii
+      Float (gen/double* {:NaN? false :infinite? false})
       (let [{:keys [kind fields ctors]} (lookup t)]
         (case kind
           :struct (apply gen/hash-map (mapcat (fn [[f ft]] [(field-key f) (gen ft)]) fields))
@@ -203,6 +208,7 @@
       Bool (boolean? x)
       String (string? x)
       Char (char? x)
+      Float (double? x)
       (let [{:keys [kind fields ctors]} (lookup t)]
         (case kind
           :struct (and (map? x)
@@ -233,6 +239,7 @@
       Bool :boolean
       String :string
       Char 'char?
+      Float :double
       (let [{:keys [kind fields ctors]} (lookup t)]
         (case kind
           :struct (into [:map {:closed true}] (map (fn [[f ft]] [(field-key f) (malli-schema ft)]) fields))
@@ -271,6 +278,7 @@
       Bool :boolean
       String :string
       Char :char
+      Float :double
       (case (:kind (lookup t))
         :struct :map
         :enum :keyword))

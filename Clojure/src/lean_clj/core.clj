@@ -85,9 +85,12 @@
   "name = \"lean-clj-embed\"\n\n[[lean_lib]]\nname = \"Clj\"\n\n[[lean_lib]]\nname = \"LeanCljEmbed\"\nglobs = [\"LeanCljEmbed.+\"]\n")
 
 
-(def ^:private clj-model
-  "Lean source of `Clj`, the models of `clojure.core`."
-  (slurp (io/resource "lean-clj/lean/Clj.lean")))
+(def ^:private clj-files
+  "Lean sources of `Clj`, the models of `clojure.core`, by path in the
+  workspace."
+  (into (sorted-map)
+        (for [f ["Clj.lean" "Clj/Attr.lean"]]
+          [f (slurp (io/resource (str "lean-clj/lean/" f)))])))
 
 
 (defn- spit-if-changed
@@ -102,7 +105,7 @@
   (let [ws (io/file *workspace*)]
     (.mkdirs ws)
     (spit-if-changed (io/file ws "lakefile.toml") lakefile)
-    (spit-if-changed (io/file ws "Clj.lean") clj-model)
+    (doseq [[f text] clj-files] (spit-if-changed (io/file ws f) text))
     ws))
 
 
@@ -232,7 +235,7 @@
          module (module-name ns-name block)
          lean (lean-file module opts src)
          _ (spit-if-changed (io/file ws (module-path module)) (:text lean))
-         key (sha256 (pr-str [generator-version (sha256 clj-model) (str ns-name) (:text lean)
+         key (sha256 (pr-str [generator-version (sha256 (pr-str clj-files)) (str ns-name) (:text lean)
                               (embedded-sources ws (:imports opts))]))
          cached (io/file ws "cache" (str key ".clj"))
          text (if (.exists cached)

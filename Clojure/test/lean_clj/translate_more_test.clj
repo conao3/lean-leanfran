@@ -3,6 +3,7 @@
   local functions, calls of functions from Lean, mutual recursion,
   destructuring, and quoted data."
   (:require
+    [clojure.string :as str]
     [clojure.test :as t]
     [lean-clj.core :as lean]
     [lean-clj.typed :as lt]))
@@ -132,3 +133,50 @@
 
 (t/deftest quoted-data
   (t/is (= '(2 3 5 7) (small-primes))))
+
+
+(lt/defn total
+  [xs (List Int)]
+  Int
+  (reduce + xs))
+
+
+(lt/defn total-by-apply
+  [xs (Array Int)]
+  Int
+  (apply + xs))
+
+
+(lt/defn inc-twice-all
+  [xs (List Int)]
+  (List Int)
+  (map (comp inc inc) xs))
+
+
+(lt/defn add-to-all
+  [n Int xs (List Int)]
+  (List Int)
+  (map (partial + n) xs))
+
+
+(lt/defn richest-first
+  [as (List Account)]
+  (List String)
+  (map :owner (reverse (sort-by :balance as))))
+
+
+(lt/defn shout
+  [words (List String)]
+  String
+  (str/upper-case (str/join " " words)))
+
+
+(lt/defn csv-fields
+  [line String]
+  (Array String)
+  (mapv str/trim (str/split line #",")))
+
+
+(t/deftest phase-three-translations-agree
+  (doseq [v [#'total #'total-by-apply #'inc-twice-all #'add-to-all #'richest-first #'shout #'csv-fields]]
+    (t/is (:pass? (lt/check v {:seed 5})) (str v))))

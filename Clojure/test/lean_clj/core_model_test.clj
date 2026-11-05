@@ -3,6 +3,7 @@
   the same generated inputs. A call where Clojure throws is outside what the
   models describe and counts as agreeing."
   (:require
+    [clojure.string :as str]
     [clojure.test :as t]
     [clojure.test.check :as tc]
     [clojure.test.check.generators :as gen]
@@ -32,7 +33,7 @@
 (declare models)
 
 
-#_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var]}
+#_{:clj-kondo/ignore [:unresolved-symbol :unresolved-var :invalid-arity]}
 
 
 (defmodels core-model
@@ -101,7 +102,70 @@
   (str-int [a Int] String (Clj.str a) str)
   (str-bool [a Bool] String (Clj.str a) str)
   (str-char [a Char] String (Clj.str a) str)
-  (str-option [a (Option String)] String (Clj.str a) str))
+  (str-option [a (Option String)] String (Clj.str a) str)
+  (some-even [xs (List Int)] (Option Bool) (Clj.someBy (fn [x] (Clj.even? x)) xs) #(some even? %))
+  (every-pos [xs (Array Int)] Bool (Clj.every? (fn [x] (Clj.pos? x)) xs) #(every? pos? %))
+  (not-every-pos [xs (List Int)] Bool (Clj.notEvery? (fn [x] (Clj.pos? x)) xs) #(not-every? pos? %))
+  (not-any-zero [xs (List Int)] Bool (Clj.notAny? (fn [x] (Clj.zero? x)) xs) #(not-any? zero? %))
+  (mapcat-twice [xs (List Int)] (List Int) (Clj.mapcat (fn [x] [x x]) xs) #(mapcat (fn [x] [x x]) %))
+  (keep-pos [xs (List Int)] (List Int) (Clj.keep (fn [x] (if (Clj.pos? x) (some x) none)) xs) #(keep (fn [x] (when (pos? x) x)) %))
+  (keep-even [xs (List Int)] (List Bool) (Clj.keep (fn [x] (Clj.even? x)) xs) #(keep even? %))
+  (map-indexed-add [xs (List Int)] (List Int) (Clj.mapIndexed (fn [i x] (Clj.add (the Int i) x)) xs) #(map-indexed + %))
+  (keep-indexed-odd [xs (List Int)] (List Int) (Clj.keepIndexed (fn [i x] (if (Clj.odd? (the Int i)) (some x) none)) xs) #(keep-indexed (fn [i x] (when (odd? i) x)) %))
+  (last-array [xs (Array Int)] (Option Int) (Clj.last xs) last)
+  (butlast-list [xs (List Int)] (Option (List Int)) (Clj.butlast xs) butlast)
+  (take-while-pos [xs (List Int)] (List Int) (Clj.takeWhile (fn [x] (Clj.pos? x)) xs) #(take-while pos? %))
+  (drop-while-pos [xs (Array Int)] (List Int) (Clj.dropWhile (fn [x] (Clj.pos? x)) xs) #(drop-while pos? %))
+  (split-at-list [n Nat xs (List Int)] (Prod (List Int) (List Int)) (Clj.splitAt n xs) split-at)
+  (interpose-list [x Int xs (List Int)] (List Int) (Clj.interpose x xs) interpose)
+  (interleave-list [xs (List Int) ys (Array Int)] (List Int) (Clj.interleave xs ys) interleave)
+  (distinct-list [xs (List Int)] (List Int) (Clj.distinct xs) distinct [(gen/fmap #(apply list %) (gen/vector (gen/choose 0 5)))])
+  (mapv-inc [xs (List Int)] (Array Int) (Clj.mapv Clj.inc xs) #(mapv inc %))
+  (filterv-even [xs (Array Int)] (Array Int) (Clj.filterv (fn [x] (Clj.even? x)) xs) #(filterv even? %))
+  (partition-list [n Nat xs (List Int)] (List (List Int)) (Clj.partition n xs) partition [(gen/choose 1 5) (types/gen '(List Int))])
+  (partition-all-list [n Nat xs (Array Int)] (List (List Int)) (Clj.partitionAll n xs) partition-all [(gen/choose 1 5) (types/gen '(Array Int))])
+  (sort-ints [xs (List Int)] (List Int) (Clj.sort xs) sort)
+  (sort-strings [xs (Array String)] (List String) (Clj.sort xs) sort)
+  (sort-by-neg [xs (List Int)] (List Int) (Clj.sortBy (fn [x] (Clj.neg x)) xs) #(sort-by - %))
+  (sort-by-parity [xs (List Int)] (List Int) (Clj.sortBy (fn [x] (Clj.even? x)) xs) #(sort-by even? %))
+  (max-key-square [a Int b Int] Int (Clj.maxKey (fn [x] (Clj.mul x x)) a b) #(max-key (fn [x] (* x x)) %1 %2))
+  (min-key-square [a Int b Int] Int (Clj.minKey (fn [x] (Clj.mul x x)) a b) #(min-key (fn [x] (* x x)) %1 %2))
+  (not-empty-list [xs (List Int)] (Option (List Int)) (Clj.notEmpty xs) not-empty)
+  (empty-array [xs (Array Int)] (Array Int) (Clj.empty xs) empty)
+  (subvec-array [xs (Array Int) a Nat b Nat] (Array Int) (Clj.subvec xs a b) subvec)
+  (reduce1-max [xs (List Int)] Int (Clj.reduce1 Clj.max xs) #(reduce max %))
+  (nthrest-list [xs (List Int) n Nat] (List Int) (Clj.nthrest xs n) nthrest)
+  (nthnext-array [xs (Array Int) n Nat] (Option (List Int)) (Clj.nthnext xs n) nthnext)
+  (str-array [xs (Array Int)] String (Clj.str xs) str)
+  (str-array-strings [xs (Array String)] String (Clj.str xs) str)
+  (str-array-options [xs (Array (Option Bool))] String (Clj.str xs) str)
+  (subs-from [s String a Nat] String (Clj.subsFrom s a) subs)
+  (subs-range [s String a Nat b Nat] String (Clj.subs s a b) subs)
+  (count-string [s String] Nat (Clj.count s) count)
+  (first-string [s String] (Option Char) (Clj.first s) first)
+  (upper-case [s String] String (Clj.Str'.upperCase s) str/upper-case)
+  (lower-case [s String] String (Clj.Str'.lowerCase s) str/lower-case)
+  (trim-string [s String] String (Clj.Str'.trim s) str/trim [(gen/fmap #(apply str %) (gen/vector (gen/elements [\a \space \tab \newline \b])))])
+  (triml-string [s String] String (Clj.Str'.triml s) str/triml [(gen/fmap #(apply str %) (gen/vector (gen/elements [\a \space \tab \newline \b])))])
+  (trimr-string [s String] String (Clj.Str'.trimr s) str/trimr [(gen/fmap #(apply str %) (gen/vector (gen/elements [\a \space \tab \newline \b])))])
+  (blank-string [s (Option String)] Bool (Clj.Str'.blank? s) str/blank? [(gen/one-of [(gen/return nil) (gen/fmap #(apply str %) (gen/vector (gen/elements [\a \space \tab])))])])
+  (starts-with [s String p String] Bool (Clj.Str'.startsWith? s p) str/starts-with? [(gen/elements ["abc" "ab" "" "b"]) (gen/elements ["a" "ab" "" "c"])])
+  (ends-with [s String p String] Bool (Clj.Str'.endsWith? s p) str/ends-with? [(gen/elements ["abc" "bc" "" "b"]) (gen/elements ["c" "bc" "" "a"])])
+  (includes [s String p String] Bool (Clj.Str'.includes? s p) str/includes? [(gen/elements ["abc" "bcd" "" "b"]) (gen/elements ["bc" "c" "" "x"])])
+  (join-sep [sep String xs (List Int)] String (Clj.Str'.join sep xs) str/join)
+  (join-all [xs (Array String)] String (Clj.Str'.join1 xs) str/join)
+  (split-comma [s String] (Array String) (Clj.Str'.split s ",") #(str/split % #",") [(gen/fmap #(apply str %) (gen/vector (gen/elements [\a \, \b])))])
+  (replace-string [s String m String r String] String (Clj.Str'.replace s m r) str/replace [(gen/elements ["abab" "" "ba"]) (gen/elements ["a" "ab" ""]) (gen/elements ["x" ""])])
+  (add-float [a Float b Float] Float (Clj.add a b) +)
+  (mul-float [a Float b Float] Float (Clj.mul a b) *)
+  (sub-float [a Float b Float] Float (Clj.sub a b) -)
+  (div-float [a Float b Float] Float (Clj.div a b) /)
+  (quot-float [a Float b Float] Float (Clj.quot a b) quot)
+  (rem-float [a Float b Float] Float (Clj.rem a b) rem)
+  (mod-float [a Float b Float] Float (Clj.mod a b) mod)
+  (lt-float [a Float b Float] Bool (Clj.lt a b) <)
+  (max-float [a Float b Float] Float (Clj.max a b) max)
+  (inc-float [a Float] Float (Clj.inc a) inc))
 
 
 (defn- agrees?
