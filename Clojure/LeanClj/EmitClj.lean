@@ -459,6 +459,8 @@ inductive Desc where
   | field1 (key : String) (d : Desc)
   | map (k v : Desc)
   | set (d : Desc)
+  /-- The result of an `IO` action: the value, or an exception for an error. -/
+  | io (d : Desc)
   deriving Inhabited
 
 partial def Desc.toSx : Desc → Sx
@@ -471,6 +473,7 @@ partial def Desc.toSx : Desc → Sx
   | .field1 k d => .vec [.atom ":field1", .atom k, d.toSx]
   | .map k v => .vec [.atom ":map", k.toSx, v.toSx]
   | .set d => .vec [.atom ":set", d.toSx]
+  | .io d => .vec [.atom ":io", d.toSx]
 
 structure MarshalState where
   /-- Registered named types (structures, enums) in registration order. -/
@@ -599,15 +602,21 @@ def publicSig (name : Name) (ps : Array Param) : MarshalM PublicSig := do
   forallBoundedTelescope ci.type ps.size fun xs body => do
     if xs.size != ps.size then
       throwError "{name}: the IR has {ps.size} parameters but the type has {xs.size} binders"
+    let body ← whnfR body
+    let est? := body.getAppFn.constName? == some `EST.Out
+    let io? := est? && body.getAppArgs[0]!.constName? != some ``Empty
     let mut params := #[]
     for h : i in [0:xs.size] do
       let x := xs[i]
-      if !isRelevant ps[i]! then params := params.push none
+      if !isRelevant ps[i]! || (est? && i + 1 == xs.size) then params := params.push none
       else
         let ldecl ← x.fvarId!.getDecl
         if ldecl.binderInfo.isInstImplicit then
           throwError "{name}: instance arguments are not supported in public functions"
         params := params.push (some (← descOf ldecl.type))
+    if est? then
+      let d ← descOf body.getAppArgs[2]!
+      return { params, result := if io? then .io d else d }
     return { params, result := ← descOf body }
 
 /-- The function compiled code runs for `name`: the target of a `@[csimp]`

@@ -966,6 +966,313 @@
   (if (and (< i (count a)) (< j (count a))) (lean_array_fswap a i j) a))
 
 
+;; Float32: Java floats. An operation on two floats computed in double and
+;; rounded to float is the correctly rounded float operation.
+
+(defn- f32
+  [x]
+  (.floatValue (Double/valueOf (double x))))
+
+
+(defn lean_float32_of_bits
+  [u]
+  (Float/intBitsToFloat (unchecked-int (long u))))
+
+
+(defn lean_float_to_float32
+  [a]
+  (f32 a))
+
+
+(defn lean_float32_to_float
+  [a]
+  (double a))
+
+
+(defn lean_uint64_to_float32
+  [a]
+  (.floatValue (biginteger (u64->nat a))))
+
+
+(defn lean_float32_add
+  [a b]
+  (f32 (+ (double a) (double b))))
+
+
+(defn lean_float32_sub
+  [a b]
+  (f32 (- (double a) (double b))))
+
+
+(defn lean_float32_mul
+  [a b]
+  (f32 (* (double a) (double b))))
+
+
+(defn lean_float32_div
+  [a b]
+  (f32 (/ (double a) (double b))))
+
+
+(defn sqrtf
+  [a]
+  (f32 (Math/sqrt (double a))))
+
+
+(defn lean_float32_beq
+  [a b]
+  (if (== (double a) (double b)) 1 0))
+
+
+(defn lean_float32_decLt
+  [a b]
+  (if (< (double a) (double b)) 1 0))
+
+
+(declare lean_float_to_uint64)
+
+
+(defn lean_float32_to_uint64
+  [a]
+  (lean_float_to_uint64 (double a)))
+
+
+(defn lean_float32_to_string
+  [a]
+  (lean_float_to_string (double a)))
+
+
+;; ByteArray and FloatArray: vectors of byte values (Long) and of doubles.
+
+(defn lean_byte_array_mk
+  [a]
+  a)
+
+
+(defn lean_mk_empty_byte_array
+  [_]
+  [])
+
+
+(defn lean_byte_array_size
+  [a]
+  (count a))
+
+
+(defn lean_byte_array_push
+  [a b]
+  (conj a b))
+
+
+(defn lean_byte_array_get
+  [a i]
+  (if (and (instance? Long i) (< (long i) (count a))) (nth a i) 0))
+
+
+(defn lean_byte_array_set
+  [a i b]
+  (if (and (instance? Long i) (< (long i) (count a))) (assoc a i b) a))
+
+
+(defn lean_byte_array_copy_slice
+  [src src-off dest dest-off len _exact]
+  (let [src-off (min src-off (count src))
+        n (min len (- (count src) src-off))
+        dest-off (min dest-off (count dest))]
+    (vec (concat (subvec dest 0 dest-off)
+                 (subvec src src-off (+ src-off n))
+                 (subvec dest (min (count dest) (+ dest-off n)))))))
+
+
+(defn lean_string_to_utf8
+  [^String s]
+  (mapv #(bit-and (long %) 0xff) (.getBytes s java.nio.charset.StandardCharsets/UTF_8)))
+
+
+(defn- utf8-bytes
+  ^bytes [a]
+  (byte-array (map unchecked-byte a)))
+
+
+(defn lean_string_validate_utf8
+  [a]
+  (let [decoder (-> java.nio.charset.StandardCharsets/UTF_8
+                    .newDecoder
+                    (.onMalformedInput java.nio.charset.CodingErrorAction/REPORT)
+                    (.onUnmappableCharacter java.nio.charset.CodingErrorAction/REPORT))]
+    (try
+      (.decode decoder (java.nio.ByteBuffer/wrap (utf8-bytes a)))
+      1
+      (catch java.nio.charset.CharacterCodingException _ 0))))
+
+
+(defn lean_string_from_utf8_unchecked
+  [a]
+  (String. (utf8-bytes a) java.nio.charset.StandardCharsets/UTF_8))
+
+
+(defn lean_float_array_mk
+  [a]
+  a)
+
+
+(defn lean_float_array_size
+  [a]
+  (count a))
+
+
+(defn lean_float_array_push
+  [a d]
+  (conj a d))
+
+
+(defn lean_float_array_fget
+  [a i]
+  (nth a i))
+
+
+(defn lean_float_array_get
+  [a i]
+  (if (and (instance? Long i) (< (long i) (count a))) (nth a i) 0.0))
+
+
+(defn lean_float_array_set
+  [a i d]
+  (if (and (instance? Long i) (< (long i) (count a))) (assoc a i d) a))
+
+
+;; Thunk and Task: delays and futures over Lean closures of `Unit`.
+
+(defn lean_mk_thunk
+  [c]
+  (delay (apply c 0)))
+
+
+(defn lean_thunk_pure
+  [v]
+  (delay v))
+
+
+(defn lean_thunk_get_own
+  [t]
+  @t)
+
+
+(defn lean_task_pure
+  [a]
+  (delay a))
+
+
+(defn lean_task_spawn
+  [c _prio]
+  (future (apply c 0)))
+
+
+(defn lean_task_map
+  [f t _prio _sync]
+  (future (apply f @t)))
+
+
+(defn lean_task_bind
+  [x f _prio _sync]
+  (future @(apply f @x)))
+
+
+(defn lean_task_get_own
+  [t]
+  @t)
+
+
+(defn lean_dbg_trace
+  [s f]
+  (binding [*out* *err*] (println s))
+  (apply f 0))
+
+
+;; IO: an `IO` action returns `EST.Out`, `ok` (tag 0) with the value or
+;; `error` (tag 1) with the `IO.Error`. A `BaseIO` or `ST` action, which cannot
+;; fail, returns the value itself. The world argument is erased.
+
+(defn- io-ok
+  [a]
+  (ctor 0 1 0 a))
+
+
+(defn- stream
+  "An `IO.FS.Stream` over the writer and reader that `out` and `in` return at
+  the time of each call: flush, read, write, getLine, putStr, isTty."
+  [out in]
+  (ctor 0 6 0
+        (closure (fn [_] (.flush ^java.io.Writer (out)) (io-ok 0)) 1 [])
+        (closure (fn [n _]
+                   (let [buf (char-array (min (long n) 65536))
+                         k (.read ^java.io.Reader (in) buf)]
+                     (io-ok (if (pos? k) (lean_string_to_utf8 (String. buf 0 k)) []))))
+                 2 [])
+        (closure (fn [bs _] (.write ^java.io.Writer (out) ^String (lean_string_from_utf8_unchecked bs)) (io-ok 0)) 2 [])
+        (closure (fn [_]
+                   (io-ok (if-let [l (binding [*in* (in)] (read-line))] (str l "\n") "")))
+                 1 [])
+        (closure (fn [s _] (.write ^java.io.Writer (out) ^String s) (.flush ^java.io.Writer (out)) (io-ok 0)) 2 [])
+        (closure (fn [_] 0) 1 [])))
+
+
+(defn lean_get_stdout
+  []
+  (stream (fn [] *out*) (fn [] *in*)))
+
+
+(defn lean_get_stderr
+  []
+  (stream (fn [] *err*) (fn [] *in*)))
+
+
+(defn lean_get_stdin
+  []
+  (stream (fn [] *out*) (fn [] *in*)))
+
+
+(defn lean_io_mono_ms_now
+  []
+  (quot (System/nanoTime) 1000000))
+
+
+(defn lean_io_mono_nanos_now
+  []
+  (norm (bigint (System/nanoTime))))
+
+
+(defn lean_st_mk_ref
+  [a]
+  (atom a))
+
+
+(defn lean_st_ref_get
+  [r]
+  @r)
+
+
+(defn lean_st_ref_put
+  [r a]
+  (reset! r a)
+  0)
+
+
+(defn lean_st_ref_swap
+  [r a]
+  (first (swap-vals! r (constantly a))))
+
+
+(defn lean_st_ref_take
+  [r]
+  (first (swap-vals! r (constantly 0))))
+
+
+(defn lean_st_ref_ptr_eq
+  [r1 r2]
+  (if (identical? r1 r2) 1 0))
+
+
 ;; Marshalling between Clojure values and Lean values
 
 (defonce ^:private types (atom {}))
@@ -1051,6 +1358,11 @@
       :option (when (instance? Ctor v) (to-clj (second d) (proj v 0)))
       :prod [(to-clj (nth d 1) (proj v 0)) (to-clj (nth d 2) (proj v 1))]
       :field1 {(nth d 1) (to-clj (nth d 2) v)}
+      :io (if (zero? (tag v))
+            (to-clj (second d) (proj v 0))
+            (let [e (proj v 0)
+                  msg (when (instance? Ctor e) (some #(when (string? %) %) (seq ^objects (.objs ^Ctor e))))]
+              (throw (ex-info (str "lean-clj: IO error" (when msg (str ": " msg))) {:error e}))))
       :map (into {} (map (fn [p] [(to-clj (nth d 1) (proj p 0)) (to-clj (nth d 2) (proj p 1))]) (lean-list->seq v)))
       :set (into #{} (map #(to-clj (second d) %) (lean-list->seq v)))
       :ref (let [t (get @types (second d))]

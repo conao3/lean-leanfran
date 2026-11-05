@@ -142,6 +142,38 @@ def recursion : List String :=
   [toString (sumAcc 0 200000), toString (parityEven 200001), toString (isEven 1000),
    toString (fact 30), toString (fib 90), toString (sumTo 2000)]
 
+def float32s : List String :=
+  let a : Float32 := 1.5
+  let b : Float32 := 0.1
+  [toString (a + b), toString (a * b), toString (a / b), toString (a - b), toString (decide (a < b)),
+   toString (b.sqrt), toString a.toFloat, toString (Float32.ofNat 7), toString (a.toUInt64),
+   toString (b == b), toString (Float.toFloat32 0.3)]
+
+def byteArrays : List String :=
+  let b := ByteArray.mk #[1, 2, 255]
+  let c := (b.push 7).set! 0 9
+  [toString b.size, toString c.toList, toString (c.get! 3), toString (b ++ c).toList,
+   toString (b.extract 1 3).toList, toString "héllo".toUTF8.size, toString (String.fromUTF8! "abc".toUTF8),
+   toString (ByteArray.empty.push 4).toList, toString (b.toList.foldl (· + ·.toNat) 0)]
+
+def floatArrays : List String :=
+  let f := FloatArray.mk #[1.5, 2.5]
+  let g := (f.push 4.0).set! 0 0.5
+  [toString f.size, toString g.toList, toString (g.get! 2), toString (g.toList.foldl (· + ·) 0)]
+
+def thunks : List String :=
+  let t : Thunk Nat := Thunk.mk fun _ => 6 * 7
+  let p : Thunk String := Thunk.pure "ready"
+  [toString t.get, toString p.get, toString (t.map (· + 1)).get, toString (t.bind fun n => Thunk.pure (n * 2)).get]
+
+def tasks : List String :=
+  let t := Task.spawn fun _ => (List.range 1000).foldl (· + ·) 0
+  let p := Task.pure 5
+  [toString t.get, toString p.get, toString (t.map (· + 1)).get, toString (p.bind fun n => Task.pure (n * 3)).get]
+
+def traced : List String :=
+  [toString (dbgTrace "lean-clj dbgTrace" fun _ => 11)]
+
 def report (_ : Unit) : String :=
   let sections : List (String × List String) := [
     ("basic", [toString (double 21), reprStr (Point.add ⟨1, -5⟩ ⟨2, 3⟩), toString (listMapSum [1, 2, 3]),
@@ -151,7 +183,8 @@ def report (_ : Unit) : String :=
     ("unicode", unicode), ("ints", ints.map toString), ("nats", nats.map toString),
     ("uints", uints), ("floats", floats), ("chars", chars), ("lists", lists), ("arrays", arrays),
     ("options", options), ("mixed", mixed), ("shapes", shapes), ("strings", strings),
-    ("recursion", recursion)]
+    ("recursion", recursion), ("float32s", float32s), ("byteArrays", byteArrays), ("floatArrays", floatArrays),
+    ("thunks", thunks), ("tasks", tasks), ("traced", traced)]
   "\n".intercalate (sections.map fun (k, vs) => "\n".intercalate (vs.map (s!"{k}: " ++ ·)))
 
 end LeanCljTest.Vectors
