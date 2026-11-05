@@ -1,1 +1,3 @@
-{:hooks {:analyze-call {lean-clj.core/deflean hooks.lean-clj/deflean}}}
+{:hooks {:analyze-call {lean-clj.core/deflean hooks.lean-clj/deflean
+                        lean-clj.typed/defn hooks.lean-clj/typed-defn
+                        lean-clj.typed/loop hooks.lean-clj/typed-loop}}}

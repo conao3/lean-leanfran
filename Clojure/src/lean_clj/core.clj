@@ -9,7 +9,8 @@
     [clojure.java.shell :as sh]
     [clojure.string :as str]
     [lean-clj.dsl :as dsl]
-    [lean-clj.runtime])
+    [lean-clj.runtime]
+    [lean-clj.types :as types])
   (:import
     (java.io
       File
@@ -174,8 +175,10 @@
 
 (defn source
   "Lean source of a deflean body: strings are Lean source (dedented), other
-  forms are commands of `lean-clj.dsl`."
+  forms are commands of `lean-clj.dsl`, whose structures and enumerations
+  are recorded in `lean-clj.types/types`."
   [body]
+  (types/register-commands! (remove string? body))
   (->> body
        (map #(if (string? %) (dedent %) (dsl/command %)))
        (str/join "\n\n")))

@@ -56,3 +56,24 @@
                     (api/list-node [(api/token-node 'declare) block])
                     (for [n names]
                       (api/list-node [(api/token-node 'declare) (api/token-node (symbol n))]))))}))
+
+
+(defn typed-defn
+  [{:keys [node]}]
+  (let [[_ nm & more] (:children node)
+        [doc more] (if (api/string-node? (first more)) [(first more) (rest more)] [nil more])
+        [bs _ret & body] more]
+    {:node (api/list-node
+             (concat [(api/token-node 'clojure.core/defn) (api/token-node (with-meta (api/sexpr nm) nil))]
+                     (when doc [doc])
+                     [(api/vector-node (take-nth 2 (:children bs)))]
+                     body))}))
+
+
+(defn typed-loop
+  [{:keys [node]}]
+  (let [[_ bs & body] (:children node)]
+    {:node (api/list-node
+             (list* (api/token-node 'clojure.core/loop)
+                    (api/vector-node (mapcat (fn [[n _ v]] [n v]) (partition 3 (:children bs))))
+                    body))}))
