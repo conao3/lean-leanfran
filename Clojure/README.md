@@ -1,18 +1,44 @@
-# lean-clj
+<p align="center">
+  <img src="docs/assets/banner.png" alt="lean-clj" width="100%">
+</p>
 
-Write and prove functions in Lean 4, run them on the JVM from Clojure.
+<p align="center">
+  <b>A two-way bridge between Lean 4 and Clojure</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/conao3/lean-clj/tags"><img src="https://img.shields.io/github/v/tag/conao3/lean-clj?sort=semver&label=release" alt="Latest release"></a>
+  <a href="https://github.com/conao3/lean-clj/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-clj/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <a href="https://lean-lang.org/"><img src="https://img.shields.io/badge/Lean-v4.35.0-0f4c81.svg" alt="Lean v4.35.0"></a>
+  <a href="https://clojars.org/io.github.conao3/lean-clj"><img src="https://img.shields.io/clojars/v/io.github.conao3/lean-clj.svg" alt="Clojars"></a>
+  <a href="https://github.com/conao3/lean-clj/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-clj?style=flat" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="#installation">Installation</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#deflean">deflean</a> ·
+  <a href="#the-cli">CLI</a> ·
+  <a href="#samples">Samples</a> ·
+  <a href="https://clojars.org/io.github.conao3/lean-clj">Clojars</a> ·
+  <a href="https://github.com/conao3/lean-clj/tags">Releases</a>
+</p>
+
+---
+
+Write a function in Lean 4, prove its properties, and call it from Clojure on
+the JVM. lean-clj compiles Lean's own compiler IR to Clojure, so the code you
+run is the program Lean's C backend builds, with types and proofs erased.
 
 lean-clj has two parts:
 
-- **A Lean IR → Clojure backend.** The `lean-clj` CLI reads the compiler IR of
-  a Lean module and emits a Clojure namespace. Proofs and types are erased by
-  the Lean compiler, so the generated code is the same program the C backend
-  compiles. A hand-written runtime (`lean-clj.runtime`) provides the C symbols
-  of Lean's `@[extern]` declarations.
-- **`deflean`, Lean embedded in Clojure.** Write Lean in a Clojure file as
-  S-expressions (or as Lean source in a string); the macro checks it, proofs
-  included, with `lake build` when the form is compiled, and defines the
-  functions in the current namespace.
+| Part | What you do | What you get |
+|---|---|---|
+| **Lean IR → Clojure backend** | Run the `lean-clj` CLI on a Lean module, from a file or a lake project | A Clojure namespace you can commit and load without Lean |
+| **`deflean`** | Write Lean inside a Clojure file, as S-expressions or as Lean source | Functions in the current namespace, checked with `lake build` (proofs included) at macro expansion |
+
+## Quick start
 
 ```clojure
 (ns demo.core
@@ -35,8 +61,8 @@ lean-clj has two parts:
 (deposit {:owner "ann" :balance 10} 5)     ;=> {:owner "ann", :balance 15}
 ```
 
-A block whose proof fails stops compilation with Lean's error messages and the
-Lean source of the block.
+If a proof in the block fails, compilation stops and prints Lean's error
+messages next to the Lean source of the block.
 
 ## Installation
 
@@ -46,35 +72,17 @@ Add lean-clj to `deps.edn` ([Clojars](https://clojars.org/io.github.conao3/lean-
 {:deps {io.github.conao3/lean-clj {:mvn/version "0.1.1"}}}
 ```
 
-Expanding a `deflean` block for the first time needs Lean 4.35.0 (`lean`,
-`lake`) and the `lean-clj` CLI on `PATH`:
+The first expansion of a `deflean` block needs Lean 4.35.0 (`lean`, `lake`)
+and the `lean-clj` CLI on `PATH`:
 
 ```
 nix profile install github:conao3/lean-clj/v0.1.1
 ```
 
-Lean comes from elan (`elan default v4.35.0`) or from `nix develop`
-of this repository, which also provides Clojure and a JDK. Running the
-generated code, and expanding a block whose output is in `.lean-clj/cache/`,
-needs only Clojure 1.12 on JDK 21 or later.
-
-## The CLI
-
-```
-lean-clj module generate-namespace --module-name <Lean module> --namespace <Clojure ns>
-         [--roots <Lean name> ...] [--strip-namespace <Lean namespace>]
-         [--search-path <dir> ...] [--output-file <path>] [--forms-only]
-         [--output json|text]
-```
-
-Without `--roots`, every public definition of the module that has a supported
-signature is exported. `--search-path` adds directories of `.olean` files (in a
-lake package, `.lake/build/lib/lean`). Exit codes: 0 success, 252 invalid
-parameters, 254 input the backend cannot handle, 255 other failures.
-
-Public functions are named after the Lean name relative to the module (or
-`--strip-namespace`), in kebab-case: `Point.add` → `point-add`, `isEven?` →
-`is-even?`.
+Get Lean from elan (`elan default v4.35.0`) or from `nix develop` of this
+repository, which also provides Clojure and a JDK. To run generated code, or to
+expand a block whose output sits in `.lean-clj/cache/`, you need Clojure 1.12
+on JDK 21 or later and no Lean.
 
 ## Values
 
@@ -93,7 +101,7 @@ according to the Lean signature:
 | structures | maps with keyword keys |
 | enumerations | keywords (`Suit.hearts` → `:hearts`) |
 
-Other types are passed through in the runtime representation (`Ctor` objects,
+Other types pass through in the runtime representation (`Ctor` objects, and
 `Closure` objects that also implement `IFn`).
 
 Inside generated code, `Nat` and `Int` are `Long`/`BigInt`, fixed-width
@@ -107,7 +115,7 @@ persistent vector.
 (deflean <block> [{:imports ["Std.Data.HashMap"]}] <command> ...)
 ```
 
-Each command is an S-expression of `lean-clj.dsl` or a string of Lean source;
+Each command is an S-expression of `lean-clj.dsl` or a string of Lean source.
 `lean-clj.dsl/render` shows the Lean source of a sequence of commands.
 
 | S-expression | Lean |
@@ -127,30 +135,65 @@ Each command is an S-expression of `lean-clj.dsl` or a string of Lean source;
 | `(by (simp [a b]) omega)` | `(by simp [a, b]; omega)` |
 | `(lean "...")` | Lean source as is |
 
-Symbols with a `-` become lowerCamelCase in Lean (`is-prime` → `isPrime`), and
-the public Clojure name converts back (`is-prime`); `_` is kept, so Lean lemma
-names are written as they are (`Nat.add_comm`). Binder vectors take
-`(implicit α Type)` and `(inst (BEq α))`; metadata on a name adds modifiers
-(`^:partial`, `^:private`, `^{:attrs [simp]}`). Binary operators: `+ - * / %
-pow ++ = == != not= < <= > >= and or iff && || band bor land lor xor <<< >>>
-in not-in cons |> <| >>= <$> comp`. Inside `by`, a tactic name's `-` becomes `_`
-(`all-goals` → `all_goals`); `(on-all t1 t2)` is `t1 <;> t2` and
-`(case tag [x] t ...)` is `case tag x => ...`.
+Names:
+
+- A `-` in a symbol becomes lowerCamelCase in Lean (`is-prime` → `isPrime`),
+  and the public Clojure name converts back (`is-prime`). lean-clj keeps `_`,
+  so you write Lean lemma names as they are (`Nat.add_comm`).
+- Binder vectors take `(implicit α Type)` and `(inst (BEq α))`. Metadata on a
+  name adds modifiers (`^:partial`, `^:private`, `^{:attrs [simp]}`).
+- Inside `by`, a `-` in a tactic name becomes `_` (`all-goals` → `all_goals`).
+  `(on-all t1 t2)` is `t1 <;> t2`, and `(case tag [x] t ...)` is
+  `case tag x => ...`.
+
+Binary operators: `+ - * / % pow ++ = == != not= < <= > >= and or iff && ||
+band bor land lor xor <<< >>> in not-in cons |> <| >>= <$> comp`.
 
 The block becomes the Lean module `LeanCljEmbed.<Namespace>.<Block>` (for
 `demo.core` and `arith`: `LeanCljEmbed.Demo.Core.Arith`) in the lake workspace
-`.lean-clj/` of the working directory. The generated code is cached in
+`.lean-clj/` of the working directory. lean-clj caches the generated code in
 `.lean-clj/cache/` under a hash of the namespace, block name, imports, and
-Lean source; with the cache present, expanding the block does not need Lean.
+Lean source. With the cache present, expanding the block needs no Lean.
 
 clj-kondo picks up the names a block defines through the hook exported in
 `resources/clj-kondo.exports/io.github.conao3/lean-clj`.
 
+## The CLI
+
+```
+lean-clj module generate-namespace --module-name <Lean module> --namespace <Clojure ns>
+         [--roots <Lean name> ...] [--strip-namespace <Lean namespace>]
+         [--search-path <dir> ...] [--output-file <path>] [--forms-only]
+         [--output json|text]
+```
+
+Without `--roots`, the CLI exports the public definitions of the module that
+have a supported signature. `--search-path` adds directories of `.olean` files
+(in a lake package, `.lake/build/lib/lean`). Exit codes: 0 success, 252 invalid
+parameters, 254 input the backend cannot handle, 255 other failures.
+
+Public functions take the Lean name relative to the module (or
+`--strip-namespace`) in kebab-case: `Point.add` → `point-add`, `isEven?` →
+`is-even?`.
+
+The backend works on Lean's compiler IR. A hand-written runtime
+(`lean-clj.runtime`) provides the C symbols of Lean's `@[extern]`
+declarations, and a generated namespace checks at load time that the runtime
+has the symbols it uses.
+
 ## Samples
 
-[`samples/`](samples) holds small programs built with lean-clj: a todo CLI,
-a word counter, and Roman numerals generated from a lake project. See
-[`samples/README.md`](samples/README.md).
+[`samples/`](samples) holds small programs built with lean-clj. Each one is a
+Clojure project with its own README and a `make test`.
+
+| Sample | What it shows |
+|---|---|
+| [`todo-cli`](samples/todo-cli) | `deflean` in S-expressions: structures and theorems about the list operations, behind a Clojure CLI |
+| [`word-count`](samples/word-count) | `deflean` with `:imports` (`Std.HashMap`) and Lean source in a string next to S-expressions, for `do` notation |
+| [`roman-numerals`](samples/roman-numerals) | a lake project compiled with the `lean-clj` CLI to a committed Clojure namespace that runs without Lean |
+
+Start with `todo-cli`. See [`samples/README.md`](samples/README.md) for how to
+run them.
 
 ## Development
 
@@ -164,11 +207,11 @@ make format
 `./test-diff.sh` runs `LeanCljTest.Vectors.report` compiled by Lean's C backend
 and the same function generated as Clojure, and compares the output.
 
-Releases are made by the `Release` workflow (Actions → Release → Run
-workflow, choosing `patch`, `minor`, or `major`). It raises the version with
+The `Release` workflow publishes releases (Actions → Release → Run workflow,
+choosing `patch`, `minor`, or `major`). It raises the version with
 `clojure -T:build bump :part <part>`, runs `make check`, pushes the commit and
 the tag `vX.Y.Z` to `master`, and deploys the jar to Clojars.
 
 ## License
 
-Apache-2.0
+Apache-2.0. See [LICENSE](LICENSE).
