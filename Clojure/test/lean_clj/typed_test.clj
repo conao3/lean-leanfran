@@ -3,6 +3,7 @@
     [clojure.test :as t]
     [clojure.test.check.generators :as gen]
     [lean-clj.core :as lean]
+    [lean-clj.malli]
     [lean-clj.typed :as lt]
     [lean-clj.types :as types]
     [malli.core :as m]))
@@ -125,3 +126,38 @@
 
 (t/deftest check-sees-structures-of-other-blocks
   (t/is (:pass? (lt/check #'add-coin {:seed 1}))))
+
+
+(lt/defn halve
+  [n Nat]
+  Nat
+  (quot n 2))
+
+
+(t/deftest malli-instrumentation-follows-the-signature
+  (lean-clj.malli/instrument! ['lean-clj.typed-test])
+  (try
+    (t/is (= 2 (halve 4)))
+    (t/is (thrown? Exception (halve -4)))
+    (finally ((requiring-resolve 'malli.instrument/unstrument!)))))
+
+
+(lt/defcheck add-coin-agrees add-coin {:seed 1})
+
+
+(t/deftest check-reports-a-counterexample
+  (with-redefs [clamp (fn [_ _ x] x)]
+    (let [r (lt/check #'clamp {:seed 1})]
+      (t/is (= 3 (get-in r [:counterexample :arity])))
+      (t/is (not= (get-in r [:counterexample :clojure]) (get-in r [:counterexample :model]))))))
+
+
+(lt/defn throws-on-zero
+  [n Int]
+  Int
+  (quot 10 n))
+
+
+(t/deftest throws-fail-counts-exceptions
+  (t/is (:pass? (lt/check #'throws-on-zero {:seed 1})))
+  (t/is (not (:pass? (lt/check #'throws-on-zero {:seed 1 :throws :fail :gens {'n (gen/return 0)}})))))

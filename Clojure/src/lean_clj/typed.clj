@@ -10,6 +10,7 @@
   about."
   (:refer-clojure :exclude [defn loop letfn])
   (:require
+    [clojure.test]
     [clojure.test.check :as tc]
     [clojure.test.check.generators :as gen]
     [clojure.test.check.properties :as prop]
@@ -143,8 +144,13 @@
   Options: `:num-tests` (100), `:seed`, `:gens`, a map from parameter names
   to generators that replace the ones of their types, `:at`, the types of the
   type variables of a polymorphic function (`{α Int}`, `Int` for the ones it
-  leaves out), and `:big-ints?`, to generate integers beyond `Long` (which
-  recursion on a `Nat` would take that many steps to finish)."
+  leaves out), `:big-ints?`, to generate integers beyond `Long` (which
+  recursion on a `Nat` would take that many steps to finish), `:max-size`, the
+  largest size of generated collections (200), and `:throws`, `:pass` (the
+  default) or `:fail` to count a call that throws as a failure.
+
+  A failure carries `:counterexample`: the arity, the shrunk arguments, and the
+  values of the function and of the model on them."
   ([v] (check v {}))
   ([v opts]
    (binding [types/*preferred-module-prefix* (module-prefix (:ns (:lean/sig (meta v))))]
@@ -152,7 +158,7 @@
 
 
 (clojure.core/defn- check*
-  [v {:keys [num-tests seed gens big-ints? at] :or {num-tests 100}}]
+  [v {:keys [num-tests seed gens big-ints? at max-size throws] :or {num-tests 100 max-size 200 throws :pass}}]
   (let [arities (:arities (:lean/sig (meta v)))
         models (model-fns v at)
         f @v]
@@ -168,14 +174,38 @@
               ret (substitute inst (:ret a))
               model (models i)
               call (fn [h args] (if rest (apply h (concat (butlast args) (last args))) (apply h args)))
+              run (fn [args] (try (call f args) (catch Exception e [::threw e])))
+              agrees? (fn [args]
+                        (let [actual (run args)]
+                          (if (and (vector? actual) (= ::threw (first actual)))
+                            (= :pass throws)
+                            (and (types/valid? ret actual) (= (apply model args) actual)))))
               r (apply tc/quick-check num-tests
-                       (prop/for-all [args (apply gen/tuple g)]
-                                     (let [expected (apply model args)
-                                           actual (try (call f args) (catch Exception _ ::threw))]
-                                       (or (= ::threw actual)
-                                           (and (types/valid? ret actual) (= expected actual)))))
+                       (prop/for-all [args (apply gen/tuple g)] (agrees? args))
+                       :max-size max-size
                        (when seed [:seed seed]))]
-          (if (:pass? r) (recur (inc i) r) r))))))
+          (if (:pass? r)
+            (recur (inc i) r)
+            (let [args (first (get-in r [:shrunk :smallest]))
+                  actual (run args)]
+              (assoc r :counterexample {:arity (count ps)
+                                        :args args
+                                        :clojure (if (and (vector? actual) (= ::threw (first actual)))
+                                                   (second actual)
+                                                   actual)
+                                        :model (try (apply model args) (catch Exception e e))}))))))))
+
+
+(defmacro defcheck
+  "A `clojure.test` test that runs `check` on the `lean-clj.typed/defn`
+  function `f` and reports the counterexample of a failure.
+
+    (defcheck sort-ints-agrees sort-ints {:num-tests 200})"
+  ([name f] `(defcheck ~name ~f {}))
+  ([name f opts]
+   `(clojure.test/deftest ~name
+      (let [r# (check (var ~f) ~opts)]
+        (clojure.test/is (:pass? r#) (pr-str (:counterexample r#)))))))
 
 
 (defmacro letfn

@@ -1,4 +1,5 @@
 {:hooks {:analyze-call {lean-clj.core/deflean hooks.lean-clj/deflean
                         lean-clj.typed/defn hooks.lean-clj/typed-defn
                         lean-clj.typed/loop hooks.lean-clj/typed-loop
-                        lean-clj.typed/letfn hooks.lean-clj/typed-letfn}}}
+                        lean-clj.typed/letfn hooks.lean-clj/typed-letfn}}
+ :lint-as {lean-clj.typed/defcheck clojure.test/deftest}}
