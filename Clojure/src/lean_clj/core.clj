@@ -252,12 +252,12 @@
   (types/register-commands! (module-name (ns-name ns) block)
                             (remove #(or (string? %) (translate/clojure-command? %)) body))
   (mapv (fn [x]
-          {:text (cond
-                   (string? x) (dedent x)
+          (merge (cond
+                   (string? x) {:text (dedent x)}
                    (translate/clojure-command? x) (translate/render-command ns x extern?)
-                   :else (dsl/command x))
-           :line (:line (meta x))
-           :verbatim (string? x)})
+                   :else {:text (dsl/command x)})
+                 {:line (:line (meta x))
+                  :verbatim (string? x)}))
         body))
 
 
@@ -271,14 +271,25 @@
       acc)))
 
 
-(defn source
-  "Lean source of the body of deflean block `block` in the namespace `ns`:
-  strings are Lean source (dedented), `(clojure f ...)` is the models of
+(defn render
+  "The body of deflean block `block` in the namespace `ns`: `:source`, its
+  Lean source, `:modules`, the Lean modules of the functions from Lean that
+  translated functions call, and `:parts`, the source of each form. Strings
+  are Lean source (dedented), `(clojure f ...)` is the models of
   `lean-clj.typed/defn` functions (`@[extern]` to the Clojure vars with
   `extern?`), and other forms are commands of `lean-clj.dsl`, whose structures
   and enumerations are recorded in `lean-clj.types/types`."
   [ns block body extern?]
-  (str/join "\n\n" (map :text (render-body ns block body extern?))))
+  (let [parts (with-starts (render-body ns block body extern?))]
+    {:source (str/join "\n\n" (map :text parts))
+     :modules (vec (distinct (mapcat :modules parts)))
+     :parts parts}))
+
+
+(defn source
+  "The Lean source of `render`."
+  [ns block body extern?]
+  (:source (render ns block body extern?)))
 
 
 (defn options
@@ -316,7 +327,7 @@
   compilation with Lean's messages, located in this file."
   [block & args]
   (let [[opts body] (if (map? (first args)) [(first args) (rest args)] [{} args])
-        parts (with-starts (render-body *ns* block body true))
+        {:keys [source modules parts]} (render *ns* block body true)
         where {:file *file* :line (:line (meta &form)) :parts parts}]
-    `(do ~@(expand (ns-name *ns*) block (options *ns* opts body)
-                   (str/join "\n\n" (map :text parts)) where))))
+    `(do ~@(expand (ns-name *ns*) block (update (options *ns* opts body) :imports #(vec (distinct (concat % modules))))
+                   source where))))

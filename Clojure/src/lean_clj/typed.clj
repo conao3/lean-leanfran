@@ -8,7 +8,7 @@
   kept in the var's `:lean/sig` metadata, from which `(clojure insert-sorted)`
   in a `deflean` block renders a Lean model of the function to prove things
   about."
-  (:refer-clojure :exclude [defn loop])
+  (:refer-clojure :exclude [defn loop letfn])
   (:require
     [clojure.test.check :as tc]
     [clojure.test.check.generators :as gen]
@@ -26,8 +26,8 @@
 
 (clojure.core/defn- check-binders
   [nm bs]
-  (when-not (and (vector? bs) (even? (count bs)) (every? symbol? (take-nth 2 bs)))
-    (throw (ex-info (str "lean-clj.typed: " nm " needs a binder vector [x T ...] of names and Lean types")
+  (when-not (and (vector? bs) (even? (count bs)) (every? #(or (symbol? %) (vector? %) (map? %)) (take-nth 2 bs)))
+    (throw (ex-info (str "lean-clj.typed: " nm " needs a binder vector [x T ...] of names (or destructuring forms) and Lean types")
                     {:name nm :binders bs}))))
 
 
@@ -67,6 +67,13 @@
   `(clojure.core/loop ~(vec (mapcat (fn [[n _ v]] [n v]) (partition 3 bindings))) ~@body))
 
 
+(clojure.core/defn- module-prefix
+  "The prefix of the deflean modules of the Clojure namespace `ns`."
+  [ns]
+  (let [m (core/module-name ns 'x)]
+    (subs m 0 (dec (count m)))))
+
+
 (clojure.core/defn- model-fn
   "The Lean model of the function `v`, compiled to Clojure in a namespace of
   its own."
@@ -81,13 +88,18 @@
                      distinct
                      vec)
         model-ns-obj (create-ns model-ns)
+        {:keys [source] :as r} (core/render (the-ns ns) 'model body false)
         forms (core/expand model-ns 'model
-                           (core/options model-ns-obj {:imports modules :opens modules} body)
-                           (core/source (the-ns ns) 'model body false))]
+                           (update (core/options model-ns-obj {:imports modules :opens modules} body)
+                                   :imports #(vec (distinct (concat % (:modules r)))))
+                           source)]
     (binding [*ns* model-ns-obj]
       (refer-clojure)
       (doseq [f forms] (eval f)))
     @(ns-resolve model-ns name)))
+
+
+(declare check*)
 
 
 (clojure.core/defn check
@@ -95,17 +107,37 @@
   inputs generated from the signature, as `clojure.test.check/quick-check`.
   A call where the Clojure function throws is outside what the model
   describes and passes; a result that is not a value of the return type
-  fails."
+  fails.
+
+  Options: `:num-tests` (100), `:seed`, `:gens`, a map from parameter names
+  to generators that replace the ones of their types, and `:big-ints?`, to
+  generate integers beyond `Long` (which recursion on a `Nat` would take that
+  many steps to finish)."
   ([v] (check v {}))
-  ([v {:keys [num-tests seed] :or {num-tests 100}}]
-   (let [{:keys [binders ret]} (:lean/sig (meta v))
-         model (model-fn v)
-         types (take-nth 2 (rest binders))
-         f @v]
-     (apply tc/quick-check num-tests
-            (prop/for-all [args (apply gen/tuple (map types/gen types))]
-                          (let [expected (apply model args)
-                                actual (try (apply f args) (catch Exception _ ::threw))]
-                            (or (= ::threw actual)
-                                (and (types/valid? ret actual) (= expected actual)))))
-            (when seed [:seed seed])))))
+  ([v {:keys [num-tests seed gens big-ints?] :or {num-tests 100}}]
+   (binding [types/*preferred-module-prefix* (module-prefix (:ns (:lean/sig (meta v))))]
+     (check* v num-tests seed gens big-ints?))))
+
+
+(clojure.core/defn- check*
+  [v num-tests seed gens big-ints?]
+  (let [{:keys [binders ret]} (:lean/sig (meta v))
+        model (model-fn v)
+        gens (binding [types/*big-ints* (boolean big-ints?)]
+               (mapv (fn [[p t]] (or (get gens p) (types/gen t))) (partition 2 binders)))
+        f @v]
+    (apply tc/quick-check num-tests
+           (prop/for-all [args (apply gen/tuple gens)]
+                         (let [expected (apply model args)
+                               actual (try (apply f args) (catch Exception _ ::threw))]
+                           (or (= ::threw actual)
+                               (and (types/valid? ret actual) (= expected actual)))))
+           (when seed [:seed seed]))))
+
+
+(defmacro letfn
+  "`clojure.core/letfn` whose functions carry Lean signatures:
+  `[(f [x T ...] R body) ...]`. A function may call the ones before it, and
+  itself through `recur` or by name."
+  [fns & body]
+  `(clojure.core/letfn ~(vec (for [[nm bs _ & fbody] fns] (list* nm (vec (take-nth 2 bs)) fbody))) ~@body))

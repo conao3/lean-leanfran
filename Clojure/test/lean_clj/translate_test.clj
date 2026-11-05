@@ -48,7 +48,7 @@
 
 (defn- render
   [& syms]
-  (tr/render-command (the-ns 'lean-clj.translate-test) (cons 'clojure syms) true))
+  (:text (tr/render-command (the-ns 'lean-clj.translate-test) (cons 'clojure syms) true)))
 
 
 (t/deftest translates-clojure-to-models
@@ -61,10 +61,11 @@
                        "(match _h1 : (Clj.first xs) with | (some x) => x | none => d)"))
   (t/is (str/includes? (render 'deposit)
                        "(if _h1 : ((Clj.truthy a.frozen) = true) then a else { a with balance := (Clj.add a.balance n) })"))
-  (t/is (= (str "def countUp.loop1 (n : Nat) (i : Nat) (acc : Nat) : Nat := "
-                "(if _h2 : ((Clj.truthy (Clj.lt i n)) = true) then (countUp.loop1 n (Clj.inc i) (Clj.add acc i)) else acc)\n"
-                "termination_by (n - i)\n\n"
-                "@[extern \"clj:lean-clj.translate-test/count-up\"] def countUp (n : Nat) : Nat := (countUp.loop1 n 0 0)")
+  (t/is (= (str "@[extern \"clj:lean-clj.translate-test/count-up\"] def countUp (n : Nat) : Nat := "
+                "(let rec loop1 (i : Nat) (acc : Nat) : Nat := "
+                "(if _h2 : ((Clj.truthy (Clj.lt i n)) = true) then (loop1 (Clj.inc i) (Clj.add acc i)) else acc)\n"
+                "  termination_by (n - i)\n"
+                "  ; (loop1 0 0))")
            (render 'count-up)))
   (t/is (str/includes? (render 'suit-name) "(match s with | .hearts => \"hearts\" | _ => \"other\")")))
 

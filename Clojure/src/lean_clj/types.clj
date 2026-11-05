@@ -107,15 +107,26 @@
                :enum {:kind :enum :module module :ctors (mapv #(symbol (name %)) ctors)})])))
 
 
+(def ^:dynamic *preferred-module-prefix*
+  "Among types of the same short name, the one whose module starts with this
+  prefix (the deflean modules of one Clojure namespace)."
+  nil)
+
+
 (defn- entry
   "The registered type named `t`: by full Lean name, or by the last components
-  when they name one type."
+  when they name one type, or one type in modules under
+  `*preferred-module-prefix*`."
   [t]
   (let [s (dsl/ident t)
         all (merge (runtime-types) @types)]
     (or (get all s)
         (let [hits (distinct (keep (fn [[k v]] (when (str/ends-with? k (str "." s)) (assoc v :name k))) all))
-              names (set (map :name hits))]
+              preferred (when *preferred-module-prefix*
+                          (filter #(some-> (:module %) (str/starts-with? *preferred-module-prefix*)) hits))
+              [hits names] (if (= 1 (count (set (map :name preferred))))
+                             [preferred (set (map :name preferred))]
+                             [hits (set (map :name hits))])]
           (case (count names)
             0 nil
             1 (dissoc (first hits) :name)
@@ -144,14 +155,20 @@
   (gen/fmap #(+ (bigint Long/MAX_VALUE) 1 %) gen/nat))
 
 
+(def ^:dynamic *big-ints*
+  "Whether `gen` mixes in integers beyond `Long`."
+  true)
+
+
 (defn gen
-  "test.check generator of the Clojure values of the Lean type `t`."
+  "test.check generator of the Clojure values of the Lean type `t`. Integers
+  include values beyond `Long` while `*big-ints*` is true."
   [t]
   (cond
     (symbol? t)
     (case t
-      Nat (gen/frequency [[9 gen/nat] [1 big-nat]])
-      Int (gen/frequency [[9 gen/small-integer] [1 big-nat] [1 (gen/fmap - big-nat)]])
+      Nat (if *big-ints* (gen/frequency [[9 gen/nat] [1 big-nat]]) gen/nat)
+      Int (if *big-ints* (gen/frequency [[9 gen/small-integer] [1 big-nat] [1 (gen/fmap - big-nat)]]) gen/small-integer)
       Bool gen/boolean
       String gen/string-ascii
       Char gen/char-ascii

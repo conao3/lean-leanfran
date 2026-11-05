@@ -77,3 +77,15 @@
              (list* (api/token-node 'clojure.core/loop)
                     (api/vector-node (mapcat (fn [[n _ v]] [n v]) (partition 3 (:children bs))))
                     body))}))
+
+
+(defn typed-letfn
+  [{:keys [node]}]
+  (let [[_ fns & body] (:children node)]
+    {:node (api/list-node
+             (list* (api/token-node 'clojure.core/letfn)
+                    (api/vector-node
+                      (for [f (:children fns)
+                            :let [[nm bs _ & fbody] (:children f)]]
+                        (api/list-node (list* nm (api/vector-node (take-nth 2 (:children bs))) fbody))))
+                    body))}))

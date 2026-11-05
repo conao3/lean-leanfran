@@ -50,6 +50,17 @@ def not [Truthy α] (x : α) : Bool := !truthy x
   cases x <;> rfl
 @[simp] theorem not_eq [Truthy α] (x : α) : not x = !truthy x := rfl
 
+/-- The value of `x` where it is truthy: the element of `some`, and other
+    values as they are. A Clojure local tested by `if` stands for this in the
+    branch where it is truthy. -/
+class Unwrap (α : Type u) (β : outParam (Type u)) [Truthy α] where
+  unwrap : (x : α) → truthy x = true → β
+
+instance (priority := low) [Truthy α] : Unwrap α α := ⟨fun x _ => x⟩
+instance : Unwrap (Option α) α := ⟨fun x h => x.get (by simpa [Truthy.truthy] using h)⟩
+
+@[simp] theorem unwrap_some (a : α) (h : truthy (some a) = true) : Unwrap.unwrap (some a) h = a := rfl
+
 /-! ## Equality -/
 
 def eq [BEq α] (a b : α) : Bool := a == b
@@ -214,6 +225,11 @@ def cons (a : α) (x : c) : List α := a :: toList x
 def concat [Seqable d α] (x : c) (y : d) : List α := toList x ++ toList y
 def nth [Inhabited α] (x : c) (i : Nat) : α := (toList x)[i]?.getD default
 def nth3 (x : c) (i : Nat) (notFound : α) : α := (toList x)[i]?.getD notFound
+def nthrest (x : c) (n : Nat) : List α := (toList x).drop n
+def nthnext (x : c) (n : Nat) : Option (List α) :=
+  match (toList x).drop n with
+  | [] => none
+  | t => some t
 
 @[simp] theorem first_eq (x : c) : first x = (toList x).head? := rfl
 @[simp] theorem rest_eq (x : c) : rest x = (toList x).tail := rfl
@@ -233,6 +249,10 @@ def nth3 (x : c) (i : Nat) (notFound : α) : α := (toList x)[i]?.getD notFound
 @[simp] theorem cons_eq (a : α) (x : c) : cons a x = a :: toList x := rfl
 @[simp] theorem concat_eq [Seqable d α] (x : c) (y : d) : concat x y = toList x ++ toList y := rfl
 @[simp] theorem nth3_eq (x : c) (i : Nat) (d : α) : nth3 x i d = (toList x)[i]?.getD d := rfl
+@[simp] theorem nthrest_eq (x : c) (n : Nat) : nthrest x n = (toList x).drop n := rfl
+@[simp] theorem nthnext_eq (x : c) (n : Nat) :
+    nthnext x n = if (toList x).drop n = [] then none else some ((toList x).drop n) := by
+  unfold nthnext; split <;> simp_all
 
 @[simp] theorem next_eq (x : c) :
     next x = if (toList x).tail = [] then none else some (toList x).tail := by
@@ -281,6 +301,35 @@ def range2 (a b : Nat) : List Nat := List.range' a (b - a)
 @[simp] theorem range2_eq (a b : Nat) : range2 a b = List.range' a (b - a) := rfl
 
 /-! ## Collections -/
+
+/-- A two-element vector literal: a pair, or a vector of two elements. -/
+class Vec2 (α : Type u) (β : Type v) (γ : Type w) where
+  vec2 : α → β → γ
+
+instance : Vec2 α β (α × β) := ⟨Prod.mk⟩
+@[default_instance] instance : Vec2 α α (Array α) := ⟨fun a b => #[a, b]⟩
+
+def vec2 [Vec2 α β γ] (a : α) (b : β) : γ := Vec2.vec2 a b
+
+@[simp] theorem vec2_pair (a : α) (b : β) : (vec2 a b : α × β) = (a, b) := rfl
+@[simp] theorem vec2_array (a b : α) : (vec2 a b : Array α) = #[a, b] := rfl
+
+/-- Element `i` of a destructured sequential value: the components of a pair,
+    and `Option` elements of a list or vector, which Clojure binds to `nil`
+    past the end. -/
+class Pos (c : Type u) (i : Nat) (β : outParam (Type v)) where
+  pos : c → β
+
+instance : Pos (α × β) 0 α := ⟨Prod.fst⟩
+instance : Pos (α × β) 1 β := ⟨Prod.snd⟩
+instance (priority := low) [Seqable c α] : Pos c i (Option α) := ⟨fun x => (toList x)[i]?⟩
+
+def elem (i : Nat) [Pos c i β] (x : c) : β := Pos.pos (i := i) x
+
+@[simp] theorem elem_fst (p : α × β) : elem 0 p = p.1 := rfl
+@[simp] theorem elem_snd (p : α × β) : elem 1 p = p.2 := rfl
+@[simp] theorem elem_list (i : Nat) (xs : List α) : elem i xs = xs[i]? := rfl
+@[simp] theorem elem_array (i : Nat) (xs : Array α) : elem i xs = xs.toList[i]? := rfl
 
 class Conj (c : Type u) (α : outParam (Type u)) where
   conj : c → α → c
