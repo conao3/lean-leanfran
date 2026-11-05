@@ -1010,6 +1010,28 @@
     c))
 
 
+(defn- sum->map
+  [{:keys [ctors]} v]
+  (let [t (if (instance? Ctor v) (tag v) v)
+        {:keys [name fields]} (first (filter #(= t (:tag %)) ctors))]
+    (into {:tag name}
+          (for [[k [where i] d] fields]
+            [k (to-clj d (if (= where :obj) (proj v i) (sproj v i)))]))))
+
+
+(defn- map->sum
+  [{:keys [ctors]} m]
+  (let [{:keys [tag size ssize fields]} (or (first (filter #(= (:tag m) (:name %)) ctors))
+                                            (throw (ex-info (str "lean-clj: no constructor " (:tag m)) {:value m})))]
+    (if (and (zero? size) (zero? ssize))
+      tag
+      (let [c (ctor tag size ssize)]
+        (doseq [[k [where i] d] fields]
+          (let [x (from-clj d (get m k))]
+            (if (= where :obj) (set-obj! c i x) (sset! c i x))))
+        c))))
+
+
 (defn to-clj
   [d v]
   (if (keyword? d)
@@ -1029,10 +1051,13 @@
       :option (when (instance? Ctor v) (to-clj (second d) (proj v 0)))
       :prod [(to-clj (nth d 1) (proj v 0)) (to-clj (nth d 2) (proj v 1))]
       :field1 {(nth d 1) (to-clj (nth d 2) v)}
+      :map (into {} (map (fn [p] [(to-clj (nth d 1) (proj p 0)) (to-clj (nth d 2) (proj p 1))]) (lean-list->seq v)))
+      :set (into #{} (map #(to-clj (second d) %) (lean-list->seq v)))
       :ref (let [t (get @types (second d))]
              (case (:kind t)
                :struct (struct->map t v)
-               :enum (nth (:ctors t) (tag v)))))))
+               :enum (nth (:ctors t) (tag v))
+               :sum (sum->map t v))))))
 
 
 (defn from-clj
@@ -1054,10 +1079,13 @@
       :option (if (nil? v) 0 (ctor 1 1 0 (from-clj (second d) v)))
       :prod (ctor 0 2 0 (from-clj (nth d 1) (nth v 0)) (from-clj (nth d 2) (nth v 1)))
       :field1 (from-clj (nth d 2) (get v (nth d 1)))
+      :map (reduce (fn [acc [k x]] (ctor 1 2 0 (ctor 0 2 0 (from-clj (nth d 1) k) (from-clj (nth d 2) x)) acc)) 0 (reverse (seq v)))
+      :set (reduce (fn [acc x] (ctor 1 2 0 (from-clj (second d) x) acc)) 0 (reverse (seq v)))
       :ref (let [t (get @types (second d))]
              (case (:kind t)
                :struct (map->struct t v)
-               :enum (long (.indexOf ^java.util.List (:ctors t) v)))))))
+               :enum (long (.indexOf ^java.util.List (:ctors t) v))
+               :sum (map->sum t v))))))
 
 
 (defn lean_panic_fn_borrowed

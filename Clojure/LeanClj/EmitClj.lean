@@ -453,6 +453,8 @@ inductive Desc where
   /-- A structure with one relevant field, represented at runtime by the field
       and in Clojure by a map with that one key. -/
   | field1 (key : String) (d : Desc)
+  | map (k v : Desc)
+  | set (d : Desc)
   deriving Inhabited
 
 partial def Desc.toSx : Desc → Sx
@@ -463,6 +465,8 @@ partial def Desc.toSx : Desc → Sx
   | .prod a b => .vec [.atom ":prod", a.toSx, b.toSx]
   | .ref k => .vec [.atom ":ref", .atom (quoteString k)]
   | .field1 k d => .vec [.atom ":field1", .atom k, d.toSx]
+  | .map k v => .vec [.atom ":map", k.toSx, v.toSx]
+  | .set d => .vec [.atom ":set", d.toSx]
 
 structure MarshalState where
   /-- Registered named types (structures, enums) in registration order. -/
@@ -498,6 +502,9 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
     | _ => return .option inner
   | ``Prod, #[a, b] => return .prod (← descOf a) (← descOf b)
   | ``Subtype, #[a, _] => descOf a
+  | ``Fin, #[_] => return .kw "nat"
+  | `Clj.Map, #[k, v] => return .map (← descOf k) (← descOf v)
+  | `Clj.Set, #[a] => return .set (← descOf a)
   | _, _ =>
     let env ← getEnv
     let some (.inductInfo ind) := env.find? c | return .kw "raw"
@@ -514,7 +521,38 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
       let names := ind.ctors.map fun n => Sx.atom s!":{kebab n.getString!}"
       modify fun s => { s with types := s.types.push (key, .map [.atom ":kind", .atom ":enum", .atom ":module", .atom (quoteString (moduleOf env c)), .atom ":ctors", .vec names]) }
       return .ref key
-    if !isStructure env c then return .kw "raw"
+    if !isStructure env c then
+      let mut ctors : Array Sx := #[]
+      for ctor in ind.ctors do
+        let some (.ctorInfo ci) := env.find? ctor | return .kw "raw"
+        let layout ← Compiler.LCNF.getCtorLayout ctor
+        let ctorTy ← instantiateForall ci.type args[:ci.numParams]
+        let (names, descs) ← forallTelescopeReducing ctorTy fun fs _ => do
+          let mut ns : Array Name := #[]
+          let mut ds : Array Desc := #[]
+          for f in fs do
+            ns := ns.push (← f.fvarId!.getUserName)
+            ds := ds.push (← descOf (← f.fvarId!.getType))
+          return (ns, ds)
+        let mut fields : Array Sx := #[]
+        for h : i in [0:layout.fieldInfo.size] do
+          let n := names[i]!
+          let fname := if n.hasMacroScopes then (if names.size == 1 then "value" else s!"value{i}")
+            else kebab (n.toString (escape := false))
+          let name := Sx.atom s!":{fname}"
+          let d := descs[i]!.toSx
+          match layout.fieldInfo[i] with
+          | .object j _ => fields := fields.push (.vec [name, .vec [.atom ":obj", .atom (toString j)], d])
+          | .usize j => fields := fields.push (.vec [name, .vec [.atom ":obj", .atom (toString j)], d])
+          | .scalar _ off _ => fields := fields.push (.vec [name, .vec [.atom ":scalar", .atom (toString off)], d])
+          | .erased | .void => pure ()
+        let info := layout.ctorInfo
+        ctors := ctors.push (Sx.map [.atom ":name", .atom s!":{kebab ctor.getString!}", .atom ":tag", .atom (toString info.cidx),
+          .atom ":size", .atom (toString (info.size + info.usize)), .atom ":ssize", .atom (toString info.ssize),
+          .atom ":fields", .vec fields.toList])
+      modify fun s => { s with types := s.types.push (key, .map [.atom ":kind", .atom ":sum", .atom ":module",
+        .atom (quoteString (moduleOf env c)), .atom ":ctors", .vec ctors.toList]) }
+      return .ref key
     let [ctor] := ind.ctors | return .kw "raw"
     let some (.ctorInfo ci) := env.find? ctor | return .kw "raw"
     let layout ← Compiler.LCNF.getCtorLayout ctor
