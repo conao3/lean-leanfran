@@ -120,9 +120,13 @@ def isRelevant (p : Param) : Bool := !p.ty.isErased && !p.ty.isVoid
 def externSymbol (env : Environment) (c : Name) : Option String :=
   getExternNameFor env `c c
 
-/-- The Clojure var of an extern symbol `clj:<ns>/<name>`. -/
+/-- The Clojure function an extern symbol calls: `clj:<ns>/<name>` calls the
+    var, and `clj&:<ns>/<name>` applies it to its last argument, the rest
+    arguments. -/
 def cljVar (sym : String) : Option String :=
-  if sym.startsWith "clj:" then some (String.ofList (sym.toList.drop 4)) else none
+  if sym.startsWith "clj:" then some (String.ofList (sym.toList.drop 4))
+  else if sym.startsWith "clj&:" then some ("clojure.core/apply " ++ String.ofList (sym.toList.drop 5))
+  else none
 
 /-- A call of a Clojure var on Lean runtime values: arguments go through
     `to-clj` and the result through `from-clj`. -/
@@ -657,7 +661,7 @@ def generate (roots : Array Name) (strip : Name) : MetaM Output := do
       | some s =>
         match cljVar s with
         | some v =>
-          let ns := (v.splitOn "/").head!
+          let ns := ((v.splitOn " ").getLast!.splitOn "/").head!
           unless cljNss.contains ns do cljNss := cljNss.push ns
         | none => unless externs.contains s do externs := externs.push s
       | none => throwError "extern without a C symbol: {f}"
