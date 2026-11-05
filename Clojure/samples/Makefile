@@ -1,4 +1,4 @@
-SAMPLES := todo-cli word-count roman-numerals
+SAMPLES := todo-cli word-count roman-numerals verified-clojure
 
 .PHONY: test
 test:

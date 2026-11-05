@@ -10,6 +10,7 @@ directory is a Clojure project that depends on lean-clj through
 | [`todo-cli`](todo-cli) | `deflean` in S-expressions: structures and theorems about the list operations, behind a Clojure CLI |
 | [`word-count`](word-count) | `deflean` with `:imports` (`Std.HashMap`) and Lean source written as a string next to S-expressions, for `do` notation |
 | [`roman-numerals`](roman-numerals) | an ordinary lake project compiled to a committed Clojure namespace with the `lean-clj` CLI, which runs without Lean |
+| [`verified-clojure`](verified-clojure) | Clojure functions written with `lean-clj.typed/defn` and proved in Lean: insertion sort is sorted, and a Lean specification runs as a Clojure closed form through `@[csimp]` |
 
 Start with `todo-cli`. Run the samples inside `nix develop` of the repository
 root.

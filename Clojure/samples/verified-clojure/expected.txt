@@ -1,0 +1,5 @@
+(1 3 3 5 9)
+500000500000
+verified.sort/insert-sorted true
+verified.sort/sort-ints true
+verified.sum/sum-to-fast true

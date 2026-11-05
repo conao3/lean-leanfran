@@ -17,7 +17,7 @@ format-check:
 
 .PHONY: lint
 lint:
-	clj-kondo --lint src test resources samples/todo-cli/src samples/word-count/src
+	clj-kondo --lint src test resources samples/todo-cli/src samples/word-count/src samples/verified-clojure/src
 
 .PHONY: test
 test: build
