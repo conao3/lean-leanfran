@@ -10,14 +10,16 @@
     [clojure.pprint :as pprint]
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
-    [lean-clj.dsl :as dsl]))
+    [lean-clj.dsl :as dsl]
+    [lean-clj.runtime :as runtime]))
 
 
 (set! *warn-on-reflection* true)
 
 
-(defonce ^{:doc "Structures and enumerations by Lean name:
-  `{:kind :struct :fields [[field type] ...]}` or `{:kind :enum :ctors [ctor ...]}`."}
+(defonce ^{:doc "Structures and enumerations by full Lean name:
+  `{:kind :struct :module m :fields [[field type] ...]}` or
+  `{:kind :enum :module m :ctors [ctor ...]}`."}
   types
   (atom {}))
 
@@ -47,7 +49,7 @@
 
 
 (defn- register-command!
-  [prefix cmd]
+  [module prefix cmd]
   (when (seq? cmd)
     (let [[head & args] cmd]
       (case head
@@ -55,32 +57,82 @@
                         vs (filter vector? more)
                         fs (if (= 2 (count vs)) (second vs) (first vs))]
                     (when (= 1 (count vs))
-                      (swap! types assoc (str prefix (dsl/ident nm))
-                             {:kind :struct :fields (mapv vec (partition 2 fs))})))
+                      (swap! types assoc (str module "." prefix (dsl/ident nm))
+                             {:kind :struct :module module :fields (mapv vec (partition 2 fs))})))
         inductive (let [[nm & more] args
                         ctors (remove #(and (seq? %) (= 'deriving (first %))) more)]
                     (when (and (seq ctors) (every? symbol? ctors))
-                      (swap! types assoc (str prefix (dsl/ident nm))
-                             {:kind :enum :ctors (vec ctors)})))
+                      (swap! types assoc (str module "." prefix (dsl/ident nm))
+                             {:kind :enum :module module :ctors (vec ctors)})))
         namespace (doseq [c (rest args)]
-                    (register-command! (str prefix (dsl/ident (first args)) ".") c))
-        mutual (doseq [c args] (register-command! prefix c))
+                    (register-command! module (str prefix (dsl/ident (first args)) ".") c))
+        mutual (doseq [c args] (register-command! module prefix c))
         nil))))
 
 
 (defn register-commands!
-  "Record the monomorphic structures and enumerations among `lean-clj.dsl`
-  commands. Each is also known by its name without the namespace it sits in."
-  [cmds]
-  (doseq [c cmds] (register-command! "" c)))
+  "Record the monomorphic structures and enumerations among the
+  `lean-clj.dsl` commands of the Lean module `module`."
+  [module cmds]
+  (doseq [c cmds] (register-command! module "" c)))
+
+
+(defn- desc-type
+  "Lean type of a marshalling descriptor of the generated code, or nil for
+  one without a Clojure value form here."
+  [d]
+  (if (keyword? d)
+    ({:nat 'Nat :int 'Int :bool 'Bool :string 'String :char 'Char} d)
+    (let [[k a b] d
+          ta (when (some? a) (if (string? a) (symbol a) (desc-type a)))]
+      (case k
+        :list (when ta (list 'List ta))
+        :array (when ta (list 'Array ta))
+        :option (when ta (list 'Option ta))
+        :prod (when-let [tb (desc-type b)] (when ta (list 'Prod ta tb)))
+        :ref ta
+        nil))))
+
+
+(defn- runtime-types
+  "Structures and enumerations that generated code registered at load time,
+  including those written as Lean source and those of CLI-generated
+  namespaces."
+  []
+  (into {}
+        (for [[k {:keys [kind module fields ctors]}] (runtime/registered-types)]
+          [k (case kind
+               :struct {:kind :struct :module module
+                        :fields (mapv (fn [[f _ d]] [(symbol (name f)) (desc-type d)]) fields)}
+               :enum {:kind :enum :module module :ctors (mapv #(symbol (name %)) ctors)})])))
+
+
+(defn- entry
+  "The registered type named `t`: by full Lean name, or by the last components
+  when they name one type."
+  [t]
+  (let [s (dsl/ident t)
+        all (merge (runtime-types) @types)]
+    (or (get all s)
+        (let [hits (distinct (keep (fn [[k v]] (when (str/ends-with? k (str "." s)) (assoc v :name k))) all))
+              names (set (map :name hits))]
+          (case (count names)
+            0 nil
+            1 (dissoc (first hits) :name)
+            (throw (ex-info (str "lean-clj.types: type " t " is ambiguous among " (str/join ", " (sort names)))
+                            {:type t :names names})))))))
+
+
+(defn module-of
+  "Lean module that defines the structure or enumeration `t`, if registered."
+  [t]
+  (:module (entry t)))
 
 
 (defn- lookup
   [t]
-  (let [s (dsl/ident t)]
-    (or (get @types s)
-        (some (fn [[k v]] (when (str/ends-with? k (str "." s)) v)) @types)
-        (throw (ex-info (str "lean-clj.types: unknown type " t) {:type t})))))
+  (or (entry t)
+      (throw (ex-info (str "lean-clj.types: unknown type " t) {:type t}))))
 
 
 (defn- unsupported

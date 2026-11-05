@@ -48,7 +48,9 @@
                       :ret ret
                       :body (first body)
                       :ns (ns-name *ns*)
-                      :name nm}
+                      :name nm
+                      :file *file*
+                      :line (:line (meta &form))}
                      (select-keys (meta nm) termination-keys))
           nm' (vary-meta nm #(-> (apply dissoc % termination-keys)
                                  (assoc :lean/sig (list 'quote sig))))]
@@ -72,8 +74,17 @@
   (let [{:keys [ns name]} (:lean/sig (meta v))
         model-ns (symbol (str "lean-clj.check." ns "." name))
         body [(list 'clojure (symbol (str ns) (str name)))]
-        forms (core/expand model-ns 'model (core/options {} body) (core/source (the-ns ns) body false))]
-    (binding [*ns* (create-ns model-ns)]
+        {:keys [binders ret]} (:lean/sig (meta v))
+        modules (->> (tree-seq coll? seq (concat (take-nth 2 (rest binders)) [ret]))
+                     (filter symbol?)
+                     (keep #(try (types/module-of %) (catch clojure.lang.ExceptionInfo _ nil)))
+                     distinct
+                     vec)
+        model-ns-obj (create-ns model-ns)
+        forms (core/expand model-ns 'model
+                           (core/options model-ns-obj {:imports modules :opens modules} body)
+                           (core/source (the-ns ns) 'model body false))]
+    (binding [*ns* model-ns-obj]
       (refer-clojure)
       (doseq [f forms] (eval f)))
     @(ns-resolve model-ns name)))

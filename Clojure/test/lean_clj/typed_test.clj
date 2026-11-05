@@ -2,6 +2,7 @@
   (:require
     [clojure.test :as t]
     [clojure.test.check.generators :as gen]
+    [lean-clj.core :as lean]
     [lean-clj.typed :as lt]
     [lean-clj.types :as types]
     [malli.core :as m]))
@@ -47,8 +48,8 @@
 
 
 (t/deftest generators-follow-the-type
-  (types/register-commands! '[(structure Account [owner String balance Nat])
-                              (namespace Cards (inductive Suit hearts spades (deriving Repr)))])
+  (types/register-commands! "LeanCljEmbed.Test.Types" '[(structure Account [owner String balance Nat])
+                                                        (namespace Cards (inductive Suit hearts spades (deriving Repr)))])
   (let [sample #(gen/sample (types/gen %) 50)]
     (t/is (every? #(and (integer? %) (not (neg? %))) (sample 'Nat)))
     (t/is (some #(instance? clojure.lang.BigInt %) (gen/sample (types/gen 'Nat) 300)))
@@ -56,8 +57,8 @@
     (t/is (every? vector? (sample '(Array Bool))))
     (t/is (every? #(or (nil? %) (string? %)) (sample '(Option String))))
     (t/is (every? #(and (vector? %) (= 2 (count %))) (sample '(Prod Nat Char))))
-    (t/is (every? #(and (= #{:owner :balance} (set (keys %))) (string? (:owner %))) (sample 'Account)))
-    (t/is (every? #{:hearts :spades} (sample 'Suit)))
+    (t/is (every? #(and (= #{:owner :balance} (set (keys %))) (string? (:owner %))) (sample 'LeanCljEmbed.Test.Types.Account)))
+    (t/is (every? #{:hearts :spades} (sample 'LeanCljEmbed.Test.Types.Cards.Suit)))
     (t/is (thrown? clojure.lang.ExceptionInfo (types/gen '(Option (Option Nat)))))
     (t/is (thrown? clojure.lang.ExceptionInfo (types/gen 'Unknown)))))
 
@@ -88,14 +89,14 @@
 
 
 (t/deftest malli-schemas-accept-the-generated-values
-  (types/register-commands! '[(structure Account [owner String balance Nat])
-                              (inductive Suit hearts spades)])
-  (doseq [t '[Nat Int Bool String Char (List Int) (Array (Option Nat)) (Prod Int Bool) Account Suit]
+  (types/register-commands! "LeanCljEmbed.Test.Types" '[(structure Account [owner String balance Nat])
+                                                        (inductive Suit hearts spades)])
+  (doseq [t '[Nat Int Bool String Char (List Int) (Array (Option Nat)) (Prod Int Bool) LeanCljEmbed.Test.Types.Account LeanCljEmbed.Test.Types.Suit]
           x (gen/sample (types/gen t) 50)]
     (t/is (m/validate (types/malli-schema t) x) (pr-str t x))
     (t/is (types/valid? t x) (pr-str t x)))
   (t/is (not (m/validate (types/malli-schema 'Nat) -1)))
-  (t/is (not (m/validate (types/malli-schema 'Account) {:owner "a" :balance 1 :extra 2})))
+  (t/is (not (m/validate (types/malli-schema 'LeanCljEmbed.Test.Types.Account) {:owner "a" :balance 1 :extra 2})))
   (t/is (= [:=> [:cat 'integer? 'integer? 'integer?] 'integer?] (types/fn-schema #'clamp))))
 
 
@@ -105,3 +106,22 @@
     (t/is (= {:arities {1 {:args [:seq] :ret :int}}} (get cfg 'sum-list)))
     (t/is (= {:arities {3 {:args [:int :int :int] :ret :int}}} (get cfg 'clamp))))
   (t/is (= :nilable/string (types/kondo-type '(Option String)))))
+
+
+(t/deftest ambiguous-type-names-stop
+  (types/register-commands! "LeanCljEmbed.Test.Other" '[(structure Account [id Nat])])
+  (t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"ambiguous" (types/gen 'Account))))
+
+
+(lean/deflean wallet
+              (structure Wallet [coins Nat]))
+
+
+(lt/defn add-coin
+  [w Wallet]
+  Wallet
+  (update w :coins inc))
+
+
+(t/deftest check-sees-structures-of-other-blocks
+  (t/is (:pass? (lt/check #'add-coin {:seed 1}))))

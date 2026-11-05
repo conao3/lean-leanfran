@@ -12,9 +12,17 @@
 (set! *warn-on-reflection* true)
 
 
+(def ^:private ^:dynamic *where*
+  "The `lean-clj.typed/defn` being translated: `{:file :line :name}`."
+  nil)
+
+
 (defn- fail
   [msg form]
-  (throw (ex-info (str "lean-clj.translate: " msg ": " (pr-str form)) {:form form})))
+  (let [{:keys [file line name]} *where*]
+    (throw (ex-info (str (when file (str file ":" line ": ")) "lean-clj.translate: "
+                         (when name (str "in " name ": ")) msg ": " (pr-str form))
+                    {:form form :where *where*}))))
 
 
 ;; clojure.core
@@ -340,7 +348,7 @@
              :counter (atom 0)
              :helpers (atom [])
              :deps (atom #{})}
-        body' (tr ctx body)
+        body' (binding [*where* (select-keys sig [:file :line :name])] (tr ctx body))
         m (cond-> (select-keys sig [:termination-by :decreasing-by])
             extern? (assoc :attrs [(str "extern \"" (extern-name sig) "\"")]))]
     {:commands (conj @(:helpers ctx) (list 'def (with-meta name m) binders ret body'))

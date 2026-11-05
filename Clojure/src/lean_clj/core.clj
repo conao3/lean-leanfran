@@ -39,7 +39,7 @@
   [s]
   (->> (str/split (munge (str s)) #"[-_]")
        (remove str/blank?)
-       (map str/capitalize)
+       (map #(str (str/upper-case (subs % 0 1)) (subs % 1)))
        (apply str)))
 
 
@@ -93,6 +93,7 @@
 (defn- spit-if-changed
   [^File f content]
   (when-not (and (.exists f) (= content (slurp f)))
+    (io/make-parents f)
     (spit f content)))
 
 
@@ -105,22 +106,59 @@
     ws))
 
 
+(defn- module-path
+  [module]
+  (str (str/replace module "." "/") ".lean"))
+
+
 (defn- lean-file
-  [module {:keys [imports]} src]
+  [module {:keys [imports opens]} src]
   (let [header (str (str/join (map #(str "import " % "\n") imports))
-                    "namespace " module "\n\n")]
+                    "namespace " module "\n\n"
+                    (str/join (map #(str "open " % "\n") opens))
+                    (when (seq opens) "\n"))]
     {:text (str header src "\n\nend " module "\n")
      :offset (count (filter #{\newline} header))}))
 
 
+(defn- embedded-sources
+  "Lean sources of the deflean modules that `imports` reach, which the code
+  generated for a block inlines."
+  [^File ws imports]
+  (loop [todo (filter #(str/starts-with? % "LeanCljEmbed.") imports) seen #{} acc []]
+    (if-let [[m & more] (seq todo)]
+      (if (contains? seen m)
+        (recur more seen acc)
+        (let [f (io/file ws (module-path m))]
+          (when-not (.exists f)
+            (throw (ex-info (str "lean-clj: the deflean module " m " is not defined; load the namespace that defines it first")
+                            {:module m})))
+          (let [text (slurp f)
+                deps (map second (re-seq #"(?m)^import (LeanCljEmbed\.\S+)$" text))]
+            (recur (concat more deps) (conj seen m) (conj acc [m text])))))
+      (sort acc))))
+
+
+(defn- location
+  "The Clojure source line of Lean line `line` of a block."
+  [{:keys [file parts line]} lean-line]
+  (let [part (last (filter #(<= (:start %) lean-line) parts))]
+    (str (or file "NO_SOURCE_FILE") ":"
+         (if (and part (:line part))
+           (+ (:line part) (if (:verbatim part) (- lean-line (:start part)) 0))
+           line))))
+
+
 (defn- relocate-messages
-  "Rewrite `<file>:<line>:<col>` in Lean's output to lines of the block."
-  [out ^String path offset block]
+  "Rewrite `<file>:<line>:<col>` in Lean's output to the Clojure source and
+  lines of the block."
+  [out ^String path offset block where]
   (-> out
-      (str/replace #"(?m)^(✖|trace:|Some required targets|- LeanCljEmbed|error: build failed).*\n?" "")
+      (str/replace #"(?m)^(✖|trace:|Some required targets|- LeanCljEmbed|error: build failed|info: lean-clj-embed|info: toolchain).*\n?" "")
       (str/replace (re-pattern (str (java.util.regex.Pattern/quote path) ":(\\d+):(\\d+)"))
                    (fn [[_ line col]]
-                     (str "deflean " block ":" (- (parse-long line) offset) ":" col)))))
+                     (let [l (- (parse-long line) offset)]
+                       (str (location where l) ": deflean " block ":" l ":" col))))))
 
 
 (defn- numbered
@@ -130,20 +168,33 @@
        (str/join "\n")))
 
 
+(def ^:private cli-checked (atom false))
+
+
+(defn- check-cli!
+  "Stop when the `lean-clj` CLI on PATH is another version than this library."
+  []
+  (when-not @cli-checked
+    (let [{:keys [out]} (sh/sh (find-exe "lean-clj") "--version")
+          v (second (re-find #"^lean-clj (\S+)" (str out)))]
+      (when-not (= v generator-version)
+        (throw (ex-info (str "lean-clj: the lean-clj CLI on PATH is version " v
+                             ", but the library is " generator-version
+                             "; install the CLI of the same version (nix profile install github:conao3/lean-clj/v"
+                             generator-version ")")
+                        {:cli v :library generator-version})))
+      (reset! cli-checked true))))
+
+
 (defn- generate!
-  [ns-name block opts src]
-  (let [ws (ensure-workspace!)
-        module (module-name ns-name block)
-        rel (str (str/replace module "." "/") ".lean")
-        {:keys [text offset]} (lean-file module opts src)
-        f (io/file ws rel)
+  [^File ws ns-name block module {:keys [text offset]} src where]
+  (check-cli!)
+  (let [rel (module-path module)
         out (io/file ws "out" (str (sha256 text) ".clj"))]
-    (io/make-parents f)
-    (spit f text)
     (let [{:keys [exit] :as r} (sh! ws (find-exe "lake") "build" module)]
       (when-not (zero? exit)
         (throw (ex-info (str "lean-clj: Lean rejected deflean " block "\n"
-                             (relocate-messages (str (:out r) (:err r)) rel offset block)
+                             (relocate-messages (str (:out r) (:err r)) rel offset block where)
                              "\nLean source of the block:\n" (numbered src))
                         {:block block :module module :exit exit}))))
     (let [{:keys [exit err]} (sh! ws (find-exe "lean-clj")
@@ -155,8 +206,10 @@
                                   "--output-file" (.getAbsolutePath out))]
       (when-not (zero? exit)
         (throw (ex-info (str "lean-clj: code generation failed for deflean " block "\n" err)
-                        {:block block :module module :exit exit}))))
-    (slurp out)))
+                        {:block block :module module :exit exit})))
+      (str (str/join (for [l (str/split-lines (str err)) :when (str/starts-with? l "lean-clj: skipped")]
+                       (str ";; " l "\n")))
+           (slurp out)))))
 
 
 (defn- read-forms
@@ -171,41 +224,76 @@
 (defn expand
   "Clojure forms for the deflean block `block` in `ns-name`, given its Lean
   source. Generated code is cached in `*workspace*`/cache under a hash of the
-  inputs."
-  [ns-name block opts src]
-  (let [key (sha256 (pr-str [generator-version (sha256 clj-model) (str ns-name) (str block) (:imports opts) src]))
-        cached (io/file *workspace* "cache" (str key ".clj"))
-        text (if (.exists cached)
-               (slurp cached)
-               (let [t (generate! ns-name block opts src)]
-                 (io/make-parents cached)
-                 (spit cached t)
-                 t))]
-    (read-forms text)))
+  Lean module and of the deflean modules it imports. `where` locates the block
+  in its Clojure file for error messages."
+  ([ns-name block opts src] (expand ns-name block opts src {}))
+  ([ns-name block opts src where]
+   (let [ws (ensure-workspace!)
+         module (module-name ns-name block)
+         lean (lean-file module opts src)
+         _ (spit-if-changed (io/file ws (module-path module)) (:text lean))
+         key (sha256 (pr-str [generator-version (sha256 clj-model) (str ns-name) (:text lean)
+                              (embedded-sources ws (:imports opts))]))
+         cached (io/file ws "cache" (str key ".clj"))
+         text (if (.exists cached)
+                (slurp cached)
+                (let [t (generate! ws ns-name block module lean src where)]
+                  (io/make-parents cached)
+                  (spit cached t)
+                  t))]
+     (doseq [[_ msg] (re-seq #"(?m)^;; lean-clj: (skipped .*)$" text)]
+       (binding [*out* *err*]
+         (println (str (location where 0) ": deflean " block ": " msg))))
+     (read-forms text))))
+
+
+(defn- render-body
+  [ns block body extern?]
+  (types/register-commands! (module-name (ns-name ns) block)
+                            (remove #(or (string? %) (translate/clojure-command? %)) body))
+  (mapv (fn [x]
+          {:text (cond
+                   (string? x) (dedent x)
+                   (translate/clojure-command? x) (translate/render-command ns x extern?)
+                   :else (dsl/command x))
+           :line (:line (meta x))
+           :verbatim (string? x)})
+        body))
+
+
+(defn- with-starts
+  [parts]
+  (loop [ps parts start 1 acc []]
+    (if-let [p (first ps)]
+      (recur (rest ps)
+             (+ start 2 (count (filter #{\newline} (:text p))))
+             (conj acc (assoc p :start start)))
+      acc)))
 
 
 (defn source
-  "Lean source of a deflean body in the namespace `ns`: strings are Lean
-  source (dedented), `(clojure f ...)` is the models of `lean-clj.typed/defn`
-  functions, and other forms are commands of `lean-clj.dsl`, whose structures
+  "Lean source of the body of deflean block `block` in the namespace `ns`:
+  strings are Lean source (dedented), `(clojure f ...)` is the models of
+  `lean-clj.typed/defn` functions (`@[extern]` to the Clojure vars with
+  `extern?`), and other forms are commands of `lean-clj.dsl`, whose structures
   and enumerations are recorded in `lean-clj.types/types`."
-  ([body] (source *ns* body true))
-  ([ns body extern?]
-   (types/register-commands! (remove #(or (string? %) (translate/clojure-command? %)) body))
-   (->> body
-        (map #(cond
-                (string? %) (dedent %)
-                (translate/clojure-command? %) (translate/render-command ns % extern?)
-                :else (dsl/command %)))
-        (str/join "\n\n"))))
+  [ns block body extern?]
+  (str/join "\n\n" (map :text (render-body ns block body extern?))))
 
 
 (defn options
-  "deflean options with `Clj` imported when the body translates Clojure
-  functions."
-  [opts body]
-  (cond-> opts
-    (some translate/clojure-command? body) (update :imports #(vec (distinct (cons "Clj" %))))))
+  "deflean options in the namespace `ns`: `:use` of other blocks (`ns/block`,
+  or `block` of the same namespace) becomes imports and opens of their
+  modules, and a body that translates Clojure functions imports `Clj`."
+  [ns opts body]
+  (let [used (map (fn [b]
+                    (module-name (or (some-> (namespace b) symbol) (ns-name ns)) (symbol (name b))))
+                  (:use opts))]
+    (cond-> (-> opts
+                (dissoc :use)
+                (update :imports #(vec (distinct (concat % used))))
+                (update :opens #(vec (distinct (concat % used)))))
+      (some translate/clojure-command? body) (update :imports #(vec (distinct (cons "Clj" %)))))))
 
 
 (defmacro deflean
@@ -220,10 +308,15 @@
 
   The body is a sequence of `lean-clj.dsl` commands; a string in the body is
   Lean source taken as is. An optional map before the body takes `:imports`,
-  a vector of Lean modules to import. The block becomes the Lean module
-  returned by `module-name`, whose definitions are wrapped in a namespace of
-  the same name. Lean checks the whole block, proofs included, when the macro
-  expands; a rejected block stops compilation with Lean's messages."
+  a vector of Lean modules to import, and `:use`, a vector of other blocks
+  (`ns/block`, or `block` of this namespace) whose definitions the block
+  uses. The block becomes the Lean module returned by `module-name`, whose
+  definitions are wrapped in a namespace of the same name. Lean checks the
+  whole block, proofs included, when the macro expands; a rejected block stops
+  compilation with Lean's messages, located in this file."
   [block & args]
-  (let [[opts body] (if (map? (first args)) [(first args) (rest args)] [{} args])]
-    `(do ~@(expand (ns-name *ns*) block (options opts body) (source body)))))
+  (let [[opts body] (if (map? (first args)) [(first args) (rest args)] [{} args])
+        parts (with-starts (render-body *ns* block body true))
+        where {:file *file* :line (:line (meta &form)) :parts parts}]
+    `(do ~@(expand (ns-name *ns*) block (options *ns* opts body)
+                   (str/join "\n\n" (map :text parts)) where))))

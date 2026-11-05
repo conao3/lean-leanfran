@@ -88,3 +88,8 @@
   (with-redefs [sum-to-fast (fn [_] 100)]
     (t/is (= 100 (sum-to 3)))
     (t/is (= 200 (sum-twice 3)))))
+
+
+(t/deftest helpers-stay-private
+  (t/is (nil? (resolve 'count-below-loop1)))
+  (t/is (nil? (resolve 'count-below.loop1))))

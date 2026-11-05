@@ -77,7 +77,7 @@
 
 
 (t/deftest deflean-rejects-a-wrong-proof
-  (let [src (lean/source '[(theorem bad [] (= (+ 1 1) 3) (by decide))])
+  (let [src (lean/source *ns* 'wrong '[(theorem bad [] (= (+ 1 1) 3) (by decide))] true)
         e (try
             (lean/expand 'lean-clj.core-test 'wrong {} src)
             nil
@@ -90,7 +90,7 @@
 
 (t/deftest deflean-caches-generated-code
   (let [cache (io/file lean/*workspace* "cache")
-        src (lean/source '[(def triple [n Nat] Nat (* 3 n))])]
+        src (lean/source *ns* 'arith2 '[(def triple [n Nat] Nat (* 3 n))] true)]
     (t/is (seq (.listFiles cache)))
     (t/is (= (lean/expand 'lean-clj.core-test 'arith2 {} src)
              (lean/expand 'lean-clj.core-test 'arith2 {} src)))))
@@ -98,4 +98,62 @@
 
 (t/deftest module-names-are-lean-module-names
   (t/is (= "LeanCljEmbed.Demo.WordCount.Arith" (lean/module-name 'demo.word-count 'arith)))
-  (t/is (= "LeanCljEmbed.Check.SortedMemberQmark" (lean/module-name 'check 'sorted-member?))))
+  (t/is (= "LeanCljEmbed.Check.SortedMemberQMARK" (lean/module-name 'check 'sorted-member?))))
+
+
+(t/deftest module-names-keep-inner-capitals
+  (t/is (= "LeanCljEmbed.My.FooBarNs.CacheB" (lean/module-name 'my.FooBar-ns 'cacheB))))
+
+
+(lean/deflean shared-types
+              (structure Point [x Int y Int]))
+
+
+(lean/deflean uses-shared {:use [shared-types]}
+              (def norm1
+                [p Point] Int
+                (+ (.x p) (.y p))))
+
+
+(t/deftest blocks-share-definitions-through-use
+  (t/is (= 7 (norm1 {:x 3 :y 4})))
+  (t/is (= "LeanCljEmbed.LeanClj.CoreTest.UsesShared.norm1" (:lean/name (meta #'norm1))))
+  (t/is (= "LeanCljEmbed.LeanClj.CoreTest.UsesShared" (:lean/module (meta #'norm1)))))
+
+
+(t/deftest the-cache-follows-imported-blocks
+  (let [a (lean/source *ns* 'cache-a '[(def k [] Nat 1)] true)
+        a' (lean/source *ns* 'cache-a '[(def k [] Nat 10)] true)
+        b (lean/source *ns* 'cache-b '[(def k2 [] Nat (+ k 1))] true)
+        opts (lean/options (the-ns 'lean-clj.core-test) {:use '[cache-a]} [])
+        run (fn []
+              (let [forms (lean/expand 'lean-clj.core-test 'cache-b opts b)]
+                (binding [*ns* (create-ns 'lean-clj.core-test.cache)]
+                  (refer-clojure)
+                  (doseq [f forms] (eval f))
+                  ((ns-resolve 'lean-clj.core-test.cache 'k2)))))]
+    (lean/expand 'lean-clj.core-test 'cache-a {} a)
+    (t/is (= 2 (run)))
+    (lean/expand 'lean-clj.core-test 'cache-a {} a')
+    (t/is (= 11 (run)))))
+
+
+(t/deftest lean-errors-point-at-the-clojure-file
+  (let [e (try
+            (eval '(lean-clj.core/deflean bad-line
+                                          (def ok [] Nat 1)
+                                          (theorem bad [] (= (+ 1 1) 3) (by decide))))
+            nil
+            (catch clojure.lang.Compiler$CompilerException e (ex-cause e)))]
+    (t/is (re-find #"NO_SOURCE_\w+:\d+: deflean bad-line:3:" (ex-message e)))))
+
+
+(t/deftest unexportable-definitions-are-reported
+  (let [err (java.io.StringWriter.)]
+    (binding [*err* err]
+      (eval '(lean-clj.core/deflean poly-skip
+                                    (def ^:private unused [] Nat 0)
+                                    (def my-member
+                                      [(implicit α Type) (inst (BEq α)) x α xs (List α)] Bool
+                                      (.contains xs x)))))
+    (t/is (re-find #"deflean poly-skip: skipped .*myMember" (str err)))))
