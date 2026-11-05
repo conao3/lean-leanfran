@@ -52,7 +52,7 @@
 
 ;; Terms
 
-(declare term tactic binders)
+(declare term tactic binders tactic-block)
 
 
 (def ^:private binops
@@ -135,6 +135,13 @@
               (str "(match " (if (vector? d) (comma d) (term d)) " with" (match-arms clauses) ")"))
       match-eq (let [[h d & clauses] args]
                  (str "(match " (term h) " : " (term d) " with" (match-arms clauses) ")"))
+      let-rec (let [[nm bs ty body rest] args
+                    {:keys [termination-by decreasing-by]} (meta nm)
+                    bs' (binders bs)]
+                (str "(let rec " (ident nm) (when-not (str/blank? bs') (str " " bs')) " : " (term ty) " := " (term body)
+                     (when termination-by (str "\n  termination_by " (term termination-by)))
+                     (when decreasing-by (str "\n  decreasing_by " (tactic-block decreasing-by)))
+                     "\n  ; " (term rest) ")"))
       the (let [[t e] args] (str "(" (term e) " : " (term t) ")"))
       -> (str "(" (str/join " → " (map term args)) ")")
       forall (let [[bs p] args] (str "(∀ " (binders bs) ", " (term p) ")"))
@@ -223,6 +230,14 @@
     :else (throw (ex-info (str "lean-clj.dsl: cannot render tactic " (pr-str x)) {:value x}))))
 
 
+(defn- tactic-block
+  "Tactics of `(by t ...)`, or one tactic, as a parenthesized sequence."
+  [x]
+  (if (and (seq? x) (= 'by (first x)))
+    (str "(" (str/join "; " (map tactic (rest x))) ")")
+    (tactic x)))
+
+
 ;; Commands
 
 (defn- modifiers
@@ -249,10 +264,7 @@
          (when ty (str " : " (term ty)))
          " := " (term body)
          (when termination-by (str "\ntermination_by " (term termination-by)))
-         (when decreasing-by
-           (str "\ndecreasing_by " (if (and (seq? decreasing-by) (= 'by (first decreasing-by)))
-                                     (str "(" (str/join "; " (map tactic (rest decreasing-by))) ")")
-                                     (tactic decreasing-by)))))))
+         (when decreasing-by (str "\ndecreasing_by " (tactic-block decreasing-by))))))
 
 
 (defn- deriving?
