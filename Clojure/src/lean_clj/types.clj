@@ -117,3 +117,34 @@
         (unsupported t)))
 
     :else (unsupported t)))
+
+
+(defn valid?
+  "Whether `x` is a Clojure value of the Lean type `t`, telling lists from
+  vectors as the generated code does."
+  [t x]
+  (cond
+    (symbol? t)
+    (case t
+      Nat (and (integer? x) (not (neg? x)))
+      Int (integer? x)
+      Bool (boolean? x)
+      String (string? x)
+      Char (char? x)
+      (let [{:keys [kind fields ctors]} (lookup t)]
+        (case kind
+          :struct (and (map? x)
+                       (= (set (map (comp field-key first) fields)) (set (keys x)))
+                       (every? (fn [[f ft]] (valid? ft (get x (field-key f)))) fields))
+          :enum (contains? (set (map field-key ctors)) x))))
+
+    (seq? t)
+    (let [[head a b] t]
+      (case head
+        List (and (seq? x) (every? #(valid? a %) x))
+        Array (and (vector? x) (every? #(valid? a %) x))
+        Option (or (nil? x) (valid? a x))
+        Prod (and (vector? x) (= 2 (count x)) (valid? a (first x)) (valid? b (second x)))
+        (unsupported t)))
+
+    :else (unsupported t)))

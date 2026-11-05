@@ -65,3 +65,22 @@
   (t/is (= "owner-name" (types/kebab "ownerName")))
   (t/is (= "http-server" (types/kebab "HTTPServer")))
   (t/is (= "x1-y" (types/kebab "x1Y"))))
+
+
+(lt/defn clamp
+  [lo Int hi Int x Int]
+  Int
+  (max lo (min hi x)))
+
+
+(lt/defn wrong-kind
+  [xs (List Int)]
+  (Array Int)
+  (map inc xs))
+
+
+(t/deftest check-compares-the-function-with-its-model
+  (t/is (:pass? (lt/check #'clamp {:seed 1})))
+  (with-redefs [clamp (fn [_ _ x] x)]
+    (t/is (not (:pass? (lt/check #'clamp {:seed 1})))))
+  (t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"Lean rejected" (lt/check #'wrong-kind))))

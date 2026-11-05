@@ -8,7 +8,13 @@
   kept in the var's `:lean/sig` metadata, from which `(clojure insert-sorted)`
   in a `deflean` block renders a Lean model of the function to prove things
   about."
-  (:refer-clojure :exclude [defn loop]))
+  (:refer-clojure :exclude [defn loop])
+  (:require
+    [clojure.test.check :as tc]
+    [clojure.test.check.generators :as gen]
+    [clojure.test.check.properties :as prop]
+    [lean-clj.core :as core]
+    [lean-clj.types :as types]))
 
 
 (set! *warn-on-reflection* true)
@@ -57,3 +63,38 @@
   (when-not (and (vector? bindings) (zero? (rem (count bindings) 3)) (every? symbol? (take-nth 3 bindings)))
     (throw (ex-info "lean-clj.typed: loop needs bindings [name Type init ...]" {:bindings bindings})))
   `(clojure.core/loop ~(vec (mapcat (fn [[n _ v]] [n v]) (partition 3 bindings))) ~@body))
+
+
+(clojure.core/defn- model-fn
+  "The Lean model of the function `v`, compiled to Clojure in a namespace of
+  its own."
+  [v]
+  (let [{:keys [ns name]} (:lean/sig (meta v))
+        model-ns (symbol (str "lean-clj.check." ns "." name))
+        body [(list 'clojure (symbol (str ns) (str name)))]
+        forms (core/expand model-ns 'model (core/options {} body) (core/source (the-ns ns) body false))]
+    (binding [*ns* (create-ns model-ns)]
+      (refer-clojure)
+      (doseq [f forms] (eval f)))
+    @(ns-resolve model-ns name)))
+
+
+(clojure.core/defn check
+  "Compare the `lean-clj.typed/defn` function `v` with its Lean model on
+  inputs generated from the signature, as `clojure.test.check/quick-check`.
+  A call where the Clojure function throws is outside what the model
+  describes and passes; a result that is not a value of the return type
+  fails."
+  ([v] (check v {}))
+  ([v {:keys [num-tests seed] :or {num-tests 100}}]
+   (let [{:keys [binders ret]} (:lean/sig (meta v))
+         model (model-fn v)
+         types (take-nth 2 (rest binders))
+         f @v]
+     (apply tc/quick-check num-tests
+            (prop/for-all [args (apply gen/tuple (map types/gen types))]
+                          (let [expected (apply model args)
+                                actual (try (apply f args) (catch Exception _ ::threw))]
+                            (or (= ::threw actual)
+                                (and (types/valid? ret actual) (= expected actual)))))
+            (when seed [:seed seed])))))

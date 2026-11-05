@@ -10,6 +10,7 @@
     [clojure.string :as str]
     [lean-clj.dsl :as dsl]
     [lean-clj.runtime]
+    [lean-clj.translate :as translate]
     [lean-clj.types :as types])
   (:import
     (java.io
@@ -184,14 +185,27 @@
 
 
 (defn source
-  "Lean source of a deflean body: strings are Lean source (dedented), other
-  forms are commands of `lean-clj.dsl`, whose structures and enumerations
-  are recorded in `lean-clj.types/types`."
-  [body]
-  (types/register-commands! (remove string? body))
-  (->> body
-       (map #(if (string? %) (dedent %) (dsl/command %)))
-       (str/join "\n\n")))
+  "Lean source of a deflean body in the namespace `ns`: strings are Lean
+  source (dedented), `(clojure f ...)` is the models of `lean-clj.typed/defn`
+  functions, and other forms are commands of `lean-clj.dsl`, whose structures
+  and enumerations are recorded in `lean-clj.types/types`."
+  ([body] (source *ns* body true))
+  ([ns body extern?]
+   (types/register-commands! (remove #(or (string? %) (translate/clojure-command? %)) body))
+   (->> body
+        (map #(cond
+                (string? %) (dedent %)
+                (translate/clojure-command? %) (translate/render-command ns % extern?)
+                :else (dsl/command %)))
+        (str/join "\n\n"))))
+
+
+(defn options
+  "deflean options with `Clj` imported when the body translates Clojure
+  functions."
+  [opts body]
+  (cond-> opts
+    (some translate/clojure-command? body) (update :imports #(vec (distinct (cons "Clj" %))))))
 
 
 (defmacro deflean
@@ -212,4 +226,4 @@
   expands; a rejected block stops compilation with Lean's messages."
   [block & args]
   (let [[opts body] (if (map? (first args)) [(first args) (rest args)] [{} args])]
-    `(do ~@(expand (ns-name *ns*) block opts (source body)))))
+    `(do ~@(expand (ns-name *ns*) block (options opts body) (source body)))))

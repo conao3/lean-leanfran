@@ -251,6 +251,23 @@ theorem count_next_lt {x : c} {t : List α} (h : next x = some t) : count t < co
     | nil => simp_all
     | cons _ t => simp
 
+@[grind →] theorem length_pos_of_head? {xs : List α} {a : α} (h : xs.head? = some a) : 0 < xs.length := by
+  cases xs <;> simp_all
+
+theorem sizeOf_tail_lt [SizeOf α] {xs : List α} {a : α} (h : xs.head? = some a) : sizeOf xs.tail < sizeOf xs := by
+  cases xs with
+  | nil => simp at h
+  | cons _ t => simp; omega
+
+theorem sizeOf_next_lt [SizeOf α] {xs : List α} {t : List α} (h : next xs = some t) : sizeOf t < sizeOf xs := by
+  simp only [next_eq, toList_list] at h
+  split at h
+  · simp at h
+  · cases h
+    cases xs with
+    | nil => simp_all
+    | cons _ t => simp; omega
+
 def range (n : Nat) : List Nat := List.range n
 def range2 (a b : Nat) : List Nat := List.range' a (b - a)
 
@@ -330,5 +347,10 @@ macro_rules
 macro_rules
   | `(tactic| decreasing_trivial) =>
     `(tactic| (have := Clj.count_next_lt ‹Clj.next _ = some _›; simp_all <;> omega))
+macro_rules
+  | `(tactic| decreasing_trivial) =>
+    `(tactic| (simp only [Clj.first_eq, Clj.rest_eq, Clj.toList_list] at *; exact Clj.sizeOf_tail_lt ‹_›))
+macro_rules
+  | `(tactic| decreasing_trivial) => `(tactic| exact Clj.sizeOf_next_lt ‹_›)
 macro_rules
   | `(tactic| decreasing_trivial) => `(tactic| (simp_all <;> omega))
