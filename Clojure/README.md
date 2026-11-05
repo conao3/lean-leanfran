@@ -93,15 +93,19 @@ according to the Lean signature:
 
 | Lean | Clojure |
 |---|---|
-| `Nat`, `Int`, `UInt8`..`UInt64`, `Float` | numbers (`BigInt` beyond `Long`) |
+| `Nat`, `Int`, `UInt8`..`UInt64`, `Fin n`, `Float` | numbers (`BigInt` beyond `Long`) |
+| `Unit` | `nil` |
 | `Bool` | `true` / `false` |
 | `Char` | `Character` |
 | `String` | string |
 | `List α` / `Array α` | list / vector |
 | `Option α` | the value or `nil` |
 | `α × β` | two-element vector |
-| structures | maps with keyword keys |
+| structures | maps with keyword keys (a one-field structure too) |
 | enumerations | keywords (`Suit.hearts` → `:hearts`) |
+| other inductives (`Except` too) | maps with a `:tag` (`{:tag :circle :r 1}`, `{:tag :ok :value 3}`) |
+| `Clj.Map κ ν` / `Clj.Set α` | map / set |
+| `IO α` | the value of running the action, or an exception |
 
 Other types pass through in the runtime representation (`Ctor` objects, and
 `Closure` objects that also implement `IFn`).
@@ -153,11 +157,30 @@ Names:
 Binary operators: `+ - * / % pow ++ = == != not= < <= > >= and or iff && ||
 band bor land lor xor <<< >>> in not-in cons |> <| >>= <$> comp`.
 
+### Blocks, modules, and the cache
+
 The block becomes the Lean module `LeanCljEmbed.<Namespace>.<Block>` (for
 `demo.core` and `arith`: `LeanCljEmbed.Demo.Core.Arith`) in the lake workspace
-`.lean-clj/` of the working directory. lean-clj caches the generated code in
-`.lean-clj/cache/` under a hash of the namespace, block name, imports, and
-Lean source. With the cache present, expanding the block needs no Lean.
+`.lean-clj/`. The workspace is `$LEAN_CLJ_WORKSPACE`, or `.lean-clj/` of the
+project root, the nearest directory up from the working directory with a
+`deps.edn`.
+
+- `{:use [other-block demo.types/types]}` imports and opens other blocks, of
+  the same namespace or of another one, so that a block uses their structures
+  and functions.
+- `(export f {:at {α Int} :as name})` adds a monomorphic definition that calls
+  the polymorphic definition `f` of the block. Clojure calls it as `name`
+  (by default `f-int`). A definition that cannot be a Clojure function (one
+  with instance arguments, say) is reported when the block expands.
+- Each Clojure function that a block defines carries `:lean/name` and
+  `:lean/module` metadata.
+- lean-clj caches the generated code in `.lean-clj/cache/` under a hash of the
+  block's Lean module and of the deflean modules it imports, so changing a
+  block regenerates the blocks that use it. With the cache present, expanding a
+  block needs no Lean.
+- An error from Lean points at the Clojure file and line of the form it came
+  from, followed by the Lean source of the block.
+- The `lean-clj` CLI on `PATH` must be the version of the library.
 
 clj-kondo picks up the names a block defines through the hook exported in
 `resources/clj-kondo.exports/io.github.conao3/lean-clj`.
@@ -184,31 +207,78 @@ a Lean definition, its model, to state and prove theorems about:
     (by (on-all (fun-induction insert-sorted x xs) simp-all grind))))
 ```
 
-- The models of `clojure.core` functions are in the Lean library `Clj`
-  ([`resources/lean-clj/lean/Clj.lean`](resources/lean-clj/lean/Clj.lean)),
-  with simp lemmas back to Lean's own operations. Each model is compared with
-  `clojure.core` on generated inputs in `test/lean_clj/core_model_test.clj`.
-  Where Clojure's meaning depends on the type, a model has instances only for
-  the types on which Lean can state it: `-` and `dec` take `Int`, and `first`,
-  `next`, `seq`, and `get` return `Option`.
-- The translation takes `if`, `when`, `cond`, `if-let`, `if-some`,
-  `when-let`, `case` on keywords and literals, `let`, `fn`, `and`, `or`,
-  keyword lookup, `assoc` and `update` of structure fields, self recursion and
-  `recur`, `lean-clj.typed/loop` (`[i Nat 0 ...]`), and macros that expand to
-  these (`->`, `->>`). Other forms stop the translation with an error.
-- Lean proves termination itself for recursion on `(rest xs)` under
-  `(if-let [y (first xs)] ...)`. Otherwise put `:termination-by` (a Lean term)
-  and `:decreasing-by` metadata on the function name or the `loop` vector.
-- The model of a translated function is `@[extern]` to the Clojure var, so
-  Lean code that calls it runs the Clojure function. A `@[csimp]` theorem
-  `(= (the (-> Nat Nat) spec) impl)` makes compiled calls of `spec`, and the
-  Clojure function `spec` itself, run the Clojure `impl`.
-- `(lt/check #'f)` compares `f` with its model on inputs generated from the
-  signature, with test.check.
+### Signatures
+
+- `[x T y U] R`, as in `deflean`. Parameters may be destructuring forms
+  (`[[a b] (Prod Int String) {:keys [owner]} Account]`), and `& xs (List T)`
+  takes the rest arguments.
+- `(lt/defn f ([x Int] Int ...) ([x Int y Int] Int ...))` has several arities;
+  their models are `f.arity1` and `f.arity2`.
+- `(implicit α Type)` and `(inst (BEq α))` make a polymorphic function. Its
+  model takes `[Clj.Truthy α]` too, so that a test of an `α` value means what
+  it means at the type the caller uses; theorems about it state
+  `(inst (Clj.Truthy α))` among their binders.
+- Types are Lean types, and `(Map K V)` and `(Set α)` are the models of Clojure
+  maps and sets.
+- `:termination-by` (a Lean term) and `:decreasing-by` metadata on the name
+  give Lean the termination argument; Lean finds it itself for recursion on
+  `(rest xs)` under `(if-let [y (first xs)] ...)`.
+
+### What the translation takes
+
+| Clojure | Lean model |
+|---|---|
+| `if`, `when`, `when-not`, `if-not`, `cond`, `case` on keywords and literals | `if h : truthy c = true`, `match`; a local tested by `if` stands for its non-nil value in the branch |
+| `if-let`, `when-let`, `if-some`, `when-some` | `match h : v with \| some x => ...` |
+| `and`, `or` | `&&`, `\|\|` in conditions; the first falsy or truthy value elsewhere (`(or x 0)`) |
+| `let`, `fn`, destructuring | `let`, `fun`, projections (`Clj.elem i` of a vector: a pair's component, or an `Option` element) |
+| `lt/loop` (`[i Nat 0 ...]`) and `recur`, `lt/letfn` | a local `let rec` |
+| calls of `lt/defn` functions and of functions from `deflean` | calls of their models and Lean definitions; mutual recursion becomes `mutual` |
+| keywords: `(:k m)`, `(get m :k)`, `(map :k xs)`, `assoc`, `update` | structure fields |
+| `{k v}` with other keys, `#{...}`, `get`, `assoc`, `update`, `dissoc`, `merge`, `frequencies`, `group-by`, `clojure.set` | `Clj.Map`, `Clj.Set` |
+| `'(1 2)`, `[a b]`, macros that expand to these (`->`, `->>`, `cond->`) | list and vector literals; a two-element vector is a pair or a vector |
+
+`do` with several forms, atoms, Java interop, `try`, `keys` and `vals` of a hash
+map (whose order is the hash order), and keyword-keyed maps other than
+structures stop the translation with the reason.
+
+### The models of clojure.core
+
+The Lean library `Clj`
+([`resources/lean-clj/lean/Clj.lean`](resources/lean-clj/lean/Clj.lean)) models
+the arithmetic of `Nat`, `Int`, and `Float`; truthiness and `nil`; the sequence
+functions (`map`, `filter`, `reduce`, `some`, `every?`, `mapcat`, `keep`,
+`partition`, `distinct`, `sort`, `sort-by`, `take-while`, `interpose`, and
+more); maps and sets; `str` and `clojure.string`. Where Clojure's meaning
+depends on the type, a model has instances only for the types on which Lean can
+state it: `-` and `dec` take `Int` (Clojure's `(- 3 5)` is `-2`), and `first`,
+`next`, `seq`, and `get` return `Option`. `simp only [clj_simp]` rewrites the
+models to Lean's own operations. Each model is compared with `clojure.core` on
+generated inputs in `test/lean_clj/core_model_test.clj`.
 
 A theorem holds for the Clojure function where the function returns a value:
 calls that throw (`Long` overflow, division by zero, an index out of range)
-are outside what the models describe. Signatures take monomorphic types.
+are outside what the models describe. The models take integers in the `Long`
+range to be `Long`s, and `clojure.string` case conversion and whitespace to be
+those of ASCII.
+
+### Running Clojure from Lean
+
+The model of a monomorphic function is `@[extern]` to the Clojure var, so
+compiled Lean code that calls it runs the Clojure function. A `@[csimp]`
+theorem `(= (the (-> Nat Nat) spec) impl)` makes compiled calls of `spec`, and
+the Clojure function `spec` itself, run the Clojure `impl`.
+
+### Checking a function against its model
+
+`(lt/check #'f opts)` compares each arity of `f` with its model on inputs
+generated from the signature, with test.check, and returns the result with a
+`:counterexample` (the arguments and both values) when they differ. Options:
+`:num-tests`, `:seed`, `:gens` (generators by parameter name), `:at` (the
+types of a polymorphic function's type variables), `:max-size`, `:big-ints?`
+(integers beyond `Long`), and `:throws :fail` (count a call that throws as a
+failure). `(lt/defcheck name f opts)` defines a `clojure.test` test that runs
+it.
 
 ## Types
 
@@ -218,11 +288,16 @@ are outside what the models describe. Signatures take monomorphic types.
 |---|---|
 | `gen` | a test.check generator of the Clojure values of the type |
 | `valid?` | whether a value has the type, telling lists from vectors |
-| `malli-schema`, `fn-schema` | a malli schema as data, and `[:=> [:cat ...] ...]` for a `lt/defn` var |
+| `malli-schema`, `fn-schema` | a malli schema as data, and the function schema of a `lt/defn` var (`[:function ...]` for several arities) |
 | `kondo-type`, `kondo-config`, `write-kondo-config!` | clj-kondo `:type-mismatch` types of `lt/defn` functions, written to `.clj-kondo/lean-clj/types/config.edn` |
 
-Structures and enumerations are known by name once a `deflean` block defines
-them with `structure` and `inductive`.
+It knows `Nat`, `Int`, `Bool`, `String`, `Char`, `Float`, `UInt8`..`UInt64`,
+`Unit`, `(Fin n)`, `List`, `Array`, `Option`, `Prod`, `(Map K V)`, `(Set α)`,
+and the structures, enumerations, and sum types (as `{:tag :circle :r 1}`)
+of `deflean` blocks and generated namespaces, by full Lean name or by a short
+name that one of them has. `lean-clj.malli/instrument!` registers the malli
+function schemas of the `lt/defn` functions of namespaces and instruments them
+(malli is your dependency).
 
 ## The CLI
 
@@ -231,21 +306,30 @@ lean-clj module generate-namespace --module-name <Lean module> --namespace <Cloj
          [--roots <Lean name> ...] [--strip-namespace <Lean namespace>]
          [--search-path <dir> ...] [--output-file <path>] [--forms-only]
          [--output json|text]
+
+lean-clj project generate --lake-dir <dir> --namespace-prefix <ns>
+         --output-dir <dir> [--modules <Lean module> ...]
 ```
 
-Without `--roots`, the CLI exports the public definitions of the module that
-have a supported signature. `--search-path` adds directories of `.olean` files
-(in a lake package, `.lake/build/lib/lean`). Exit codes: 0 success, 252 invalid
+`module generate-namespace` emits one module. Without `--roots`, the CLI
+exports the public definitions of the module that have a supported signature,
+and reports the others on standard error. `--search-path` adds directories of
+`.olean` files (in a lake package, `.lake/build/lib/lean`). `project generate`
+builds a lake project, takes the search path of its dependencies from
+`lake env`, and writes a namespace `<prefix>.<module>` for each module under
+the project (or each of `--modules`). Exit codes: 0 success, 252 invalid
 parameters, 254 input the backend cannot handle, 255 other failures.
 
 Public functions take the Lean name relative to the module (or
 `--strip-namespace`) in kebab-case: `Point.add` → `point-add`, `isEven?` →
-`is-even?`.
+`is-even?`. An `IO` action runs when called and returns its value, or throws
+for an error; its output goes to `*out*` and `*err*`.
 
 The backend works on Lean's compiler IR. A hand-written runtime
 (`lean-clj.runtime`) provides the C symbols of Lean's `@[extern]`
-declarations, and a generated namespace checks at load time that the runtime
-has the symbols it uses.
+declarations, including `Float32`, `ByteArray`, `FloatArray`, `Thunk`, `Task`,
+and the standard streams and references of `IO`. A generated namespace checks
+at load time that the runtime has the symbols it uses.
 
 ## Samples
 
@@ -256,7 +340,7 @@ Clojure project with its own README and a `make test`.
 |---|---|
 | Write functions in Lean and call them from Clojure (`deflean`) | [`todo-cli`](samples/todo-cli), [`word-count`](samples/word-count) |
 | Compile a Lean project to a Clojure namespace (the CLI) | [`roman-numerals`](samples/roman-numerals) |
-| Write functions in Clojure and verify them in Lean (`lean-clj.typed`) | [`verified-clojure`](samples/verified-clojure), [`sorted-search`](samples/sorted-search), [`typed-schemas`](samples/typed-schemas) |
+| Write functions in Clojure and verify them in Lean (`lean-clj.typed`) | [`verified-clojure`](samples/verified-clojure), [`sorted-search`](samples/sorted-search), [`inventory`](samples/inventory), [`generic-search`](samples/generic-search), [`typed-schemas`](samples/typed-schemas) |
 
 [`samples/README.md`](samples/README.md) describes what each sample shows and
 where to start.
