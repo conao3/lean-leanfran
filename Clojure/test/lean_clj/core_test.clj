@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [double])
   (:require
     [clojure.java.io :as io]
+    [clojure.java.shell]
     [clojure.test :as t]
     [lean-clj.core :as lean]))
 
@@ -157,3 +158,14 @@
                                       [(implicit α Type) (inst (BEq α)) x α xs (List α)] Bool
                                       (.contains xs x)))))
     (t/is (re-find #"deflean poly-skip: skipped .*myMember" (str err)))))
+
+
+(t/deftest the-cli-generates-a-lake-project
+  (let [out "test-out/project"
+        {:keys [exit err]} (clojure.java.shell/sh "lean-clj" "project" "generate"
+                                                  "--lake-dir" "samples/roman-numerals/lean"
+                                                  "--namespace-prefix" "gen"
+                                                  "--output-dir" out)]
+    (t/is (zero? exit) err)
+    (load-file (str out "/gen/roman.clj"))
+    (t/is (= "MCMXCIV" ((resolve 'gen.roman/to-roman) 1994)))))

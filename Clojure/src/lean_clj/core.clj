@@ -31,9 +31,22 @@
   "0.2.1")
 
 
+(defn- project-root
+  "The nearest directory from the working directory up that holds a
+  `deps.edn`, or the working directory."
+  ^File []
+  (let [cwd (.getAbsoluteFile (io/file (System/getProperty "user.dir")))]
+    (or (first (filter #(.exists (io/file % "deps.edn")) (take-while some? (iterate #(.getParentFile ^File %) cwd))))
+        cwd)))
+
+
 (def ^:dynamic *workspace*
-  "Directory of the lake workspace and the generated-code cache."
-  (io/file ".lean-clj"))
+  "Directory of the lake workspace and the generated-code cache: the
+  environment variable `LEAN_CLJ_WORKSPACE`, or `.lean-clj/` of the project
+  root (the nearest directory with a `deps.edn`)."
+  (if-let [dir (System/getenv "LEAN_CLJ_WORKSPACE")]
+    (io/file dir)
+    (io/file (project-root) ".lean-clj")))
 
 
 (defn- camel

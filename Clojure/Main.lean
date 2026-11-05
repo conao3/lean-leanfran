@@ -8,6 +8,7 @@ def usage : String := "usage: lean-clj [--version] <command> <subcommand> [param
 
 commands:
   module generate-namespace  Emit a Clojure namespace for functions of a Lean module
+  project generate           Build a lake project and emit a namespace for each of its modules
 
 lean-clj module generate-namespace
   --module-name <Name>        Lean module to import (required)
@@ -19,6 +20,12 @@ lean-clj module generate-namespace
   --forms-only | --no-forms-only
                               Omit the `ns` form (used by deflean)
   --output json|text          Format of the summary printed when --output-file is given
+
+lean-clj project generate
+  --lake-dir <dir>            Directory of the lake project (required)
+  --namespace-prefix <ns>     Prefix of the Clojure namespaces (required)
+  --output-dir <dir>          Source directory to write the namespaces in (required)
+  --modules <Name> ...        Modules to emit (default: every module under --lake-dir)
 "
 
 structure Opts where
@@ -30,6 +37,10 @@ structure Opts where
   outputFile : Option System.FilePath := none
   formsOnly : Bool := false
   output : String := "json"
+  lakeDir : Option System.FilePath := none
+  nsPrefix : Option String := none
+  outputDir : Option System.FilePath := none
+  modules : Array Name := #[]
 
 def parseName (s : String) : Name := s.toName
 
@@ -53,6 +64,12 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   | "--search-path" :: rest =>
     let (vs, rest) := takeMany rest
     parseOpts rest { o with searchPath := o.searchPath ++ vs.toArray.map System.FilePath.mk }
+  | "--lake-dir" :: v :: rest => parseOpts rest { o with lakeDir := some v }
+  | "--namespace-prefix" :: v :: rest => parseOpts rest { o with nsPrefix := v }
+  | "--output-dir" :: v :: rest => parseOpts rest { o with outputDir := some v }
+  | "--modules" :: rest =>
+    let (vs, rest) := takeMany rest
+    parseOpts rest { o with modules := o.modules ++ vs.toArray.map parseName }
   | a :: _ => .error s!"unknown parameter: {a}"
 
 /-- Definitions of `mod` worth exporting by default. -/
@@ -120,11 +137,58 @@ def runGenerate (o : Opts) : IO UInt32 := do
       for (l, c) in out.publics do IO.println s!"{c}\t{l}"
   return 0
 
+/-- The Lean modules of the `.lean` files under `dir`, outside `.lake` and the
+    lakefile. -/
+partial def sourceModules (dir : System.FilePath) (pfx : List String := []) : IO (Array Name) := do
+  let mut out := #[]
+  for e in ← dir.readDir do
+    if e.fileName.startsWith "." then continue
+    if ← e.path.isDir then
+      out := out ++ (← sourceModules e.path (pfx ++ [e.fileName]))
+    else if e.fileName.endsWith ".lean" && e.fileName != "lakefile.lean" then
+      let base := String.ofList (e.fileName.toList.take (e.fileName.length - 5))
+      out := out.push ((pfx ++ [base]).foldl Name.str .anonymous)
+  return out
+
+/-- The Clojure namespace of the module `m` under `pfx`: `Roman.Core` → `pfx.roman.core`. -/
+def moduleNamespace (pfx : String) (m : Name) : String :=
+  ".".intercalate (pfx :: m.componentsRev.reverse.map fun c => kebab (c.toString (escape := false)))
+
+def namespacePath (ns : String) : System.FilePath :=
+  System.mkFilePath ((ns.replace "-" "_").splitOn ".") |>.addExtension "clj"
+
+def runProject (o : Opts) : IO UInt32 := do
+  let some dir := o.lakeDir | return 252
+  let some pfx := o.nsPrefix | return 252
+  let some outDir := o.outputDir | return 252
+  let build ← IO.Process.output { cmd := "lake", args := #["build"], cwd := dir }
+  if build.exitCode != 0 then
+    IO.eprint (build.stdout ++ build.stderr)
+    return 254
+  let env ← IO.Process.output { cmd := "lake", args := #["env", "printenv", "LEAN_PATH"], cwd := dir }
+  let paths := ((env.stdout.trimAscii.toString).splitOn ":").filter (!·.isEmpty) |>.toArray.map System.FilePath.mk
+  let mods ← if o.modules.isEmpty then sourceModules dir else pure o.modules
+  for m in mods do
+    let ns := moduleNamespace pfx m
+    let o' : Opts := { moduleName := some m, ns := some ns, searchPath := paths,
+                       outputFile := some (outDir / namespacePath ns), output := "text" }
+    let code ← runGenerate o'
+    if code != 0 then return code
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] => IO.println s!"lean-clj {version} (Lean {Lean.versionString})"; return 0
   | [] | ["help"] | ["module", "help"] | ["module", "generate-namespace", "help"] =>
     IO.print usage; return 0
+  | "project" :: "generate" :: rest =>
+    match parseOpts rest {} with
+    | .error e => IO.eprintln e; IO.eprint usage; return 252
+    | .ok o =>
+      if o.lakeDir.isNone || o.nsPrefix.isNone || o.outputDir.isNone then
+        IO.eprintln "--lake-dir, --namespace-prefix, and --output-dir are required"; return 252
+      try runProject o
+      catch e => IO.eprintln s!"error: {e}"; return 254
   | "module" :: "generate-namespace" :: rest =>
     match parseOpts rest {} with
     | .error e => IO.eprintln e; IO.eprint usage; return 252
