@@ -43,7 +43,13 @@
 (t/deftest tactics
   (t/is (= "(by simp [foo, bar]; omega)" (dsl/term '(by (simp [foo bar]) omega))))
   (t/is (= "(by all_goals omega)" (dsl/term '(by (all-goals omega)))))
-  (t/is (= "(by cases h <;> simp)" (dsl/term '(by (on-all (cases h) simp))))))
+  (t/is (= "(by cases h <;> simp)" (dsl/term '(by (on-all (cases h) simp)))))
+  (t/is (= "(by induction n; (case zero => (rfl)); (case succ k ih => (simp; omega)))"
+           (dsl/term '(by (induction n) (case zero [] rfl) (case succ [k ih] simp omega))))))
+
+
+(t/is (= "(by induction xs; (case nil => (simp)); (case cons y t ih => (simp)))"
+         (dsl/term '(by (induction xs) (case nil [] simp) (case cons [y t ih] simp)))))
 
 
 (t/deftest commands

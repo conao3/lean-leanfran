@@ -217,8 +217,8 @@
         on-all (str/join " <;> " (map tactic args))
         seq (str "(" (str/join "; " (map tactic args)) ")")
         case (let [[tag vars & tacs] args]
-               (str "case " (term tag) (apply str (map #(str " " (term %)) vars))
-                    " => (" (str/join "; " (map tactic tacs)) ")"))
+               (str "(case " (if (nil? tag) "nil" (term tag)) (apply str (map #(str " " (term %)) vars))
+                    " => (" (str/join "; " (map tactic tacs)) "))"))
         (str/join " " (cons (tactic-name head) (map term args)))))
     :else (throw (ex-info (str "lean-clj.dsl: cannot render tactic " (pr-str x)) {:value x}))))
 
