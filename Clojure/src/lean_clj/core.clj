@@ -81,16 +81,26 @@
 
 
 (def ^:private lakefile
-  "name = \"lean-clj-embed\"\n\n[[lean_lib]]\nname = \"LeanCljEmbed\"\nglobs = [\"LeanCljEmbed.+\"]\n")
+  "name = \"lean-clj-embed\"\n\n[[lean_lib]]\nname = \"Clj\"\n\n[[lean_lib]]\nname = \"LeanCljEmbed\"\nglobs = [\"LeanCljEmbed.+\"]\n")
+
+
+(def ^:private clj-model
+  "Lean source of `Clj`, the models of `clojure.core`."
+  (slurp (io/resource "lean-clj/lean/Clj.lean")))
+
+
+(defn- spit-if-changed
+  [^File f content]
+  (when-not (and (.exists f) (= content (slurp f)))
+    (spit f content)))
 
 
 (defn- ensure-workspace!
   ^File []
-  (let [ws (io/file *workspace*)
-        lf (io/file ws "lakefile.toml")]
+  (let [ws (io/file *workspace*)]
     (.mkdirs ws)
-    (when-not (and (.exists lf) (= lakefile (slurp lf)))
-      (spit lf lakefile))
+    (spit-if-changed (io/file ws "lakefile.toml") lakefile)
+    (spit-if-changed (io/file ws "Clj.lean") clj-model)
     ws))
 
 
@@ -162,7 +172,7 @@
   source. Generated code is cached in `*workspace*`/cache under a hash of the
   inputs."
   [ns-name block opts src]
-  (let [key (sha256 (pr-str [generator-version (str ns-name) (str block) (:imports opts) src]))
+  (let [key (sha256 (pr-str [generator-version (sha256 clj-model) (str ns-name) (str block) (:imports opts) src]))
         cached (io/file *workspace* "cache" (str key ".clj"))
         text (if (.exists cached)
                (slurp cached)
