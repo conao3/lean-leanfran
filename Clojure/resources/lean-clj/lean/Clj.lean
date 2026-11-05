@@ -28,6 +28,12 @@ instance : Truthy (Option α) := ⟨Option.isSome⟩
 @[simp] theorem truthy_bool (b : Bool) : truthy b = b := rfl
 @[simp] theorem truthy_none : truthy (none : Option α) = false := rfl
 @[simp] theorem truthy_some (a : α) : truthy (some a) = true := rfl
+@[simp] theorem truthy_nat (a : Nat) : truthy a = true := rfl
+@[simp] theorem truthy_int (a : Int) : truthy a = true := rfl
+@[simp] theorem truthy_string (a : String) : truthy a = true := rfl
+@[simp] theorem truthy_char (a : Char) : truthy a = true := rfl
+@[simp] theorem truthy_list (a : List α) : truthy a = true := rfl
+@[simp] theorem truthy_array (a : Array α) : truthy a = true := rfl
 
 class IsNil (α : Type u) where
   isNil : α → Bool
