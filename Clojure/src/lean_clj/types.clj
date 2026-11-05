@@ -61,9 +61,19 @@
                              {:kind :struct :module module :fields (mapv vec (partition 2 fs))})))
         inductive (let [[nm & more] args
                         ctors (remove #(and (seq? %) (= 'deriving (first %))) more)]
-                    (when (and (seq ctors) (every? symbol? ctors))
+                    (cond
+                      (and (seq ctors) (every? symbol? ctors))
                       (swap! types assoc (str module "." prefix (dsl/ident nm))
-                             {:kind :enum :module module :ctors (vec ctors)})))
+                             {:kind :enum :module module :ctors (vec ctors)})
+
+                      (and (seq ctors) (not (vector? (first more))))
+                      (swap! types assoc (str module "." prefix (dsl/ident nm))
+                             {:kind :sum :module module
+                              :ctors (mapv (fn [c]
+                                             (if (symbol? c)
+                                               {:name c :fields []}
+                                               {:name (first c) :fields (mapv vec (partition 2 (second c)))}))
+                                           ctors)})))
         namespace (doseq [c (rest args)]
                     (register-command! module (str prefix (dsl/ident (first args)) ".") c))
         mutual (doseq [c args] (register-command! module prefix c))
@@ -90,6 +100,8 @@
         :array (when ta (list 'Array ta))
         :option (when ta (list 'Option ta))
         :prod (when-let [tb (desc-type b)] (when ta (list 'Prod ta tb)))
+        :map (when-let [tb (desc-type b)] (when ta (list 'Map ta tb)))
+        :set (when ta (list 'Set ta))
         :ref ta
         nil))))
 
@@ -104,7 +116,12 @@
           [k (case kind
                :struct {:kind :struct :module module
                         :fields (mapv (fn [[f _ d]] [(symbol (name f)) (desc-type d)]) fields)}
-               :enum {:kind :enum :module module :ctors (mapv #(symbol (name %)) ctors)})])))
+               :enum {:kind :enum :module module :ctors (mapv #(symbol (name %)) ctors)}
+               :sum {:kind :sum :module module
+                     :ctors (mapv (fn [{:keys [name fields]}]
+                                    {:name (symbol (clojure.core/name name))
+                                     :fields (mapv (fn [[f _ d]] [(symbol (clojure.core/name f)) (desc-type d)]) fields)})
+                                  ctors)})])))
 
 
 (def ^:dynamic *preferred-module-prefix*
@@ -146,6 +163,13 @@
       (throw (ex-info (str "lean-clj.types: unknown type " t) {:type t}))))
 
 
+(defn- head-of
+  "The head of a type application, with `Clj.Map` and `Clj.Set` as `Map` and
+  `Set`."
+  [h]
+  ({'Clj.Map 'Map 'Clj.Set 'Set} h h))
+
+
 (defn- unsupported
   [t]
   (throw (ex-info (str "lean-clj.types: type " (pr-str t) " has no Clojure value form") {:type t})))
@@ -164,6 +188,21 @@
   true)
 
 
+(def ^:private uint-max
+  '{UInt8 255 UInt16 65535 UInt32 4294967295 UInt64 18446744073709551615 USize 18446744073709551615})
+
+
+(defn- fin-bound
+  [t]
+  (when (and (seq? t) (= 'Fin (first t)) (integer? (second t))) (second t)))
+
+
+(defn- tagged
+  "The map of a constructor of a sum type, as the generated code passes it."
+  [ctor]
+  (field-key ctor))
+
+
 (defn gen
   "test.check generator of the Clojure values of the Lean type `t`. Integers
   include values beyond `Long` while `*big-ints*` is true."
@@ -177,13 +216,19 @@
       String gen/string-ascii
       Char gen/char-ascii
       Float (gen/double* {:NaN? false :infinite? false})
+      Unit (gen/return nil)
+      (UInt8 UInt16 UInt32 UInt64 USize) (gen/fmap bigint (gen/large-integer* {:min 0 :max (min Long/MAX_VALUE (uint-max t))}))
       (let [{:keys [kind fields ctors]} (lookup t)]
         (case kind
           :struct (apply gen/hash-map (mapcat (fn [[f ft]] [(field-key f) (gen ft)]) fields))
-          :enum (gen/elements (mapv field-key ctors)))))
+          :enum (gen/elements (mapv field-key ctors))
+          :sum (gen/one-of (for [{:keys [name fields]} ctors]
+                             (gen/fmap #(assoc % :tag (tagged name))
+                                       (apply gen/hash-map (mapcat (fn [[f ft]] [(field-key f) (gen ft)]) fields))))))))
 
     (seq? t)
-    (let [[head a b] t]
+    (let [[head a b] t
+          head (head-of head)]
       (case head
         List (gen/fmap #(apply list %) (gen/vector (gen a)))
         Array (gen/vector (gen a))
@@ -191,6 +236,9 @@
                  (unsupported t)
                  (gen/one-of [(gen/return nil) (gen a)]))
         Prod (gen/tuple (gen a) (gen b))
+        Map (gen/map (gen a) (gen b))
+        Set (gen/set (gen a))
+        Fin (if-let [n (fin-bound t)] (gen/choose 0 (dec n)) (unsupported t))
         (unsupported t)))
 
     :else (unsupported t)))
@@ -209,20 +257,34 @@
       String (string? x)
       Char (char? x)
       Float (double? x)
-      (let [{:keys [kind fields ctors]} (lookup t)]
+      Unit (nil? x)
+      (UInt8 UInt16 UInt32 UInt64 USize) (and (integer? x) (<= 0 x (uint-max t)))
+      (let [{:keys [kind fields ctors]} (lookup t)
+            valid-fields (fn [fields m] (every? (fn [[f ft]] (valid? ft (get m (field-key f)))) fields))]
         (case kind
           :struct (and (map? x)
                        (= (set (map (comp field-key first) fields)) (set (keys x)))
-                       (every? (fn [[f ft]] (valid? ft (get x (field-key f)))) fields))
-          :enum (contains? (set (map field-key ctors)) x))))
+                       (valid-fields fields x))
+          :enum (contains? (set (map field-key ctors)) x)
+          :sum (and (map? x)
+                    (some (fn [{:keys [name fields]}]
+                            (and (= (tagged name) (:tag x))
+                                 (= (set (cons :tag (map (comp field-key first) fields))) (set (keys x)))
+                                 (valid-fields fields x)))
+                          ctors)
+                    true))))
 
     (seq? t)
-    (let [[head a b] t]
+    (let [[head a b] t
+          head (head-of head)]
       (case head
         List (and (seq? x) (every? #(valid? a %) x))
         Array (and (vector? x) (every? #(valid? a %) x))
         Option (or (nil? x) (valid? a x))
         Prod (and (vector? x) (= 2 (count x)) (valid? a (first x)) (valid? b (second x)))
+        Map (and (map? x) (every? (fn [[k v]] (and (valid? a k) (valid? b v))) x))
+        Set (and (set? x) (every? #(valid? a %) x))
+        Fin (if-let [n (fin-bound t)] (and (integer? x) (<= 0 x (dec n))) (unsupported t))
         (unsupported t)))
 
     :else (unsupported t)))
@@ -240,13 +302,20 @@
       String :string
       Char 'char?
       Float :double
-      (let [{:keys [kind fields ctors]} (lookup t)]
+      Unit :nil
+      (UInt8 UInt16 UInt32 UInt64 USize) [:and 'integer? [:>= 0] [:<= (uint-max t)]]
+      (let [{:keys [kind fields ctors]} (lookup t)
+            entries (fn [fields] (map (fn [[f ft]] [(field-key f) (malli-schema ft)]) fields))]
         (case kind
-          :struct (into [:map {:closed true}] (map (fn [[f ft]] [(field-key f) (malli-schema ft)]) fields))
-          :enum (into [:enum] (map field-key ctors)))))
+          :struct (into [:map {:closed true}] (entries fields))
+          :enum (into [:enum] (map field-key ctors))
+          :sum (into [:multi {:dispatch :tag}]
+                     (for [{:keys [name fields]} ctors]
+                       [(tagged name) (into [:map {:closed true} [:tag [:= (tagged name)]]] (entries fields))])))))
 
     (seq? t)
-    (let [[head a b] t]
+    (let [[head a b] t
+          head (head-of head)]
       (case head
         List [:sequential (malli-schema a)]
         Array [:vector (malli-schema a)]
@@ -254,6 +323,9 @@
                  (unsupported t)
                  [:maybe (malli-schema a)])
         Prod [:tuple (malli-schema a) (malli-schema b)]
+        Map [:map-of (malli-schema a) (malli-schema b)]
+        Set [:set (malli-schema a)]
+        Fin (if-let [n (fin-bound t)] [:and 'integer? [:>= 0] [:< n]] (unsupported t))
         (unsupported t)))
 
     :else (unsupported t)))
@@ -279,16 +351,22 @@
       String :string
       Char :char
       Float :double
+      Unit :nil
+      (UInt8 UInt16 UInt32 UInt64 USize) :nat-int
       (case (:kind (lookup t))
-        :struct :map
+        (:struct :sum) :map
         :enum :keyword))
 
     (seq? t)
-    (let [[head a] t]
+    (let [[head a] t
+          head (head-of head)]
       (case head
         List :seq
         Array :vector
         Prod :vector
+        Map :map
+        Set :set
+        Fin :nat-int
         Option (if (and (seq? a) (= 'Option (first a)))
                  (unsupported t)
                  (keyword "nilable" (name (kondo-type a))))

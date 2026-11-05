@@ -249,8 +249,15 @@ def seq (x : c) : Option (List α) :=
   match toList x with
   | [] => none
   | xs => some xs
-def count (x : c) : Nat := (toList x).length
-def «empty?» (x : c) : Bool := (toList x).isEmpty
+/-- The number of elements, for sequences and also for maps and sets, which
+    have no order to list them in. -/
+class Size (c : Type u) where
+  size : c → Nat
+
+instance (priority := low) [Seqable c α] : Size c := ⟨fun x => (toList x).length⟩
+
+def count [Size c'] (x : c') : Nat := Size.size x
+def «empty?» [Size c'] (x : c') : Bool := Size.size x == 0
 def map (f : α → β) (x : c) : List β := (toList x).map f
 def filter [Truthy β] (p : α → β) (x : c) : List α := (toList x).filter fun a => truthy (p a)
 def remove [Truthy β] (p : α → β) (x : c) : List α := (toList x).filter fun a => !truthy (p a)
@@ -272,7 +279,8 @@ def nthnext (x : c) (n : Nat) : Option (List α) :=
 @[simp, clj_simp] theorem first_eq (x : c) : first x = (toList x).head? := rfl
 @[simp, clj_simp] theorem rest_eq (x : c) : rest x = (toList x).tail := rfl
 @[simp, clj_simp] theorem count_eq (x : c) : count x = (toList x).length := rfl
-@[simp, clj_simp] theorem empty?_eq (x : c) : «empty?» x = (toList x).isEmpty := rfl
+@[simp, clj_simp] theorem empty?_eq (x : c) : «empty?» x = (toList x).isEmpty := by
+  cases h : toList x <;> simp_all [«empty?», Size.size]
 @[simp, clj_simp] theorem map_eq (f : α → β) (x : c) : map f x = (toList x).map f := rfl
 @[simp, clj_simp] theorem filter_eq [Truthy β] (p : α → β) (x : c) :
     filter p x = (toList x).filter fun a => truthy (p a) := rfl
@@ -504,6 +512,101 @@ instance : Empty (Array α) := ⟨fun _ => #[]⟩
 def empty [Empty c'] (x : c') : c' := Empty.empty x
 
 def subvec (v : Array α) (start stop : Nat) : Array α := v.extract start stop
+
+/-! ## Maps and sets
+
+`Map κ ν` is an association list without duplicate keys and `Set α` a list
+without duplicates, in the order the operations put them in. Clojure's hash
+maps and sets order their elements by hash, so the models give no ordered view
+of them (`keys`, `vals`, `seq`); their equality ignores the order, as Clojure's
+`=` does. -/
+
+structure Map (κ : Type u) (ν : Type v) where
+  entries : List (κ × ν)
+
+structure Set (α : Type u) where
+  elems : List α
+
+namespace Map
+
+def empty : Map κ ν := ⟨[]⟩
+def get [BEq κ] (m : Map κ ν) (k : κ) : Option ν := (m.entries.find? fun e => e.1 == k).map (·.2)
+def contains [BEq κ] (m : Map κ ν) (k : κ) : Bool := m.entries.any fun e => e.1 == k
+def erase [BEq κ] (m : Map κ ν) (k : κ) : Map κ ν := ⟨m.entries.filter fun e => !(e.1 == k)⟩
+def insert [BEq κ] (m : Map κ ν) (k : κ) (v : ν) : Map κ ν :=
+  if m.contains k then ⟨m.entries.map fun e => if e.1 == k then (k, v) else e⟩
+  else ⟨m.entries ++ [(k, v)]⟩
+def ofList [BEq κ] (kvs : List (κ × ν)) : Map κ ν := kvs.foldl (fun m e => m.insert e.1 e.2) empty
+
+end Map
+
+namespace Set
+
+def empty : Set α := ⟨[]⟩
+def contains [BEq α] (s : Set α) (a : α) : Bool := s.elems.contains a
+def insert [BEq α] (s : Set α) (a : α) : Set α := if s.contains a then s else ⟨s.elems ++ [a]⟩
+def erase [BEq α] (s : Set α) (a : α) : Set α := ⟨s.elems.filter fun b => !(b == a)⟩
+def ofList [BEq α] (xs : List α) : Set α := xs.foldl insert empty
+
+end Set
+
+instance [BEq κ] [BEq ν] : BEq (Map κ ν) :=
+  ⟨fun a b => a.entries.length == b.entries.length && a.entries.all fun e => b.get e.1 == some e.2⟩
+instance [BEq α] : BEq (Set α) :=
+  ⟨fun a b => a.elems.length == b.elems.length && a.elems.all b.contains⟩
+instance : Inhabited (Map κ ν) := ⟨Map.empty⟩
+instance : Inhabited (Set α) := ⟨Set.empty⟩
+
+instance : Size (Map κ ν) := ⟨fun m => m.entries.length⟩
+instance : Size (Set α) := ⟨fun s => s.elems.length⟩
+instance [BEq κ] : Conj (Map κ ν) (κ × ν) := ⟨fun m e => m.insert e.1 e.2⟩
+instance [BEq α] : Conj (Set α) α := ⟨Set.insert⟩
+instance [BEq κ] : Get (Map κ ν) κ ν := ⟨Map.get, Map.contains⟩
+instance [BEq α] : Get (Set α) α α := ⟨fun s a => if s.contains a then some a else none, Set.contains⟩
+
+class Assoc (c : Type u) (κ : Type v) (ν : outParam (Type w)) where
+  assoc : c → κ → ν → c
+
+instance [BEq κ] : Assoc (Map κ ν) κ ν := ⟨Map.insert⟩
+/-- `assoc` on a vector: replacing an element, or appending at index `count`.
+    Clojure throws for a larger index. -/
+instance : Assoc (Array α) Nat α :=
+  ⟨fun v i x => if h : i < v.size then v.set i x h else if i = v.size then v.push x else v⟩
+
+def assoc [Assoc c' κ ν] (x : c') (k : κ) (v : ν) : c' := Assoc.assoc x k v
+def dissoc [BEq κ] (m : Map κ ν) (k : κ) : Map κ ν := m.erase k
+def disj [BEq α] (s : Set α) (a : α) : Set α := s.erase a
+/-- `update` with a key that is not a structure field. On a map the function
+    takes the value or `nil` for a missing key. On a vector it takes the element
+    at an index below `count`; Clojure calls it with `nil` at index `count`,
+    which the model leaves unchanged. -/
+class Update (c : Type u) (κ : Type v) (φ : outParam (Type w)) where
+  update : c → κ → φ → c
+
+instance [BEq κ] : Update (Map κ ν) κ (Option ν → ν) := ⟨fun m k f => m.insert k (f (m.get k))⟩
+instance : Update (Array α) Nat (α → α) := ⟨fun v i f => if h : i < v.size then v.set i (f v[i]) h else v⟩
+
+def update [Update c' κ φ] (x : c') (k : κ) (f : φ) : c' := Update.update x k f
+def merge [BEq κ] (a b : Map κ ν) : Map κ ν := b.entries.foldl (fun m e => m.insert e.1 e.2) a
+def selectKeys [BEq κ] (m : Map κ ν) (ks : c) [Seqable c κ] : Map κ ν :=
+  ⟨m.entries.filter fun e => (toList ks).contains e.1⟩
+def mapOf [BEq κ] (kvs : List (κ × ν)) : Map κ ν := Map.ofList kvs
+def setOf [BEq α] (xs : List α) : Set α := Set.ofList xs
+def toSet [BEq α] (x : c) : Set α := Set.ofList (toList x)
+def frequencies [BEq α] (x : c) : Map α Nat :=
+  (toList x).foldl (fun m a => m.insert a ((m.get a).getD 0 + 1)) Map.empty
+def groupBy [BEq β] (f : α → β) (x : c) : Map β (Array α) :=
+  (toList x).foldl (fun m a => m.insert (f a) (((m.get (f a)).getD #[]).push a)) Map.empty
+def union [BEq α] (a b : Set α) : Set α := b.elems.foldl Set.insert a
+def intersection [BEq α] (a b : Set α) : Set α := ⟨a.elems.filter b.contains⟩
+def difference [BEq α] (a b : Set α) : Set α := ⟨a.elems.filter fun x => !b.contains x⟩
+
+@[simp, clj_simp] theorem get_map [BEq κ] (m : Map κ ν) (k : κ) : get m k = m.get k := rfl
+@[simp, clj_simp] theorem contains?_map [BEq κ] (m : Map κ ν) (k : κ) : «contains?» m k = m.contains k := rfl
+@[simp, clj_simp] theorem contains?_set [BEq α] (s : Set α) (a : α) : «contains?» s a = s.contains a := rfl
+@[simp, clj_simp] theorem count_map (m : Map κ ν) : count m = m.entries.length := rfl
+@[simp, clj_simp] theorem count_set (s : Set α) : count s = s.elems.length := rfl
+@[simp, clj_simp] theorem assoc_map [BEq κ] (m : Map κ ν) (k : κ) (v : ν) : assoc m k v = m.insert k v := rfl
 
 /-! ## Strings -/
 

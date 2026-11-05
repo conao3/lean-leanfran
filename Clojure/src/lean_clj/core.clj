@@ -307,7 +307,8 @@
                 (dissoc :use)
                 (update :imports #(vec (distinct (concat % used))))
                 (update :opens #(vec (distinct (concat % used)))))
-      (some translate/clojure-command? body) (update :imports #(vec (distinct (cons "Clj" %)))))))
+      (some translate/clojure-command? body) (-> (update :imports #(vec (distinct (cons "Clj" %))))
+                                                 (update :opens #(vec (distinct (cons "Clj (Map Set)" %))))))))
 
 
 (defmacro deflean

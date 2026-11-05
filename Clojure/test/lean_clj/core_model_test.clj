@@ -3,6 +3,7 @@
   the same generated inputs. A call where Clojure throws is outside what the
   models describe and counts as agreeing."
   (:require
+    [clojure.set]
     [clojure.string :as str]
     [clojure.test :as t]
     [clojure.test.check :as tc]
@@ -165,7 +166,32 @@
   (mod-float [a Float b Float] Float (Clj.mod a b) mod)
   (lt-float [a Float b Float] Bool (Clj.lt a b) <)
   (max-float [a Float b Float] Float (Clj.max a b) max)
-  (inc-float [a Float] Float (Clj.inc a) inc))
+  (inc-float [a Float] Float (Clj.inc a) inc)
+  (assoc-map [m (Clj.Map String Nat) k String v Nat] (Clj.Map String Nat) (Clj.assoc m k v) assoc)
+  (assoc-vec [v (Array Int) i Nat x Int] (Array Int) (Clj.assoc v i x) assoc [(types/gen '(Array Int)) (gen/choose 0 6) gen/small-integer])
+  (dissoc-map [m (Clj.Map Int String) k Int] (Clj.Map Int String) (Clj.dissoc m k) dissoc)
+  (get-map [m (Clj.Map String Int) k String] (Option Int) (Clj.get m k) get [(gen/map (gen/elements ["a" "b" "c"]) gen/small-integer) (gen/elements ["a" "b" "d"])])
+  (contains-map [m (Clj.Map Int Int) k Int] Bool (Clj.contains? m k) contains?)
+  (count-map [m (Clj.Map Int Bool)] Nat (Clj.count m) count)
+  (empty-map [m (Clj.Map Int Bool)] Bool (Clj.empty? m) empty?)
+  (update-map [m (Clj.Map String Nat) k String] (Clj.Map String Nat) (Clj.update m k (fn [x] (+ (Option.getD x 0) 1))) #(update %1 %2 (fnil inc 0)) [(gen/map (gen/elements ["a" "b"]) gen/nat) (gen/elements ["a" "c"])])
+  (update-vec [v (Array Int) i Nat] (Array Int) (Clj.update v i Clj.inc) #(update %1 %2 inc) [(types/gen '(Array Int)) (gen/choose 0 4)])
+  (merge-maps [a (Clj.Map Int Int) b (Clj.Map Int Int)] (Clj.Map Int Int) (Clj.merge a b) merge)
+  (select-keys-map [m (Clj.Map Int Int) ks (List Int)] (Clj.Map Int Int) (Clj.selectKeys m ks) select-keys)
+  (eq-maps [a (Clj.Map Int Int) b (Clj.Map Int Int)] Bool (Clj.eq a b) = [(gen/map (gen/choose 0 2) (gen/choose 0 1)) (gen/map (gen/choose 0 2) (gen/choose 0 1))])
+  (conj-map [m (Clj.Map Int Int) e (Prod Int Int)] (Clj.Map Int Int) (Clj.conj m e) conj)
+  (into-map [m (Clj.Map Int Int) es (List (Prod Int Int))] (Clj.Map Int Int) (Clj.into m es) into)
+  (frequencies-list [xs (List Int)] (Clj.Map Int Nat) (Clj.frequencies xs) frequencies [(gen/fmap #(apply list %) (gen/vector (gen/choose 0 3)))])
+  (group-by-parity [xs (List Int)] (Clj.Map Bool (Array Int)) (Clj.groupBy (fn [x] (Clj.even? x)) xs) #(group-by even? %))
+  (to-set [xs (List Int)] (Clj.Set Int) (Clj.toSet xs) set [(gen/fmap #(apply list %) (gen/vector (gen/choose 0 3)))])
+  (conj-set [s (Clj.Set Int) x Int] (Clj.Set Int) (Clj.conj s x) conj)
+  (disj-set [s (Clj.Set Int) x Int] (Clj.Set Int) (Clj.disj s x) disj [(gen/set (gen/choose 0 3)) (gen/choose 0 3)])
+  (contains-set [s (Clj.Set Int) x Int] Bool (Clj.contains? s x) contains? [(gen/set (gen/choose 0 3)) (gen/choose 0 3)])
+  (get-set [s (Clj.Set Int) x Int] (Option Int) (Clj.get s x) get [(gen/set (gen/choose 0 3)) (gen/choose 0 3)])
+  (eq-sets [a (Clj.Set Int) b (Clj.Set Int)] Bool (Clj.eq a b) = [(gen/set (gen/choose 0 2)) (gen/set (gen/choose 0 2))])
+  (union-sets [a (Clj.Set Int) b (Clj.Set Int)] (Clj.Set Int) (Clj.union a b) clojure.set/union)
+  (intersection-sets [a (Clj.Set Int) b (Clj.Set Int)] (Clj.Set Int) (Clj.intersection a b) clojure.set/intersection [(gen/set (gen/choose 0 4)) (gen/set (gen/choose 0 4))])
+  (difference-sets [a (Clj.Set Int) b (Clj.Set Int)] (Clj.Set Int) (Clj.difference a b) clojure.set/difference [(gen/set (gen/choose 0 4)) (gen/set (gen/choose 0 4))]))
 
 
 (defn- agrees?

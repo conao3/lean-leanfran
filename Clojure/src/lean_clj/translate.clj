@@ -94,7 +94,18 @@
    'min-key {:model 'Clj.minKey :arity #{3} :fn-args #{0}}
    'not-empty {:model 'Clj.notEmpty :arity #{1}}
    'empty {:model 'Clj.empty :arity #{1}}
-   'subvec {:model 'Clj.subvec :arity #{3}}})
+   'subvec {:model 'Clj.subvec :arity #{3}}
+   'select-keys {:model 'Clj.selectKeys :arity #{2}}
+   'set {:model 'Clj.toSet :arity #{1}}
+   'frequencies {:model 'Clj.frequencies :arity #{1}}
+   'group-by {:model 'Clj.groupBy :arity #{2} :fn-args #{0}}})
+
+
+(def ^:private set-fns
+  "clojure.set functions that are one model in `Clj`."
+  {'union {:model 'Clj.union :arity #{2}}
+   'intersection {:model 'Clj.intersection :arity #{2}}
+   'difference {:model 'Clj.difference :arity #{2}}})
 
 
 (def ^:private string-fns
@@ -475,16 +486,31 @@
                        (and (keyword? k) (= 2 n)) (list (field k) (tr ctx m))
                        (and (keyword? k) (= 3 n)) (list (field k) (tr ctx m))
                        (= 2 n) (list 'Clj.get (tr ctx m) (tr ctx k))
-                       :else (fail "get with a default takes a keyword key of a structure" form)))
+                       :else (list 'Option.getD (list 'Clj.get (tr ctx m) (tr ctx k)) (tr ctx (nth args 2)))))
+      (= 'fnil sym) (let [[f d & more] args
+                          x (fresh! ctx "x")]
+                      (when (seq more) (fail "fnil takes a function and one default" form))
+                      (list 'fn [x] (list (tr-arg ctx #{0} 0 f) (list 'Option.getD x (tr ctx d)))))
       (= 'assoc sym) (let [[m & kvs] args]
-                       (when-not (and (seq kvs) (even? (count kvs)) (every? keyword? (take-nth 2 kvs)))
-                         (fail "assoc takes keyword keys of a structure" form))
-                       (list 'with (tr ctx m) (into {} (map (fn [[k x]] [k (tr ctx x)]) (partition 2 kvs)))))
-      (= 'update sym) (let [[m k f & more] args]
-                        (when-not (keyword? k) (fail "update takes a keyword key of a structure" form))
-                        (let [m' (tr ctx m)
-                              f' (if (keyword? f) (getter ctx f) (tr ctx f))]
-                          (list 'with m' {k (list* f' (list (field k) m') (tr-all ctx more))})))
+                       (when-not (and (seq kvs) (even? (count kvs))) (fail "assoc takes keys and values" form))
+                       (if (every? keyword? (take-nth 2 kvs))
+                         (list 'with (tr ctx m) (into {} (map (fn [[k x]] [k (tr ctx x)]) (partition 2 kvs))))
+                         (reduce (fn [acc [k x]] (list 'Clj.assoc acc (tr ctx k) (tr ctx x))) (tr ctx m) (partition 2 kvs))))
+      (= 'update sym) (let [[m k f & more] args
+                            m' (tr ctx m)
+                            f' (if (keyword? f) (getter ctx f) (tr ctx f))]
+                        (if (keyword? k)
+                          (list 'with m' {k (list* f' (list (field k) m') (tr-all ctx more))})
+                          (let [x (fresh! ctx "x")]
+                            (list 'Clj.update m' (tr ctx k)
+                                  (if (seq more) (list 'fn [x] (list* f' x (tr-all ctx more))) f')))))
+      (= 'dissoc sym) (reduce (fn [acc k] (list 'Clj.dissoc acc (tr ctx k))) (tr ctx (first args)) (rest args))
+      (= 'disj sym) (reduce (fn [acc k] (list 'Clj.disj acc (tr ctx k))) (tr ctx (first args)) (rest args))
+      (= 'merge sym) (if (empty? args) (fail "merge needs a map" form) (fold 'Clj.merge (tr-all ctx args)))
+      (= 'hash-map sym) (tr ctx (apply hash-map args))
+      (= 'hash-set sym) (tr ctx (set args))
+      (#{'keys 'vals} sym) (fail (str sym " lists a hash map in hash order, which a model cannot state; use get, contains?, or count") form)
+
       (fns sym) (let [{:keys [model arity fn-args]} (fns sym)]
                   (if (contains? arity n)
                     (list* model (vec (map-indexed (fn [i x] (tr-arg ctx (or fn-args #{}) i x)) args)))
@@ -495,6 +521,11 @@
 (defn- string-var?
   [^clojure.lang.Var v]
   (= 'clojure.string (ns-name (.ns v))))
+
+
+(defn- set-var?
+  [^clojure.lang.Var v]
+  (= 'clojure.set (ns-name (.ns v))))
 
 
 (defn- plain-regex
@@ -538,6 +569,11 @@
       (and v (lean-var? v)) (do (swap! (:modules ctx) conj (:lean/module (meta v)))
                                 (list* (symbol (:lean/name (meta v))) (tr-all ctx args)))
       (and v (string-var? v)) (tr-string ctx (.sym ^clojure.lang.Var v) args form)
+      (and v (set-var? v)) (let [{:keys [model arity]} (set-fns (.sym ^clojure.lang.Var v))]
+                             (cond
+                               (nil? model) (fail (str "clojure.set/" (.sym ^clojure.lang.Var v) " has no model in Clj") form)
+                               (contains? arity (count args)) (list* model (tr-all ctx args))
+                               :else (fold model (tr-all ctx args))))
       (and v (core-var? v)) (tr-core ctx (.sym ^clojure.lang.Var v) args form)
       v (fail (str head " is not a lean-clj.typed/defn function, a function from Lean, or modelled in Clj") form)
       (local? ctx head) (list* head (tr-all ctx args))
@@ -643,6 +679,11 @@
                       :else (fail (str x " is not a lean-clj.typed/defn function, a function from Lean, or modelled in Clj") x))))
     (or (string? x) (char? x) (boolean? x) (integer? x)) x
     (double? x) (if (Double/isFinite x) x (fail "a model takes finite floating-point literals" x))
+    (map? x) (cond
+               (empty? x) 'Clj.Map.empty
+               (every? keyword? (keys x)) (into {} (map (fn [[k v]] [k (tr ctx v)]) x))
+               :else (list 'Clj.mapOf (mapv (fn [[k v]] (list '<> (tr ctx k) (tr ctx v))) x)))
+    (set? x) (list 'Clj.setOf (tr-all ctx (vec x)))
     (vector? x) (case (count x)
                   0 (list 'array)
                   2 (list* 'Clj.vec2 (tr-all ctx x))
