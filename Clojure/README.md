@@ -115,6 +115,15 @@ integers and `Bool` are `Long`, `UInt64` holds the 64-bit pattern in a `Long`,
 `String` positions are UTF-8 byte offsets as in Lean, and `Array` is a
 persistent vector.
 
+At run time, only the JVM runs. Lean runs when a `deflean` block expands or
+when the CLI compiles a module, and `lean-clj.runtime` replaces Lean's C
+runtime, so no Lean process, FFI, or second heap takes part. The values that
+cross between Clojure and generated code are immutable, and Lean's mutable
+state runs on Clojure's own: `IO.Ref` and `ST.Ref` are atoms, `Task` is a
+future, `Thunk` is a delay, a constant is a delay computed once per namespace,
+and the standard streams are `*out*`, `*err*`, and `*in*`, so `binding`
+redirects them.
+
 ## `deflean`
 
 ```clojure
