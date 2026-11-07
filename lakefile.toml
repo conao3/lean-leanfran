@@ -14,3 +14,7 @@ name = "LeanRustTest"
 [[lean_exe]]
 name = "oracle"
 root = "LeanRustTest.OracleMain"
+
+[[lean_exe]]
+name = "oracle-io"
+root = "LeanRustTest.IoMain"

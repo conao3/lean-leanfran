@@ -159,3 +159,57 @@ pub unsafe fn lean_io_cancel_core(_t: Obj) {}
 pub unsafe fn lean_io_get_task_state_core(_t: Obj) -> u8 {
     2
 }
+
+/* Tasks of `BaseIO` actions */
+
+/// `BaseIO.asTask act prio` (`act`, `prio` consumed): runs `act` now.
+pub unsafe fn lean_io_as_task(act: Obj, prio: Obj) -> Obj {
+    lean_dec(prio);
+    lean_task_pure(lean_apply_1(act, lean_box(0)))
+}
+
+/// `BaseIO.mapTask f t prio sync` (`f`, `t`, `prio` consumed).
+pub unsafe fn lean_io_map_task(f: Obj, t: Obj, prio: Obj, _sync: u8) -> Obj {
+    lean_dec(prio);
+    let v = lean_task_get(t);
+    lean_inc(v);
+    lean_dec(t);
+    lean_task_pure(crate::closure::lean_apply_2(f, v, lean_box(0)))
+}
+
+/// `BaseIO.bindTask t f prio sync` (`t`, `f`, `prio` consumed).
+pub unsafe fn lean_io_bind_task(t: Obj, f: Obj, prio: Obj, _sync: u8) -> Obj {
+    lean_dec(prio);
+    let v = lean_task_get(t);
+    lean_inc(v);
+    lean_dec(t);
+    crate::closure::lean_apply_2(f, v, lean_box(0))
+}
+
+/// `IO.checkCanceled : BaseIO Bool`.
+pub unsafe fn lean_io_check_canceled() -> u8 {
+    lean_io_check_canceled_core() as u8
+}
+
+/// `IO.cancel : @& Task α → BaseIO Unit`.
+pub unsafe fn lean_io_cancel(t: Obj) -> Obj {
+    lean_io_cancel_core(t);
+    lean_box(0)
+}
+
+/// `IO.getTaskState : @& Task α → BaseIO TaskState`.
+pub unsafe fn lean_io_get_task_state(t: Obj) -> u8 {
+    lean_io_get_task_state_core(t)
+}
+
+/// `IO.wait : Task α → BaseIO α` (consumes `t`).
+pub unsafe fn lean_io_wait(t: Obj) -> Obj {
+    lean_task_get_own(t)
+}
+
+/// `IO.waitAny : @& List (Task α) → BaseIO α`: the value of the first task.
+pub unsafe fn lean_io_wait_any(tasks: Obj) -> Obj {
+    let v = lean_task_get(lean_ctor_get(tasks, 0));
+    lean_inc(v);
+    v
+}

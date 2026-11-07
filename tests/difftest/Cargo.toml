@@ -6,3 +6,7 @@ publish = false
 
 [dependencies]
 lean-rust-runtime = { path = "../../crates/lean-rust-runtime" }
+
+[[bin]]
+name = "lean-rust-difftest-io"
+path = "src/io_main.rs"
