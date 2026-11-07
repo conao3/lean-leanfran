@@ -24,6 +24,7 @@
             projectRootFile = "flake.nix";
             programs.nixfmt.enable = true;
             programs.rustfmt.enable = true;
+            programs.rustfmt.edition = "2021";
           };
 
           devShells.default = pkgs.mkShell {

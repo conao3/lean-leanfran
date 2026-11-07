@@ -1,7 +1,10 @@
 //! Runs `LeanRustTest.Vectors.report` through the generated Rust (diff test against the C backend oracle).
 
 mod generated {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-out/vectors.rs"));
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../test-out/vectors.rs"
+    ));
 }
 
 fn main() {

@@ -59,9 +59,21 @@ def isObjType (t : IRType) : Bool := !t.isScalar
 
 /-! ## Emission context -/
 
+/-- Lean functions exported under a C name (`@[export sym]`), by that name. An extern whose
+    C name is one of them is implemented by Lean code, so it is called like a Lean function
+    (the C backend links the extern to that function). -/
+def exportedFns (env : Environment) : Std.HashMap String Name := Id.run do
+  let mut m : Std.HashMap String Name := {}
+  for idx in [0:env.header.moduleNames.size] do
+    for (n, sym) in exportAttr.ext.getModuleEntries env idx do
+      m := m.insert sym.toString n
+  return m
+
 structure Ctx where
   env : Environment
   decls : Std.HashMap Name Decl
+  /-- Lean functions implementing externs, by C name. -/
+  exports : Std.HashMap String Name := {}
   self : Name
   selfParams : Array Param
   /-- Join points with a single `jmp`, expanded at that site. -/
@@ -91,6 +103,14 @@ def isConst (d : Decl) : Bool :=
   | .fdecl _ xs .. => xs.isEmpty
   | _ => false
 
+/-- Largest number of parameters a closure function takes separately (`closureMaxArgs`). -/
+def closureMaxArgs : Nat := 16
+
+/-- A boxed function with more than `closureMaxArgs` parameters takes them as an array
+    `*mut Obj`, as in the C backend (`lean_apply_m` calls it that way). -/
+def takesArgArray (d : Decl) : Bool :=
+  (d.params.filter (!·.ty.isVoid)).size > closureMaxArgs && Lean.Compiler.LCNF.isBoxedName d.name
+
 def varType (x : VarId) : EmitM IRType := do
   return (← read).varTypes.getD x.idx .object
 
@@ -101,11 +121,25 @@ def callStr (c : Name) (ys : Array Arg) : EmitM String := do
   match ctx.decls[c]? with
   | some d@(.extern _ ps _ _) =>
     let some sym := externSymbol ctx.env c | throw s!"extern without a C symbol: {d.name}"
+    if let some t := ctx.exports[sym]? then
+      if let some td := ctx.decls[t]? then
+        if td.params.size == ps.size then
+          -- an owned parameter of the Lean implementation receives a borrowed argument
+          let args := (td.params.zip (ps.zip ys)).filter (fun (tp, _) => !tp.ty.isVoid) |>.map fun (tp, p, y) =>
+            if p.borrow && !tp.borrow && isObjType tp.ty then
+              match y with
+              | .var x => s!"\{ rt::lean_inc({varName x}); {varName x} }"
+              | .erased => argStr y
+            else argStr y
+          if isConst td then return s!"{fnName t}()"
+          return s!"{fnName t}({", ".intercalate args.toList})"
     let args := (ps.zip ys).filter (fun (p, _) => !(p.ty.isErased || p.ty.isVoid)) |>.map (argStr ·.2)
     return s!"rt::{sym}({", ".intercalate args.toList})"
   | some d =>
     if isConst d then return s!"{fnName c}()"
     let args := (d.params.zip ys).filter (fun (p, _) => !p.ty.isVoid) |>.map (argStr ·.2)
+    if takesArgArray d then
+      return s!"\{ let mut __aargs: [Obj; {args.size}] = [{", ".intercalate args.toList}]; {fnName c}(__aargs.as_mut_ptr()) }"
     return s!"{fnName c}({", ".intercalate args.toList})"
   | none => throw s!"function was not collected: {c}"
 
@@ -282,11 +316,11 @@ partial def emitBody (b : FnBody) : EmitM Unit := do
       let f := if c then "lean_dec" else "lean_dec_ref"
       emitLn s!"rt::{f}({varName x});"
     emitBody k
-  | .del x k => emitLn s!"rt::lean_free_object({varName x});"; emitBody k
+  | .del x k => emitLn s!"rt::lean_del_object({varName x});"; emitBody k
   | .case _ x xType alts =>
     let xt ← varType x
     let scrut := if isObjType xType && isObjType xt then s!"rt::lean_obj_tag({varName x})"
-      else s!"({varName x} as u32)"
+      else s!"{varName x} as u32"
     emitLn s!"match {scrut} \{"
     let mut hasDefault := false
     for alt in alts do
@@ -329,8 +363,12 @@ end
 def paramList (ps : Array Param) : String :=
   ", ".intercalate (ps.filter (!·.ty.isVoid) |>.map (fun p => s!"mut {varName p.x}: {rsType p.ty}")).toList
 
-def fnHeader (f : Name) (ps : Array Param) (ty : IRType) : String :=
-  s!"#[allow(non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}({paramList ps}) -> {rsType ty}"
+def fnHeader (d : Decl) (f : Name) (ps : Array Param) (ty : IRType) : String :=
+  if takesArgArray d then
+    let unpack := (ps.filter (!·.ty.isVoid)).mapIdx fun i p => s!"let mut {varName p.x}: {rsType p.ty} = *__args.add({i});\n"
+    s!"#[allow(non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}(__args: *mut Obj) -> {rsType ty} \{\n" ++ String.join unpack.toList
+  else
+    s!"#[allow(non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}({paramList ps}) -> {rsType ty} \{\n"
 
 partial def bodySelfTail (f : Name) (b : FnBody) : Bool :=
   match b with
@@ -340,7 +378,7 @@ partial def bodySelfTail (f : Name) (b : FnBody) : Bool :=
   | .ret _ | .jmp .. | .unreachable => false
   | b => bodySelfTail f b.body
 
-def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (d : Decl) : Except String String := do
+def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (exports : Std.HashMap String Name) (d : Decl) : Except String String := do
   let .fdecl f ps ty body _ := d | return ""
   let jps := joinPoints body {}
   let mut inlineJps : Std.HashMap Nat (Array Param × FnBody) := {}
@@ -356,7 +394,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (d : Decl) : Ex
   let machine := !states.isEmpty || selfTail
   let vars := bodyVars body {}
   let varTypes := ps.foldl (fun m p => m.insert p.x.idx p.ty) vars
-  let ctx : Ctx := { env, decls, self := f, selfParams := ps, inlineJps, stateOf, varTypes }
+  let ctx : Ctx := { env, decls, exports, self := f, selfParams := ps, inlineJps, stateOf, varTypes }
   let run (b : FnBody) : Except String String := do
     let ((), s) ← ((emitBody b).run ctx).run ""
     return s
@@ -377,7 +415,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (d : Decl) : Ex
     let mark := if isObjType ty then "rt::lean_mark_persistent(v); " else ""
     out := out ++ s!"#[allow(non_snake_case, clippy::all)]\npub(crate) unsafe fn {fnName f}() -> {rsType ty} \{\n  thread_local! \{ static CELL: core::cell::OnceCell<{cell}> = const \{ core::cell::OnceCell::new() }; }\n  CELL.with(|c| *c.get_or_init(|| unsafe \{ let v = {fnName f}_init(); {mark}v }))\n}\n"
     return out
-  out := out ++ fnHeader f ps ty ++ " {\n"
+  out := out ++ fnHeader d f ps ty
   for (i, t) in vars.toList.mergeSort (fun a b => a.1 ≤ b.1) do
     out := out ++ s!"let mut x_{i}: {rsType t} = {defaultValue t};\n"
   let inner ← run body
@@ -403,7 +441,7 @@ partial def bodyCallees (b : FnBody) (acc : Array Name) : Array Name :=
   | .ret _ | .jmp .. | .unreachable => acc
   | b => bodyCallees b.body acc
 
-def collect (env : Environment) (roots : Array Name) : Except String (Array Decl) := do
+def collect (env : Environment) (exports : Std.HashMap String Name) (roots : Array Name) : Except String (Array Decl) := do
   let mut seen : Std.HashSet Name := {}
   let mut out : Array Decl := #[]
   let mut stack := roots.reverse
@@ -414,6 +452,9 @@ def collect (env : Environment) (roots : Array Name) : Except String (Array Decl
     seen := seen.insert n
     let some d := findEnvDecl env n | throw s!"no IR for {n} (is it noncomputable?)"
     out := out.push d
+    if let .extern f .. := d then
+      if let some t := (externSymbol env f).bind (exports[·]?) then
+        unless seen.contains t do stack := stack.push t
     if let .fdecl _ _ _ b _ := d then
       for c in (bodyCallees b #[]).reverse do
         unless seen.contains c do stack := stack.push c
@@ -429,12 +470,12 @@ def csimpTarget (env : Environment) (name : Name) : Name := Id.run do
   return name
 
 /-- C names of the externs the collected functions call. -/
-def externsOf (env : Environment) (decls : Array Decl) : Except String (Array String) := do
+def externsOf (env : Environment) (exports : Std.HashMap String Name) (decls : Array Decl) : Except String (Array String) := do
   let mut out : Array String := #[]
   for d in decls do
     if let .extern f .. := d then
       match externSymbol env f with
-      | some s => unless out.contains s do out := out.push s
+      | some s => unless out.contains s || exports.contains s do out := out.push s
       | none => throw s!"extern without a C symbol: {f}"
   return out
 
@@ -446,12 +487,13 @@ structure Output where
 
 def generateInternal (env : Environment) (roots : Array Name) : Except String Output := do
   let targets := roots.map (csimpTarget env)
-  let decls ← collect env (roots ++ targets)
+  let exports := exportedFns env
+  let decls ← collect env exports (roots ++ targets)
   let declMap := decls.foldl (fun m d => m.insert d.name d) ({} : Std.HashMap Name Decl)
-  let externs ← externsOf env decls
+  let externs ← externsOf env exports decls
   let mut items := ""
   for d in decls do
-    items := items ++ (← emitDecl env declMap d) ++ "\n"
+    items := items ++ (← emitDecl env declMap exports d) ++ "\n"
   return { items, externs, decls }
 
 end LeanRust
