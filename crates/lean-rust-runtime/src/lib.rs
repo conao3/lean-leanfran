@@ -1,1 +1,48 @@
-//! Runtime of the Rust code generated from Lean IR by lean-rust: the object model of `lean.h` and the `lean_*` functions.
+//! Runtime of the Rust code generated from Lean IR by lean-rust: the object model of `lean.h`
+//! and the `lean_*` functions of the C runtime, under their C names.
+//!
+//! # Safety
+//!
+//! Every function follows the calling convention of its C counterpart: object arguments are
+//! consumed unless the C declaration borrows them (`b_lean_obj_arg`, `@&` in Lean), results
+//! are owned unless documented as borrowed, and every `Obj` must be a valid Lean value of the
+//! type the function expects. Objects use single-threaded reference counts and must stay on
+//! the thread that created them.
+
+#![allow(clippy::missing_safety_doc, clippy::too_many_arguments, non_snake_case)]
+
+pub mod array;
+pub mod closure;
+pub mod float;
+pub mod int;
+pub mod io;
+pub mod nat;
+pub mod object;
+pub mod panic;
+pub mod string;
+pub mod thunk;
+pub mod uint;
+
+pub use array::*;
+pub use closure::*;
+pub use float::*;
+pub use int::*;
+pub use io::*;
+pub use nat::*;
+pub use object::*;
+pub use panic::*;
+pub use string::*;
+pub use thunk::*;
+pub use uint::*;
+
+/// `System.Platform.getNumBits`: the word size of the target.
+pub unsafe fn lean_system_platform_nbits(_unit: Obj) -> Obj {
+    lean_box(usize::BITS as usize)
+}
+
+/// `ptrAddrUnsafe`.
+pub unsafe fn lean_ptr_addr_unsafe(a: Obj) -> usize {
+    lean_ptr_addr(a)
+}
+
+include!(concat!(env!("OUT_DIR"), "/externs.rs"));
