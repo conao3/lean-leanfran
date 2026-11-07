@@ -29,7 +29,11 @@ fn main() {
     for n in &names {
         out.push_str(&format!("    \"{n}\",\n"));
     }
-    out.push_str("];\n");
+    out.push_str("];\n\n/// Refers to every name of [`EXTERNS`], so that a name that is not a function of the crate fails to compile.\n#[allow(dead_code)]\nfn check_externs() -> [*const (); EXTERNS.len()] {\n    [\n");
+    for n in &names {
+        out.push_str(&format!("        {n} as *const (),\n"));
+    }
+    out.push_str("    ]\n}\n");
     let dest = Path::new(&std::env::var("OUT_DIR").unwrap()).join("externs.rs");
     fs::write(dest, out).unwrap();
 }
