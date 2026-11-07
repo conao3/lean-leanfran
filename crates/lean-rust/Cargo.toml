@@ -1,0 +1,11 @@
+[package]
+name = "lean-rust"
+description = "Run Lean functions from Rust and verify Rust functions in Lean"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lean-rust-runtime = { path = "../lean-rust-runtime", version = "0.1.0" }

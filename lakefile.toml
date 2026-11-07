@@ -1,0 +1,16 @@
+name = "lean-rust"
+defaultTargets = ["lean-rust"]
+
+[[lean_lib]]
+name = "LeanRust"
+
+[[lean_exe]]
+name = "lean-rust"
+root = "Main"
+
+[[lean_lib]]
+name = "LeanRustTest"
+
+[[lean_exe]]
+name = "oracle"
+root = "LeanRustTest.OracleMain"

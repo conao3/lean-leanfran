@@ -1,0 +1,6 @@
+/result
+/.lake/
+/target/
+/test-out/
+/.claude-dev/
+.lean-rust/workspace/
