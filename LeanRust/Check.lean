@@ -18,9 +18,13 @@ structure ObligationRef where
   model : Name
   label : String
 
-def ObligationRef.statement (o : ObligationRef) : Name := o.model ++ `obligation ++ Name.mkSimple o.label
+/-- The label as a name: `ge.u32` for the obligation of a type of `instances`. -/
+def ObligationRef.labelName (o : ObligationRef) : Name :=
+  (o.label.splitOn ".").foldl Name.str .anonymous
 
-def ObligationRef.theorem (o : ObligationRef) : Name := o.model ++ `proof ++ Name.mkSimple o.label
+def ObligationRef.statement (o : ObligationRef) : Name := o.model ++ `obligation ++ o.labelName
+
+def ObligationRef.theorem (o : ObligationRef) : Name := o.model ++ `proof ++ o.labelName
 
 /-- The path of the source of `mod` relative to the package (`Proofs/Sort.lean`). -/
 def moduleFile (mod : Name) : String :=

@@ -25,6 +25,9 @@ pub struct Model {
     pub rust: String,
     /// The Lean name of the model.
     pub lean: String,
+    /// The types of `instances` of a generic function, as written (without spaces).
+    #[serde(default)]
+    pub instances: Vec<String>,
     #[serde(default)]
     pub items: Vec<LockItem>,
     #[serde(default)]
@@ -124,6 +127,10 @@ impl Lock {
             let _ = writeln!(s, "\n[[model]]");
             let _ = writeln!(s, "rust = {}", quote(&m.rust));
             let _ = writeln!(s, "lean = {}", quote(&m.lean));
+            if !m.instances.is_empty() {
+                let ts: Vec<String> = m.instances.iter().map(|t| quote(t)).collect();
+                let _ = writeln!(s, "instances = [{}]", ts.join(", "));
+            }
             let _ = writeln!(s, "items = [");
             for i in &m.items {
                 let _ = writeln!(

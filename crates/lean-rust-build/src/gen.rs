@@ -511,6 +511,8 @@ pub struct Spec {
     pub lean: String,
     /// `true` for a function returning `Bool` (a Rust path), `false` for a `Prop`.
     pub boolean: bool,
+    /// Named arguments after the others: the type arguments of a polymorphic spec (`(α := T)`).
+    pub named: Vec<String>,
 }
 
 /// The parameter names of a model in Lean.
@@ -535,12 +537,15 @@ fn result_parts(f: &ModelFn, res: &str) -> Vec<String> {
     }
 }
 
+fn spec_call(spec: &Spec, args: &[String]) -> String {
+    let mut all: Vec<&str> = vec![spec.lean.as_str()];
+    all.extend(args.iter().map(String::as_str));
+    all.extend(spec.named.iter().map(String::as_str));
+    all.join(" ")
+}
+
 fn applied(spec: &Spec, args: &[String]) -> String {
-    let call = if args.is_empty() {
-        spec.lean.clone()
-    } else {
-        format!("{} {}", spec.lean, args.join(" "))
-    };
+    let call = spec_call(spec, args);
     if spec.boolean {
         format!("{call} = true")
     } else {
@@ -548,14 +553,25 @@ fn applied(spec: &Spec, args: &[String]) -> String {
     }
 }
 
+/// The parts of the obligation of a generic function before the arguments: the binders of the
+/// type parameters, the instances and the hypotheses on them (`∀ {T : Type} [LinearOrder T]
+/// (ord : core.cmp.Ord T) [LeanRust.OrdModel ord], `), and the instance arguments of the model.
+#[derive(Debug, Clone, Default)]
+pub struct GenericParts {
+    pub binders: String,
+    pub insts: Vec<String>,
+}
+
 /// The statement of an obligation: `∀ args, pre args = true → M args ⦃ r => post args r = true ⦄`
-/// for `ensures`, `∀ args, M args = ok (spec args)` for `refines`.
+/// for `ensures`, `∀ args, M args = ok (spec args)` for `refines` (a label `refines` or
+/// `refines.<type>`).
 pub fn obligation_statement(
     f: &ModelFn,
     lean: &str,
     label: &str,
     spec: &Spec,
     requires: Option<&Spec>,
+    generic: &GenericParts,
 ) -> String {
     let params = lean_params(f);
     let binders = if params.is_empty() {
@@ -566,20 +582,22 @@ pub fn obligation_statement(
     let pre = requires
         .map(|r| format!("{} → ", applied(r, &params)))
         .unwrap_or_default();
-    let call = if params.is_empty() {
+    let mut call_args = generic.insts.clone();
+    call_args.extend(params.iter().cloned());
+    let call = if call_args.is_empty() {
         lean.to_string()
     } else {
-        format!("{lean} {}", params.join(" "))
+        format!("{lean} {}", call_args.join(" "))
     };
     let mut res = "res".to_string();
     while params.contains(&res) {
         res.push('\'');
     }
-    let body = if label == "refines" {
-        let s = if params.is_empty() {
+    let body = if label.split('.').next() == Some("refines") {
+        let s = if params.is_empty() && spec.named.is_empty() {
             spec.lean.clone()
         } else {
-            format!("({} {})", spec.lean, params.join(" "))
+            format!("({})", spec_call(spec, &params))
         };
         format!("{call} = ok {s}")
     } else {
@@ -587,10 +605,211 @@ pub fn obligation_statement(
         args.extend(result_parts(f, &res));
         format!("{call} ⦃ {res} => {} ⦄", applied(spec, &args))
     };
-    format!("{binders}{pre}{body}")
+    format!("{}{binders}{pre}{body}", generic.binders)
+}
+
+/* Generic functions */
+
+/// A binder of the signature of a definition of Aeneas's output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Binder {
+    pub name: String,
+    pub ty: String,
+    /// `{..}` (a type parameter).
+    pub implicit: bool,
+}
+
+/// The binders of the definition at the start of `body` (`def f {T : Type _} (inst : ..) (a : T)
+/// : Result T := ..`), up to the colon of its type.
+pub fn decl_binders(body: &str) -> Vec<Binder> {
+    let Some(start) = body.find("def ") else {
+        return Vec::new();
+    };
+    let rest = &body[start + 4..];
+    let rest = rest.trim_start();
+    let name_end = rest
+        .find(|c: char| c.is_whitespace() || c == '(' || c == '{' || c == '[' || c == ':')
+        .unwrap_or(rest.len());
+    let mut chars = rest[name_end..].chars().peekable();
+    let mut out = Vec::new();
+    loop {
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        let Some(&open) = chars.peek() else { break };
+        if !matches!(open, '(' | '{' | '[') {
+            break;
+        }
+        chars.next();
+        let mut depth = 1;
+        let mut text = String::new();
+        for c in chars.by_ref() {
+            if c == '(' || c == '{' || c == '[' {
+                depth += 1;
+            } else if c == ')' || c == '}' || c == ']' {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            text.push(c);
+        }
+        let Some((names, ty)) = text.split_once(':') else {
+            continue;
+        };
+        let ty = ty.split_whitespace().collect::<Vec<_>>().join(" ");
+        for n in names.split_whitespace() {
+            out.push(Binder {
+                name: n.to_string(),
+                ty: ty.clone(),
+                implicit: open == '{',
+            });
+        }
+    }
+    out
+}
+
+/// The Lean classes of a trait structure of Aeneas (the head of the type of an instance
+/// binder): the classes of the type parameter and the class of the laws of the instance.
+pub fn law_classes(trait_struct: &str) -> Option<(&'static [&'static str], &'static str)> {
+    Some(match trait_struct {
+        "core.cmp.PartialEq" => (&["DecidableEq"], "LeanRust.PartialEqModel"),
+        "core.cmp.Eq" => (&["DecidableEq"], "LeanRust.PartialEqModel"),
+        "core.cmp.PartialOrd" => (&["Preorder", "DecidableRel"], "LeanRust.PartialOrdModel"),
+        "core.cmp.Ord" => (&["LinearOrder"], "LeanRust.OrdModel"),
+        "core.clone.Clone" => (&[], "LeanRust.CloneModel"),
+        "core.marker.Copy" => (&[], ""),
+        "core.default.Default" => (&["Inhabited"], "LeanRust.DefaultModel"),
+        _ => return None,
+    })
+}
+
+/// The obligation parts of a generic model from the binders of Aeneas's definition: every
+/// type parameter with the classes its bounds need, every instance followed by the hypothesis
+/// of its laws. `values` are the parameters of the Rust function.
+pub fn generic_parts(binders: &[Binder], values: &[String]) -> Result<GenericParts, String> {
+    let mut params: Vec<(String, Vec<&'static str>)> = Vec::new();
+    let mut insts = Vec::new();
+    let mut hyps = Vec::new();
+    for b in binders {
+        if b.implicit {
+            if b.ty.starts_with("Type") {
+                params.push((b.name.clone(), Vec::new()));
+            }
+            continue;
+        }
+        if values.contains(&b.name) {
+            continue;
+        }
+        let mut words = b.ty.split_whitespace();
+        let Some(head) = words.next() else { continue };
+        let args: Vec<&str> = words.collect();
+        let Some(first) = args.first() else { continue };
+        let Some(p) = params.iter_mut().find(|(n, _)| n == first) else {
+            continue;
+        };
+        let Some((classes, law)) = law_classes(head) else {
+            return Err(format!(
+                "the trait bound `{}` has no law class (LeanRust.*Model): use `obligations = per_instance`",
+                b.ty
+            ));
+        };
+        if args.iter().any(|a| a != first) {
+            return Err(format!(
+                "the trait bound `{}` relates two types: use `obligations = per_instance`",
+                b.ty
+            ));
+        }
+        for c in classes {
+            if !p.1.contains(c) {
+                p.1.push(c);
+            }
+        }
+        insts.push(b.name.clone());
+        let target = if head == "core.cmp.Eq" {
+            format!("{}.partialEqInst", b.name)
+        } else {
+            b.name.clone()
+        };
+        let hyp = if law.is_empty() {
+            String::new()
+        } else {
+            format!(" [{law} {target}]")
+        };
+        hyps.push(format!("({} : {}){hyp}", b.name, b.ty));
+    }
+    let mut text = String::new();
+    for (n, classes) in &params {
+        let _ = write!(text, "{{{n} : Type}} ");
+        let linear = classes.contains(&"LinearOrder");
+        let preorder = classes.contains(&"Preorder");
+        if linear {
+            let _ = write!(text, "[LinearOrder {n}] ");
+        } else if preorder {
+            let _ = write!(text, "[Preorder {n}] [DecidableRel (α := {n}) (· ≤ ·)] ");
+        }
+        if classes.contains(&"DecidableEq") && !linear {
+            let _ = write!(text, "[DecidableEq {n}] ");
+        }
+        if classes.contains(&"Inhabited") {
+            let _ = write!(text, "[Inhabited {n}] ");
+        }
+    }
+    for h in &hyps {
+        text.push_str(h);
+        text.push(' ');
+    }
+    Ok(GenericParts {
+        binders: if text.is_empty() {
+            String::new()
+        } else {
+            format!("∀ {}, ", text.trim_end())
+        },
+        insts,
+    })
+}
+
+/// The suffix of Aeneas's instances of a Rust type of its library (`U32` in
+/// `core.cmp.OrdU32`): the scalars, `bool` and `()`.
+pub fn library_type(rust: &str) -> Option<&'static str> {
+    Some(match rust {
+        "u8" => "U8",
+        "u16" => "U16",
+        "u32" => "U32",
+        "u64" => "U64",
+        "u128" => "U128",
+        "usize" => "Usize",
+        "i8" => "I8",
+        "i16" => "I16",
+        "i32" => "I32",
+        "i64" => "I64",
+        "i128" => "I128",
+        "isize" => "Isize",
+        "bool" => "Bool",
+        "()" => "Unit",
+        _ => return None,
+    })
+}
+
+/// The traits Aeneas's library implements for each [`library_type`]: the scalars implement all
+/// of [`law_classes`], `bool` `PartialEq`, `Clone` and `Copy`, `()` `PartialEq`.
+pub fn library_instance(trait_struct: &str, rust: &str) -> Option<String> {
+    let ty = library_type(rust)?;
+    let ok = match ty {
+        "Bool" => matches!(
+            trait_struct,
+            "core.cmp.PartialEq" | "core.clone.Clone" | "core.marker.Copy"
+        ),
+        "Unit" => trait_struct == "core.cmp.PartialEq",
+        _ => law_classes(trait_struct).is_some(),
+    };
+    ok.then(|| format!("{trait_struct}{ty}"))
 }
 
 pub const LEAN_HEADER: &str = "-- Generated by cargo lean-rust. Do not edit.\n";
+
+/// The module of [`crate::AENEAS_MODEL_LEAN`] in the crate's Lean package.
+pub const AENEAS_MODEL_MODULE: &str = "LeanRustGen.Lib.AeneasModel";
 
 /// The Lean module of the model's functions.
 pub fn model_module(crate_ident: &str) -> String {
@@ -618,17 +837,31 @@ pub fn module_path(module: &str) -> std::path::PathBuf {
 }
 
 /// The Rust expression of the `rs:` extern of `f`: `rs:crate::a::f(_,&)`, with `->()` when it
-/// returns `()`.
-pub fn rust_extern(f: &ModelFn, self_path: Option<&str>, trait_path: Option<&str>) -> String {
+/// returns `()`. `types` are the types of the type parameters of a generic function.
+pub fn rust_extern(
+    f: &ModelFn,
+    self_path: Option<&str>,
+    trait_path: Option<&str>,
+    types: &[String],
+) -> String {
+    let fish = |ts: &[String]| {
+        if ts.is_empty() {
+            String::new()
+        } else {
+            format!("::<{}>", ts.join(", "))
+        }
+    };
+    let (outer, own) = types.split_at(f.sig.impl_generics.min(types.len()));
+    let (outer, own) = (fish(outer), fish(own));
     let mut module = String::from("crate");
     for m in &f.module {
         module.push_str("::");
         module.push_str(m);
     }
     let path = match (self_path, trait_path) {
-        (Some(t), Some(tr)) => format!("<{t} as {tr}>::{}", f.name),
-        (Some(t), None) => format!("{t}::{}", f.name),
-        _ => format!("{module}::{}", f.name),
+        (Some(t), Some(tr)) => format!("<{t}{outer} as {tr}>::{}{own}", f.name),
+        (Some(t), None) => format!("{t}{outer}::{}{own}", f.name),
+        _ => format!("{module}::{}{own}", f.name),
     };
     let modes: Vec<&str> = f
         .sig
@@ -646,4 +879,27 @@ pub fn rust_extern(f: &ModelFn, self_path: Option<&str>, trait_path: Option<&str
         ""
     };
     format!("rs:{path}({}){unit}", modes.join(","))
+}
+
+/// The instance of the trait structure `trait_struct` for the crate's type `rust` (its last
+/// path segment) in Aeneas's output `funs`: `def Id.Insts.CoreCmpOrd : core.cmp.Ord Id := {`.
+pub fn crate_instance(funs: &str, trait_struct: &str, rust: &str) -> Option<String> {
+    let ty = rust.rsplit("::").next()?.split('<').next()?;
+    for line in funs.lines() {
+        let Some(rest) = line.strip_prefix("def ") else {
+            continue;
+        };
+        let Some((name, sig)) = rest.split_once(" : ") else {
+            continue;
+        };
+        let mut words = sig.split_whitespace();
+        if words.next() != Some(trait_struct) {
+            continue;
+        }
+        let Some(arg) = words.next() else { continue };
+        if arg.rsplit('.').next() == Some(ty) {
+            return Some(name.trim().to_string());
+        }
+    }
+    None
 }

@@ -56,20 +56,32 @@ fn model_state(
     crate_ident: &str,
 ) -> ModelState {
     let entry = lock.model(&f.rust);
+    let instances: Vec<String> = f
+        .attr
+        .instances
+        .iter()
+        .map(crate::model::type_text)
+        .collect();
     let changed: Vec<String> = match entry {
-        Some(m) => m
-            .items
-            .iter()
-            .filter(|i| items.hashes.get(&i.rust) != Some(&i.hash))
-            .map(|i| i.rust.clone())
-            .collect(),
+        Some(m) => {
+            let mut c: Vec<String> = m
+                .items
+                .iter()
+                .filter(|i| items.hashes.get(&i.rust) != Some(&i.hash))
+                .map(|i| i.rust.clone())
+                .collect();
+            if m.instances != instances {
+                c.push(format!("instances of {}", f.rust));
+            }
+            c
+        }
         None => Vec::new(),
     };
     let obligations = f
         .attr
-        .obligations()
+        .obligation_labels()
         .into_iter()
-        .map(|(label, spec)| {
+        .map(|(label, spec, _)| {
             let spec_text = match spec {
                 SpecRef::Path(p) => crate::model::path_string(p),
                 SpecRef::Lean(s) => s.clone(),

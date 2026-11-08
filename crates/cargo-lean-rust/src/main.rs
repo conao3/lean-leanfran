@@ -256,6 +256,9 @@ pub struct Resolved {
     pub key: String,
     /// The Lean module defining the spec.
     pub import: Option<String>,
+    /// The type parameters and the instantiations of a polymorphic spec (`rust_instances`).
+    pub type_params: Vec<String>,
+    pub instances: Vec<(String, String)>,
 }
 
 /// The `lean!` blocks of the crate with their keys and the Lean names of their public functions.
@@ -265,7 +268,7 @@ pub struct Specs {
     pub cache: PathBuf,
 }
 
-fn exported_fns(file: &Path) -> Option<Vec<(String, String)>> {
+fn exported_fns(file: &Path) -> Option<Vec<(String, lean_rust_build::model::Exported)>> {
     let text = std::fs::read_to_string(file).ok()?;
     let ast = syn::parse_file(&text).ok()?;
     let mut out = Vec::new();
@@ -273,8 +276,8 @@ fn exported_fns(file: &Path) -> Option<Vec<(String, String)>> {
         let syn::Item::Fn(f) = item else { continue };
         for a in &f.attrs {
             if lean_rust_build::model::is_attr(a, "exported") {
-                if let Ok(s) = a.parse_args::<syn::LitStr>() {
-                    out.push((f.sig.ident.to_string(), s.value()));
+                if let Some(e) = lean_rust_build::model::parse_exported(a) {
+                    out.push((f.sig.ident.to_string(), e));
                 }
             }
         }
@@ -334,6 +337,8 @@ impl Specs {
                     block: String::new(),
                     key: String::new(),
                     import: None,
+                    type_params: Vec::new(),
+                    instances: Vec::new(),
                 })
             }
             SpecRef::Path(p) => p,
@@ -353,24 +358,28 @@ impl Specs {
                     lean_rust_build::module_path_string(&b.path)
                 )
             })?;
-            let Some((_, lean)) = fns.iter().find(|(n, _)| n == name) else {
+            let Some((_, e)) = fns.iter().find(|(n, _)| n == name) else {
                 return Err(format!(
                     "{at}: `{shown}` is not a public function of the lean! block {}",
                     lean_rust_build::module_path_string(&b.path)
                 ));
             };
             return Ok(Resolved {
-                lean: lean.clone(),
+                lean: e.lean.clone(),
                 boolean: true,
                 block: lean_rust_build::module_path_string(&b.path),
                 key: format!("sha256:{}", self.keys[i]),
                 import: Some(b.lean_module(&c.ident())),
+                type_params: e.type_params.clone(),
+                instances: e.instances.clone(),
             });
         }
         let unit = lean_rust_build::module_path_string(&segs);
-        if let Some((lean, file)) = items.exported.get(&unit) {
+        if let Some((e, file)) = items.exported.get(&unit) {
             return Ok(Resolved {
-                lean: lean.clone(),
+                lean: e.lean.clone(),
+                type_params: e.type_params.clone(),
+                instances: e.instances.clone(),
                 boolean: true,
                 block: unit.clone(),
                 key: items.hashes.get(&unit).cloned().unwrap_or_default(),

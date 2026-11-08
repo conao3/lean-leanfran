@@ -1,7 +1,8 @@
 //! `#[lean_rust::model]` and `#[derive(lean_rust::Model)]`.
 
 use lean_rust_build::model::{
-    model_attr, parse_model_args, signature, Mode, ModelAttr, Sig, SpecRef,
+    instance_name, model_attr, parse_model_args, signature, Mode, ModelAttr, Sig, SpecRef,
+    TypeParam,
 };
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
@@ -11,6 +12,8 @@ use syn::{Ident, ImplItem, Item, Path, Type};
 struct Owner {
     self_ty: Option<Type>,
     trait_: Option<Path>,
+    /// The generics of the impl block.
+    generics: Option<syn::Generics>,
 }
 
 /// The rustdoc attribute of a model, and an item reporting a missing build script.
@@ -169,7 +172,10 @@ fn adapter_fns(
     a: &Adapter,
     has_ret: bool,
     spec_path: &dyn Fn(&Path) -> TokenStream,
+    suffix: &str,
 ) -> TokenStream {
+    let requires = format_ident!("requires{}", suffix);
+    let refines = format_ident!("refines{}", suffix);
     let params = &a.params;
     let specs = &a.specs;
     let s = spec_names(a);
@@ -183,7 +189,7 @@ fn adapter_fns(
     if let Some(SpecRef::Path(p)) = &attr.requires {
         let p = spec_path(p);
         out.extend(quote! {
-            pub fn requires(#(#params),*) -> bool {
+            pub fn #requires(#(#params),*) -> bool {
                 #(#specs)*
                 #p(#(#s),*)
             }
@@ -193,7 +199,7 @@ fn adapter_fns(
         let p = spec_path(p);
         let value = nested_tuple(&a.results);
         out.extend(quote! {
-            pub fn refines(#(#params),*) -> bool {
+            pub fn #refines(#(#params),*) -> bool {
                 #(#specs)*
                 #call_stmt
                 #p(#(#s),*) == #value
@@ -203,7 +209,7 @@ fn adapter_fns(
     for (label, spec) in &attr.ensures {
         let SpecRef::Path(p) = spec else { continue };
         let p = spec_path(p);
-        let f = format_ident!("ensures_{}", label);
+        let f = format_ident!("ensures_{}{}", label, suffix);
         let results = &a.results;
         out.extend(quote! {
             pub fn #f(#(#params),*) -> bool {
@@ -216,19 +222,24 @@ fn adapter_fns(
     out
 }
 
-fn tests(attr: &ModelAttr, a: &Adapter) -> TokenStream {
+/// The proptests of the adapter functions with `suffix`; a strategy function is called with
+/// `turbofish` (the types of the instance of a generic function).
+fn tests(attr: &ModelAttr, a: &Adapter, suffix: &str, turbofish: TokenStream) -> TokenStream {
     if attr.check == Some(false) {
         return TokenStream::new();
     }
     let mut checks = Vec::new();
     if matches!(attr.refines, Some(SpecRef::Path(_))) {
-        checks.push((format_ident!("check_refines"), format_ident!("refines")));
+        checks.push((
+            format_ident!("check_refines{}", suffix),
+            format_ident!("refines{}", suffix),
+        ));
     }
     for (label, spec) in &attr.ensures {
         if matches!(spec, SpecRef::Path(_)) {
             checks.push((
-                format_ident!("check_ensures_{}", label),
-                format_ident!("ensures_{}", label),
+                format_ident!("check_ensures_{}{}", label, suffix),
+                format_ident!("ensures_{}{}", label, suffix),
             ));
         }
     }
@@ -239,7 +250,7 @@ fn tests(attr: &ModelAttr, a: &Adapter) -> TokenStream {
     let strategy = match &attr.strategy {
         Some(p) => {
             let p = deeper(p, 1);
-            quote! { #p() }
+            quote! { #p #turbofish () }
         }
         None if owned.len() == 1 => {
             let t = &owned[0];
@@ -247,6 +258,7 @@ fn tests(attr: &ModelAttr, a: &Adapter) -> TokenStream {
         }
         None => quote! { (#(::lean_rust::check::proptest::prelude::any::<#owned>()),*) },
     };
+    let requires = format_ident!("requires{}", suffix);
     let names = &a.names;
     let pat = if names.len() == 1 {
         quote! { #(#names)* }
@@ -258,7 +270,7 @@ fn tests(attr: &ModelAttr, a: &Adapter) -> TokenStream {
         quote! {
             {
                 let #pat = __args.clone();
-                ::lean_rust::check::proptest::prop_assume!(copy::requires(#(#pass),*));
+                ::lean_rust::check::proptest::prop_assume!(copy::#requires(#(#pass),*));
             }
         }
     } else {
@@ -282,29 +294,133 @@ fn tests(attr: &ModelAttr, a: &Adapter) -> TokenStream {
     }
 }
 
-/// The adapter module of one function.
+/// Replaces the type parameters by the types of an instance.
+struct Subst<'a>(&'a [(String, Type)]);
+
+impl syn::visit_mut::VisitMut for Subst<'_> {
+    fn visit_type_mut(&mut self, t: &mut Type) {
+        if let Type::Path(p) = t {
+            if p.qself.is_none() {
+                if let Some(id) = p.path.get_ident() {
+                    if let Some((_, to)) = self.0.iter().find(|(n, _)| id == n) {
+                        *t = to.clone();
+                        return;
+                    }
+                }
+            }
+        }
+        syn::visit_mut::visit_type_mut(self, t);
+    }
+}
+
+fn subst_type(t: &Type, map: &[(String, Type)]) -> Type {
+    let mut t = t.clone();
+    syn::visit_mut::VisitMut::visit_type_mut(&mut Subst(map), &mut t);
+    t
+}
+
+/// The types of the type parameters `generics` in `instance`: the type itself for one
+/// parameter, the elements of a tuple for several.
+fn instance_types(generics: &[TypeParam], instance: &Type) -> syn::Result<Vec<(String, Type)>> {
+    let types: Vec<Type> = match instance {
+        Type::Tuple(t) if generics.len() != 1 => t.elems.iter().cloned().collect(),
+        t => vec![t.clone()],
+    };
+    if types.len() != generics.len() {
+        return Err(syn::Error::new_spanned(
+            instance,
+            format!(
+                "lean_rust::model: the function has {} type parameters; give a tuple of {} types",
+                generics.len(),
+                generics.len()
+            ),
+        ));
+    }
+    Ok(generics.iter().map(|g| g.name.clone()).zip(types).collect())
+}
+
+/// The adapter module of one function: for a generic function, the adapters and tests of
+/// each type of `instances`, with the suffix `_<type>`.
 fn expand_fn(
     attr: &ModelAttr,
     sig: &syn::Signature,
     owner: &Owner,
     doc_rest: &str,
 ) -> syn::Result<TokenStream> {
-    let parsed = signature(sig)?;
+    let parsed = signature(sig, owner.generics.as_ref())?;
     let name = &sig.ident;
-    let callee = |depth: usize| {
-        let supers = (0..depth).map(|_| quote! { super:: });
-        match (&owner.self_ty, &owner.trait_) {
-            (Some(t), Some(tr)) => quote! { <#t as #tr>::#name },
-            (Some(t), None) => quote! { <#t>::#name },
-            _ => quote! { #(#supers)* #name },
+    let fn_generics: Vec<String> = signature(sig, None)?
+        .generics
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+    let mut cases: Vec<(String, Vec<(String, Type)>)> = Vec::new();
+    if parsed.generics.is_empty() {
+        cases.push((String::new(), Vec::new()));
+    } else {
+        if attr.instances.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &sig.ident,
+                "lean_rust::model: a generic function needs `instances = [..]`: the types its tests run with",
+            ));
         }
-    };
-    let a = adapter(&parsed, callee(1), owner);
-    let a2 = adapter(&parsed, callee(2), owner);
-    let has_ret = parsed.ret.is_some();
-    let real = adapter_fns(attr, &a, has_ret, &|p| deeper(p, 1));
-    let copies = adapter_fns(attr, &a2, has_ret, &|p| copy_path(p, 2));
-    let tests = tests(attr, &a);
+        for inst in &attr.instances {
+            cases.push((
+                format!("_{}", instance_name(inst)),
+                instance_types(&parsed.generics, inst)?,
+            ));
+        }
+    }
+    let mut real = TokenStream::new();
+    let mut copies = TokenStream::new();
+    let mut tests_out = TokenStream::new();
+    for (suffix, map) in &cases {
+        let mut sig_i = parsed.clone();
+        for p in &mut sig_i.params {
+            p.ty = p.ty.as_ref().map(|t| subst_type(t, map));
+        }
+        sig_i.ret = sig_i.ret.as_ref().map(|t| subst_type(t, map));
+        let owner_i = Owner {
+            self_ty: owner.self_ty.as_ref().map(|t| subst_type(t, map)),
+            trait_: owner.trait_.clone(),
+            generics: None,
+        };
+        let own: Vec<&Type> = fn_generics
+            .iter()
+            .filter_map(|g| map.iter().find(|(n, _)| n == g).map(|(_, t)| t))
+            .collect();
+        let turbofish = if own.is_empty() {
+            TokenStream::new()
+        } else {
+            quote! { ::<#(#own),*> }
+        };
+        let all: Vec<&Type> = map.iter().map(|(_, t)| t).collect();
+        let strategy_turbofish = if all.is_empty() {
+            TokenStream::new()
+        } else {
+            quote! { ::<#(#all),*> }
+        };
+        let callee = |depth: usize| {
+            let supers = (0..depth).map(|_| quote! { super:: });
+            match (&owner_i.self_ty, &owner_i.trait_) {
+                (Some(t), Some(tr)) => quote! { <#t as #tr>::#name #turbofish },
+                (Some(t), None) => quote! { <#t>::#name #turbofish },
+                _ => quote! { #(#supers)* #name #turbofish },
+            }
+        };
+        let a = adapter(&sig_i, callee(1), &owner_i);
+        let a2 = adapter(&sig_i, callee(2), &owner_i);
+        let has_ret = sig_i.ret.is_some();
+        real.extend(adapter_fns(attr, &a, has_ret, &|p| deeper(p, 1), suffix));
+        copies.extend(adapter_fns(
+            attr,
+            &a2,
+            has_ret,
+            &|p| copy_path(p, 2),
+            suffix,
+        ));
+        tests_out.extend(tests(attr, &a, suffix, strategy_turbofish));
+    }
     let module = format_ident!("__lean_rust_{}", doc_rest.replace("::", "_"));
     Ok(quote! {
         #[doc(hidden)]
@@ -317,7 +433,7 @@ fn expand_fn(
                 use super::super::*;
                 #copies
             }
-            #tests
+            #tests_out
         }
     })
 }
@@ -367,6 +483,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
                 &Owner {
                     self_ty: None,
                     trait_: None,
+                    generics: None,
                 },
                 &rest,
             )?;
@@ -398,12 +515,6 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
                     "lean_rust::model: the type of the impl block must be a path",
                 ));
             };
-            if !imp.generics.params.is_empty() {
-                return Err(syn::Error::new_spanned(
-                    &imp.generics,
-                    "lean_rust::model: generic impl blocks are not supported",
-                ));
-            }
             let trait_ = imp.trait_.as_ref().map(|(_, p, _)| p.clone());
             let trait_name = trait_
                 .as_ref()
@@ -411,6 +522,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
             let owner = Owner {
                 self_ty: Some((*imp.self_ty).clone()),
                 trait_,
+                generics: Some(imp.generics.clone()),
             };
             let mut modules = TokenStream::new();
             for it in &mut imp.items {
@@ -443,22 +555,52 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
 
 /* derive(Model) */
 
-fn field_layout(tys: &[&Type]) -> TokenStream {
+/// `true` when `t` mentions one of the type parameters `params`.
+fn mentions(t: &Type, params: &[String]) -> bool {
+    struct V<'a>(&'a [String], bool);
+    impl<'ast> syn::visit::Visit<'ast> for V<'_> {
+        fn visit_path(&mut self, p: &'ast syn::Path) {
+            if let Some(id) = p.get_ident() {
+                if self.0.iter().any(|n| id == n) {
+                    self.1 = true;
+                }
+            }
+            syn::visit::visit_path(self, p);
+        }
+    }
+    let mut v = V(params, false);
+    syn::visit::Visit::visit_type(&mut v, t);
+    v.1
+}
+
+/// The scalar size of a field of type `t`: a field of a type parameter is an object, as in
+/// Lean's layout of a polymorphic structure.
+fn scalar_size(t: &Type, params: &[String]) -> TokenStream {
+    if mentions(t, params) {
+        quote! { 0u32 }
+    } else {
+        quote! { <#t as ::lean_rust::runtime::Model>::SCALAR_SIZE }
+    }
+}
+
+fn field_layout(tys: &[&Type], params: &[String]) -> TokenStream {
+    let sizes = tys.iter().map(|t| scalar_size(t, params));
     quote! {
-        ::lean_rust::runtime::ctor_layout(&[#(<#tys as ::lean_rust::runtime::Model>::SCALAR_SIZE),*])
+        ::lean_rust::runtime::ctor_layout(&[#(#sizes),*])
     }
 }
 
 /// `to_model` of a constructor with tag `tag` and the field values `vals` of types `tys`.
-fn build_ctor(tag: usize, vals: &[TokenStream], tys: &[&Type]) -> TokenStream {
+fn build_ctor(tag: usize, vals: &[TokenStream], tys: &[&Type], params: &[String]) -> TokenStream {
     let tag = tag as u32;
     if vals.is_empty() {
         return quote! { ::lean_rust::runtime::lean_box(#tag as usize) };
     }
-    let layout = field_layout(tys);
+    let layout = field_layout(tys, params);
     let sets = vals.iter().zip(tys).enumerate().map(|(i, (v, t))| {
+        let size = scalar_size(t, params);
         quote! {
-            if <#t as ::lean_rust::runtime::Model>::SCALAR_SIZE == 0 {
+            if #size == 0 {
                 ::lean_rust::runtime::lean_ctor_set(__o, __slot[#i], ::lean_rust::runtime::Model::to_model(#v));
             } else {
                 ::lean_rust::runtime::Model::set_scalar(#v, __o, ::lean_rust::runtime::scalar_offset(__objs, __slot[#i]));
@@ -473,14 +615,15 @@ fn build_ctor(tag: usize, vals: &[TokenStream], tys: &[&Type]) -> TokenStream {
     }}
 }
 
-fn read_fields(tys: &[&Type]) -> (TokenStream, Vec<TokenStream>) {
-    let layout = field_layout(tys);
+fn read_fields(tys: &[&Type], params: &[String]) -> (TokenStream, Vec<TokenStream>) {
+    let layout = field_layout(tys, params);
     let reads = tys
         .iter()
         .enumerate()
         .map(|(i, t)| {
+            let size = scalar_size(t, params);
             quote! {
-                if <#t as ::lean_rust::runtime::Model>::SCALAR_SIZE == 0 {
+                if #size == 0 {
                     <#t as ::lean_rust::runtime::Model>::from_model(::lean_rust::runtime::lean_ctor_get(o, __slot[#i]))
                 } else {
                     <#t as ::lean_rust::runtime::Model>::get_scalar(o, ::lean_rust::runtime::scalar_offset(__objs, __slot[#i]))
@@ -519,12 +662,17 @@ fn bindings(fields: &syn::Fields) -> (TokenStream, Vec<TokenStream>) {
 
 pub fn derive(input: TokenStream) -> syn::Result<TokenStream> {
     let input: syn::DeriveInput = syn::parse2(input)?;
-    if !input.generics.params.is_empty() {
+    if let Some(c) = input.generics.const_params().next() {
         return Err(syn::Error::new_spanned(
-            &input.generics,
-            "derive(lean_rust::Model): generic types are not supported",
+            c,
+            "derive(lean_rust::Model): const generics are not supported",
         ));
     }
+    let params: Vec<String> = input
+        .generics
+        .type_params()
+        .map(|p| p.ident.to_string())
+        .collect();
     let name = &input.ident;
     let body = match &input.data {
         syn::Data::Struct(s) => {
@@ -561,8 +709,8 @@ pub fn derive(input: TokenStream) -> syn::Result<TokenStream> {
                     }
                 }
             } else {
-                let build = build_ctor(0, &vars, &tys);
-                let (layout, reads) = read_fields(&tys);
+                let build = build_ctor(0, &vars, &tys, &params);
+                let (layout, reads) = read_fields(&tys, &params);
                 let read = construct(quote! { #name }, &s.fields, reads);
                 quote! {
                     unsafe fn to_model(self) -> ::lean_rust::runtime::Obj {
@@ -616,13 +764,13 @@ pub fn derive(input: TokenStream) -> syn::Result<TokenStream> {
                     let vn = &v.ident;
                     let tys: Vec<&Type> = v.fields.iter().map(|f| &f.ty).collect();
                     let (pat, vars) = bindings(&v.fields);
-                    let build = build_ctor(i, &vars, &tys);
+                    let build = build_ctor(i, &vars, &tys, &params);
                     to_arms.push(quote! { #name::#vn #pat => #build, });
                     let tag = i as u32;
                     if tys.is_empty() {
                         from_arms.push(quote! { #tag => #name::#vn, });
                     } else {
-                        let (layout, reads) = read_fields(&tys);
+                        let (layout, reads) = read_fields(&tys, &params);
                         let read = construct(quote! { #name::#vn }, &v.fields, reads);
                         from_arms.push(quote! { #tag => { #layout #read } });
                     }
@@ -652,13 +800,25 @@ pub fn derive(input: TokenStream) -> syn::Result<TokenStream> {
             ))
         }
     };
+    let mut model_generics = input.generics.clone();
+    for p in model_generics.type_params_mut() {
+        p.bounds
+            .push(syn::parse_quote!(::lean_rust::runtime::Model));
+    }
+    let (impl_g, ty_g, where_g) = model_generics.split_for_impl();
+    let mut spec_generics = input.generics.clone();
+    let mut spec_where = spec_generics.make_where_clause().clone();
+    let (spec_impl_g, _, _) = input.generics.split_for_impl();
+    spec_where
+        .predicates
+        .push(syn::parse_quote!(Self: ::core::clone::Clone));
     Ok(quote! {
-        impl ::lean_rust::runtime::Model for #name {
+        impl #impl_g ::lean_rust::runtime::Model for #name #ty_g #where_g {
             #body
         }
-        impl ::lean_rust::spec::SpecArg for #name {
-            type Spec = #name;
-            fn spec_arg(&self) -> #name {
+        impl #spec_impl_g ::lean_rust::spec::SpecArg for #name #ty_g #spec_where {
+            type Spec = Self;
+            fn spec_arg(&self) -> Self {
                 ::core::clone::Clone::clone(self)
             }
         }
@@ -720,13 +880,14 @@ pub fn expand_opaque(
     if extracting() || receiver || attr.check == Some(false) || !has_model {
         return Ok(item);
     }
-    let sig = signature(&f.sig)?;
+    let sig = signature(&f.sig, None)?;
     let a = adapter(
         &sig,
         quote! { super::#name },
         &Owner {
             self_ty: None,
             trait_: None,
+            generics: None,
         },
     );
     let params = &a.params;

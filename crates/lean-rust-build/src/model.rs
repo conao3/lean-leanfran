@@ -29,6 +29,15 @@ impl SpecRef {
     }
 }
 
+/// How the obligations of a generic function are stated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObligationMode {
+    /// One obligation for every type, assuming the laws of the trait bounds (`LeanRust.OrdModel`).
+    Generic,
+    /// One obligation per type of `instances`, with Aeneas's instances of the traits.
+    PerInstance,
+}
+
 /// The keys of `#[lean_rust::model(..)]`.
 #[derive(Debug, Clone, Default)]
 pub struct ModelAttr {
@@ -37,6 +46,32 @@ pub struct ModelAttr {
     pub ensures: Vec<(String, SpecRef)>,
     pub check: Option<bool>,
     pub strategy: Option<Path>,
+    /// The types the tests of a generic function run with: one type per type parameter, a
+    /// tuple for several.
+    pub instances: Vec<Type>,
+    pub obligations: Option<ObligationMode>,
+}
+
+/// The text of a type without spaces: `Vec<u32>`, `(u32,String)`.
+pub fn type_text(t: &Type) -> String {
+    t.to_token_stream()
+        .to_string()
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect()
+}
+
+/// The part of a name standing for a type: `u32`, `Vec_u32`, `u32_String`.
+pub fn instance_name(t: &Type) -> String {
+    let mut out = String::new();
+    for c in type_text(t).chars() {
+        if c.is_alphanumeric() || c == '_' {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    out.trim_end_matches('_').to_string()
 }
 
 impl ModelAttr {
@@ -48,6 +83,27 @@ impl ModelAttr {
         }
         for (l, s) in &self.ensures {
             out.push((l.clone(), s));
+        }
+        out
+    }
+
+    /// `true` for `obligations = per_instance`.
+    pub fn per_instance(&self) -> bool {
+        self.obligations == Some(ObligationMode::PerInstance)
+    }
+
+    /// The obligations with their labels in the lockfile: `<label>.<type>` per type of
+    /// `instances` for `obligations = per_instance`, with the index of the type.
+    pub fn obligation_labels(&self) -> Vec<(String, &SpecRef, Option<usize>)> {
+        let mut out = Vec::new();
+        for (label, spec) in self.obligations() {
+            if self.per_instance() {
+                for (i, t) in self.instances.iter().enumerate() {
+                    out.push((format!("{label}.{}", instance_name(t)), spec, Some(i)));
+                }
+            } else {
+                out.push((label, spec, None));
+            }
         }
         out
     }
@@ -64,6 +120,12 @@ impl ModelAttr {
             },
             check: inner.check.or(self.check),
             strategy: inner.strategy.clone().or_else(|| self.strategy.clone()),
+            instances: if inner.instances.is_empty() {
+                self.instances.clone()
+            } else {
+                inner.instances.clone()
+            },
+            obligations: inner.obligations.or(self.obligations),
         }
     }
 }
@@ -102,10 +164,29 @@ pub fn parse_model_args(tokens: TokenStream) -> syn::Result<ModelAttr> {
             attr.check = Some(b.value);
         } else if meta.path.is_ident("strategy") {
             attr.strategy = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("instances") {
+            let input = meta.value()?;
+            let content;
+            syn::bracketed!(content in input);
+            let types =
+                syn::punctuated::Punctuated::<Type, syn::Token![,]>::parse_terminated(&content)?;
+            attr.instances = types.into_iter().collect();
+        } else if meta.path.is_ident("obligations") {
+            let mode: syn::Ident = meta.value()?.parse()?;
+            attr.obligations = Some(match mode.to_string().as_str() {
+                "generic" => ObligationMode::Generic,
+                "per_instance" => ObligationMode::PerInstance,
+                _ => {
+                    return Err(syn::Error::new(
+                        mode.span(),
+                        "expected `generic` or `per_instance`",
+                    ))
+                }
+            });
         } else {
-            return Err(
-                meta.error("expected `refines`, `requires`, `ensures(..)`, `check` or `strategy`")
-            );
+            return Err(meta.error(
+                "expected `refines`, `requires`, `ensures(..)`, `check`, `strategy`, `instances` or `obligations`",
+            ));
         }
         Ok(())
     });
@@ -177,8 +258,20 @@ pub struct Param {
     pub is_self: bool,
 }
 
+/// A type parameter of a generic function, with the traits of its bounds (the last segments of
+/// their paths).
+#[derive(Debug, Clone)]
+pub struct TypeParam {
+    pub name: String,
+    pub bounds: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Sig {
+    /// The type parameters of the impl block, then of the function.
+    pub generics: Vec<TypeParam>,
+    /// The number of the type parameters of the impl block.
+    pub impl_generics: usize,
     pub params: Vec<Param>,
     /// `None` for `()`.
     pub ret: Option<Type>,
@@ -198,14 +291,69 @@ fn is_unit(t: &Type) -> bool {
     matches!(t, Type::Tuple(t) if t.elems.is_empty())
 }
 
-/// The signature of a function, or an error for the signatures `#[model]` does not support.
-pub fn signature(sig: &syn::Signature) -> syn::Result<Sig> {
-    if !sig.generics.params.is_empty() {
-        return Err(syn::Error::new(
-            sig.generics.span(),
-            "lean_rust::model: generic functions are not supported",
-        ));
+fn bounds_of(
+    bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::Token![+]>,
+) -> Vec<String> {
+    bounds
+        .iter()
+        .filter_map(|b| match b {
+            syn::TypeParamBound::Trait(t) => t.path.segments.last().map(|s| s.ident.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The type parameters of `generics` (the impl block's, then the function's), with the bounds
+/// of their `where` clauses.
+pub fn type_params(generics: &[&syn::Generics]) -> syn::Result<Vec<TypeParam>> {
+    let mut out: Vec<TypeParam> = Vec::new();
+    for g in generics {
+        for p in &g.params {
+            match p {
+                syn::GenericParam::Lifetime(_) => {}
+                syn::GenericParam::Const(c) => {
+                    return Err(syn::Error::new(
+                        c.span(),
+                        "lean_rust::model: const generics are not supported",
+                    ))
+                }
+                syn::GenericParam::Type(t) => out.push(TypeParam {
+                    name: t.ident.to_string(),
+                    bounds: bounds_of(&t.bounds),
+                }),
+            }
+        }
+        if let Some(w) = &g.where_clause {
+            for pred in &w.predicates {
+                let syn::WherePredicate::Type(pt) = pred else {
+                    continue;
+                };
+                let Type::Path(tp) = &pt.bounded_ty else {
+                    continue;
+                };
+                let Some(id) = tp.path.get_ident() else {
+                    continue;
+                };
+                if let Some(p) = out.iter_mut().find(|p| *id == p.name) {
+                    p.bounds.extend(bounds_of(&pt.bounds));
+                }
+            }
+        }
     }
+    Ok(out)
+}
+
+/// The signature of a function (a method of an impl block with the generics `outer`), or an
+/// error for the signatures `#[model]` does not support.
+pub fn signature(sig: &syn::Signature, outer: Option<&syn::Generics>) -> syn::Result<Sig> {
+    let impl_generics = match outer {
+        Some(g) => type_params(&[g])?.len(),
+        None => 0,
+    };
+    let mut all = Vec::new();
+    all.extend(outer);
+    all.push(&sig.generics);
+    let generics = type_params(&all)?;
     if sig.asyncness.is_some() || sig.unsafety.is_some() || sig.variadic.is_some() {
         return Err(syn::Error::new(
             sig.span(),
@@ -269,7 +417,12 @@ pub fn signature(sig: &syn::Signature) -> syn::Result<Sig> {
         ReturnType::Type(_, t) if is_unit(t) => None,
         ReturnType::Type(_, t) => Some((**t).clone()),
     };
-    Ok(Sig { params, ret })
+    Ok(Sig {
+        generics,
+        impl_generics,
+        params,
+        ret,
+    })
 }
 
 /* Loops */
@@ -502,9 +655,9 @@ pub struct CrateItems {
     pub hashes: BTreeMap<String, String>,
     /// `use` declarations, by module path.
     pub uses: BTreeMap<Vec<String>, Uses>,
-    /// `#[lean_rust::exported("<Lean name>")]` functions, by unit name: the Lean name and the
+    /// `#[lean_rust::exported("<Lean name>")]` functions, by unit name: the arguments and the
     /// file.
-    pub exported: BTreeMap<String, (String, String)>,
+    pub exported: BTreeMap<String, (Exported, String)>,
     /// Inline and file modules, by module path.
     pub modules: Vec<Vec<String>>,
     pub errors: Vec<String>,
@@ -530,13 +683,82 @@ pub fn trait_unit(module: &[String], self_ty: &str, trait_name: &str, f: &str) -
     s
 }
 
-fn exported_name(attrs: &[Attribute]) -> Option<String> {
-    for a in attrs.iter().filter(|a| is_attr(a, "exported")) {
-        if let Ok(s) = a.parse_args::<LitStr>() {
-            return Some(s.value());
+/// The arguments of `#[lean_rust::exported(..)]`: the Lean name, and for a generic function
+/// generated from `rust_instances` the type parameters of the Lean function and its
+/// instantiations by Rust type (`type_params = ["α"], instances = [("u32", "f.inst_U32")]`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Exported {
+    pub lean: String,
+    pub type_params: Vec<String>,
+    pub instances: Vec<(String, String)>,
+}
+
+/// The arguments of an `exported` attribute.
+pub fn parse_exported(a: &Attribute) -> Option<Exported> {
+    a.parse_args_with(|input: syn::parse::ParseStream| {
+        let lean: LitStr = input.parse()?;
+        let mut e = Exported {
+            lean: lean.value(),
+            ..Exported::default()
+        };
+        while input.peek(syn::Token![,]) {
+            input.parse::<syn::Token![,]>()?;
+            if input.is_empty() {
+                break;
+            }
+            let key: syn::Ident = input.parse()?;
+            input.parse::<syn::Token![=]>()?;
+            let content;
+            syn::bracketed!(content in input);
+            if key == "type_params" {
+                let names =
+                    syn::punctuated::Punctuated::<LitStr, syn::Token![,]>::parse_terminated(&content)?;
+                e.type_params = names.iter().map(LitStr::value).collect();
+            } else if key == "instances" {
+                let pairs = syn::punctuated::Punctuated::<syn::ExprTuple, syn::Token![,]>::parse_terminated(
+                    &content,
+                )?;
+                for p in pairs {
+                    let s: Vec<String> = p
+                        .elems
+                        .iter()
+                        .filter_map(|x| match x {
+                            syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Str(s),
+                                ..
+                            }) => Some(s.value()),
+                            _ => None,
+                        })
+                        .collect();
+                    if let [ty, lean] = s.as_slice() {
+                        e.instances.push((ty.clone(), lean.clone()));
+                    }
+                }
+            } else {
+                return Err(syn::Error::new(key.span(), "unknown key"));
+            }
         }
-    }
-    None
+        Ok(e)
+    })
+    .ok()
+}
+
+/// A Rust type of an instance in the form both sides write: without spaces and the paths of
+/// `lean_rust` (`(rt::Nat, String)` and `(lean_rust::Nat,String)` are `(Nat,String)`).
+pub fn normalize_type(t: &str) -> String {
+    let t: String = t.chars().filter(|c| !c.is_whitespace()).collect();
+    t.replace("::lean_rust::runtime::", "")
+        .replace("::lean_rust::", "")
+        .replace("lean_rust::runtime::", "")
+        .replace("lean_rust::", "")
+        .replace("rt::", "")
+}
+
+fn exported_name(attrs: &[Attribute]) -> Option<Exported> {
+    attrs
+        .iter()
+        .filter(|a| is_attr(a, "exported"))
+        .find_map(parse_exported)
 }
 
 fn collect_use(tree: &syn::UseTree, prefix: &mut Vec<String>, uses: &mut Uses) {
@@ -596,9 +818,9 @@ impl Scanner<'_> {
         attr: ModelAttr,
         sig: &syn::Signature,
         block: &syn::Block,
-        self_ty: Option<String>,
-        trait_name: Option<String>,
+        (self_ty, trait_name): (Option<String>, Option<String>),
         paths: (Option<Vec<String>>, Option<Vec<String>>),
+        outer: Option<&syn::Generics>,
     ) {
         let name = sig.ident.to_string();
         let rust = match (&self_ty, &trait_name) {
@@ -606,7 +828,7 @@ impl Scanner<'_> {
             (Some(t), None) => unit_name(&self.module, &[t, &name]),
             _ => unit_name(&self.module, &[&name]),
         };
-        let parsed = match signature(sig) {
+        let parsed = match signature(sig, outer) {
             Ok(s) => s,
             Err(e) => {
                 self.error(e.span(), e);
@@ -686,9 +908,9 @@ impl Scanner<'_> {
                 attr,
                 &f.sig,
                 &f.block,
-                Some(self_ty.clone()),
-                trait_name.clone(),
+                (Some(self_ty.clone()), trait_name.clone()),
                 (self_path.clone(), trait_path.clone()),
+                Some(&i.generics),
             );
         }
     }
@@ -709,7 +931,7 @@ impl<'ast> Visit<'ast> for Scanner<'_> {
                 }
                 match model_attr(&f.attrs) {
                     Ok(Some(attr)) => {
-                        self.model_fn(attr, &f.sig, &f.block, None, None, (None, None))
+                        self.model_fn(attr, &f.sig, &f.block, (None, None), (None, None), None)
                     }
                     Ok(None) => {}
                     Err(e) => self.error(e.span(), e),

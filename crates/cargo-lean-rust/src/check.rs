@@ -1,6 +1,8 @@
 //! `cargo lean-rust check`.
 
-use crate::extract::{resolve_all, rust_extern};
+use crate::extract::{
+    instance_spec, instance_types, modelled_by_library, resolve_all, rust_extern,
+};
 use crate::{check_package, current_states, run, tool, Crate, Specs};
 use lean_rust_build::gen::{self, LEAN_HEADER};
 use lean_rust_build::lock::Lock;
@@ -251,27 +253,51 @@ pub fn check(c: &Crate) -> Result<(), String> {
         let Some((_, spec)) = obls.iter().find(|(l, _)| l == "refines") else {
             continue;
         };
-        let proved = m
-            .obligation
-            .iter()
-            .any(|o| o.label == "refines" && o.status == "proved");
-        if !proved || !spec.boolean || !replaced.insert(spec.lean.clone()) {
+        if !spec.boolean {
             continue;
         }
-        if let Some(i) = &spec.import {
-            csimp_imports.insert(i.clone());
+        let proved = |label: &str| {
+            m.obligation
+                .iter()
+                .any(|o| o.label == label && o.status == "proved")
+        };
+        let mut replacements: Vec<(String, String, Vec<String>)> = Vec::new();
+        if f.sig.generics.is_empty() {
+            if proved("refines") {
+                replacements.push((String::new(), "refines".into(), Vec::new()));
+            }
+        } else {
+            for inst in &f.attr.instances {
+                let types = instance_types(f, inst);
+                let suffix = format!(".{}", lean_rust_build::model::instance_name(inst));
+                if f.attr.per_instance() {
+                    if proved(&format!("refines{suffix}")) {
+                        replacements.push((suffix.clone(), format!("refines{suffix}"), types));
+                    }
+                } else if proved("refines") && modelled_by_library(f, &types) {
+                    replacements.push((suffix, "refines".into(), types));
+                }
+            }
         }
-        let lean_name = &m.lean;
-        let _ = writeln!(
-            csimp,
-            "/-- `{}` runs the Rust function `{}`: `{lean_name}.proof.refines` proves that it computes the spec. -/\n\
-             @[extern \"{}\"]\ndef {lean_name}.impl : type_of% @{s} := @{s}\n\n\
-             @[csimp] theorem {lean_name}.csimp : @{s} = @{lean_name}.impl := rfl\n",
-            spec.lean,
-            f.rust,
-            rust_extern(&items, f),
-            s = spec.lean
-        );
+        for (suffix, label, types) in replacements {
+            let s = instance_spec(spec, &types, &f.rust)?;
+            let s = s.lean.trim_start_matches("_root_.").to_string();
+            if !replaced.insert(s.clone()) {
+                continue;
+            }
+            if let Some(i) = &spec.import {
+                csimp_imports.insert(i.clone());
+            }
+            let lean_name = &m.lean;
+            let _ = writeln!(
+                csimp,
+                "/-- `{s}` runs the Rust function `{}`: `{lean_name}.proof.{label}` proves that it computes the spec. -/\n\
+                 @[extern \"{}\"]\ndef {lean_name}.impl{suffix} : type_of% @{s} := @{s}\n\n\
+                 @[csimp] theorem {lean_name}.csimp{suffix} : @{s} = @{lean_name}.impl{suffix} := rfl\n",
+                f.rust,
+                rust_extern(&items, f, &types),
+            );
+        }
     }
     let csimp_path = b.csimp_path();
     if csimp.is_empty() {
