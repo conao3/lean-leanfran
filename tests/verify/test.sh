@@ -118,7 +118,7 @@ sed -i "s|#\[lean_rust::model(instances = \[u32, i64\], ensures|#[lean_rust::mod
 if (cd "$d" && cargo build 2>"$work/wrong-instance.log"); then
   fail "a type the spec is not instantiated for compiles"
 fi
-grep -q "the trait bound \`u8: MaxGe\` is not satisfied" "$work/wrong-instance.log" ||
+grep -q "the trait bound \`u8: spec::generic_specs::__lean_rust_inst::MaxGe\` is not satisfied" "$work/wrong-instance.log" ||
   fail "wrong instance: $(cat "$work/wrong-instance.log")"
 echo "verify-test: rustc rejects a wrong spec path and a spec of other argument types"
 
