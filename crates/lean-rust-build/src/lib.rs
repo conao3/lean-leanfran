@@ -37,9 +37,9 @@ use std::process::Command;
 use syn::visit::Visit;
 use syntax::{file_hash, normalize_path, LeanBlock};
 
-/// Version of the generator: the `lean-rust --version` this crate works with, and part of every
+/// Version of the generated code: the `lean-rust --generator-version` this crate works with, and part of every
 /// cache key.
-pub const GENERATOR_VERSION: &str = "0.1.0";
+pub const GENERATOR_VERSION: &str = "1";
 
 /// The Lean toolchain of the crate's Lean package (`lean/lean-toolchain`).
 pub const LEAN_TOOLCHAIN: &str = "leanprover/lean4:v4.35.0";
@@ -480,12 +480,12 @@ impl Builder {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("lean-rust"));
         let version = run_output(
-            Command::new(&cli).arg("--version"),
+            Command::new(&cli).arg("--generator-version"),
             &cli.display().to_string(),
         )?;
-        if version.trim() != format!("lean-rust {GENERATOR_VERSION}") {
+        if version.trim() != GENERATOR_VERSION {
             return Err(Error::new(format!(
-                "lean-rust-build: {} is `{}`; this build needs `lean-rust {GENERATOR_VERSION}`",
+                "lean-rust-build: {} generates code of version `{}`; this build needs version `{GENERATOR_VERSION}`",
                 cli.display(),
                 version.trim()
             )));
