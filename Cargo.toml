@@ -9,9 +9,11 @@ members = [
     "tests/difftest",
     "tests/public",
     "tests/embed",
+    "tests/verify",
     "samples/todo-cli",
     "samples/word-count",
     "samples/roman-numerals",
+    "samples/verified-rust",
 ]
 
 [workspace.package]

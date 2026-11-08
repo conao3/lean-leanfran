@@ -1,0 +1,124 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::arith::bigger"
+lean = "lean_rust_verify_test.arith.bigger"
+items = [
+  { rust = "crate::arith::bigger", hash = "sha256:13b458eed2da9509e2d97aa8e505f0a57e55eeb2328637fe7e20afa52387d7c7" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "specs.bigger"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
+hash = "sha256:3e838dfb55e7f0a20d621c6c813814091282d35b1c37e64ef3ebef4706060242"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Arith.lean:6"
+
+[[model]]
+rust = "crate::arith::double"
+lean = "lean_rust_verify_test.arith.double"
+items = [
+  { rust = "crate::arith::double", hash = "sha256:0f4f5da36a5d2f885567e5286f520d8614118d01d2a71794717dc550d0890967" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "specs.double"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
+hash = "sha256:b266feec5d61dbe42d41e9265382c7485a3fec95f1e89bc177da41eeb91d0ffc"
+status = "sorry"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Arith.lean:11"
+
+[[model]]
+rust = "crate::arith::halve"
+lean = "lean_rust_verify_test.arith.halve"
+items = [
+  { rust = "crate::arith::half", hash = "sha256:ace035e1ca5b002b805cc97a75edec06925fea6518a2a6af594a7a3a4557f445" },
+  { rust = "crate::arith::halve", hash = "sha256:1134de47b94d4ff257ce8ed34071de9a89837bd0c7e464c828cb68d9706fa469" },
+]
+
+[[model.obligation]]
+label = "halved"
+spec = "specs.halved"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
+hash = "sha256:3ccce208cab2e57c2ffc387d46e7263a03f22de1f60660002d288fe55632de67"
+status = "missing"
+axioms = []
+proof = ""
+
+[[model]]
+rust = "crate::arith::succ"
+lean = "lean_rust_verify_test.arith.succ"
+items = [
+  { rust = "crate::arith::succ", hash = "sha256:3642053a69d11a70b354c35eebc1a29ad3d637e90343f5bb7bc613b01d0a1d38" },
+]
+
+[[model.obligation]]
+label = "pos"
+spec = "specs.positive"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
+hash = "sha256:f2f5ba45cecb310deb2f4a39cf17b7268b0163658892bafe8d9a19d4c7c4cb92"
+status = "mismatch"
+axioms = []
+proof = "lean/Proofs/Arith.lean:14"
+
+[[model]]
+rust = "crate::counter::Counter::reset"
+lean = "lean_rust_verify_test.counter.Counter.reset"
+items = [
+  { rust = "crate::counter::Counter", hash = "sha256:5b11b7e1c88c911cbc80f738aeffbc138b8391f8281312eecbbcf80cd630c759" },
+  { rust = "crate::counter::Counter::reset", hash = "sha256:9cd7a260503811890d46809032a79c87ee53cdc8ec929fadb0a10e69fddfa331" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "counters.reset"
+spec_block = "crate::spec::counters"
+spec_hash = "sha256:486238c5436cd51e15be61cfc2ce3b54e5b982a317d41493ea086dcc6295ecc3"
+hash = "sha256:a2134372f62dd719e060eef31067942a34399bfb16eef8a0176e23fe286a510c"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Counter.lean:6"
+
+[[model]]
+rust = "crate::effects::guarded"
+lean = "lean_rust_verify_test.effects.guarded"
+items = [
+  { rust = "crate::effects::guarded", hash = "sha256:6fee45f448e9573a955cb01a77abc5cdb4737033c60a38445ec8c2cdf4498350" },
+]
+
+[[model.obligation]]
+label = "same"
+spec = "specs.unchanged"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
+hash = "sha256:43902b33bcaf8abd8ac8074b0c3c21e9c3ab38213bc225efd378eec9fa01355d"
+status = "axioms"
+axioms = ["Classical.choice", "Quot.sound", "effects.check", "effects.check_ok", "propext"]
+proof = "lean/Proofs/Effects.lean:6"
+
+[[model]]
+rust = "crate::vecs::zero_all"
+lean = "lean_rust_verify_test.vecs.zero_all"
+items = [
+  { rust = "crate::vecs::zero_all", hash = "sha256:5e18d9c903b4e0b0279faf46c5a17d6231c2b30ba3abe6af1de832fc39b72049" },
+]
+
+[[model.obligation]]
+label = "zeroed"
+spec = "specs.all_zero"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
+hash = "sha256:855b387c51d51f82d1b02975fca57d52c7284e048df925912e3dccd4694e870e"
+status = "missing"
+axioms = []
+proof = ""
