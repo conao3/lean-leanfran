@@ -1,5 +1,10 @@
-SAMPLES := todo-cli word-count roman-numerals
+SAMPLES := todo-cli word-count roman-numerals verified-rust sorted-search inventory
+VERIFY_SAMPLES := verified-rust sorted-search inventory
 
 .PHONY: test
 test:
 	for s in $(SAMPLES); do $(MAKE) -C $$s test || exit 1; done
+
+.PHONY: verify
+verify:
+	for s in $(VERIFY_SAMPLES); do $(MAKE) -C $$s verify || exit 1; done

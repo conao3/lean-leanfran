@@ -1,0 +1,12 @@
+[package]
+name = "sorted-search"
+version = "0.1.0"
+edition = "2021"
+publish = false
+include = ["src/**", "build.rs", ".lean-rust/cache/**", "lean/**", "lean-rust.lock"]
+
+[dependencies]
+lean-rust = { path = "../../crates/lean-rust" }
+
+[build-dependencies]
+lean-rust-build = { path = "../../crates/lean-rust-build" }
