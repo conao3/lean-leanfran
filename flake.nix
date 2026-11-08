@@ -28,7 +28,7 @@
         {
           packages.lean-rust = pkgs.stdenv.mkDerivation {
             pname = "lean-rust";
-            version = "0.1.0";
+            version = "0.2.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [
@@ -56,7 +56,7 @@
 
           packages.cargo-lean-rust = pkgs.rustPlatform.buildRustPackage {
             pname = "cargo-lean-rust";
-            version = "0.1.0";
+            version = "0.2.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [
@@ -76,7 +76,7 @@
           };
 
           packages.default = pkgs.symlinkJoin {
-            name = "lean-rs-0.1.0";
+            name = "lean-rs-0.2.0";
             paths = [
               config.packages.lean-rust
               config.packages.cargo-lean-rust
