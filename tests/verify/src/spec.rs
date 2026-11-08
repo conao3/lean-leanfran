@@ -20,6 +20,10 @@ lean_rust::lean! {
 
     def all_zero (_v : alloc.vec.Vec Std.U32) (r : alloc.vec.Vec Std.U32) : Bool :=
       r.val.all (·.val == 0)
+
+    def arr_sum (a : Std.Array Std.U32 3#usize) : Std.U64 := ⟨BitVec.ofNat 64 (a.val.map (·.val)).sum⟩
+
+    def arr_fill (x : Std.U32) : Std.Array Std.U32 3#usize := Std.Array.repeat 3#usize x
     "#
 }
 

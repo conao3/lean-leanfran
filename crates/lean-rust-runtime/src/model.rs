@@ -180,11 +180,7 @@ impl<T: Model, const N: usize> Model for [T; N] {
         list_n_to_model(Vec::from(self), |x| x.to_model())
     }
     unsafe fn from_model(o: Obj) -> Self {
-        let v = list_n_from_model(o, |x| T::from_model(x));
-        match v.try_into() {
-            Ok(a) => a,
-            Err(_) => unreachable!("Std.Array of a different length"),
-        }
+        array_n_from_model(o, |x| T::from_model(x))
     }
 }
 
@@ -294,4 +290,48 @@ pub fn ctor_layout(sizes: &[u32]) -> (Vec<u32>, u32, u32) {
 /// Offset of a scalar field of a constructor with `objs` object fields.
 pub fn scalar_offset(objs: u32, off: u32) -> u32 {
     objs * core::mem::size_of::<usize>() as u32 + off
+}
+
+/// `[T; N]` of the elements of the borrowed `ListN α N` (`Std.Array α N`).
+pub unsafe fn array_n_from_model<T, const N: usize>(o: Obj, f: impl FnMut(Obj) -> T) -> [T; N] {
+    match list_n_from_model(o, f).try_into() {
+        Ok(a) => a,
+        Err(_) => unreachable!("Std.Array of a different length"),
+    }
+}
+
+/// The constructors of Aeneas's `Error`, by tag.
+const AENEAS_ERRORS: [&str; 7] = [
+    "assertionFailure",
+    "integerOverflow",
+    "divisionByZero",
+    "arrayOutOfBounds",
+    "maximumSizeExceeded",
+    "panic",
+    "undef",
+];
+
+/// The value of the owned `MatchResult α` `m` (the result of `Result.match`): `ok` gives the
+/// value, `fail` and `div` are a Rust panic.
+pub unsafe fn result_value<T>(m: Obj, f: impl FnOnce(Obj) -> T) -> T {
+    match lean_obj_tag(m) {
+        0 => {
+            let v = f(lean_ctor_get(m, 0));
+            lean_dec(m);
+            v
+        }
+        1 => panic!("lean-rust: the Lean function diverges"),
+        _ => {
+            let e = lean_ctor_get(m, 0);
+            let tag = if lean_is_scalar(e) {
+                lean_unbox(e)
+            } else {
+                lean_obj_tag(e) as usize
+            };
+            panic!(
+                "lean-rust: the Lean function fails: {}",
+                AENEAS_ERRORS.get(tag).unwrap_or(&"error")
+            )
+        }
+    }
 }

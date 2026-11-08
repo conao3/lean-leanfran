@@ -31,3 +31,15 @@ pub fn guarded(x: u32) -> u32 {
     check(x);
     x
 }
+
+/// Its model (`lean/External.lean`) is a definition: the test compares the two.
+#[lean_rust::opaque]
+pub fn clamp(x: u32) -> u32 {
+    x.min(100)
+}
+
+/// A model calling `clamp`, without obligations.
+#[lean_rust::model]
+pub fn capped(x: u32) -> u32 {
+    clamp(x)
+}

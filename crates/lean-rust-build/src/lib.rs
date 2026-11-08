@@ -262,6 +262,14 @@ impl Builder {
         if extracting {
             return Ok(());
         }
+        println!(
+            "cargo:rerun-if-changed={}",
+            self.model_dir()
+                .join("FunsExternal_Template.lean")
+                .display()
+        );
+        let offline = std::env::var("LEAN_RUST_OFFLINE").as_deref() == Ok("1");
+        self.compile_opaque(&self.scan_items()?, offline)?;
         self.verify(&blocks, &doc_dir)
     }
 
@@ -627,7 +635,11 @@ impl Builder {
             fs::write(cache.join(format!("{}.rs", keys[i])), &text)?;
             write_if_changed(&self.out_dir.join(blocks[i].out_file()), &text)?;
         }
-        let live: BTreeSet<PathBuf> = keys.iter().map(|k| cache.join(format!("{k}.rs"))).collect();
+        let mut live: BTreeSet<PathBuf> =
+            keys.iter().map(|k| cache.join(format!("{k}.rs"))).collect();
+        for o in self.opaque_models(&self.scan_items()?)? {
+            live.insert(cache.join(format!("{}.rs", o.key)));
+        }
         prune_dir(&cache, &live)?;
         Ok(())
     }
@@ -1031,4 +1043,183 @@ pub fn depends_on_model(b: &Block, blocks: &[Block]) -> bool {
         stack.extend(blocks.iter().filter(|o| x.uses.contains(&o.path)));
     }
     false
+}
+
+/// The Lean model of a `#[lean_rust::opaque]` function, written in `lean/External.lean`.
+#[derive(Debug, Clone)]
+pub struct OpaqueModel {
+    /// The unit name of the Rust function.
+    pub rust: String,
+    /// The candidate Lean names of the model (relative to the root and to the crate).
+    pub lean: Vec<String>,
+    /// The cache key of its generated Rust.
+    pub key: String,
+    /// The path of the generated Rust below `OUT_DIR`.
+    pub out_file: PathBuf,
+}
+
+fn sha_hex(parts: &[&[u8]]) -> String {
+    let mut h = Sha256::new();
+    for p in parts {
+        h.update(p);
+        h.update([0]);
+    }
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+impl Builder {
+    fn model_dir(&self) -> PathBuf {
+        self.lean_dir()
+            .join("LeanRustGen")
+            .join("Model")
+            .join(self.crate_ident())
+    }
+
+    /// The opaque functions whose model Aeneas lists in `FunsExternal_Template.lean`, when
+    /// `lean/External.lean` defines it.
+    pub fn opaque_models(&self, items: &model::CrateItems) -> Result<Vec<OpaqueModel>, Error> {
+        let template = self.model_dir().join("FunsExternal_Template.lean");
+        let (Ok(template), Ok(external)) = (
+            fs::read_to_string(&template),
+            fs::read(self.lean_dir().join("External.lean")),
+        ) else {
+            return Ok(Vec::new());
+        };
+        let ident = self.crate_ident();
+        let decls = gen::parse_aeneas(&template);
+        let types = fs::read(self.lean_dir().join("ExternalTypes.lean")).unwrap_or_default();
+        let model_types = fs::read(self.model_dir().join("Types.lean")).unwrap_or_default();
+        let mut out = Vec::new();
+        for (unit, file) in &items.opaque {
+            let Some(d) = decls.iter().find(|d| {
+                d.rust
+                    .as_deref()
+                    .and_then(|r| gen::aeneas_unit(r, &ident))
+                    .as_deref()
+                    == Some(unit.as_str())
+            }) else {
+                continue;
+            };
+            let name = unit.rsplit("::").next().unwrap_or(unit).to_string();
+            if unit.matches("::").count() != file_module(file).len() + 1 {
+                continue;
+            }
+            let lean = vec![d.lean.clone(), format!("{ident}.{}", d.lean)];
+            let key = sha_hex(&[
+                ident.as_bytes(),
+                unit.as_bytes(),
+                lean.join(" ").as_bytes(),
+                &external,
+                &types,
+                &model_types,
+                GENERATOR_VERSION.as_bytes(),
+            ]);
+            out.push(OpaqueModel {
+                rust: unit.clone(),
+                lean,
+                key,
+                out_file: Path::new("lean_rust")
+                    .join("opaque")
+                    .join(file_hash(file))
+                    .join(format!("{name}.rs")),
+            });
+        }
+        Ok(out)
+    }
+
+    /// Writes the Rust of the models of the opaque functions to `OUT_DIR` from the cache,
+    /// generating the missing ones with `lean-rust module generate` unless `cached_only`.
+    fn compile_opaque(&self, items: &model::CrateItems, cached_only: bool) -> Result<(), Error> {
+        let models = self.opaque_models(items)?;
+        let cache = self.cache_dir();
+        let missing: Vec<&OpaqueModel> = models
+            .iter()
+            .filter(|m| !cache.join(format!("{}.rs", m.key)).is_file())
+            .collect();
+        if !missing.is_empty() && !cached_only {
+            self.generate_opaque(&missing)?;
+        }
+        for m in &models {
+            if let Ok(text) = fs::read(cache.join(format!("{}.rs", m.key))) {
+                write_if_changed(&self.out_dir.join(&m.out_file), &text)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn generate_opaque(&self, models: &[&OpaqueModel]) -> Result<(), Error> {
+        let cli = std::env::var_os("LEAN_RUST_CLI")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("lean-rust"));
+        let lean = self.lean_dir();
+        run_output(
+            Command::new("lake")
+                .args(["build", "External"])
+                .current_dir(&lean),
+            "lake build External",
+        )?;
+        let lean_path = run_output(
+            Command::new("lake")
+                .args(["env", "printenv", "LEAN_PATH"])
+                .current_dir(&lean),
+            "lake env",
+        )?;
+        let tmp = self.out_dir.join("lean_rust").join("tmp");
+        fs::create_dir_all(&tmp)?;
+        let ident = self.crate_ident();
+        let jobs: Vec<serde_json::Value> = models
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "module": "External",
+                    "roots": m.lean,
+                    "namespace": ident,
+                    "model_namespace": ident,
+                    "output_file": tmp.join(format!("{}.rs", m.key)).to_string_lossy(),
+                })
+            })
+            .collect();
+        let batch = tmp.join("opaque.json");
+        fs::write(&batch, serde_json::Value::Array(jobs).to_string())?;
+        let mut cmd = Command::new(&cli);
+        cmd.args(["module", "generate", "--batch"])
+            .arg(&batch)
+            .args(["--output", "json", "--search-path"]);
+        for p in lean_path.trim().split(':').filter(|p| !p.is_empty()) {
+            cmd.arg(p);
+        }
+        let summary = run_output(&mut cmd, &format!("{} module generate", cli.display()))?;
+        let summary: Vec<serde_json::Value> = serde_json::from_str(&summary).unwrap_or_default();
+        let cache = self.cache_dir();
+        fs::create_dir_all(&cache)?;
+        for (i, m) in models.iter().enumerate() {
+            let gen = tmp.join(format!("{}.rs", m.key));
+            let mut text = fs::read_to_string(&gen)?;
+            let public = summary
+                .get(i)
+                .and_then(|s| s.get("public"))
+                .and_then(|p| p.as_array())
+                .and_then(|p| p.first())
+                .and_then(|p| p.get("rust"))
+                .and_then(|r| r.as_str());
+            match public {
+                Some(r) => text.push_str(&format!(
+                    "\n#[doc(hidden)]\npub use self::{r} as __lean_rust_model;\n"
+                )),
+                None => println!(
+                    "cargo:warning=lean-rust: {}: lean/External.lean has no computable model to test it against",
+                    m.rust
+                ),
+            }
+            fs::write(&gen, &text)?;
+            run_output(
+                Command::new("rustfmt")
+                    .args(["--edition", "2021"])
+                    .arg(&gen),
+                "rustfmt",
+            )?;
+            fs::write(cache.join(format!("{}.rs", m.key)), fs::read(&gen)?)?;
+        }
+        Ok(())
+    }
 }

@@ -13,8 +13,8 @@ items = [
 label = "refines"
 spec = "specs.bigger"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
-hash = "sha256:3ea8f72c30f2790e970354ac5b6bf84ef6aaba3edbf024060b9582ebd82ceb9c"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:ac117c2ad5e758390535641c2a6de823d6cac027f488c0d61de51e59460799db"
 status = "proved"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
 proof = "lean/Proofs/Arith.lean:6"
@@ -30,8 +30,8 @@ items = [
 label = "refines"
 spec = "specs.double"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
-hash = "sha256:822e44981f810d652904888c267312c771996967a5780bda5408d13d0b2d58e6"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:5de7aeb8fc94513ea5199653bc4cdb5f619a42ab62a01352325ecf0c9bfcbbba"
 status = "sorry"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
 proof = "lean/Proofs/Arith.lean:11"
@@ -48,8 +48,8 @@ items = [
 label = "halved"
 spec = "specs.halved"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
-hash = "sha256:fb48c455fc61c12e95dfc99ed04789c20f293f01125717a017a7ec02a458dcfe"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:b34a25056001f49c12b35a0c7485253564209f63c951c5bf516889990cd25fdc"
 status = "missing"
 axioms = []
 proof = ""
@@ -65,11 +65,28 @@ items = [
 label = "pos"
 spec = "specs.positive"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
-hash = "sha256:32fe85fe005702813a46ccd3ac82e0de0c47059d59d6f4d445836c9c305dec8f"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:f2d5aa9014c19e776e9e6f3685299f84aee991f66b4c291995aff7d4d43e702f"
 status = "mismatch"
 axioms = []
 proof = "lean/Proofs/Arith.lean:14"
+
+[[model]]
+rust = "crate::arrays::sum3"
+lean = "lean_rust_verify_test.arrays.sum3"
+items = [
+  { rust = "crate::arrays::sum3", hash = "sha256:ac0a643e1337a6237d86e00cdeb6597e8f6218dc523e4dc0b50e76d89f30d026" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "specs.arr_sum"
+spec_block = "crate::spec::specs"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:15869ce0c9b8bd87ca2232f8623c3c40090108838dfad8bdbbe9ee6b32b16b7e"
+status = "missing"
+axioms = []
+proof = ""
 
 [[model]]
 rust = "crate::counter::Counter::reset"
@@ -100,11 +117,18 @@ items = [
 label = "same"
 spec = "specs.unchanged"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
-hash = "sha256:7d57e068a293aef6a1fc5b95af54f347fd337f52ef85167d2953ca5b09ba5614"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:8873618df6885404158a1f4cc7a060de561470e1f137b857adf5629d16a33f5d"
 status = "axioms"
 axioms = ["Classical.choice", "Quot.sound", "effects.check", "effects.check_ok", "propext"]
 proof = "lean/Proofs/Effects.lean:6"
+
+[[model]]
+rust = "crate::effects::capped"
+lean = "lean_rust_verify_test.effects.capped"
+items = [
+  { rust = "crate::effects::capped", hash = "sha256:5defe317898aa7dfcb30dfe00496310519bf53e1c190d05c6d567b55363527d3" },
+]
 
 [[model]]
 rust = "crate::vecs::zero_all"
@@ -117,8 +141,8 @@ items = [
 label = "zeroed"
 spec = "specs.all_zero"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:18e9d885abf70eb485068d758eaa7af40bef1eedc7cb66a6762f4a9c2aef5cee"
-hash = "sha256:bd0e489eb3df1a087393c761379f45bf3d290947c11b1e0b43347ecc21940963"
+spec_hash = "sha256:5f8a42fd5c2fded09ea04f385fb8db8ad21f750b10fec96361fd307ad9145e0e"
+hash = "sha256:50cfba1dd4ec6728d9083063318a3d9108fb8f29913436bf4729b0c089d63230"
 status = "missing"
 axioms = []
 proof = ""

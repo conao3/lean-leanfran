@@ -43,10 +43,19 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// A function whose body is not extracted: its Lean model is written by hand in
-/// `lean/External.lean`. It changes nothing.
+/// `lean/External.lean`. The item is unchanged; under `#[cfg(test)]` the macro adds a
+/// proptest of the function against that model (keys `check` and `strategy` as in `#[model]`),
+/// when the build script generated it.
 #[proc_macro_attribute]
-pub fn opaque(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+pub fn opaque(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let file = caller_rel_path()
+        .ok()
+        .zip(std::env::var("OUT_DIR").ok())
+        .map(|(rel, out)| (file_hash(&rel), out));
+    match model::expand_opaque(attr.into(), item.into(), file) {
+        Ok(ts) => ts.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Implements `Model` (the representation of the type in Aeneas's model: the constructor

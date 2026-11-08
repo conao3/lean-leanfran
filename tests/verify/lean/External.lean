@@ -11,3 +11,6 @@ def effects.trace : Result Unit := ok ()
 axiom effects.check : Std.U32 → Result Unit
 
 axiom effects.check_ok : ∀ x, effects.check x = ok ()
+
+/-- `clamp` caps at 100. -/
+def effects.clamp (x : Std.U32) : Result Std.U32 := if x.val ≤ 100 then ok x else ok 100#u32

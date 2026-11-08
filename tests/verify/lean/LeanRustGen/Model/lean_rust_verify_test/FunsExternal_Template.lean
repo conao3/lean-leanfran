@@ -31,3 +31,8 @@ axiom effects.trace : Result Unit
     Visibility: public -/
 axiom effects.check : Std.U32 → Result Unit
 
+/-- [lean_rust_verify_test::effects::clamp]:
+    Source: 'tests/verify/src/effects.rs', lines 37:0-39:1
+    Visibility: public -/
+axiom effects.clamp : Std.U32 → Result Std.U32
+

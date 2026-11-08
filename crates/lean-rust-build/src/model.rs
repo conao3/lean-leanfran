@@ -496,8 +496,8 @@ pub struct Uses {
 #[derive(Debug, Default)]
 pub struct CrateItems {
     pub models: Vec<ModelFn>,
-    /// `#[lean_rust::opaque]` functions, as unit names.
-    pub opaque: Vec<String>,
+    /// `#[lean_rust::opaque]` functions: the unit names and the files.
+    pub opaque: Vec<(String, String)>,
     /// Hash of every function, method and type, by unit name.
     pub hashes: BTreeMap<String, String>,
     /// `use` declarations, by module path.
@@ -664,7 +664,7 @@ impl Scanner<'_> {
             };
             self.out.hashes.insert(unit.clone(), method_hash(f));
             if f.attrs.iter().any(|a| is_attr(a, "opaque")) {
-                self.out.opaque.push(unit.clone());
+                self.out.opaque.push((unit.clone(), self.file.clone()));
             }
             if let Some(n) = exported_name(&f.attrs) {
                 self.out.exported.insert(unit, (n, self.file.clone()));
@@ -702,7 +702,7 @@ impl<'ast> Visit<'ast> for Scanner<'_> {
                 let unit = unit_name(&self.module, &[&name]);
                 self.out.hashes.insert(unit.clone(), fn_hash(f));
                 if f.attrs.iter().any(|a| is_attr(a, "opaque")) {
-                    self.out.opaque.push(unit.clone());
+                    self.out.opaque.push((unit.clone(), self.file.clone()));
                 }
                 if let Some(n) = exported_name(&f.attrs) {
                     self.out.exported.insert(unit, (n, self.file.clone()));

@@ -37,3 +37,9 @@ fn lean_calls_the_rust_function_and_sees_a_panic_as_fail() {
     assert!(calls::runs(3));
     assert!(!calls::runs(7));
 }
+
+#[test]
+fn an_array_crosses_to_lean_and_back() {
+    assert_eq!(specs::arr_sum([1, 2, u32::MAX]), 3 + u32::MAX as u64);
+    assert_eq!(specs::arr_fill(7), [7, 7, 7]);
+}

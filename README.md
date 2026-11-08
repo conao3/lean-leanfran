@@ -199,7 +199,7 @@ Specs are public functions generated from Lean (`lean!` or `project generate`) a
 their Rust path, so rustc checks the name and the argument types; a string names a Lean
 definition (a `Prop` is fine) for an obligation without a test. Specs are written in the types
 of Aeneas's model: `Std.U8`…`Std.I128`, `Std.Usize` (Rust `u8`…`i128`, `usize`), `Slice α` and
-`alloc.vec.Vec α` (`Vec<T>`), `Str` (`String`), `Result α` (the value; a panic unless `ok`),
+`alloc.vec.Vec α` (`Vec<T>`), `Std.Array α n` (`[T; N]`), `Str` (`String`), `Result α` (the value; a panic unless `ok`),
 and the crate's structs and enums, which derive `lean_rust::Model` (and `Clone`).
 
 | Key | Obligation `M.obligation.<label>` (M: the model) |
@@ -214,7 +214,9 @@ On an impl block, `#[lean_rust::model]` models every method; a method's own
 `#[lean_rust::model(..)]` gives its specs. `#[lean_rust::opaque]` keeps the body of a function
 out of the model: its model is written in `lean/External.lean` (and the types Aeneas does not
 know, such as `BTreeMap`, in `lean/ExternalTypes.lean`), starting from the templates `extract`
-writes. Every loop of a modelled function has a label: `'scan: for ..` in `insert_sorted` is
+writes. `cargo test` compares an opaque function with its model when the model is a definition
+(the build script compiles it like a `lean!` block): equal results, or a panic of the function
+where the model fails. Every loop of a modelled function has a label: `'scan: for ..` in `insert_sorted` is
 `insert_sorted.scan`, an alias of Aeneas's `insert_sorted_loop`, so proofs keep their names
 when loops are added.
 
@@ -303,7 +305,7 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
 - Generic structures are generated per instantiation (`Pair Nat Bool` → `PairNatBool`).
 - `#[lean_rust::model]` covers what Aeneas covers (no `unsafe`, interior mutability or
   concurrency), and not generic functions. A trait method is extracted only for a trait of the
-  crate. The hand-written model of an opaque function is not tested against the function.
+  crate. The model of an opaque method is not tested.
 - Aeneas's output does not build when a parameter has the name of a module of the crate
   (`item` in the module `item`): rename the parameter.
 

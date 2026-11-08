@@ -2,7 +2,8 @@
 # cargo lean-rust on copies of this crate: extract and check reproduce the committed files and
 # states, a proof that does not build is failed, a change of a function, of a function it calls
 # or of a spec makes its obligations stale, require = "proved" stops the build, a wrong spec path
-# or argument type is a rustc error, and the test of a refines catches a wrong implementation.
+# or argument type is a rustc error, the test of a refines catches a wrong implementation, and
+# the test of an opaque function catches a wrong model.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 src="$root/tests/verify"
@@ -117,3 +118,11 @@ if (cd "$d" && cargo test -q --lib 2>"$work/wrong-impl.log" >"$work/wrong-impl.o
 fi
 grep -q "check_refines" "$work/wrong-impl.out" || fail "wrong impl: $(cat "$work/wrong-impl.out")"
 echo "verify-test: the test of a refines catches a wrong implementation"
+
+d=$(copy wrong-model)
+sed -i 's|else ok 100#u32|else ok 99#u32|' "$d/lean/External.lean"
+if (cd "$d" && cargo test -q --lib 2>"$work/wrong-model.log" >"$work/wrong-model.out"); then
+  fail "the test of an opaque function passes for a wrong model"
+fi
+grep -q "__lean_rust_opaque_clamp::check_model" "$work/wrong-model.out" || fail "wrong model: $(cat "$work/wrong-model.out")"
+echo "verify-test: the test of an opaque function catches a wrong model in lean/External.lean"

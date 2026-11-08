@@ -95,6 +95,8 @@ inductive Desc where
   | slice (d : Desc)
   /-- Aeneas's `Result α`: the value, a Rust panic when the result is not `ok`. -/
   | result (d : Desc)
+  /-- Aeneas's `Std.Array α n` (a `ListN` at run time): `[T; n]`. -/
+  | arrayN (d : Desc) (n : Nat)
   deriving Inhabited, BEq
 
 /-- Where a constructor field lives in the object. -/
@@ -150,10 +152,11 @@ partial def Desc.rustType : Desc → String
   | .model r => r
   | .slice d => s!"Vec<{d.rustType}>"
   | .result d => d.rustType
+  | .arrayN d n => s!"[{d.rustType}; {n}]"
 
 partial def Desc.named? : Desc → Array String
   | .named r => #[r]
-  | .list d | .array d | .option d | .boxed d | .slice d | .result d => d.named?
+  | .list d | .array d | .option d | .boxed d | .slice d | .result d | .arrayN d _ => d.named?
   | .except a b | .prod a b => a.named? ++ b.named?
   | _ => #[]
 
@@ -258,6 +261,10 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
     | none => throwError "scalar type `{t}`"
   | `Aeneas.Std.Slice, #[a] | `Aeneas.Std.alloc.vec.Vec, #[a] => return .slice (← descOf a)
   | `Aeneas.Std.Str, #[] => return .model "String"
+  | `Aeneas.Std.Array, #[a, n] =>
+    let len ← reduce (← mkAppM `Aeneas.Std.UScalar.val #[n])
+    let some v ← (evalNat len).run | throwError "`Std.Array` with a length that is not a literal: `{n}`"
+    return .arrayN (← descOf a) v
   | `Aeneas.Std.Result, #[a] => return .result (← descOf a)
   | _, _ =>
     if unsupportedTypes.contains c then throwError "unsupported type `{c}`"
@@ -354,6 +361,7 @@ partial def toObj (d : Desc) (x : String) (k : Nat := 0) : String :=
   | .model _ => s!"rt::Model::to_model({x})"
   | .slice d => s!"rt::slice_to_model({x}, |{v}| {toObj d v (k + 1)})"
   | .result d => s!"__lr_result_ok({toObj d x k})"
+  | .arrayN d _ => s!"rt::list_n_to_model(Vec::from({x}), |{v}| {toObj d v (k + 1)})"
 
 /-- Rust expression reading a Rust value from the borrowed boxed `Obj` `x`. -/
 partial def fromObj (d : Desc) (x : String) (k : Nat := 0) : String :=
@@ -370,6 +378,7 @@ partial def fromObj (d : Desc) (x : String) (k : Nat := 0) : String :=
   | .model r => s!"<{r} as rt::Model>::from_model({x})"
   | .slice d => s!"rt::slice_from_model({x}, |{v}| {fromObj d v (k + 1)})"
   | .result d => s!"rt::result_value(__lr_result_match({x}), |{v}| {fromObj d v (k + 1)})"
+  | .arrayN d _ => s!"rt::array_n_from_model({x}, |{v}| {fromObj d v (k + 1)})"
 
 def signedOf : String → Option String
   | "i8" => some "u8"

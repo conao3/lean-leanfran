@@ -57,6 +57,31 @@ def arith.halve (x : Std.U32) : Result Std.U32 := do
 def arith.succ (x : Std.U32) : Result Std.U32 := do
   x + 1#u32
 
+/-- [lean_rust_verify_test::arrays::sum3]: loop 0:
+    Source: 'tests/verify/src/arrays.rs', lines 9:4-12:5
+    Visibility: public -/
+@[rust_loop]
+def arrays.sum3_loop
+  (a : Array Std.U32 3#usize) (s : Std.U64) (i : Std.Usize) :
+  Result Std.U64
+  := do
+  if i < 3#usize
+  then
+    let i1 ← Array.index_usize a i
+    let i2 ← lift (UScalar.cast .U64 i1)
+    let s1 ← s + i2
+    let i3 ← i + 1#usize
+    arrays.sum3_loop a s1 i3
+  else ok s
+partial_fixpoint
+
+/-- [lean_rust_verify_test::arrays::sum3]:
+    Source: 'tests/verify/src/arrays.rs', lines 6:0-14:1
+    Visibility: public -/
+@[reducible]
+def arrays.sum3 (a : Array Std.U32 3#usize) : Result Std.U64 := do
+  arrays.sum3_loop a 0#u64 0#usize
+
 /-- [lean_rust_verify_test::counter::{lean_rust_verify_test::counter::Counter}::reset]:
     Source: 'tests/verify/src/counter.rs', lines 14:4-16:5
     Visibility: public -/
@@ -70,6 +95,12 @@ def counter.Counter.reset
 def effects.guarded (x : Std.U32) : Result Std.U32 := do
   effects.check x
   ok x
+
+/-- [lean_rust_verify_test::effects::capped]:
+    Source: 'tests/verify/src/effects.rs', lines 43:0-45:1
+    Visibility: public -/
+def effects.capped (x : Std.U32) : Result Std.U32 := do
+  effects.clamp x
 
 /-- [lean_rust_verify_test::vecs::zero_all]: loop 0:
     Source: 'tests/verify/src/vecs.rs', lines 9:4-12:5

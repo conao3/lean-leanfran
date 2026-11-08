@@ -180,7 +180,7 @@ pub fn extract(c: &Crate) -> Result<(), String> {
             .arg("--start-from")
             .arg(start_from(&ident, &items, f));
     }
-    for o in &items.opaque {
+    for (o, _) in &items.opaque {
         let segs: Vec<String> = o
             .trim_start_matches("crate::")
             .split("::")

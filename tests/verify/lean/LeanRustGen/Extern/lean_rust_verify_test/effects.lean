@@ -5,3 +5,6 @@ open Aeneas Aeneas.Std Result
 @[extern "rs:crate::effects::guarded(_)"]
 def lean_rust_verify_test.effects.guarded.rs : type_of% @lean_rust_verify_test.effects.guarded := @lean_rust_verify_test.effects.guarded
 
+@[extern "rs:crate::effects::capped(_)"]
+def lean_rust_verify_test.effects.capped.rs : type_of% @lean_rust_verify_test.effects.capped := @lean_rust_verify_test.effects.capped
+
