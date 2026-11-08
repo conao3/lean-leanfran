@@ -185,3 +185,33 @@ fn io_functions() {
         "hello from Lean, Rust\nreturned 4\ncounter 10\nerror Other: failed with 3\ndone\n"
     );
 }
+
+#[test]
+fn instantiated_polymorphic_functions() {
+    assert_eq!(p::largest(vec![nat(3), nat(9), nat(4)]), nat(9));
+    assert_eq!(
+        p::largest(vec!["pear".to_string(), "apple".to_string()]),
+        "pear"
+    );
+    assert_eq!(p::largest(vec![Int::from(-3), Int::from(5)]), Int::from(5));
+    assert_eq!(p::largest::<Int>(vec![]), Int::from(0));
+    assert_eq!(
+        p::pair_with(nat(1), vec!["a".to_string(), "b".to_string()]),
+        vec![(nat(1), "a".to_string()), (nat(1), "b".to_string())]
+    );
+    assert_eq!(
+        p::pair_with("x".to_string(), vec![true]),
+        vec![("x".to_string(), true)]
+    );
+    assert!(p::same(true));
+    assert_eq!(p::largest_inst_nat(vec![nat(2), nat(1)]), nat(2));
+}
+
+#[test]
+fn instantiations_are_replaced_by_csimp() {
+    assert_eq!(p::same(nat(7)), nat(7));
+    assert_eq!(p::__lean_rust_spec::same(nat(7)), nat(7));
+    let start = p::SOURCE.find("pub fn same_inst_nat(").unwrap();
+    let body = &p::SOURCE[start..start + p::SOURCE[start..].find("\n}\n").unwrap()];
+    assert!(body.contains("l_LeanRustTest_Public_sameNat("), "{body}");
+}

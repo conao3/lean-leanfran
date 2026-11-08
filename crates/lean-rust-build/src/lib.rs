@@ -39,10 +39,22 @@ use syntax::{file_hash, normalize_path, LeanBlock};
 
 /// Version of the generated code: the `lean-rust --generator-version` this crate works with, and part of every
 /// cache key.
-pub const GENERATOR_VERSION: &str = "1";
+pub const GENERATOR_VERSION: &str = "2";
 
 /// The Lean toolchain of the crate's Lean package (`lean/lean-toolchain`).
 pub const LEAN_TOOLCHAIN: &str = "leanprover/lean4:v4.35.0";
+
+/// `LeanRust/Instances.lean` of lean-rust's Lean library: the `rust_instances` command, written
+/// to `lean/LeanRustGen/Lib/Instances.lean` for the `lean!` blocks that use it.
+pub const INSTANCES_LEAN: &str = include_str!("../lean/Instances.lean");
+
+/// `LeanRust/AeneasModel.lean` of lean-rust's Lean library: the classes of the laws of Rust's
+/// traits over Aeneas's models, written to `lean/LeanRustGen/Lib/AeneasModel.lean` by
+/// `cargo lean-rust extract` for the obligations of generic functions.
+pub const AENEAS_MODEL_LEAN: &str = include_str!("../lean/AeneasModel.lean");
+
+/// The module of [`INSTANCES_LEAN`] in the crate's Lean package.
+pub const INSTANCES_MODULE: &str = "LeanRustGen.Lib.Instances";
 
 /// An error of the build script, with a message for the user.
 pub struct Error {
@@ -120,6 +132,11 @@ impl Block {
         Path::new("lean_rust")
             .join(&self.file_hash)
             .join(format!("{}.rs", self.name))
+    }
+
+    /// `true` when the source uses `rust_instances`, which imports [`INSTANCES_MODULE`].
+    pub fn uses_instances(&self) -> bool {
+        self.source.contains("rust_instances")
     }
 }
 
@@ -502,6 +519,12 @@ impl Builder {
             write_if_changed(&lean.join(b.lean_file(&crate_ident)), text.as_bytes())?;
             sources.push((header_lines, indent));
         }
+        let lib = lean.join("LeanRustGen").join("Lib").join("Instances.lean");
+        if blocks.iter().any(Block::uses_instances) {
+            write_if_changed(&lib, INSTANCES_LEAN.as_bytes())?;
+        } else if lib.is_file() {
+            fs::remove_file(&lib)?;
+        }
         prune_dir(
             &lean.join("LeanRustGen").join("Embed").join(&crate_ident),
             &blocks
@@ -800,6 +823,10 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block], extra: &str) -> Result<Vec
         h.update([0]);
         h.update(b.source.as_bytes());
         h.update([0]);
+        if b.uses_instances() {
+            h.update(INSTANCES_LEAN.as_bytes());
+        }
+        h.update([0]);
         for u in &b.uses {
             let Some(&j) = index.get(u.as_slice()) else {
                 return Err(Error::new(format!(
@@ -832,6 +859,9 @@ pub fn lean_source(b: &Block, used: &[&Block], crate_ident: &str) -> (String, us
     let mut text = String::new();
     for imp in &b.imports {
         text.push_str(&format!("import {imp}\n"));
+    }
+    if b.uses_instances() {
+        text.push_str(&format!("import {INSTANCES_MODULE}\n"));
     }
     for u in used {
         text.push_str(&format!("import {}\n", u.lean_module(crate_ident)));

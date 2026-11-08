@@ -1,3 +1,5 @@
+import LeanRust.Instances
+
 /-! Functions called through the generated public API by the `tests/public` crate. -/
 
 namespace LeanRustTest.Public
@@ -142,5 +144,24 @@ def «type» (n : Nat) : Nat := n
 def first! (xs : List Nat) : Nat := xs.head!
 
 def double' (n : Nat) : Nat := 2 * n
+
+def largest {α : Type} [Ord α] [Inhabited α] (xs : List α) : α :=
+  xs.foldl (fun a b => if compare a b == .lt then b else a) default
+
+rust_instances largest [Nat, String, Int]
+
+def pairWith {α β : Type} (x : α) (ys : List β) : List (α × β) := ys.map (x, ·)
+
+rust_instances pairWith [(α := Nat) (β := String), (α := String) (β := Bool)]
+
+def same {α : Type} (x : α) : α := x
+
+rust_instances same [Nat, Bool]
+
+def sameNat (x : Nat) : Nat := x + 0
+
+@[csimp] theorem same_inst_nat_eq : @same.inst_Nat = @sameNat := by
+  funext x
+  simp [same.inst_Nat, same, sameNat]
 
 end LeanRustTest.Public

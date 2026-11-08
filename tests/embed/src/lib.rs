@@ -45,3 +45,13 @@ lean_rust::lean! {
       simp [doubleBoth, scale, double_eq, Nat.mul_comm]
     "#
 }
+
+lean_rust::lean! {
+    /// A polymorphic function instantiated for Rust.
+    pub mod generic;
+    r#"
+    def countOf {α : Type} [BEq α] (xs : List α) (x : α) : Nat := xs.countP (· == x)
+
+    rust_instances countOf [Nat, String]
+    "#
+}

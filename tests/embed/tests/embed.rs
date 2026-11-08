@@ -46,3 +46,16 @@ fn blocks_use_other_blocks() {
     );
     assert_eq!(scaled::scale(q, nat(3)).x, nat(12));
 }
+
+#[test]
+fn instantiated_functions_are_generic() {
+    use lean_rust_embed_test::generic;
+    assert_eq!(
+        generic::count_of(vec![nat(1), nat(2), nat(1)], nat(1)),
+        nat(2)
+    );
+    assert_eq!(
+        generic::count_of(vec!["a".to_string(), "b".to_string()], "b".to_string()),
+        nat(1)
+    );
+}

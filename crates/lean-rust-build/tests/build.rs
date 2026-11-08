@@ -1,7 +1,10 @@
 //! Cache keys, file hashes and the Lean files of `lean!` blocks.
 
 use lean_rust_build::syntax::file_hash;
-use lean_rust_build::{cache_keys, lean_source, Block, LEAN_TOOLCHAIN};
+use lean_rust_build::{
+    cache_keys, lean_source, Block, AENEAS_MODEL_LEAN, INSTANCES_LEAN, INSTANCES_MODULE,
+    LEAN_TOOLCHAIN,
+};
 
 fn block(name: &str, source: &str, uses: Vec<Vec<String>>) -> Block {
     Block {
@@ -67,4 +70,34 @@ fn lean_source_wraps_and_dedents() {
     );
     assert_eq!(header, 4);
     assert_eq!(indent, 4);
+}
+
+#[test]
+fn lean_library_matches_the_repository() {
+    assert_eq!(
+        include_str!("../../../LeanRust/Instances.lean"),
+        INSTANCES_LEAN
+    );
+    assert_eq!(
+        include_str!("../../../LeanRust/AeneasModel.lean"),
+        AENEAS_MODEL_LEAN
+    );
+}
+
+#[test]
+fn blocks_using_rust_instances_import_the_command() {
+    let b = block(
+        "g",
+        "def f {α} (x : α) := x\nrust_instances f [Nat]",
+        vec![],
+    );
+    let (text, header, _) = lean_source(&b, &[], "my_crate");
+    assert!(text.starts_with(&format!("import {INSTANCES_MODULE}\n")));
+    assert_eq!(header, 2);
+    let plain = block("g", "def f {α} (x : α) := x", vec![]);
+    assert!(!lean_source(&plain, &[], "my_crate").0.contains("import"));
+    assert_ne!(
+        cache_keys("c", &[b], "").unwrap(),
+        cache_keys("c", &[plain], "").unwrap()
+    );
 }

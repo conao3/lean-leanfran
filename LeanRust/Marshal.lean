@@ -97,6 +97,8 @@ inductive Desc where
   | result (d : Desc)
   /-- Aeneas's `Std.Array α n` (a `ListN` at run time): `[T; n]`. -/
   | arrayN (d : Desc) (n : Nat)
+  /-- The `i`-th type parameter of a polymorphic function instantiated by `rust_instances`. -/
+  | tyVar (i : Nat)
   deriving Inhabited, BEq
 
 /-- Where a constructor field lives in the object. -/
@@ -153,12 +155,35 @@ partial def Desc.rustType : Desc → String
   | .slice d => s!"Vec<{d.rustType}>"
   | .result d => d.rustType
   | .arrayN d n => s!"[{d.rustType}; {n}]"
+  | .tyVar i => s!"T{i}"
 
 partial def Desc.named? : Desc → Array String
   | .named r => #[r]
   | .list d | .array d | .option d | .boxed d | .slice d | .result d | .arrayN d _ => d.named?
   | .except a b | .prod a b => a.named? ++ b.named?
   | _ => #[]
+
+/-- A Rust type converted by the runtime's `Model` as a whole: the argument of a generic type
+    of the crate's model. -/
+partial def Desc.isModel : Desc → Bool
+  | .model _ | .prim "bool" | .prim "char" | .prim "()" => true
+  | .slice d | .arrayN d _ | .option d | .boxed d => d.isModel
+  | .prod a b => a.isModel && b.isModel
+  | _ => false
+
+/-- `d` with the type parameters replaced by `f`. -/
+partial def Desc.subst (f : Nat → Desc) : Desc → Desc
+  | .tyVar i => f i
+  | .list d => .list (d.subst f)
+  | .array d => .array (d.subst f)
+  | .option d => .option (d.subst f)
+  | .except e a => .except (e.subst f) (a.subst f)
+  | .prod a b => .prod (a.subst f) (b.subst f)
+  | .boxed d => .boxed (d.subst f)
+  | .slice d => .slice (d.subst f)
+  | .result d => .result (d.subst f)
+  | .arrayN d n => .arrayN (d.subst f) n
+  | d => d
 
 structure MarshalState where
   types : Array TypeDef := #[]
@@ -174,6 +199,8 @@ structure MarshalConfig where
   typePaths : Array (Name × String) := #[]
   /-- The namespace of the crate's Aeneas model: its types are the crate's Rust types. -/
   modelNs : Option Name := none
+  /-- The type parameters of a polymorphic function, as `Desc.tyVar` by position. -/
+  typeVars : Array FVarId := #[]
 
 abbrev MarshalM := ReaderT MarshalConfig (StateRefT MarshalState MetaM)
 
@@ -224,6 +251,8 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
   if t.isForall then throwError "function type `{t}`"
   if t.isSort then throwError "type argument `{t}`"
   let args := t.getAppArgs
+  if let .fvar id := t then
+    if let some i := (← read).typeVars.idxOf? id then return .tyVar i
   let .const c _ := t.getAppFn | throwError "type variable `{t}`"
   match c, args with
   | ``Nat, #[] => return .prim "rt::Nat"
@@ -271,12 +300,15 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
     if c.getRoot == `Aeneas then throwError "unsupported type of Aeneas's model `{t}`"
     if let some ns := (← read).modelNs then
       if ns.isPrefixOf c && (moduleOf (← getEnv) c).startsWith s!"LeanRustGen.Model.{ns}." then
-        unless args.isEmpty do throwError "generic type of the model `{t}`"
-        return .model (modelRustPath ns c)
+        if args.isEmpty then return .model (modelRustPath ns c)
+        let ds ← args.mapM descOf
+        unless ds.all Desc.isModel do throwError "generic type of the model `{t}` with an argument that is not a Rust type of the model"
+        return .model s!"{modelRustPath ns c}<{", ".intercalate (ds.toList.map (·.rustType))}>"
     namedDesc c t args
 
 partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : MarshalM Desc := do
   let env ← getEnv
+  if t.hasFVar then throwError "type `{t}` of a type parameter"
   let some (.inductInfo ind) := env.find? c | throwError "unsupported type `{t}`"
   if ind.numIndices != 0 then throwError "type family `{t}`"
   let cfg ← read
@@ -362,6 +394,7 @@ partial def toObj (d : Desc) (x : String) (k : Nat := 0) : String :=
   | .slice d => s!"rt::slice_to_model({x}, |{v}| {toObj d v (k + 1)})"
   | .result d => s!"__lr_result_ok({toObj d x k})"
   | .arrayN d _ => s!"rt::list_n_to_model(Vec::from({x}), |{v}| {toObj d v (k + 1)})"
+  | .tyVar _ => "rt::lean_internal_panic_unreachable()"
 
 /-- Rust expression reading a Rust value from the borrowed boxed `Obj` `x`. -/
 partial def fromObj (d : Desc) (x : String) (k : Nat := 0) : String :=
@@ -379,6 +412,7 @@ partial def fromObj (d : Desc) (x : String) (k : Nat := 0) : String :=
   | .slice d => s!"rt::slice_from_model({x}, |{v}| {fromObj d v (k + 1)})"
   | .result d => s!"rt::result_value(__lr_result_match({x}), |{v}| {fromObj d v (k + 1)})"
   | .arrayN d _ => s!"rt::array_n_from_model({x}, |{v}| {fromObj d v (k + 1)})"
+  | .tyVar _ => "rt::lean_internal_panic_unreachable()"
 
 def signedOf : String → Option String
   | "i8" => some "u8"
@@ -783,6 +817,111 @@ def emitResultHelpers (decls : Std.HashMap Name Decl) : String := Id.run do
     allow ++ s!"unsafe fn __lr_result_match(r: Obj) -> Obj \{\n    rt::lean_inc(r);\n    {helperCall mt ["r"]}\n}\n" ++
     allow ++ s!"unsafe fn __lr_result_fail_panic() -> Obj \{\n    {helperCall fl ["5u8"]}\n}\n"
 
+/-! ## Polymorphic functions -/
+
+unsafe def rustInstanceEntriesUnsafe (env : Environment) : Array (Name × Name × Array (Name × Lean.Expr)) := Id.run do
+  let mut out := #[]
+  for md in env.header.moduleData do
+    for (n, es) in md.entries do
+      if n == `LeanRust.rustInstancesExt then
+        for e in es do out := out.push (unsafeCast e)
+  return out
+
+/-- The instantiations recorded by `rust_instances` (`LeanRust/Instances.lean`) in the imported
+    modules: the polymorphic function, the instantiation and the type arguments. -/
+@[implemented_by rustInstanceEntriesUnsafe]
+opaque rustInstanceEntries (env : Environment) : Array (Name × Name × Array (Name × Lean.Expr))
+
+structure GenericInst where
+  /-- The instantiation (`f.inst_Nat`) and its public Rust function. -/
+  lean : Name
+  rust : String
+  /-- The Rust types of the type arguments. -/
+  types : Array Desc
+
+structure GenericFn where
+  lean : Name
+  rust : String
+  /-- The sealed trait in `__lean_rust_inst`. -/
+  traitName : String
+  typeParams : Array Name
+  params : Array (String × Desc)
+  result : Desc
+  io : Bool
+  insts : Array GenericInst
+  doc : String
+
+/-- The type parameters, the parameters and the result of a polymorphic function, with its type
+    parameters as `Desc.tyVar`, and whether it is in `IO`. Instance parameters are left out. -/
+def genericSig (name : Name) : MarshalM (Array Name × Array Desc × Desc × Bool) := do
+  let some ci := (← getEnv).find? name | throwError "unknown constant {name}"
+  forallTelescope ci.type fun xs body => do
+    let mut vars := #[]
+    let mut names := #[]
+    for x in xs do
+      if (← whnf (← inferType x)).isSort then
+        vars := vars.push x.fvarId!
+        names := names.push (← x.fvarId!.getUserName)
+    withReader (fun c => { c with typeVars := vars }) do
+      let body ← whnfR body
+      let est := body.getAppFn.constName? == some `EST.Out
+      let errTy := if est then body.getAppArgs[0]!.constName? else none
+      let mut params := #[]
+      for h : i in [0:xs.size] do
+        let x := xs[i]
+        if est && i + 1 == xs.size then continue
+        let ldecl ← x.fvarId!.getDecl
+        if vars.contains x.fvarId! || ldecl.binderInfo.isInstImplicit then continue
+        if ← isProp ldecl.type then throwError "takes a proof argument `{ldecl.userName}`"
+        params := params.push (← descOf ldecl.type)
+      let result ← if est then descOf body.getAppArgs[2]! else descOf body
+      return (names, params, result, errTy == some ``IO.Error)
+
+def GenericInst.typesString (i : GenericInst) : String :=
+  match i.types.toList with
+  | [t] => t.rustType
+  | ts => "(" ++ ", ".intercalate (ts.map (·.rustType)) ++ ")"
+
+/-- The Rust type of the type parameter `i` seen from `self`: `T`, `T::T1`. -/
+def tyVarDesc (self : String) (i : Nat) : Desc :=
+  .prim (if i == 0 then self else s!"{self}::T{i}")
+
+def GenericFn.signature (g : GenericFn) (f : Nat → Desc) : String × String :=
+  let ty (d : Desc) := (d.subst f).rustType
+  let params := ", ".intercalate (g.params.toList.map fun (n, d) => s!"{n}: {ty d}")
+  let res := ty g.result
+  (params, if g.io then s!"std::io::Result<{res}>" else res)
+
+/-- The generic public function: it dispatches through its trait. -/
+def emitGenericFn (facade : String) (g : GenericFn) : String :=
+  let (params, ret) := g.signature (tyVarDesc "T")
+  let args := ", ".intercalate (g.params.toList.map (·.1))
+  let insts := ", ".intercalate (g.insts.toList.map fun i => s!"({quoteString i.typesString}, {quoteString (toString i.lean)})")
+  let tps := ", ".intercalate (g.typeParams.toList.map fun n => quoteString (toString n))
+  s!"#[doc = {quoteString g.doc}]\n#[{facade}::exported({quoteString (toString g.lean)}, type_params = [{tps}], instances = [{insts}])]\n" ++
+    s!"pub fn {g.rust}<T: __lean_rust_inst::{g.traitName}>({params}) -> {ret} \{\n    <T as __lean_rust_inst::{g.traitName}>::{g.rust}({args})\n}\n"
+
+/-- The module of the sealed traits of the generic functions, implemented for the types of
+    their instantiations by calling the public functions of the instantiations. -/
+def emitInstModule (gs : Array GenericFn) : String := Id.run do
+  let mut s := "#[doc(hidden)]\npub mod __lean_rust_inst {\n    #[allow(unused_imports)]\n    use super::*;\n    mod sealed {\n        pub trait Sealed {}\n    }\n"
+  let mut sealed : Std.HashSet String := {}
+  for g in gs do
+    for i in g.insts do
+      let t := i.types[0]!.rustType
+      unless sealed.contains t do
+        sealed := sealed.insert t
+        s := s ++ s!"    impl sealed::Sealed for {t} \{}\n"
+    let assoc := String.join ((List.range (g.typeParams.size - 1)).map fun k => s!"        type T{k + 1};\n")
+    let (params, ret) := g.signature (tyVarDesc "Self")
+    s := s ++ s!"    pub trait {g.traitName}: Sized + sealed::Sealed \{\n{assoc}        fn {g.rust}({params}) -> {ret};\n    }\n"
+    let args := ", ".intercalate (g.params.toList.map (·.1))
+    for i in g.insts do
+      let defs := String.join ((List.range (g.typeParams.size - 1)).map fun k => s!"        type T{k + 1} = {(i.types[k + 1]!).rustType};\n")
+      let (params, ret) := g.signature fun k => i.types[k]!
+      s := s ++ s!"    impl {g.traitName} for {i.types[0]!.rustType} \{\n{defs}        fn {g.rust}({params}) -> {ret} \{\n            super::{i.rust}({args})\n        }\n    }\n"
+  return s ++ "}\n"
+
 /-! ## Generation -/
 
 structure Skipped where
@@ -826,10 +965,25 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
     return (generateInternal env roots).map fun o =>
       { items := o.items, externs := o.externs, decls := o.decls, publics := #[], skipped := #[] }
   let cfg : MarshalConfig := { strip, typePaths, modelNs }
-  let ((fns, copies), st) ← (do
+  let mut instsOf : Std.HashMap Name (Array (Name × Array (Name × Lean.Expr))) := {}
+  for (f, i, args) in rustInstanceEntries env do
+    instsOf := instsOf.insert f ((instsOf.getD f #[]).push (i, args))
+  let roots := roots ++ (roots.flatMap fun r => (instsOf.getD r #[]).map (·.1)).filter (!roots.contains ·)
+  let ((fns, copies, gens), st) ← (do
       let mut fns : Array (Except Skipped PublicFn) := #[]
       let mut copies : Array PublicFn := #[]
+      let mut gens : Array (Except Skipped (Name × (Array Name × Array Desc × Desc × Bool) × Array (Name × Array Desc))) := #[]
       for r in roots do
+        if let some insts := instsOf[r]? then
+          let saved ← get
+          try
+            let sig ← genericSig r
+            let tys ← insts.mapM fun (i, args) => return (i, ← args.mapM fun (_, t) => descOf t)
+            gens := gens.push (.ok (r, sig, tys))
+          catch e =>
+            set saved
+            gens := gens.push (.error { name := r, reason := ← e.toMessageData.toString })
+          continue
         let t := csimpTarget env r
         let some d := findEnvDecl env t
           | fns := fns.push (.error { name := r, reason := "no IR (is it noncomputable?)" }); continue
@@ -846,7 +1000,7 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
         catch e =>
           set saved
           fns := fns.push (.error { name := r, reason := ← e.toMessageData.toString })
-      return (fns, copies) : MarshalM _).run cfg |>.run {}
+      return (fns, copies, gens) : MarshalM _).run cfg |>.run {}
   let types0 : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
   let mut publics : Array PublicFn := #[]
   let mut skipped : Array Skipped := #[]
@@ -861,11 +1015,43 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
       | some l => skipped := skipped.push { name := f.lean, reason := s!"argument type `{l}` has proof fields" }
       | none => publics := publics.push f
   let copies := copies.filter fun c => publics.any (·.lean == c.lean)
+  let mut generics : Array GenericFn := #[]
+  for g in gens do
+    match g with
+    | .error s => skipped := skipped.push s
+    | .ok (r, (typeParams, descs, result, io), tys) =>
+      let mut insts : Array GenericInst := #[]
+      let mut names : Option (Array String) := none
+      let mut reason : Option String := none
+      for (i, types) in tys do
+        match publics.find? (·.lean == i) with
+        | none =>
+          reason := some s!"the instantiation {i} is not public: {(skipped.find? (·.name == i)).map (·.reason) |>.getD "not exported"}"
+        | some f =>
+          let ns := f.sig.params.filterMap fun | .value nm _ => some nm | _ => none
+          if ns.size != descs.size then
+            reason := some s!"the instantiation {i} takes {ns.size} arguments, {r} {descs.size}"
+          names := names <|> some ns
+          insts := insts.push { lean := i, rust := f.rust, types }
+      if let some why := reason then
+        skipped := skipped.push { name := r, reason := why }
+        continue
+      let mut seen : Std.HashMap String Name := {}
+      for i in insts do
+        let t := i.types[0]!.rustType
+        if let some o := seen[t]? then
+          return .error s!"{r}: the instantiations {o} and {i.lean} have the same Rust type `{t}`"
+        seen := seen.insert t i.lean
+      let some ci := env.find? r | return .error s!"unknown constant {r}"
+      let rust := rustFnName strip r
+      let doc := s!"Lean: `{r} : {← ppExpr ci.type}` (module `{moduleOf env r}`), instantiated for {", ".intercalate (insts.toList.map fun i => s!"`{i.typesString}`")}."
+      let g : GenericFn := { lean := r, rust := rust, traitName := rustTypeName strip r, typeParams := typeParams, params := (names.getD #[]).zip descs, result := result, io := io, insts := insts, doc := doc }
+      generics := generics.push g
   let mut names : Std.HashMap String Name := {}
-  for f in publics do
-    if let some o := names[f.rust]? then
-      return .error s!"Rust name `{f.rust}` is used by both {o} and {f.lean}"
-    names := names.insert f.rust f.lean
+  for (lean, rust) in publics.map (fun f => (f.lean, f.rust)) ++ generics.map (fun g => (g.lean, g.rust)) do
+    if let some o := names[rust]? then
+      return .error s!"Rust name `{rust}` is used by both {o} and {lean}"
+    names := names.insert rust lean
   let aeneas := if env.contains resultOk then #[resultOk, resultMatch, resultFail] else #[]
   let extra := publics.foldl (fun acc f => acc ++ f.sig.instFns) #[] ++
     (if publics.any (·.sig.io) then #[``IO.Error.toString] else #[]) ++ aeneas
@@ -904,13 +1090,17 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
       match res with
       | .ok s => items := items ++ s ++ "\n"
       | .error e => return .error e
+    let genericItems := if generics.isEmpty then "" else
+      String.join (generics.toList.map fun g => emitGenericFn facade g ++ "\n") ++ emitInstModule generics ++ "\n"
+    items := items ++ genericItems
     let mut specMod := "#[doc(hidden)]\n#[allow(unused_imports)]\npub mod __lean_rust_spec {\n    pub use super::*;\n"
     for f in copies do
       match emitPublic types declMap facade f with
       | .ok s => specMod := specMod ++ s
       | .error e => return .error e
+    unless copies.isEmpty do specMod := specMod ++ genericItems
     items := items ++ specMod ++ "}\n"
     return .ok { items, externs := o.externs, decls := o.decls,
-                 publics := publics.map fun f => (f.lean, f.rust), skipped }
+                 publics := publics.map (fun f => (f.lean, f.rust)) ++ generics.map (fun g => (g.lean, g.rust)), skipped }
 
 end LeanRust
