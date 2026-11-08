@@ -17,6 +17,23 @@ members = [
     "samples/sorted-search",
     "samples/inventory",
     "samples/generic-search",
+    "samples/steps/01-functions",
+    "samples/steps/02-theorems",
+    "samples/steps/03-structures",
+    "samples/steps/04-inductives",
+    "samples/steps/05-collections",
+    "samples/steps/06-imports",
+    "samples/steps/07-io",
+    "samples/steps/08-polymorphic",
+    "samples/steps/09-lake-project",
+    "samples/steps/10-ensures",
+    "samples/steps/11-prop-specs",
+    "samples/steps/12-requires",
+    "samples/steps/13-refines",
+    "samples/steps/14-loops",
+    "samples/steps/15-structs-enums",
+    "samples/steps/16-opaque",
+    "samples/steps/17-generics",
 ]
 
 [workspace.package]

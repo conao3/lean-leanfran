@@ -1,0 +1,20 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::saturating_double"
+lean = "step_10_ensures.saturating_double"
+items = [
+  { rust = "crate::saturating_double", hash = "sha256:3ab4607dcdc554f13ac6d6b8680b6abe6a79297ada5ec84593e9aaad7e822db7" },
+]
+
+[[model.obligation]]
+label = "ge"
+spec = "double.ge"
+spec_block = "crate::spec::double"
+spec_hash = "sha256:69df9343fc920203adb169bb26359ce26fa09d12f1ec9ecca203669822d5b10a"
+hash = "sha256:2a9a3918ed426f6d84473c8056e32987de8c4912dbf6a7454f4dfff0a41ef98f"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/SaturatingDouble.lean:6"

@@ -1,0 +1,6 @@
+name = "step_03_structures"
+defaultTargets = ["LeanRustGen"]
+
+[[lean_lib]]
+name = "LeanRustGen"
+globs = ["LeanRustGen.+"]

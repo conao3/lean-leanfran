@@ -368,9 +368,11 @@ runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `lean-rus
 
 ## Samples
 
-[`samples/`](samples) has `todo-cli` and `word-count` (`lean!`), `roman-numerals` (a lake
-project with committed generated modules), and `verified-rust`, `sorted-search`, `inventory`
-and `generic-search` (Rust functions verified in Lean, the last one generic).
+[`samples/steps/`](samples/steps) introduces the features one crate at a time, in 17 steps from a
+first `lean!` block to a generic verified function. [`samples/`](samples) also has `todo-cli`
+and `word-count` (`lean!`), `roman-numerals` (a lake project with committed generated modules),
+and `verified-rust`, `sorted-search`, `inventory` and `generic-search` (Rust functions verified
+in Lean, the last one generic).
 
 ## Development
 
@@ -397,6 +399,9 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
 ## Limitations
 
 - Objects use non-atomic reference counts; `Task`s run synchronously where they are created.
+- `IO` covers the standard streams, references, the clock and tasks; files, processes and the
+  environment are not implemented (a module calling them fails to generate, listing the
+  missing externs).
 - Each generated module defines its own structs and enums; two modules that mention the same
   Lean type have two Rust types, except for types of the blocks named in `uses`.
 - Generic structures are generated per instantiation (`Pair Nat Bool` → `PairNatBool`).

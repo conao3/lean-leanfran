@@ -1,0 +1,20 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::sum_to"
+lean = "step_14_loops.sum_to"
+items = [
+  { rust = "crate::sum_to", hash = "sha256:05695b568651ef482fe4a5775db5af1e717d3291299833e7d4a4c1f209401eb8" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "sums.sum_to"
+spec_block = "crate::spec::sums"
+spec_hash = "sha256:42610c1387a31e62aef48fa0a64d0095340bf7b3eed774aaa5c83f62a9e591e8"
+hash = "sha256:0b2020012fa1805e72077e81bedfba2aade151913052f0908b44d45414a6bc23"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/SumTo.lean:40"

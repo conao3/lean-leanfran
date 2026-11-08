@@ -5,6 +5,9 @@ crate of the repository's cargo workspace that depends on `lean-rust` by path, w
 README and a `make test` that the repository's `make check` runs. Run the samples inside
 `nix develop` of the repository root.
 
+[`steps/`](steps) introduces the features one crate at a time, from a first `lean!` block to a
+generic verified function; start there. The samples below combine them into small programs.
+
 lean-rust is used in three ways here, and the samples follow them.
 
 ## 1. Write functions in Lean inside a Rust file
@@ -45,5 +48,5 @@ so `make test` needs neither Lean nor Charon; `make verify` extracts and checks 
 
 ## Where to start
 
-Start with `todo-cli` for `lean!`, then `roman-numerals` for a lake project, then
-`verified-rust` for verifying Rust.
+Read [`steps/`](steps) in order, then `todo-cli` for `lean!`, `roman-numerals` for a lake
+project, and `verified-rust` for verifying Rust.

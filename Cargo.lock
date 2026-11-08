@@ -570,6 +570,141 @@ dependencies = [
 ]
 
 [[package]]
+name = "step-01-functions"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-02-theorems"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-03-structures"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-04-inductives"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-05-collections"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-06-imports"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-07-io"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-08-polymorphic"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-09-lake-project"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+]
+
+[[package]]
+name = "step-10-ensures"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-11-prop-specs"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-12-requires"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-13-refines"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-14-loops"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-15-structs-enums"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-16-opaque"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
+name = "step-17-generics"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"

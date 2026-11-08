@@ -1,0 +1,6 @@
+name = "step_08_polymorphic"
+defaultTargets = ["LeanRustGen"]
+
+[[lean_lib]]
+name = "LeanRustGen"
+globs = ["LeanRustGen.+"]

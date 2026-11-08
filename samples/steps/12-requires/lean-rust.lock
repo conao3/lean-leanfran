@@ -1,0 +1,20 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::midpoint"
+lean = "step_12_requires.midpoint"
+items = [
+  { rust = "crate::midpoint", hash = "sha256:cf59a8041558192b9abbe2b472a6ed3d7bab415343c3e3901b712da0f9ba2bc7" },
+]
+
+[[model.obligation]]
+label = "between"
+spec = "mid.between"
+spec_block = "crate::spec::mid"
+spec_hash = "sha256:63217cba8d431c3c6da80c9cc7d8a3473ec88f4d34bf37014b8a10095cbac92a"
+hash = "sha256:23e78dc7fd8a74c83c1436348347941e824a003dde46ccec634b10c259fdb86c"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Midpoint.lean:6"

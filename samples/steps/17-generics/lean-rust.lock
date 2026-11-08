@@ -1,0 +1,21 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::clamp"
+lean = "step_17_generics.clamp"
+instances = ["u32", "i64"]
+items = [
+  { rust = "crate::clamp", hash = "sha256:9e8e68eba49e0e921a530dd79b0768f869798d2bd30871f554aa5490689b05b2" },
+]
+
+[[model.obligation]]
+label = "within"
+spec = "range.within"
+spec_block = "crate::spec::range"
+spec_hash = "sha256:2315c1d221e051bf3761d0127f3d6254eae939667086ff5f20bbe56f2d8a4c62"
+hash = "sha256:6bc6c6c79952028c1cad89fee464e4211c6c18361c442545a844901e09c77565"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Clamp.lean:6"
