@@ -7,6 +7,7 @@ name = "LeanRust"
 [[lean_exe]]
 name = "lean-rust"
 root = "Main"
+supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanRustTest"

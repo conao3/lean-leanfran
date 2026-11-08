@@ -10,7 +10,7 @@ generate() {
   .lake/build/bin/lean-rust module generate \
     --module-name "$1" --roots "$2" \
     --search-path .lake/build/lib/lean --runtime-path ::lean_rust_runtime \
-    --output-file "$3" --output text
+    --output-file "$3" --output text --internal-only
 }
 generate LeanRustTest.Vectors LeanRustTest.Vectors.report test-out/vectors.rs
 generate LeanRustTest.Io LeanRustTest.Io.run test-out/io.rs

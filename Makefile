@@ -4,7 +4,7 @@
 
 build:
 	lake build lean-rust oracle LeanRustTest
-	cargo build --workspace --exclude lean-rust-difftest
+	cargo build --workspace --exclude lean-rust-difftest --exclude lean-rust-public-test
 
 gen-externs:
 	cargo run -q -p lean-rust-runtime --example gen-externs > LeanRust/RuntimeExterns.lean.tmp
@@ -13,7 +13,8 @@ gen-externs:
 test:
 	lake build
 	./test-diff.sh
-	cargo nextest run -p lean-rust-runtime
+	./test-public.sh
+	cargo nextest run -p lean-rust-runtime -p lean-rust-build
 
 format:
 	treefmt
@@ -22,6 +23,6 @@ format-check:
 	treefmt --ci
 
 lint:
-	cargo clippy -p lean-rust-runtime --all-targets -- -D warnings
+	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build --all-targets -- -D warnings
 
 check: format-check lint test

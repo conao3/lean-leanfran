@@ -6,6 +6,7 @@ members = [
     "crates/lean-rust-macros",
     "crates/lean-rust-build",
     "tests/difftest",
+    "tests/public",
 ]
 
 [workspace.package]

@@ -8,4 +8,5 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+lean-rust-macros = { path = "../lean-rust-macros", version = "0.1.0" }
 lean-rust-runtime = { path = "../lean-rust-runtime", version = "0.1.0" }

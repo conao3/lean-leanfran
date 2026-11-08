@@ -1,5 +1,6 @@
 [package]
 name = "lean-rust-build"
+description = "Build script support of lean-rust: checks the lean! blocks of a crate with Lean and generates their Rust code"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,3 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+serde_json = "1"
+sha2 = "0.10"
+syn = { version = "2", features = ["full", "visit"] }

@@ -366,9 +366,9 @@ def paramList (ps : Array Param) : String :=
 def fnHeader (d : Decl) (f : Name) (ps : Array Param) (ty : IRType) : String :=
   if takesArgArray d then
     let unpack := (ps.filter (!·.ty.isVoid)).mapIdx fun i p => s!"let mut {varName p.x}: {rsType p.ty} = *__args.add({i});\n"
-    s!"#[allow(non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}(__args: *mut Obj) -> {rsType ty} \{\n" ++ String.join unpack.toList
+    s!"#[allow(dead_code, non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}(__args: *mut Obj) -> {rsType ty} \{\n" ++ String.join unpack.toList
   else
-    s!"#[allow(non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}({paramList ps}) -> {rsType ty} \{\n"
+    s!"#[allow(dead_code, non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, unused_unsafe, clippy::all)]\npub(crate) unsafe fn {fnName f}({paramList ps}) -> {rsType ty} \{\n"
 
 partial def bodySelfTail (f : Name) (b : FnBody) : Bool :=
   match b with
@@ -403,7 +403,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (exports : Std.
     -- constants: evaluated once on first use and marked persistent
     let inner ← run body
     let cell := if isObjType ty then "Obj" else rsType ty
-    out := out ++ s!"#[allow(non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, clippy::all)]\nunsafe fn {fnName f}_init() -> {rsType ty} \{\n"
+    out := out ++ s!"#[allow(dead_code, non_snake_case, unused_mut, unused_assignments, unused_variables, unreachable_code, clippy::all)]\nunsafe fn {fnName f}_init() -> {rsType ty} \{\n"
     for (i, t) in vars.toList.mergeSort (fun a b => a.1 ≤ b.1) do
       out := out ++ s!"let mut x_{i}: {rsType t} = {defaultValue t};\n"
     if machine then
@@ -413,7 +413,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (exports : Std.
     else out := out ++ inner
     out := out ++ "}\n"
     let mark := if isObjType ty then "rt::lean_mark_persistent(v); " else ""
-    out := out ++ s!"#[allow(non_snake_case, clippy::all)]\npub(crate) unsafe fn {fnName f}() -> {rsType ty} \{\n  thread_local! \{ static CELL: core::cell::OnceCell<{cell}> = const \{ core::cell::OnceCell::new() }; }\n  CELL.with(|c| *c.get_or_init(|| unsafe \{ let v = {fnName f}_init(); {mark}v }))\n}\n"
+    out := out ++ s!"#[allow(dead_code, non_snake_case, clippy::all)]\npub(crate) unsafe fn {fnName f}() -> {rsType ty} \{\n  thread_local! \{ static CELL: core::cell::OnceCell<{cell}> = const \{ core::cell::OnceCell::new() }; }\n  CELL.with(|c| *c.get_or_init(|| unsafe \{ let v = {fnName f}_init(); {mark}v }))\n}\n"
     return out
   out := out ++ fnHeader d f ps ty
   for (i, t) in vars.toList.mergeSort (fun a b => a.1 ≤ b.1) do
