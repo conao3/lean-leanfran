@@ -1188,6 +1188,17 @@ unsafe fn __lr_result_fail_panic() -> Obj {
 }
 
 #[allow(dead_code, non_snake_case, unused_mut, clippy::all)]
+pub(crate) unsafe fn l_verified__rust_bits_popcount__fast_impl(mut x_1: Obj) -> Obj {
+    let x: u64 = <u64 as rt::Model>::from_model(x_1);
+    rt::lean_dec(x_1);
+    let __v = {
+        let __v = crate::bits::popcount_fast(x);
+        __v
+    };
+    rt::Model::to_model(__v)
+}
+
+#[allow(dead_code, non_snake_case, unused_mut, clippy::all)]
 pub(crate) unsafe fn l_verified__rust_bits_max__u32_impl(mut x_1: Obj, mut x_2: Obj) -> Obj {
     let a: u32 = <u32 as rt::Model>::from_model(x_1);
     rt::lean_dec(x_1);
@@ -1203,12 +1214,8 @@ pub(crate) unsafe fn l_verified__rust_bits_max__u32_impl(mut x_1: Obj, mut x_2: 
 #[doc = "Lean: `bits.popcount : Aeneas.Std.U64 → Aeneas.Std.U32` (module `LeanRustGen.Embed.verified_rust.hcdda342bf128cef0.bits`)."]
 #[::lean_rust::exported("bits.popcount")]
 pub fn popcount(x: u64) -> u32 {
-    unsafe {
-        let __a0: Obj = rt::Model::to_model(x);
-        let __r: Obj = l_bits_popcount(__a0);
-        rt::lean_dec(__a0);
-        let __v = <u32 as rt::Model>::from_model(__r);
-        rt::lean_dec(__r);
+    {
+        let __v = crate::bits::popcount_fast(x);
         __v
     }
 }
@@ -1241,6 +1248,18 @@ pub fn max_bound(a: u32, b: u32, r: u32) -> bool {
 #[allow(unused_imports)]
 pub mod __lean_rust_spec {
     pub use super::*;
+    #[doc = "Lean: `bits.popcount : Aeneas.Std.U64 → Aeneas.Std.U32` (module `LeanRustGen.Embed.verified_rust.hcdda342bf128cef0.bits`)."]
+    #[::lean_rust::exported("bits.popcount")]
+    pub fn popcount(x: u64) -> u32 {
+        unsafe {
+            let __a0: Obj = rt::Model::to_model(x);
+            let __r: Obj = l_bits_popcount(__a0);
+            rt::lean_dec(__a0);
+            let __v = <u32 as rt::Model>::from_model(__r);
+            rt::lean_dec(__r);
+            __v
+        }
+    }
     #[doc = "Lean: `bits.max : Aeneas.Std.U32 → Aeneas.Std.U32 → Aeneas.Std.U32` (module `LeanRustGen.Embed.verified_rust.hcdda342bf128cef0.bits`)."]
     #[::lean_rust::exported("bits.max")]
     pub fn max(a: u32, b: u32) -> u32 {

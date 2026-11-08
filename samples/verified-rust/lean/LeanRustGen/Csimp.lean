@@ -3,6 +3,12 @@ import LeanRustGen.Model.verified_rust.Funs
 import LeanRustGen.Embed.verified_rust.hcdda342bf128cef0.bits
 open Aeneas Aeneas.Std Result
 
+/-- `bits.popcount` runs the Rust function `crate::bits::popcount_fast`: `verified_rust.bits.popcount_fast.proof.refines` proves that it computes the spec. -/
+@[extern "rs:crate::bits::popcount_fast(_)"]
+def verified_rust.bits.popcount_fast.impl : type_of% @bits.popcount := @bits.popcount
+
+@[csimp] theorem verified_rust.bits.popcount_fast.csimp : @bits.popcount = @verified_rust.bits.popcount_fast.impl := rfl
+
 /-- `bits.max` runs the Rust function `crate::bits::max_u32`: `verified_rust.bits.max_u32.proof.refines` proves that it computes the spec. -/
 @[extern "rs:crate::bits::max_u32(_,_)"]
 def verified_rust.bits.max_u32.impl : type_of% @bits.max := @bits.max

@@ -16,9 +16,17 @@ Rust functions bound to specs written in Lean with `#[lean_rust::model]`: the tw
 |---|---|---|
 | `max_u32` | `refines` (`bits.max`) | proved: `bits::max` runs `max_u32` (csimp) |
 | `max_u32` | `bound` (`bits.max_bound`) | proved |
-| `popcount_fast` | `refines` (`bits.popcount`) | `sorry`: the step `popcount (x &&& (x - 1)) + 1 = popcount x` is bit-level reasoning not done here |
-| `insert_sorted` | `sorted` (`sorting.output_sorted`) | missing: needs a spec of the loop over the slice iterator |
-| `insert_sorted` | `perm` (`OutputPerm`) | `sorry` |
+| `popcount_fast` | `refines` (`bits.popcount`) | proved: `bits::popcount` runs `popcount_fast` (csimp) |
+| `insert_sorted` | `sorted` (`sorting.output_sorted`) | proved |
+| `insert_sorted` | `perm` (`OutputPerm`) | proved |
+
+The proofs in [`lean/Proofs/Bits.lean`](lean/Proofs/Bits.lean) count the one bits of the `n`
+lowest bits (`pc`), prove `pc (v &&& (v - 1)) + 1 = pc v` for `v ≠ 0` by induction on `n`, and
+state the loop `'clear` with `termination_by x.val`. [`lean/Proofs/Sort.lean`](lean/Proofs/Sort.lean)
+states the loop `'scan` over the slice iterator (`slice` and index `i`) with a function of the
+remaining elements `slice.val.drop i`, shows that the result is Mathlib's `List.orderedInsert`,
+and takes sortedness and the permutation from Mathlib. `input_sorted` also bounds the length
+below `Usize.max`: `xs.len() + 1` overflows on a slice of that length in the model.
 
 `cargo test` checks every `refines` and `ensures` with a Rust path against the spec with
 proptest, proved or not; `insert_sorted` draws sorted inputs from `strategy`.

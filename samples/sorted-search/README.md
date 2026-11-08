@@ -8,8 +8,10 @@ is sorted (`refines = .., requires = search::sorted`).
 - [`src/search.rs`](src/search.rs): `lower_bound` halves a range in the loop `'halve`, whose
   Lean model is `sorted_search.search.lower_bound.halve`; `contains` calls it.
 
-Both obligations are `sorry` in [`lean/Proofs/Search.lean`](lean/Proofs/Search.lean): the
-proof needs a spec of the loop `'halve` with its invariant and `termination_by hi - lo`. A
+Both obligations are proved in [`lean/Proofs/Search.lean`](lean/Proofs/Search.lean): the loop
+`'halve` has a spec with its invariant (`lo ≤ hi ≤ len`, the elements below `lo` are less than
+`x`, those from `hi` on are not) and `termination_by hi - lo`; at its end the count is `lo`.
+`contains` uses the invariant that the spec of `lower_bound` returns. A
 `refines` with `requires` is not a csimp replacement: the Rust function is equal to the spec
 only on sorted slices, so code calls `lower_bound` directly where the slice is sorted.
 

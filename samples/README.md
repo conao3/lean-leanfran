@@ -38,7 +38,7 @@ so `make test` needs neither Lean nor Charon; `make verify` extracts and checks 
 
 | Sample | What it shows |
 |---|---|
-| [`verified-rust`](verified-rust) | `refines` (a proved one replaces its spec by the Rust function), `ensures`, `requires`, a `Prop` spec, loop labels |
+| [`verified-rust`](verified-rust) | `refines` (a proved one replaces its spec by the Rust function), `ensures`, `requires`, a `Prop` spec, loop labels, proofs of loops |
 | [`sorted-search`](sorted-search) | `refines` under `requires` (binary search on a sorted slice) |
 | [`inventory`](inventory) | structs and enums in specs (`derive(lean_rust::Model)`), a `BTreeMap` modelled in `lean/External.lean` |
 

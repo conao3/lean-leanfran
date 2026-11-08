@@ -15,9 +15,9 @@ spec = "bits.popcount"
 spec_block = "crate::spec::bits"
 spec_hash = "sha256:da4d02cefcbcb3bf328f607230ddf3b4cb9cbdcd6d4fa6c2ccf34cd5f9b6d14b"
 hash = "sha256:850222bef6bb22b25fe45cc650ba65a96143b722d554120a086322de5e42e9a5"
-status = "sorry"
+status = "proved"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
-proof = "lean/Proofs/Bits.lean:19"
+proof = "lean/Proofs/Bits.lean:86"
 
 [[model]]
 rust = "crate::bits::max_u32"
