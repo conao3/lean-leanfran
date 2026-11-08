@@ -1,0 +1,17 @@
+[package]
+name = "todo-cli"
+version = "0.1.0"
+edition = "2021"
+publish = false
+include = ["src/**", "build.rs", ".lean-rust/cache/**", "lean/**"]
+
+[[bin]]
+name = "todo"
+path = "src/main.rs"
+
+[dependencies]
+lean-rust = { path = "../../crates/lean-rust" }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[build-dependencies]
+lean-rust-build = { path = "../../crates/lean-rust-build" }

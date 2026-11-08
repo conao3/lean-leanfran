@@ -16,6 +16,7 @@ test:
 	./test-public.sh
 	LEAN_RUST_CLI=$(CURDIR)/.lake/build/bin/lean-rust cargo nextest run -p lean-rust-runtime -p lean-rust-build -p lean-rust-embed-test
 	tests/embed/test.sh
+	$(MAKE) -C samples test
 
 format:
 	treefmt
@@ -24,6 +25,6 @@ format-check:
 	treefmt --ci
 
 lint:
-	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build -p lean-rust-embed-test --all-targets -- -D warnings
+	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build -p lean-rust-embed-test -p todo-cli -p word-count -p roman-numerals --all-targets -- -D warnings
 
 check: format-check lint test
