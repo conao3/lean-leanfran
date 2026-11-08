@@ -155,9 +155,12 @@ def printSummary (o : Opts) (toStderr : Bool) (j : Json) : IO Unit := do
       for s in (get "skipped").getArr?.toOption.getD #[] do
         IO.eprintln s!"lean-rust: skipped {(s.getObjValD "name").getStr?.toOption.getD ""}: {(s.getObjValD "reason").getStr?.toOption.getD ""}"
 
-def importAll (o : Opts) (mods : Array Name) : IO Environment := do
+def importAll (o : Opts) (mods : Array Name) : IO (Except Name Environment) := do
   initSearchPath (← findSysroot) o.searchPath.toList
-  importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024) (loadExts := true)
+  let sp ← searchPathRef.get
+  for m in mods do
+    if (← sp.findWithExt "olean" m).isNone then return .error m
+  .ok <$> importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024) (loadExts := true)
 
 def parseJobs (j : Json) : Except String (Array Job) := do
   let arr ← j.getArr?
@@ -172,7 +175,11 @@ def parseJobs (j : Json) : Except String (Array Job) := do
     return { module, roots, namespace?, typePaths, outputFile }
 
 def runJobs (o : Opts) (jobs : Array Job) : IO (Array Json × UInt32) := do
-  let env ← importAll o (jobs.map (·.module))
+  let env ← match ← importAll o (jobs.map (·.module)) with
+    | .ok env => pure env
+    | .error m =>
+      let j := Json.mkObj [("module", toString m), ("error", s!"no .olean for {m} in the search path"), ("code", 252)]
+      return (jobs.map fun _ => j, 252)
   let mut out := #[]
   let mut code : UInt32 := 0
   for job in jobs do
