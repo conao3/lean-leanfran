@@ -33,9 +33,8 @@ pub struct ModelState {
     pub changed: Vec<String>,
 }
 
-/// The states of the modelled functions of `items`. `keys` are the current keys of the specs
-/// (the cache keys of the `lean!` blocks by module path, and the hashes of other functions by
-/// unit name).
+/// The states of the modelled functions of `items`. `keys` are the current hashes of the specs
+/// ([`crate::Builder::spec_hashes`]).
 pub fn states(
     items: &CrateItems,
     lock: &Lock,
@@ -79,7 +78,7 @@ fn model_state(
             match (entry, recorded) {
                 (Some(m), Some(o)) => {
                     let spec_changed =
-                        !o.spec_block.is_empty() && keys.get(&o.spec_block) != Some(&o.spec_key);
+                        !o.spec_block.is_empty() && keys.get(&o.spec_block) != Some(&o.spec_hash);
                     let status = if !changed.is_empty() || spec_changed {
                         "stale".to_string()
                     } else {

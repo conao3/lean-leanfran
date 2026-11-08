@@ -363,7 +363,7 @@ impl Specs {
                 lean: lean.clone(),
                 boolean: true,
                 block: lean_rust_build::module_path_string(&b.path),
-                key: self.keys[i].clone(),
+                key: format!("sha256:{}", self.keys[i]),
                 import: Some(b.lean_module(&c.ident())),
             });
         }
@@ -399,7 +399,7 @@ pub fn current_states(c: &Crate) -> Result<Vec<lean_rust_build::verify::ModelSta
     let specs = Specs::new(c)?;
     let lock = lean_rust_build::lock::Lock::read(&b.lock_path())?;
     let keys = b
-        .spec_keys(&specs.blocks, &items)
+        .spec_hashes(&specs.blocks, &items)
         .map_err(|e| e.to_string())?;
     Ok(lean_rust_build::verify::states(
         &items,

@@ -45,9 +45,10 @@ pub struct Obligation {
     /// The module path of the `lean!` block defining the spec (`crate::spec::sorting`).
     #[serde(default)]
     pub spec_block: String,
-    /// The cache key of that block when the obligation was extracted.
+    /// `sha256:<cache key>` of that block (without the csimp replacements), or the hash of the
+    /// generated function, when the obligation was extracted.
     #[serde(default)]
-    pub spec_key: String,
+    pub spec_hash: String,
     /// SHA-256 of the statement of the obligation and the spec key.
     pub hash: String,
     /// `proved`, `sorry`, `axioms`, `missing`, `mismatch`, `failed` or `unchecked`.
@@ -138,7 +139,7 @@ impl Lock {
                 let _ = writeln!(s, "label = {}", quote(&o.label));
                 let _ = writeln!(s, "spec = {}", quote(&o.spec));
                 let _ = writeln!(s, "spec_block = {}", quote(&o.spec_block));
-                let _ = writeln!(s, "spec_key = {}", quote(&o.spec_key));
+                let _ = writeln!(s, "spec_hash = {}", quote(&o.spec_hash));
                 let _ = writeln!(s, "hash = {}", quote(&o.hash));
                 let _ = writeln!(s, "status = {}", quote(&o.status));
                 let axioms: Vec<String> = o.axioms.iter().map(|a| quote(a)).collect();

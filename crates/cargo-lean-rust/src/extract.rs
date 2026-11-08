@@ -157,8 +157,6 @@ pub fn extract(c: &Crate) -> Result<(), String> {
         return Err(items.errors.join("\n"));
     }
     let ident = c.ident();
-    let specs = Specs::new(c)?;
-    let resolved = resolve_all(c, &items, &specs)?;
     let lean_dir = c.lean_dir();
     if items.models.is_empty() {
         return Err("the crate has no #[lean_rust::model] function".into());
@@ -268,51 +266,19 @@ pub fn extract(c: &Crate) -> Result<(), String> {
     decls.extend(gen::parse_aeneas(&read("Types.lean")));
     let externals: Vec<AeneasDecl> = gen::parse_aeneas(&read("FunsExternal_Template.lean"));
 
-    let old = Lock::read(&b.lock_path())?;
-    let mut lock = Lock {
-        version: LOCK_VERSION,
-        aeneas: AENEAS_REV.to_string(),
-        charon: charon_version,
-        model: Vec::new(),
-    };
-    let mut aliases: BTreeMap<Vec<String>, String> = BTreeMap::new();
-    let mut obligations: BTreeMap<Vec<String>, (BTreeSet<String>, String)> = BTreeMap::new();
-    let mut externs: BTreeMap<Vec<String>, String> = BTreeMap::new();
     let mut errors = Vec::new();
-    let all_blocks: Vec<String> = specs
-        .blocks
-        .iter()
-        .filter(|b| {
-            !b.imports
-                .iter()
-                .any(|i| i.starts_with("LeanRustGen.Obligation") || i.starts_with("Proofs"))
-        })
-        .map(|b| b.lean_module(&ident))
-        .collect();
-    let block_namespaces: Vec<String> = specs
-        .blocks
-        .iter()
-        .filter(|b| all_blocks.contains(&b.lean_module(&ident)))
-        .map(|b| b.name.clone())
-        .collect();
-
-    for (f, requires, obls) in &resolved {
-        let decl = decls.iter().find(|d| {
-            d.loop_index.is_none()
-                && d.rust
-                    .as_deref()
-                    .and_then(|r| gen::aeneas_unit(r, &ident))
-                    .as_deref()
-                    == Some(f.rust.as_str())
-        });
+    let mut aliases: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    let mut externs: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    let mut models: BTreeMap<String, Model> = BTreeMap::new();
+    for f in &items.models {
+        let unit_of = |d: &AeneasDecl| d.rust.as_deref().and_then(|r| gen::aeneas_unit(r, &ident));
+        let decl = decls
+            .iter()
+            .find(|d| d.loop_index.is_none() && unit_of(d).as_deref() == Some(f.rust.as_str()));
         let Some(decl) = decl else {
-            let opaque = externals.iter().any(|d| {
-                d.rust
-                    .as_deref()
-                    .and_then(|r| gen::aeneas_unit(r, &ident))
-                    .as_deref()
-                    == Some(f.rust.as_str())
-            });
+            let opaque = externals
+                .iter()
+                .any(|d| unit_of(d).as_deref() == Some(f.rust.as_str()));
             errors.push(if opaque {
                 format!("{}:{}: {} is modelled and opaque", f.file, f.line, f.rust)
             } else {
@@ -338,7 +304,6 @@ pub fn extract(c: &Crate) -> Result<(), String> {
             }
             Err(e) => errors.push(e),
         }
-        let entry = obligations.entry(f.module.clone()).or_default();
         let mut model = Model {
             rust: f.rust.clone(),
             lean: lean.clone(),
@@ -366,10 +331,82 @@ pub fn extract(c: &Crate) -> Result<(), String> {
                 }
             }
         }
-        if let Some(r) = requires {
-            if let Some(i) = &r.import {
-                entry.0.insert(i.clone());
-            }
+        let ext = externs.entry(f.module.clone()).or_default();
+        let _ = writeln!(
+            ext,
+            "@[extern \"{}\"]\ndef {lean}.rs : type_of% @{lean} := @{lean}\n",
+            rust_extern(&items, f)
+        );
+        models.insert(f.rust.clone(), model);
+    }
+    if !errors.is_empty() {
+        return Err(errors.join("\n"));
+    }
+
+    let mut written = BTreeSet::new();
+    let funs = gen::model_module(&ident);
+    let open = "open Aeneas Aeneas.Std Result\n";
+    for (module, text) in &aliases {
+        if text.is_empty() {
+            continue;
+        }
+        let m = module_of("Alias", &ident, module);
+        write(
+            &lean_dir.join(gen::module_path(&m)),
+            &format!("{LEAN_HEADER}import {funs}\n{open}\n{text}"),
+            &mut written,
+        )?;
+    }
+    for (module, text) in &externs {
+        let m = module_of("Extern", &ident, module);
+        write(
+            &lean_dir.join(gen::module_path(&m)),
+            &format!("{LEAN_HEADER}import {funs}\n{open}\n{text}"),
+            &mut written,
+        )?;
+    }
+    for d in ["Alias", "Extern"] {
+        prune(&lean_dir.join("LeanRustGen").join(d).join(&ident), &written)?;
+    }
+
+    let (blocks, _) = b.scan().map_err(|e| e.to_string())?;
+    b.generate_cache(&blocks, |_| true)
+        .map_err(|e| e.to_string())?;
+    let specs = Specs::new(c)?;
+    let resolved = resolve_all(c, &items, &specs)?;
+    let all_blocks: Vec<String> = specs
+        .blocks
+        .iter()
+        .filter(|b| {
+            !b.imports
+                .iter()
+                .any(|i| i.starts_with("LeanRustGen.Obligation") || i.starts_with("Proofs"))
+        })
+        .map(|b| b.lean_module(&ident))
+        .collect();
+    let block_namespaces: Vec<String> = specs
+        .blocks
+        .iter()
+        .filter(|b| all_blocks.contains(&b.lean_module(&ident)))
+        .map(|b| b.name.clone())
+        .collect();
+
+    let old = Lock::read(&b.lock_path())?;
+    let mut lock = Lock {
+        version: LOCK_VERSION,
+        aeneas: AENEAS_REV.to_string(),
+        charon: charon_version,
+        model: Vec::new(),
+    };
+    let mut obligations: BTreeMap<Vec<String>, (BTreeSet<String>, String)> = BTreeMap::new();
+    for (f, requires, obls) in &resolved {
+        let Some(mut model) = models.remove(&f.rust) else {
+            continue;
+        };
+        let lean = model.lean.clone();
+        let entry = obligations.entry(f.module.clone()).or_default();
+        if let Some(i) = requires.as_ref().and_then(|r| r.import.as_ref()) {
+            entry.0.insert(i.clone());
         }
         for (label, r) in obls {
             if let Some(i) = &r.import {
@@ -398,7 +435,7 @@ pub fn extract(c: &Crate) -> Result<(), String> {
                 label: label.clone(),
                 spec: r.lean.clone(),
                 spec_block: r.block.clone(),
-                spec_key: r.key.clone(),
+                spec_hash: r.key.clone(),
                 hash: h,
                 status: previous
                     .map(|o| o.status.clone())
@@ -407,32 +444,9 @@ pub fn extract(c: &Crate) -> Result<(), String> {
                 proof: previous.map(|o| o.proof.clone()).unwrap_or_default(),
             });
         }
-        let ext = externs.entry(f.module.clone()).or_default();
-        let _ = writeln!(
-            ext,
-            "@[extern \"{}\"]\ndef {lean}.rs : type_of% @{lean} := @{lean}\n",
-            rust_extern(&items, f)
-        );
         lock.model.push(model);
     }
-    if !errors.is_empty() {
-        return Err(errors.join("\n"));
-    }
 
-    let mut written = BTreeSet::new();
-    let funs = gen::model_module(&ident);
-    let open = "open Aeneas Aeneas.Std Result\n";
-    for (module, text) in &aliases {
-        if text.is_empty() {
-            continue;
-        }
-        let m = module_of("Alias", &ident, module);
-        write(
-            &lean_dir.join(gen::module_path(&m)),
-            &format!("{LEAN_HEADER}import {funs}\n{open}\n{text}"),
-            &mut written,
-        )?;
-    }
     for (module, (imports, text)) in &obligations {
         let m = module_of("Obligation", &ident, module);
         let mut head = format!("{LEAN_HEADER}import {funs}\n");
@@ -457,17 +471,10 @@ pub fn extract(c: &Crate) -> Result<(), String> {
             &mut written,
         )?;
     }
-    for (module, text) in &externs {
-        let m = module_of("Extern", &ident, module);
-        write(
-            &lean_dir.join(gen::module_path(&m)),
-            &format!("{LEAN_HEADER}import {funs}\n{open}\n{text}"),
-            &mut written,
-        )?;
-    }
-    for d in ["Alias", "Obligation", "Extern"] {
-        prune(&lean_dir.join("LeanRustGen").join(d).join(&ident), &written)?;
-    }
+    prune(
+        &lean_dir.join("LeanRustGen").join("Obligation").join(&ident),
+        &written,
+    )?;
     fs::write(b.lock_path(), lock.to_toml()).map_err(|e| e.to_string())?;
     let n: usize = lock.model.iter().map(|m| m.obligation.len()).sum();
     println!(

@@ -265,6 +265,24 @@ impl Builder {
         self.verify(&blocks, &doc_dir)
     }
 
+    /// Generates the cache entries of the `blocks` that `select` accepts and that are not
+    /// cached (with `lake build` and `lean-rust module generate`).
+    pub fn generate_cache(
+        &self,
+        blocks: &[Block],
+        select: impl Fn(&Block) -> bool,
+    ) -> Result<(), Error> {
+        let keys = cache_keys(&self.crate_name, blocks, &self.csimp_key())?;
+        let cache = self.cache_dir();
+        let missing: Vec<usize> = (0..blocks.len())
+            .filter(|&i| select(&blocks[i]) && !cache.join(format!("{}.rs", keys[i])).is_file())
+            .collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        self.generate(blocks, &keys, &missing)
+    }
+
     fn check_toolchain(&self) -> Result<(), Error> {
         let file = self.lean_dir().join("lean-toolchain");
         match fs::read_to_string(&file) {
@@ -293,9 +311,10 @@ impl Builder {
         Ok(items)
     }
 
-    /// The current keys of the specs: the cache keys of the blocks (without the `@[csimp]`
-    /// replacements) by module path, and the hashes of the other functions by unit name.
-    pub fn spec_keys(
+    /// The current hashes of the specs: `sha256:<cache key>` of the blocks (without the
+    /// `@[csimp]` replacements) by module path, and the hashes of the other functions by unit
+    /// name.
+    pub fn spec_hashes(
         &self,
         blocks: &[Block],
         items: &model::CrateItems,
@@ -303,7 +322,7 @@ impl Builder {
         let keys = cache_keys(&self.crate_name, blocks, "")?;
         let mut out: BTreeMap<String, String> = items.hashes.clone();
         for (b, k) in blocks.iter().zip(&keys) {
-            out.insert(module_path_string(&b.path), k.clone());
+            out.insert(module_path_string(&b.path), format!("sha256:{k}"));
         }
         Ok(out)
     }
@@ -347,8 +366,8 @@ impl Builder {
             return Ok(());
         }
         let lock = lock::Lock::read(&self.lock_path()).map_err(Error::new)?;
-        let spec_keys = self.spec_keys(blocks, &items)?;
-        let states = verify::states(&items, &lock, &spec_keys, &self.crate_ident());
+        let spec_hashes = self.spec_hashes(blocks, &items)?;
+        let states = verify::states(&items, &lock, &spec_hashes, &self.crate_ident());
         for m in &states {
             write_if_changed(&doc_dir.join(&m.doc_file), verify::doc_text(m).as_bytes())?;
         }
@@ -432,6 +451,23 @@ impl Builder {
     }
 
     fn generate(&self, blocks: &[Block], keys: &[String], missing: &[usize]) -> Result<(), Error> {
+        let model = self
+            .lean_dir()
+            .join("LeanRustGen")
+            .join("Model")
+            .join(self.crate_ident());
+        if !model.is_dir() {
+            if let Some(&i) = missing
+                .iter()
+                .find(|&&i| depends_on_model(&blocks[i], blocks))
+            {
+                return Err(Error::new(format!(
+                    "lean-rust-build: the lean! block {} ({}) imports the model of the crate, which `cargo lean-rust extract` writes: run it first",
+                    module_path_string(&blocks[i].path),
+                    blocks[i].file
+                )));
+            }
+        }
         let cli = std::env::var_os("LEAN_RUST_CLI")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("lean-rust"));
@@ -970,3 +1006,29 @@ pub const AENEAS_REV: &str = "c5eb4a28cef65e0aa27743105308243e535a2a2b";
 
 /// The version of the Charon bundled with that Aeneas.
 pub const CHARON_VERSION: &str = "0.1.313";
+
+/// `true` when the block imports the crate's model (`LeanRustGen.Model`, `.Alias` or `.Extern`,
+/// written by `cargo lean-rust extract`), directly or through the blocks it uses.
+pub fn depends_on_model(b: &Block, blocks: &[Block]) -> bool {
+    let mut stack = vec![b];
+    let mut seen: Vec<&[String]> = Vec::new();
+    while let Some(x) = stack.pop() {
+        if seen.contains(&x.path.as_slice()) {
+            continue;
+        }
+        seen.push(&x.path);
+        if x.imports.iter().any(|i| {
+            [
+                "LeanRustGen.Model.",
+                "LeanRustGen.Alias.",
+                "LeanRustGen.Extern.",
+            ]
+            .iter()
+            .any(|p| i.starts_with(p))
+        }) {
+            return true;
+        }
+        stack.extend(blocks.iter().filter(|o| x.uses.contains(&o.path)));
+    }
+    false
+}
