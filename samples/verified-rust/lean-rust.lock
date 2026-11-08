@@ -1,0 +1,74 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::bits::popcount_fast"
+lean = "verified_rust.bits.popcount_fast"
+items = [
+  { rust = "crate::bits::popcount_fast", hash = "sha256:de27f7399d58bb3b4c65db62ad8dc591bbe4d329d3b19baa179c1390e19d2a95" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "bits.popcount"
+spec_block = "crate::spec::bits"
+spec_hash = "sha256:da4d02cefcbcb3bf328f607230ddf3b4cb9cbdcd6d4fa6c2ccf34cd5f9b6d14b"
+hash = "sha256:74fff1f401534a6ca7c1bf22bac8ad754fdc6bc21eef47ae02ec86977442348d"
+status = "sorry"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Bits.lean:19"
+
+[[model]]
+rust = "crate::bits::max_u32"
+lean = "verified_rust.bits.max_u32"
+items = [
+  { rust = "crate::bits::max_u32", hash = "sha256:5439802a7e8497c42d6272964fa89162837863f30dd2399438304297a5bbd938" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "bits.max"
+spec_block = "crate::spec::bits"
+spec_hash = "sha256:da4d02cefcbcb3bf328f607230ddf3b4cb9cbdcd6d4fa6c2ccf34cd5f9b6d14b"
+hash = "sha256:6bd1a5271082e1ec13b33deb2810aaa14f240b82b7ca43257d1f536b2a0b0ea2"
+status = "proved"
+axioms = ["Quot.sound", "propext"]
+proof = "lean/Proofs/Bits.lean:6"
+
+[[model.obligation]]
+label = "bound"
+spec = "bits.max_bound"
+spec_block = "crate::spec::bits"
+spec_hash = "sha256:da4d02cefcbcb3bf328f607230ddf3b4cb9cbdcd6d4fa6c2ccf34cd5f9b6d14b"
+hash = "sha256:4c84565648ebfa29e14dcc7c7e2de7404a98ec9c374fba1b4b23e6aacd48773a"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Bits.lean:11"
+
+[[model]]
+rust = "crate::sort::insert_sorted"
+lean = "verified_rust.sort.insert_sorted"
+items = [
+  { rust = "crate::sort::insert_sorted", hash = "sha256:f04e53b848593442201e04f1ad2d0eeabbd2ba922d88c1115ed65691818ac36e" },
+]
+
+[[model.obligation]]
+label = "sorted"
+spec = "sorting.output_sorted"
+spec_block = "crate::spec::sorting"
+spec_hash = "sha256:2d0a029caa3a2d0fc5af54e2290bdbba6e3a1c7f9d48a1347a52048e0781ee00"
+hash = "sha256:0b41d616aff51c2b2e5f72461eb29bffe749dcce022ee8e56391491b5fcd5533"
+status = "missing"
+axioms = []
+proof = ""
+
+[[model.obligation]]
+label = "perm"
+spec = "OutputPerm"
+spec_block = ""
+spec_hash = ""
+hash = "sha256:71ae67469c2c7774b43569142a9c935e889f20c9862beb9b397d93aca8f96cc8"
+status = "sorry"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Sort.lean:6"
