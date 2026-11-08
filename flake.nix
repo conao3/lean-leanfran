@@ -5,6 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     treefmt-nix.url = "github:numtide/treefmt-nix";
+    aeneas.url = "github:AeneasVerif/aeneas/c5eb4a28cef65e0aa27743105308243e535a2a2b";
   };
 
   outputs =
@@ -18,9 +19,14 @@
       ];
 
       perSystem =
-        { pkgs, config, ... }:
         {
-          packages.default = pkgs.stdenv.mkDerivation {
+          pkgs,
+          config,
+          system,
+          ...
+        }:
+        {
+          packages.lean-rust = pkgs.stdenv.mkDerivation {
             pname = "lean-rust";
             version = "0.1.0";
             src = pkgs.lib.fileset.toSource {
@@ -48,6 +54,36 @@
             '';
           };
 
+          packages.cargo-lean-rust = pkgs.rustPlatform.buildRustPackage {
+            pname = "cargo-lean-rust";
+            version = "0.1.0";
+            src = pkgs.lib.fileset.toSource {
+              root = ./.;
+              fileset = pkgs.lib.fileset.unions [
+                ./Cargo.toml
+                ./Cargo.lock
+                ./crates
+                ./tests
+                ./samples
+              ];
+            };
+            cargoLock.lockFile = ./Cargo.lock;
+            cargoBuildFlags = [
+              "-p"
+              "cargo-lean-rust"
+            ];
+            doCheck = false;
+          };
+
+          packages.default = pkgs.symlinkJoin {
+            name = "lean-rs-0.1.0";
+            paths = [
+              config.packages.lean-rust
+              config.packages.cargo-lean-rust
+              inputs.aeneas.packages.${system}.default
+            ];
+          };
+
           treefmt = {
             projectRootFile = "flake.nix";
             programs.nixfmt.enable = true;
@@ -64,6 +100,7 @@
               pkgs.rustfmt
               pkgs.cargo-nextest
               pkgs.gcc
+              inputs.aeneas.packages.${system}.default
               config.treefmt.build.wrapper
             ];
           };
