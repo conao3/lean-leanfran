@@ -70,6 +70,37 @@ namespace (`Point.add` → `point_add`, `find?` → `find_q`, `get!` → `get_ba
 and `#[lean_rust::exported("<Lean name>")]`. A `@[csimp]` replacement in the definition's module
 is what the function runs.
 
+### Polymorphic functions
+
+`rust_instances` (from `LeanRust.Instances`, which `lean!` blocks that use it import) compiles
+a polymorphic function for chosen types and makes it one generic Rust function:
+
+```rust
+lean_rust::lean! {
+    pub mod sorting;
+    r#"
+    def largest {α : Type} [Ord α] [Inhabited α] (xs : List α) : α :=
+      xs.foldl (fun a b => if compare a b == .lt then b else a) default
+
+    rust_instances largest [Nat, String]
+    "#
+}
+
+fn main() {
+    assert_eq!(sorting::largest(vec!["b".to_string(), "a".to_string()]), "b");
+}
+```
+
+`rust_instances f [Nat, String]` defines `f.inst_Nat := @f Nat _` (the instances synthesized)
+and `f.inst_String`; several type parameters take named arguments, `rust_instances g [(α := Nat)
+(β := String)]`. The Rust function `largest<T: __lean_rust_inst::Largest>(xs: Vec<T>) -> T`
+dispatches through a sealed trait implemented for the instantiated types only (another type is
+a rustc error); the trait of a function with several type parameters is implemented for the
+first one, with the others as associated types (`T::T1`). The instantiations are also public
+functions (`largest_inst_nat`), and a `@[csimp]` lemma can replace one of them. A lake project
+compiled with `project generate` imports `LeanRust.Instances` from this repository's `LeanRust`
+library.
+
 ## Install
 
 The CLI is a Lean program. With Nix:
@@ -208,7 +239,9 @@ and the crate's structs and enums, which derive `lean_rust::Model` (and `Clone`)
 | `requires = pre` | the assumption `pre args = true →` of every obligation; the tests draw inputs satisfying it |
 | `ensures(label = post, ..)` | `∀ args, M args ⦃ r => post args r = true ⦄` (`post` takes the arguments, the result unless `()`, and the values of the `&mut` arguments after the call) |
 | `check = false` | no test |
-| `strategy = path` | the proptest strategy of the arguments (a value for one argument, a tuple otherwise) |
+| `strategy = path` | the proptest strategy of the arguments (a value for one argument, a tuple otherwise); of a generic function, a generic function called with the types of each instance |
+| `instances = [u32, i64]` | the types a generic function is tested with (a tuple per instance for several type parameters) |
+| `obligations = generic \| per_instance` | the obligations of a generic function: one for every type (default), or one per type of `instances` (label `<label>.<type>`) |
 
 On an impl block, `#[lean_rust::model]` models every method; a method's own
 `#[lean_rust::model(..)]` gives its specs. `#[lean_rust::opaque]` keeps the body of a function
@@ -219,6 +252,70 @@ writes. `cargo test` compares an opaque function with its model when the model i
 where the model fails. Every loop of a modelled function has a label: `'scan: for ..` in `insert_sorted` is
 `insert_sorted.scan`, an alias of Aeneas's `insert_sorted_loop`, so proofs keep their names
 when loops are added.
+
+### Generic functions
+
+A generic function is tested with the types of `instances`, and its obligation holds for every
+type. Aeneas passes each trait bound as a structure of the trait's methods (`core.cmp.Ord T`);
+the obligation assumes that the structure obeys the laws of a Lean class, stated by
+`LeanRustGen/Lib/AeneasModel.lean` (`LeanRust/AeneasModel.lean`, written by `extract`):
+
+| Bound | Assumption |
+|---|---|
+| `PartialEq`, `Eq` | `[DecidableEq T] [PartialEqModel inst]`: `eq` decides `=` |
+| `PartialOrd` | `[Preorder T] [DecidableRel (· ≤ ·)] [PartialOrdModel inst]`: the comparisons decide `≤` |
+| `Ord` | `[LinearOrder T] [OrdModel inst]`: `cmp` is `compare`, `max` and `min` are `max` and `min` |
+| `Clone` | `[CloneModel inst]`: `clone` returns the value |
+| `Copy` | nothing |
+| `Default` | `[Inhabited T] [DefaultModel inst]`: `default` is `default` |
+
+The classes have `@[step]` lemmas (`ord.partialOrdInst.lt a b ⦃ r => r = decide (a < b) ⦄`),
+and Aeneas's instances of the scalars (all classes), `bool` (`PartialEq`, `Clone`), `()`, `Vec`
+(`PartialEq`, `Clone`), `Box` and arrays (`Clone`) are proved to be models.
+
+```rust
+lean_rust::lean! {
+    #[lean(imports = ["Aeneas"])]
+    pub mod spec;
+    r#"
+    def max_ge {α : Type} [LinearOrder α] (a b r : α) : Bool := decide (a ≤ r ∧ b ≤ r)
+    rust_instances max_ge [Std.U32, Std.I64]
+    "#
+}
+
+#[lean_rust::model(instances = [u32, i64], ensures(ge = spec::max_ge))]
+pub fn max_of<T: Ord + Copy>(a: T, b: T) -> T {
+    if a >= b { a } else { b }
+}
+```
+
+```lean
+-- the obligation
+def max_of.obligation.ge : Prop :=
+  ∀ {T : Type} [LinearOrder T] (corecmpOrdInst : core.cmp.Ord T) [LeanRust.OrdModel corecmpOrdInst]
+    (coremarkerCopyInst : core.marker.Copy T), ∀ a b,
+    max_of corecmpOrdInst coremarkerCopyInst a b ⦃ res => _root_.spec.max_ge a b res (α := T) = true ⦄
+
+theorem max_of.proof.ge : max_of.obligation.ge := by
+  intro T _ ord _ copy a b
+  unfold max_of
+  step*
+  · simp_all [_root_.spec.max_ge]
+  · simp_all [_root_.spec.max_ge]
+    exact le_of_lt (by simpa using ‹_›)
+```
+
+The tests call `max_of::<u32>` and `max_of::<i64>` and the spec `spec::max_ge` with the same
+types: the spec is a polymorphic Lean function instantiated by `rust_instances` for the model
+types of the instances. A bound without a law class (a trait of the crate, `Hash`) needs
+`obligations = per_instance`: each obligation passes Aeneas's instances of the type
+(`core.cmp.OrdU32`, or the crate's `Item.Insts.CoreCmpOrd`) and the instantiation of the spec
+(`spec.max_ge.inst_U32`). A proved `refines` replaces the instantiation of each type whose
+obligation holds: with `generic`, the types whose bounds Aeneas's library models; with
+`per_instance`, the types of the proved obligations. Methods of generic impl blocks take the
+type parameters of the block first, and `derive(lean_rust::Model)` implements `Model` for a
+generic struct or enum when its parameters do (`impl<T: Model> Model for Pair<T>`); a spec
+names it with its Aeneas type (`generic.Pair Std.U32`).
 
 The proof of `M.obligation.l` is `theorem M.proof.l : M.obligation.l` in `lean/Proofs/`.
 `cargo lean-rust check` records one of `proved` (the standard axioms only), `sorry`, `axioms`
@@ -272,8 +369,8 @@ runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `lean-rus
 ## Samples
 
 [`samples/`](samples) has `todo-cli` and `word-count` (`lean!`), `roman-numerals` (a lake
-project with committed generated modules), and `verified-rust`, `sorted-search` and
-`inventory` (Rust functions verified in Lean).
+project with committed generated modules), and `verified-rust`, `sorted-search`, `inventory`
+and `generic-search` (Rust functions verified in Lean, the last one generic).
 
 ## Development
 
@@ -304,8 +401,11 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
   Lean type have two Rust types, except for types of the blocks named in `uses`.
 - Generic structures are generated per instantiation (`Pair Nat Bool` → `PairNatBool`).
 - `#[lean_rust::model]` covers what Aeneas covers (no `unsafe`, interior mutability or
-  concurrency), and not generic functions. A trait method is extracted only for a trait of the
-  crate. The model of an opaque method is not tested.
+  concurrency). A trait method is extracted only for a trait of the crate. The model of an
+  opaque method is not tested. Generic functions take neither const generics, trait objects nor
+  `Fn` bounds; Aeneas has no instances of `Ord` for `String`, `char` and `bool`, nor of the
+  traits of `Option`, `Result` and slices, so a generic proof covers those types only by test.
+- A polymorphic Lean function is public only for the types of its `rust_instances`.
 - Aeneas's output does not build when a parameter has the name of a module of the crate
   (`item` in the module `item`): rename the parameter.
 
