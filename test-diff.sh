@@ -4,6 +4,7 @@
 set -euo pipefail
 ulimit -s 65536
 export LEAN_BACKTRACE=0
+export LEAN_RUST_TEST_VAR=from-the-environment
 lake build lean-rust oracle oracle-io LeanRustTest
 mkdir -p test-out
 generate() {

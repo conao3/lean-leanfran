@@ -1,5 +1,5 @@
-//! IO primitives: results (`EST.Out`), `IO.Error`, the standard streams, `ST.Ref` and the
-//! monotonic clocks.
+//! IO primitives: results (`EST.Out`), handles (the standard streams and files), streams,
+//! `ST.Ref` and the monotonic clocks.
 //!
 //! In Lean 4.35 an `IO` action returns an `EST.Out` (`ok` = constructor 0, `error` =
 //! constructor 1, one object field), while a `BaseIO`/`ST` action returns its value itself. The
@@ -7,14 +7,13 @@
 
 use crate::array::{lean_alloc_sarray, lean_sarray_cptr, lean_sarray_set_size, sarray_bytes};
 use crate::closure::lean_alloc_closure;
+use crate::io_error::{io_error_to_string, of_std};
 use crate::nat::lean_uint64_to_nat;
 use crate::object::*;
-use crate::string::{
-    lean_mk_string, lean_mk_string_from_bytes, lean_string_bytes, lean_string_to_str,
-};
+use crate::string::{lean_mk_string_from_bytes, lean_string_bytes};
 use core::ffi::c_void;
-use std::cell::Cell;
-use std::io::{BufRead, Read, Write};
+use std::cell::{Cell, RefCell};
+use std::io::{BufRead, Read, Seek, SeekFrom, Write};
 
 /* Results */
 
@@ -66,79 +65,144 @@ pub unsafe fn lean_io_result_take_value(r: Obj) -> Obj {
     v
 }
 
-/* IO.Error */
-
-/// Constructor index of `IO.Error.otherError`.
-const IO_ERROR_OTHER: u32 = 1;
-/// Constructor index of `IO.Error.unexpectedEof`.
-const IO_ERROR_EOF: u32 = 17;
-/// Constructor index of `IO.Error.userError`.
-const IO_ERROR_USER: u32 = 18;
-
-/// `IO.userError msg` (consumes `msg`).
-pub unsafe fn lean_mk_io_user_error(msg: Obj) -> Obj {
-    let r = lean_alloc_ctor(IO_ERROR_USER, 1, 0);
-    lean_ctor_set(r, 0, msg);
-    r
+/// The `error` result of a Rust I/O error without a file name.
+pub(crate) unsafe fn io_result_of_error(e: &std::io::Error) -> Obj {
+    lean_io_result_mk_error(of_std(e, None))
 }
 
-/// `IO.Error.otherError code details` (consumes `details`).
-pub unsafe fn lean_mk_io_error_other_error(code: u32, details: Obj) -> Obj {
-    let r = lean_alloc_ctor(IO_ERROR_OTHER, 1, 4);
-    lean_ctor_set(r, 0, details);
-    lean_ctor_set_uint32(r, 8, code);
-    r
-}
-
-/// `IO.Error.unexpectedEof`.
-pub unsafe fn lean_mk_io_error_eof(_unit: Obj) -> Obj {
-    lean_box(IO_ERROR_EOF as usize)
-}
-
-unsafe fn io_error_of(e: &std::io::Error) -> Obj {
-    let code = e.raw_os_error().unwrap_or(0) as u32;
-    lean_mk_io_error_other_error(code, lean_mk_string(&e.to_string()))
-}
-
-unsafe fn io_result_of_error(e: &std::io::Error) -> Obj {
-    lean_io_result_mk_error(io_error_of(e))
-}
-
-/// Text of an `IO.Error` for `uncaught exception:` (user errors and the `details` of the
-/// constructors with a message; the exact `IO.Error.toString` is Lean code).
-unsafe fn io_error_text(e: Obj) -> String {
-    if lean_is_scalar(e) {
-        return if lean_unbox(e) as u32 == IO_ERROR_EOF {
-            "end of file".to_string()
-        } else {
-            String::new()
-        };
-    }
-    let n = lean_ctor_num_objs(e);
-    let details = lean_ctor_get(e, n - 1);
-    let text = lean_string_to_str(details).to_string();
-    if lean_ptr_tag(e) as u32 == IO_ERROR_USER {
-        text
-    } else {
-        let code = lean_ctor_get_uint32(e, 8 * n);
-        format!("{text} (error code: {code})")
+/// `ok ()`, or the `error` result of `r`.
+pub(crate) unsafe fn io_unit(r: std::io::Result<()>) -> Obj {
+    match r {
+        Ok(()) => lean_io_result_mk_ok(lean_box(0)),
+        Err(e) => io_result_of_error(&e),
     }
 }
 
-/// Prints `uncaught exception: <error>` for an `error` result (borrowed).
+/// Prints `uncaught exception: <IO.Error.toString e>` for an `error` result (borrowed).
 pub unsafe fn lean_io_result_show_error(r: Obj) {
-    let text = io_error_text(lean_io_result_get_error(r));
+    let text = io_error_to_string(lean_io_result_get_error(r));
     let _ = std::io::stdout().flush();
     eprintln!("uncaught exception: {text}");
 }
 
 /* Handles */
 
-/// The file behind a `IO.FS.Handle` (only the standard streams are provided).
+/// The file behind a `IO.FS.Handle`.
 pub enum HandleFile {
     Stdin,
     Stdout,
     Stderr,
+    /// A file, a pipe or `/dev/null`, with a read buffer.
+    File(RefCell<FileState>),
+}
+
+/// An open file and the bytes read from it ahead of the reader.
+pub struct FileState {
+    file: std::fs::File,
+    buf: Vec<u8>,
+    pos: usize,
+}
+
+const READ_CHUNK: usize = 8192;
+
+impl FileState {
+    pub fn new(file: std::fs::File) -> Self {
+        FileState {
+            file,
+            buf: Vec::new(),
+            pos: 0,
+        }
+    }
+
+    pub fn file(&self) -> &std::fs::File {
+        &self.file
+    }
+
+    /// Refills the buffer when it is used up; false at the end of the file.
+    fn fill(&mut self) -> std::io::Result<bool> {
+        if self.pos < self.buf.len() {
+            return Ok(true);
+        }
+        self.buf.resize(READ_CHUNK, 0);
+        self.pos = 0;
+        loop {
+            match self.file.read(&mut self.buf) {
+                Ok(n) => {
+                    self.buf.truncate(n);
+                    return Ok(n > 0);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => {
+                    self.buf.clear();
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    /// Up to `n` bytes, fewer only at the end of the file (like `fread`).
+    fn read(&mut self, n: usize, out: &mut [u8]) -> std::io::Result<usize> {
+        let mut got = 0;
+        while got < n {
+            if !self.fill()? {
+                break;
+            }
+            let k = (self.buf.len() - self.pos).min(n - got);
+            out[got..got + k].copy_from_slice(&self.buf[self.pos..self.pos + k]);
+            self.pos += k;
+            got += k;
+        }
+        Ok(got)
+    }
+
+    /// Up to and including the next newline.
+    fn get_line(&mut self) -> std::io::Result<Vec<u8>> {
+        let mut line = Vec::new();
+        while self.fill()? {
+            let rest = &self.buf[self.pos..];
+            match rest.iter().position(|&b| b == b'\n') {
+                Some(i) => {
+                    line.extend_from_slice(&rest[..=i]);
+                    self.pos += i + 1;
+                    break;
+                }
+                None => {
+                    line.extend_from_slice(rest);
+                    self.pos = self.buf.len();
+                }
+            }
+        }
+        Ok(line)
+    }
+
+    /// Moves the file position back over the bytes read ahead, so that the file position is
+    /// the reader's.
+    fn unread(&mut self) -> std::io::Result<()> {
+        let ahead = self.buf.len() - self.pos;
+        self.buf.clear();
+        self.pos = 0;
+        if ahead > 0 {
+            self.file.seek(SeekFrom::Current(-(ahead as i64)))?;
+        }
+        Ok(())
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+        self.unread()?;
+        self.file.write_all(bytes)
+    }
+
+    fn rewind(&mut self) -> std::io::Result<()> {
+        self.buf.clear();
+        self.pos = 0;
+        self.file.seek(SeekFrom::Start(0)).map(|_| ())
+    }
+
+    fn truncate(&mut self) -> std::io::Result<()> {
+        self.unread()?;
+        let at = self.file.stream_position()?;
+        self.file.set_len(at)
+    }
 }
 
 unsafe fn handle_finalize(p: *mut c_void) {
@@ -157,7 +221,12 @@ pub unsafe fn lean_io_wrap_handle(f: HandleFile) -> Obj {
     lean_alloc_external(&HANDLE_CLASS, Box::into_raw(Box::new(f)) as *mut c_void)
 }
 
-unsafe fn handle_file<'a>(h: Obj) -> &'a HandleFile {
+/// An `IO.FS.Handle` for the file `f`.
+pub(crate) unsafe fn wrap_file(f: std::fs::File) -> Obj {
+    lean_io_wrap_handle(HandleFile::File(RefCell::new(FileState::new(f))))
+}
+
+pub(crate) unsafe fn handle_file<'a>(h: Obj) -> &'a HandleFile {
     &*(lean_get_external_data(h) as *const HandleFile)
 }
 
@@ -165,71 +234,92 @@ fn write_to(f: &HandleFile, bytes: &[u8]) -> std::io::Result<()> {
     match f {
         HandleFile::Stdout => std::io::stdout().write_all(bytes),
         HandleFile::Stderr => std::io::stderr().write_all(bytes),
-        HandleFile::Stdin => Err(std::io::Error::from(std::io::ErrorKind::Unsupported)),
+        HandleFile::Stdin => Err(std::io::Error::from_raw_os_error(libc::EBADF)),
+        HandleFile::File(s) => s.borrow_mut().write(bytes),
+    }
+}
+
+/// `Handle.mk : (@& FilePath) → FS.Mode → IO Handle`: `read`, `write`, `writeNew`, `readWrite`
+/// or `append` (0–4).
+pub unsafe fn lean_io_prim_handle_mk(fname: Obj, mode: u8) -> Obj {
+    let path = match crate::fs::path_of(fname) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    let mut o = std::fs::OpenOptions::new();
+    match mode {
+        0 => o.read(true),
+        1 => o.write(true).create(true).truncate(true),
+        2 => o.write(true).create_new(true),
+        3 => o.read(true).write(true),
+        _ => o.append(true).create(true),
+    };
+    match o.open(path) {
+        Ok(f) => lean_io_result_mk_ok(wrap_file(f)),
+        Err(e) => lean_io_result_mk_error(of_std(&e, Some(fname))),
     }
 }
 
 /// `Handle.flush : (@& Handle) → IO Unit`.
 pub unsafe fn lean_io_prim_handle_flush(h: Obj) -> Obj {
-    let r = match handle_file(h) {
+    io_unit(match handle_file(h) {
         HandleFile::Stdout => std::io::stdout().flush(),
         HandleFile::Stderr => std::io::stderr().flush(),
         HandleFile::Stdin => Ok(()),
-    };
-    match r {
-        Ok(()) => lean_io_result_mk_ok(lean_box(0)),
-        Err(e) => io_result_of_error(&e),
-    }
+        HandleFile::File(s) => s.borrow_mut().file.flush(),
+    })
 }
 
 /// `Handle.putStr : (@& Handle) → (@& String) → IO Unit`.
 pub unsafe fn lean_io_prim_handle_put_str(h: Obj, s: Obj) -> Obj {
-    match write_to(handle_file(h), lean_string_bytes(s)) {
-        Ok(()) => lean_io_result_mk_ok(lean_box(0)),
-        Err(e) => io_result_of_error(&e),
-    }
+    io_unit(write_to(handle_file(h), lean_string_bytes(s)))
 }
 
 /// `Handle.write : (@& Handle) → (@& ByteArray) → IO Unit`.
 pub unsafe fn lean_io_prim_handle_write(h: Obj, buf: Obj) -> Obj {
-    match write_to(handle_file(h), sarray_bytes(buf)) {
-        Ok(()) => lean_io_result_mk_ok(lean_box(0)),
-        Err(e) => io_result_of_error(&e),
-    }
+    io_unit(write_to(handle_file(h), sarray_bytes(buf)))
 }
 
 /// `Handle.getLine : (@& Handle) → IO String`: up to and including the next newline.
 pub unsafe fn lean_io_prim_handle_get_line(h: Obj) -> Obj {
-    match handle_file(h) {
+    let r = match handle_file(h) {
         HandleFile::Stdin => {
             let mut line = Vec::new();
-            match std::io::stdin().lock().read_until(b'\n', &mut line) {
-                Ok(_) => lean_io_result_mk_ok(lean_mk_string_from_bytes(&line)),
-                Err(e) => io_result_of_error(&e),
-            }
+            std::io::stdin()
+                .lock()
+                .read_until(b'\n', &mut line)
+                .map(|_| line)
         }
-        _ => io_result_of_error(&std::io::Error::from(std::io::ErrorKind::Unsupported)),
+        HandleFile::File(s) => s.borrow_mut().get_line(),
+        _ => Err(std::io::Error::from_raw_os_error(libc::EBADF)),
+    };
+    match r {
+        Ok(line) => lean_io_result_mk_ok(lean_mk_string_from_bytes(&line)),
+        Err(e) => io_result_of_error(&e),
     }
 }
 
 /// `Handle.read : (@& Handle) → USize → IO ByteArray`.
 pub unsafe fn lean_io_prim_handle_read(h: Obj, nbytes: usize) -> Obj {
-    match handle_file(h) {
-        HandleFile::Stdin => {
-            let r = lean_alloc_sarray(1, 0, nbytes);
-            let buf = core::slice::from_raw_parts_mut(lean_sarray_cptr(r), nbytes);
-            match std::io::stdin().lock().read(buf) {
-                Ok(n) => {
-                    lean_sarray_set_size(r, n);
-                    lean_io_result_mk_ok(r)
-                }
-                Err(e) => {
-                    lean_dec_ref(r);
-                    io_result_of_error(&e)
-                }
-            }
+    let f = handle_file(h);
+    if matches!(f, HandleFile::Stdout | HandleFile::Stderr) {
+        return io_result_of_error(&std::io::Error::from_raw_os_error(libc::EBADF));
+    }
+    let r = lean_alloc_sarray(1, 0, nbytes);
+    let buf = core::slice::from_raw_parts_mut(lean_sarray_cptr(r), nbytes);
+    let n = match f {
+        HandleFile::File(s) => s.borrow_mut().read(nbytes, buf),
+        _ => std::io::stdin().lock().read(buf),
+    };
+    match n {
+        Ok(n) => {
+            lean_sarray_set_size(r, n);
+            lean_io_result_mk_ok(r)
         }
-        _ => io_result_of_error(&std::io::Error::from(std::io::ErrorKind::Unsupported)),
+        Err(e) => {
+            lean_dec_ref(r);
+            io_result_of_error(&e)
+        }
     }
 }
 
@@ -240,7 +330,71 @@ pub unsafe fn lean_io_prim_handle_is_tty(h: Obj) -> u8 {
         HandleFile::Stdin => std::io::stdin().is_terminal(),
         HandleFile::Stdout => std::io::stdout().is_terminal(),
         HandleFile::Stderr => std::io::stderr().is_terminal(),
+        HandleFile::File(s) => s.borrow().file.is_terminal(),
     }) as u8
+}
+
+/// `Handle.rewind : (@& Handle) → IO Unit`.
+pub unsafe fn lean_io_prim_handle_rewind(h: Obj) -> Obj {
+    io_unit(match handle_file(h) {
+        HandleFile::File(s) => s.borrow_mut().rewind(),
+        _ => Err(std::io::Error::from_raw_os_error(libc::ESPIPE)),
+    })
+}
+
+/// `Handle.truncate : (@& Handle) → IO Unit`: truncates the file at the reader's position.
+pub unsafe fn lean_io_prim_handle_truncate(h: Obj) -> Obj {
+    io_unit(match handle_file(h) {
+        HandleFile::File(s) => s.borrow_mut().truncate(),
+        _ => Err(std::io::Error::from_raw_os_error(libc::EINVAL)),
+    })
+}
+
+fn raw_fd(f: &HandleFile) -> i32 {
+    use std::os::fd::AsRawFd;
+    match f {
+        HandleFile::Stdin => 0,
+        HandleFile::Stdout => 1,
+        HandleFile::Stderr => 2,
+        HandleFile::File(s) => s.borrow().file.as_raw_fd(),
+    }
+}
+
+fn flock(f: &HandleFile, op: i32) -> std::io::Result<()> {
+    if unsafe { libc::flock(raw_fd(f), op) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// `Handle.lock : (@& Handle) → (exclusive : Bool) → IO Unit`.
+pub unsafe fn lean_io_prim_handle_lock(h: Obj, exclusive: u8) -> Obj {
+    let op = if exclusive != 0 {
+        libc::LOCK_EX
+    } else {
+        libc::LOCK_SH
+    };
+    io_unit(flock(handle_file(h), op))
+}
+
+/// `Handle.tryLock : (@& Handle) → (exclusive : Bool) → IO Bool`.
+pub unsafe fn lean_io_prim_handle_try_lock(h: Obj, exclusive: u8) -> Obj {
+    let op = if exclusive != 0 {
+        libc::LOCK_EX
+    } else {
+        libc::LOCK_SH
+    };
+    match flock(handle_file(h), op | libc::LOCK_NB) {
+        Ok(()) => lean_io_result_mk_ok(lean_box(1)),
+        Err(e) if e.raw_os_error() == Some(libc::EWOULDBLOCK) => lean_io_result_mk_ok(lean_box(0)),
+        Err(e) => io_result_of_error(&e),
+    }
+}
+
+/// `Handle.unlock : (@& Handle) → IO Unit`.
+pub unsafe fn lean_io_prim_handle_unlock(h: Obj) -> Obj {
+    io_unit(flock(handle_file(h), libc::LOCK_UN))
 }
 
 /* Streams (`IO.FS.Stream.ofHandle`) */

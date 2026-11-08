@@ -302,6 +302,7 @@ dependencies = [
 name = "lean-rust-runtime"
 version = "0.2.0"
 dependencies = [
+ "libc",
  "libm",
  "num-bigint",
  "num-integer",

@@ -399,9 +399,12 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
 ## Limitations
 
 - Objects use non-atomic reference counts; `Task`s run synchronously where they are created.
-- `IO` covers the standard streams, references, the clock and tasks; files, processes and the
-  environment are not implemented (a module calling them fails to generate, listing the
-  missing externs).
+- The runtime builds on Unix (Linux and macOS).
+- `IO` follows the C runtime: files, directories, the environment, child processes (`fork` and
+  `execvp`) and promises, with the same `IO.Error`s. Since tasks run synchronously,
+  `IO.Process.output` reads the standard output of the child before its standard error, the
+  result of an unresolved promise cannot be awaited, `IO.getNumHeartbeats` returns the value
+  last set, and `allocprof` prints no profile.
 - Each generated module defines its own structs and enums; two modules that mention the same
   Lean type have two Rust types, except for types of the blocks named in `uses`.
 - Generic structures are generated per instantiation (`Pair Nat Bool` → `PairNatBool`).

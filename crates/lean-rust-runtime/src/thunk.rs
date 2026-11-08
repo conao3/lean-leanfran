@@ -95,7 +95,13 @@ pub unsafe fn lean_task_spawn(c: Obj, prio: Obj) -> Obj {
 #[inline]
 pub unsafe fn lean_task_get(t: Obj) -> Obj {
     debug_check_live(t, "task read");
-    (*to_task(t)).m_value
+    let v = (*to_task(t)).m_value;
+    if v.is_null() {
+        lean_internal_panic(
+            "the result of a promise that is not resolved is read (tasks run synchronously, so nothing can resolve it later)",
+        );
+    }
+    v
 }
 
 /// `Task.get` (consumes `t`).
@@ -155,9 +161,13 @@ pub unsafe fn lean_io_check_canceled_core() -> bool {
 /// `IO.cancel`: no-op, tasks are already finished.
 pub unsafe fn lean_io_cancel_core(_t: Obj) {}
 
-/// `IO.getTaskState`: always finished (2).
-pub unsafe fn lean_io_get_task_state_core(_t: Obj) -> u8 {
-    2
+/// `IO.getTaskState`: finished (2), or running (1) for the result of an unresolved promise, as the C runtime reports it.
+pub unsafe fn lean_io_get_task_state_core(t: Obj) -> u8 {
+    if (*to_task(t)).m_value.is_null() {
+        1
+    } else {
+        2
+    }
 }
 
 /* Tasks of `BaseIO` actions */
@@ -211,5 +221,78 @@ pub unsafe fn lean_io_wait(t: Obj) -> Obj {
 pub unsafe fn lean_io_wait_any(tasks: Obj) -> Obj {
     let v = lean_task_get(lean_ctor_get(tasks, 0));
     lean_inc(v);
+    v
+}
+
+/* Promises */
+
+unsafe fn promise_finalize(p: *mut core::ffi::c_void) {
+    let t = *Box::from_raw(p as *mut Obj);
+    if (*to_task(t)).m_value.is_null() {
+        (*to_task(t)).m_value = lean_box(0);
+    }
+    lean_dec(t);
+}
+
+unsafe fn promise_foreach(_p: *mut core::ffi::c_void, _f: Obj) {}
+
+static PROMISE_CLASS: ExternalClass = ExternalClass {
+    m_finalize: promise_finalize,
+    m_foreach: promise_foreach,
+};
+
+unsafe fn promise_task(p: Obj) -> Obj {
+    *(lean_get_external_data(p) as *const Obj)
+}
+
+/// `IO.Promise.new : BaseIO (Promise α)`: a promise whose task `Task (Option α)` holds no value
+/// until `resolve` (`some v`) or until the promise is dropped (`none`).
+pub unsafe fn lean_io_promise_new() -> Obj {
+    let t = lean_alloc_small_object(size_of::<TaskObject>());
+    lean_set_st_header(t, LEAN_TASK as u32, 0);
+    (*to_task(t)).m_value = ptr::null_mut();
+    (*to_task(t)).m_imp = ptr::null_mut();
+    lean_alloc_external(
+        &PROMISE_CLASS,
+        Box::into_raw(Box::new(t)) as *mut core::ffi::c_void,
+    )
+}
+
+/// `IO.Promise.resolve : α → (@& Promise α) → BaseIO Unit` (consumes `value`); a second
+/// `resolve` keeps the first value.
+pub unsafe fn lean_io_promise_resolve(value: Obj, p: Obj) -> Obj {
+    let t = promise_task(p);
+    if (*to_task(t)).m_value.is_null() {
+        let s = lean_alloc_ctor(1, 1, 0);
+        lean_ctor_set(s, 0, value);
+        (*to_task(t)).m_value = s;
+    } else {
+        lean_dec(value);
+    }
+    lean_box(0)
+}
+
+/// `IO.Promise.result? : (@& Promise α) → Task (Option α)`.
+pub unsafe fn lean_io_promise_result_opt(p: Obj) -> Obj {
+    let t = promise_task(p);
+    lean_inc(t);
+    t
+}
+
+/// `Option.getOrBlock! : Option α → α` (consumes `o`): the value, or a panic for a promise
+/// dropped without a value.
+pub unsafe fn lean_option_get_or_block(o: Obj) -> Obj {
+    if lean_is_scalar(o) {
+        crate::panic::lean_panic(
+            "PANIC: Promise.result!: promise has been dropped without ever being resolved",
+            true,
+        );
+        lean_internal_panic(
+            "Promise.result!: promise has been dropped without ever being resolved",
+        );
+    }
+    let v = lean_ctor_get(o, 0);
+    lean_inc(v);
+    lean_dec(o);
     v
 }

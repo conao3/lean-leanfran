@@ -14,13 +14,16 @@
 pub mod array;
 pub mod closure;
 pub mod float;
+pub mod fs;
 pub mod int;
 pub mod io;
+pub mod io_error;
 pub mod marshal;
 pub mod model;
 pub mod nat;
 pub mod object;
 pub mod panic;
+pub mod process;
 pub mod string;
 pub mod thunk;
 pub mod uint;
@@ -28,13 +31,16 @@ pub mod uint;
 pub use array::*;
 pub use closure::*;
 pub use float::*;
+pub use fs::*;
 pub use int::*;
 pub use io::*;
+pub use io_error::*;
 pub use marshal::*;
 pub use model::*;
 pub use nat::*;
 pub use object::*;
 pub use panic::*;
+pub use process::*;
 pub use string::*;
 pub use thunk::*;
 pub use uint::*;
@@ -42,6 +48,36 @@ pub use uint::*;
 /// `System.Platform.getNumBits`: the word size of the target.
 pub unsafe fn lean_system_platform_nbits(_unit: Obj) -> Obj {
     lean_box(usize::BITS as usize)
+}
+
+/// `System.Platform.getIsWindows`.
+pub unsafe fn lean_system_platform_windows(_unit: Obj) -> u8 {
+    cfg!(windows) as u8
+}
+
+/// `System.Platform.getIsOSX`.
+pub unsafe fn lean_system_platform_osx(_unit: Obj) -> u8 {
+    cfg!(target_os = "macos") as u8
+}
+
+/// `System.Platform.getIsLinux`.
+pub unsafe fn lean_system_platform_linux(_unit: Obj) -> u8 {
+    cfg!(target_os = "linux") as u8
+}
+
+/// `System.Platform.getIsEmscripten`.
+pub unsafe fn lean_system_platform_emscripten(_unit: Obj) -> u8 {
+    cfg!(target_os = "emscripten") as u8
+}
+
+/// `System.Platform.getTarget`: the target triple the runtime was compiled for.
+pub unsafe fn lean_system_platform_target(_unit: Obj) -> Obj {
+    lean_mk_string(env!("LEAN_RUST_TARGET"))
+}
+
+/// `System.Platform.Internal.getHardwareConcurrency`: the number of hardware threads, or 0.
+pub unsafe fn lean_internal_get_hardware_concurrency(_unit: Obj) -> u32 {
+    std::thread::available_parallelism().map_or(0, |n| n.get() as u32)
 }
 
 /// `ptrAddrUnsafe`.

@@ -8,6 +8,10 @@ use std::path::Path;
 fn main() {
     let src = Path::new("src");
     println!("cargo:rerun-if-changed=src");
+    println!(
+        "cargo:rustc-env=LEAN_RUST_TARGET={}",
+        std::env::var("TARGET").unwrap()
+    );
     let mut names = Vec::new();
     let mut entries: Vec<_> = fs::read_dir(src)
         .unwrap()
