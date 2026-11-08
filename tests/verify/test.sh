@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # cargo lean-rust on copies of this crate: extract and check reproduce the committed files and
-# states, a change of a function, of a function it calls or of a spec makes its obligations
-# stale, require = "proved" stops the build, a wrong spec path or argument type is a rustc
-# error, and the test of a refines catches a wrong implementation.
+# states, a proof that does not build is failed, a change of a function, of a function it calls
+# or of a spec makes its obligations stale, require = "proved" stops the build, a wrong spec path
+# or argument type is a rustc error, and the test of a refines catches a wrong implementation.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 src="$root/tests/verify"
@@ -55,6 +55,17 @@ diff -r -I '^ *Source: ' "$src/lean/LeanRustGen" "$d/lean/LeanRustGen" ||
 diff <(grep -v '^proof = ' "$src/lean-rust.lock") <(grep -v '^proof = ' "$d/lean-rust.lock") ||
   fail "extract and check do not reproduce lean-rust.lock"
 echo "verify-test: extract and check reproduce the committed model, obligations, csimp and lockfile"
+cat >"$d/lean/Proofs/Halve.lean" <<'LEAN'
+import LeanRustGen.Obligation.lean_rust_verify_test.arith
+
+theorem lean_rust_verify_test.arith.halve.proof.halved :
+    lean_rust_verify_test.arith.halve.obligation.halved := by
+  exact 0
+LEAN
+(cd "$d" && "$clr" lean-rust check >/dev/null)
+expect_status "$d" crate::arith::halve halved failed
+expect_status "$d" crate::arith::bigger refines proved
+echo "verify-test: a proof whose file does not build is failed, and the others are checked"
 
 d=$(copy stale)
 sed -i 's|    x / 2|    x / 4|' "$d/src/arith.rs"
