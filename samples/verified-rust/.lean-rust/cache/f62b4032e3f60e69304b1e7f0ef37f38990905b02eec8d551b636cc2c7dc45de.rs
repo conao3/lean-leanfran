@@ -477,10 +477,253 @@ pub(crate) unsafe fn l_sorting_input__sorted(mut x_1: Obj, mut x_2: Obj) -> u8 {
 )]
 pub(crate) unsafe fn l_sorting_input__sorted___redArg(mut x_1: Obj) -> u8 {
     let mut x_2: Obj = rt::lean_box(0);
-    let mut x_3: u8 = 0;
+    let mut x_3: Obj = rt::lean_box(0);
+    let mut x_4: Obj = rt::lean_box(0);
+    let mut x_5: u8 = 0;
+    let mut x_6: u8 = 0;
     x_2 = l_Aeneas_Std_Slice_val___redArg(x_1);
-    x_3 = l_sorting_sorted(x_2);
+    x_3 = l_List_lengthTR___redArg(x_2);
+    x_4 = l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2_();
+    x_5 = rt::lean_nat_dec_lt(x_3, x_4);
+    rt::lean_dec(x_3);
+    match x_5 as u32 {
+        0 => {
+            rt::lean_dec(x_2);
+            return x_5;
+        }
+        1 => {
+            x_6 = l_sorting_sorted(x_2);
+            return x_6;
+        }
+        _ => rt::lean_internal_panic_unreachable(),
+    }
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    unused_unsafe,
+    clippy::all
+)]
+pub(crate) unsafe fn l_List_lengthTR___redArg(mut x_1: Obj) -> Obj {
+    let mut x_2: Obj = rt::lean_box(0);
+    let mut x_3: Obj = rt::lean_box(0);
+    x_2 = rt::lean_unsigned_to_nat(0u32);
+    x_3 = l_List_lengthTRAux___redArg(x_1, x_2);
     return x_3;
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    unused_unsafe,
+    clippy::all
+)]
+pub(crate) unsafe fn l_List_lengthTRAux___redArg(mut x_1: Obj, mut x_2: Obj) -> Obj {
+    let mut x_3: Obj = rt::lean_box(0);
+    let mut x_4: Obj = rt::lean_box(0);
+    let mut x_5: Obj = rt::lean_box(0);
+    let mut x_6: Obj = rt::lean_box(0);
+    let mut __blk: u32 = 0;
+    'body: loop {
+        match __blk {
+            0 => match rt::lean_obj_tag(x_1) {
+                0 => {
+                    return x_2;
+                }
+                1 => {
+                    x_3 = rt::lean_ctor_get(x_1, 1);
+                    x_4 = rt::lean_unsigned_to_nat(1u32);
+                    x_5 = rt::lean_nat_add(x_2, x_4);
+                    rt::lean_dec(x_2);
+                    {
+                        let t_0 = x_3;
+                        let t_1 = x_5;
+                        x_1 = t_0;
+                        x_2 = t_1;
+                    }
+                    __blk = 0;
+                    continue 'body;
+                }
+                _ => rt::lean_internal_panic_unreachable(),
+            },
+            _ => rt::lean_internal_panic_unreachable(),
+        }
+    }
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    clippy::all
+)]
+unsafe fn l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2__init(
+) -> Obj {
+    let mut x_1: Obj = rt::lean_box(0);
+    x_1 = l_Aeneas_Std_definition___closed__1_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2_();
+    return x_1;
+}
+#[allow(dead_code, non_snake_case, clippy::all)]
+pub(crate) unsafe fn l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2_(
+) -> Obj {
+    thread_local! { static CELL: core::cell::OnceCell<Obj> = const { core::cell::OnceCell::new() }; }
+    CELL.with(|c| *c.get_or_init(|| unsafe { let v = l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2__init(); rt::lean_mark_persistent(v); v }))
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    clippy::all
+)]
+unsafe fn l_Aeneas_Std_definition___closed__1_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2__init(
+) -> Obj {
+    let mut x_1: Obj = rt::lean_box(0);
+    let mut x_2: Obj = rt::lean_box(0);
+    let mut x_3: Obj = rt::lean_box(0);
+    x_1 = rt::lean_unsigned_to_nat(1u32);
+    x_2 = l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2_();
+    x_3 = rt::lean_nat_sub(x_2, x_1);
+    return x_3;
+}
+#[allow(dead_code, non_snake_case, clippy::all)]
+pub(crate) unsafe fn l_Aeneas_Std_definition___closed__1_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2_(
+) -> Obj {
+    thread_local! { static CELL: core::cell::OnceCell<Obj> = const { core::cell::OnceCell::new() }; }
+    CELL.with(|c| *c.get_or_init(|| unsafe { let v = l_Aeneas_Std_definition___closed__1_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2__init(); rt::lean_mark_persistent(v); v }))
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    clippy::all
+)]
+unsafe fn l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2__init(
+) -> Obj {
+    let mut x_1: Obj = rt::lean_box(0);
+    let mut x_2: Obj = rt::lean_box(0);
+    let mut x_3: Obj = rt::lean_box(0);
+    x_1 = l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2_();
+    x_2 = rt::lean_unsigned_to_nat(2u32);
+    x_3 = rt::lean_nat_pow(x_2, x_1);
+    return x_3;
+}
+#[allow(dead_code, non_snake_case, clippy::all)]
+pub(crate) unsafe fn l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2_(
+) -> Obj {
+    thread_local! { static CELL: core::cell::OnceCell<Obj> = const { core::cell::OnceCell::new() }; }
+    CELL.with(|c| *c.get_or_init(|| unsafe { let v = l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_1727204241____hygCtx___hyg_2__init(); rt::lean_mark_persistent(v); v }))
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    clippy::all
+)]
+unsafe fn l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2__init(
+) -> Obj {
+    let mut x_1: Obj = rt::lean_box(0);
+    x_1 = l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2_();
+    return x_1;
+}
+#[allow(dead_code, non_snake_case, clippy::all)]
+pub(crate) unsafe fn l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2_(
+) -> Obj {
+    thread_local! { static CELL: core::cell::OnceCell<Obj> = const { core::cell::OnceCell::new() }; }
+    CELL.with(|c| *c.get_or_init(|| unsafe { let v = l_Aeneas_Std_definition_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2__init(); rt::lean_mark_persistent(v); v }))
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    clippy::all
+)]
+unsafe fn l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2__init(
+) -> Obj {
+    let mut x_1: u8 = 0;
+    let mut x_2: Obj = rt::lean_box(0);
+    x_1 = 0u8;
+    x_2 = l_Aeneas_Std_UScalarTy_numBits(x_1);
+    return x_2;
+}
+#[allow(dead_code, non_snake_case, clippy::all)]
+pub(crate) unsafe fn l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2_(
+) -> Obj {
+    thread_local! { static CELL: core::cell::OnceCell<Obj> = const { core::cell::OnceCell::new() }; }
+    CELL.with(|c| *c.get_or_init(|| unsafe { let v = l_Aeneas_Std_definition___closed__0_00___x40_Aeneas_Std_Scalar_Core_390856329____hygCtx___hyg_2__init(); rt::lean_mark_persistent(v); v }))
+}
+
+#[allow(
+    dead_code,
+    non_snake_case,
+    unused_mut,
+    unused_assignments,
+    unused_variables,
+    unreachable_code,
+    unused_unsafe,
+    clippy::all
+)]
+pub(crate) unsafe fn l_Aeneas_Std_UScalarTy_numBits(mut x_1: u8) -> Obj {
+    let mut x_2: Obj = rt::lean_box(0);
+    let mut x_3: Obj = rt::lean_box(0);
+    let mut x_4: Obj = rt::lean_box(0);
+    let mut x_5: Obj = rt::lean_box(0);
+    let mut x_6: Obj = rt::lean_box(0);
+    let mut x_7: Obj = rt::lean_box(0);
+    match x_1 as u32 {
+        0 => {
+            x_2 = l_System_Platform_numBits();
+            return x_2;
+        }
+        1 => {
+            x_3 = rt::lean_unsigned_to_nat(8u32);
+            return x_3;
+        }
+        2 => {
+            x_4 = rt::lean_unsigned_to_nat(16u32);
+            return x_4;
+        }
+        3 => {
+            x_5 = rt::lean_unsigned_to_nat(32u32);
+            return x_5;
+        }
+        4 => {
+            x_6 = rt::lean_unsigned_to_nat(64u32);
+            return x_6;
+        }
+        5 => {
+            x_7 = rt::lean_unsigned_to_nat(128u32);
+            return x_7;
+        }
+        _ => rt::lean_internal_panic_unreachable(),
+    }
 }
 
 #[allow(

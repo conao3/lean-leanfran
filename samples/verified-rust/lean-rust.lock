@@ -57,11 +57,11 @@ items = [
 label = "sorted"
 spec = "sorting.output_sorted"
 spec_block = "crate::spec::sorting"
-spec_hash = "sha256:2d0a029caa3a2d0fc5af54e2290bdbba6e3a1c7f9d48a1347a52048e0781ee00"
-hash = "sha256:a3ae9d2a00a92e253825405674a8c4db0fbea1f316fdb24500c215fedb556d38"
-status = "missing"
-axioms = []
-proof = ""
+spec_hash = "sha256:7277e8829a97d895950f03c13aa39d0757f238677d3892262c08d778b240d416"
+hash = "sha256:d80a1a1e4c9ac8c195c1a2bdd1b8dc341c88c07eec0370ac8e0f311498d3674b"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Sort.lean:121"
 
 [[model.obligation]]
 label = "perm"
@@ -69,6 +69,6 @@ spec = "OutputPerm"
 spec_block = ""
 spec_hash = ""
 hash = "sha256:edbfc7e21421a366cdcedfefb8bc43c0d4c41b081aebdb3d62a76316b4182620"
-status = "sorry"
+status = "proved"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
-proof = "lean/Proofs/Sort.lean:6"
+proof = "lean/Proofs/Sort.lean:129"
