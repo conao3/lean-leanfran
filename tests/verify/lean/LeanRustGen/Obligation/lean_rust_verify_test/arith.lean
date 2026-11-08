@@ -9,17 +9,17 @@ open specs counters calls
 
 /-- `refines` of `crate::arith::bigger`. -/
 def lean_rust_verify_test.arith.bigger.obligation.refines : Prop :=
-  ∀ a b, lean_rust_verify_test.arith.bigger a b = ok (specs.bigger a b)
+  ∀ a b, lean_rust_verify_test.arith.bigger a b = ok (_root_.specs.bigger a b)
 
 /-- `refines` of `crate::arith::double`. -/
 def lean_rust_verify_test.arith.double.obligation.refines : Prop :=
-  ∀ x, lean_rust_verify_test.arith.double x = ok (specs.double x)
+  ∀ x, lean_rust_verify_test.arith.double x = ok (_root_.specs.double x)
 
 /-- `halved` of `crate::arith::halve`. -/
 def lean_rust_verify_test.arith.halve.obligation.halved : Prop :=
-  ∀ x, lean_rust_verify_test.arith.halve x ⦃ res => specs.halved x res = true ⦄
+  ∀ x, lean_rust_verify_test.arith.halve x ⦃ res => _root_.specs.halved x res = true ⦄
 
 /-- `pos` of `crate::arith::succ`. -/
 def lean_rust_verify_test.arith.succ.obligation.pos : Prop :=
-  ∀ x, specs.small x = true → lean_rust_verify_test.arith.succ x ⦃ res => specs.positive x res = true ⦄
+  ∀ x, _root_.specs.small x = true → lean_rust_verify_test.arith.succ x ⦃ res => _root_.specs.positive x res = true ⦄
 

@@ -9,9 +9,9 @@ open bits sorting
 
 /-- `sorted` of `crate::sort::insert_sorted`. -/
 def verified_rust.sort.insert_sorted.obligation.sorted : Prop :=
-  ∀ x xs, sorting.input_sorted x xs = true → verified_rust.sort.insert_sorted x xs ⦃ res => sorting.output_sorted x xs res = true ⦄
+  ∀ x xs, _root_.sorting.input_sorted x xs = true → verified_rust.sort.insert_sorted x xs ⦃ res => _root_.sorting.output_sorted x xs res = true ⦄
 
 /-- `perm` of `crate::sort::insert_sorted`. -/
 def verified_rust.sort.insert_sorted.obligation.perm : Prop :=
-  ∀ x xs, sorting.input_sorted x xs = true → verified_rust.sort.insert_sorted x xs ⦃ res => OutputPerm x xs res ⦄
+  ∀ x xs, _root_.sorting.input_sorted x xs = true → verified_rust.sort.insert_sorted x xs ⦃ res => OutputPerm x xs res ⦄
 

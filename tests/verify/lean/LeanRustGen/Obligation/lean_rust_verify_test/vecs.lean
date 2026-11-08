@@ -10,5 +10,5 @@ open specs counters calls
 
 /-- `zeroed` of `crate::vecs::zero_all`. -/
 def lean_rust_verify_test.vecs.zero_all.obligation.zeroed : Prop :=
-  ∀ v, lean_rust_verify_test.vecs.zero_all v ⦃ res => specs.all_zero v res = true ⦄
+  ∀ v, lean_rust_verify_test.vecs.zero_all v ⦃ res => _root_.specs.all_zero v res = true ⦄
 

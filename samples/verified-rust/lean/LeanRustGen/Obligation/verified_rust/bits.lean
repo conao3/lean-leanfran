@@ -9,13 +9,13 @@ open bits sorting
 
 /-- `refines` of `crate::bits::popcount_fast`. -/
 def verified_rust.bits.popcount_fast.obligation.refines : Prop :=
-  ∀ x, verified_rust.bits.popcount_fast x = ok (bits.popcount x)
+  ∀ x, verified_rust.bits.popcount_fast x = ok (_root_.bits.popcount x)
 
 /-- `refines` of `crate::bits::max_u32`. -/
 def verified_rust.bits.max_u32.obligation.refines : Prop :=
-  ∀ a b, verified_rust.bits.max_u32 a b = ok (bits.max a b)
+  ∀ a b, verified_rust.bits.max_u32 a b = ok (_root_.bits.max a b)
 
 /-- `bound` of `crate::bits::max_u32`. -/
 def verified_rust.bits.max_u32.obligation.bound : Prop :=
-  ∀ a b, verified_rust.bits.max_u32 a b ⦃ res => bits.max_bound a b res = true ⦄
+  ∀ a b, verified_rust.bits.max_u32 a b ⦃ res => _root_.bits.max_bound a b res = true ⦄
 

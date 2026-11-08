@@ -9,5 +9,5 @@ open specs counters calls
 
 /-- `refines` of `crate::counter::Counter::reset`. -/
 def lean_rust_verify_test.counter.Counter.reset.obligation.refines : Prop :=
-  ∀ self, lean_rust_verify_test.counter.Counter.reset self = ok (counters.reset self)
+  ∀ self, lean_rust_verify_test.counter.Counter.reset self = ok (_root_.counters.reset self)
 

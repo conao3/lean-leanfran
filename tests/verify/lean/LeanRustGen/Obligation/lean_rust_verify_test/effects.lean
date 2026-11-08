@@ -9,5 +9,5 @@ open specs counters calls
 
 /-- `same` of `crate::effects::guarded`. -/
 def lean_rust_verify_test.effects.guarded.obligation.same : Prop :=
-  ∀ x, lean_rust_verify_test.effects.guarded x ⦃ res => specs.unchanged x res = true ⦄
+  ∀ x, lean_rust_verify_test.effects.guarded x ⦃ res => _root_.specs.unchanged x res = true ⦄
 

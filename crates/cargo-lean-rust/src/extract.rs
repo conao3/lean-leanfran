@@ -138,9 +138,15 @@ pub fn resolve_all<'a>(
     }
 }
 
+/// The spec in an obligation: a generated function by its name from the root, which the
+/// namespaces the obligation module opens cannot capture.
 fn to_spec(r: &Resolved) -> Spec {
     Spec {
-        lean: r.lean.clone(),
+        lean: if r.boolean {
+            format!("_root_.{}", r.lean)
+        } else {
+            r.lean.clone()
+        },
         boolean: r.boolean,
     }
 }
