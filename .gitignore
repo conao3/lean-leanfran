@@ -4,3 +4,4 @@
 /test-out/
 /.claude-dev/
 .lean-rust/workspace/
+/.lake-aeneas/

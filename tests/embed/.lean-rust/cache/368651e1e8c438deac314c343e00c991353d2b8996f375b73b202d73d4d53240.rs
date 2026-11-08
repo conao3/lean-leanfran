@@ -84,3 +84,9 @@ pub fn sum_to(arg0: rt::Nat) -> rt::Nat {
         __v
     }
 }
+
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub mod __lean_rust_spec {
+    pub use super::*;
+}

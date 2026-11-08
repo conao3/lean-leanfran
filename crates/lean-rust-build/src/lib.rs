@@ -11,13 +11,25 @@
 //! written into the crate's Lean package (`lean/LeanRustGen/Embed/`), checked with `lake build`
 //! and generated with `lean-rust module generate`.
 //!
+//! It also compares the `#[lean_rust::model]` functions with the lockfile `lean-rust.lock`
+//! (without Lean or Charon), reports the stale and unextracted obligations with
+//! `cargo:warning`, and writes the rustdoc of their states.
+//!
 //! Environment variables: `LEAN_RUST_CLI` (the `lean-rust` executable, default from `PATH`),
-//! `LEAN_RUST_OFFLINE=1` (use the cache only), `LEAN_RUST_EXTRACTING=1` (do nothing).
+//! `LEAN_RUST_OFFLINE=1` (use the cache only), `LEAN_RUST_EXTRACTING=1` (set by
+//! `cargo lean-rust extract`: use the cache only and skip the lockfile),
+//! `LEAN_RUST_REQUIRE=proved` (fail unless every obligation is proved, as
+//! `[package.metadata.lean-rust] require = "proved"`).
 
+pub mod gen;
+pub mod lock;
+pub mod model;
 pub mod syntax;
+pub mod verify;
 
+use model::file_module;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -156,26 +168,48 @@ impl Builder {
         }
     }
 
-    fn crate_ident(&self) -> String {
+    pub fn crate_ident(&self) -> String {
         self.crate_name.replace('-', "_")
     }
 
-    fn cache_dir(&self) -> PathBuf {
+    pub fn cache_dir(&self) -> PathBuf {
         self.manifest_dir.join(".lean-rust").join("cache")
     }
 
-    fn lean_dir(&self) -> PathBuf {
+    pub fn lean_dir(&self) -> PathBuf {
         self.manifest_dir.join("lean")
     }
 
-    /// Generates the Rust modules of all `lean!` blocks of the crate into `OUT_DIR`.
+    /// The lockfile of the crate.
+    pub fn lock_path(&self) -> PathBuf {
+        self.manifest_dir.join("lean-rust.lock")
+    }
+
+    /// The `@[csimp]` replacements `cargo lean-rust check` writes.
+    pub fn csimp_path(&self) -> PathBuf {
+        self.lean_dir().join("LeanRustGen").join("Csimp.lean")
+    }
+
+    /// The part of every cache key that depends on the `@[csimp]` replacements.
+    pub fn csimp_key(&self) -> String {
+        match fs::read(self.csimp_path()) {
+            Ok(text) => Sha256::digest(&text)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect(),
+            Err(_) => String::new(),
+        }
+    }
+
+    /// Generates the Rust modules of all `lean!` blocks of the crate into `OUT_DIR`, and
+    /// compares the modelled functions with the lockfile.
     pub fn compile(&self) -> Result<(), Error> {
         println!("cargo:rerun-if-env-changed=LEAN_RUST_EXTRACTING");
         println!("cargo:rerun-if-env-changed=LEAN_RUST_OFFLINE");
         println!("cargo:rerun-if-env-changed=LEAN_RUST_CLI");
-        if std::env::var("LEAN_RUST_EXTRACTING").as_deref() == Ok("1") {
-            return Ok(());
-        }
+        println!("cargo:rerun-if-env-changed=LEAN_RUST_REQUIRE");
+        let extracting = std::env::var("LEAN_RUST_EXTRACTING").as_deref() == Ok("1");
+        self.check_toolchain()?;
         let (blocks, files) = self.scan()?;
         for f in &files {
             println!("cargo:rerun-if-changed={}", f.display());
@@ -184,7 +218,7 @@ impl Builder {
         if src.is_dir() {
             println!("cargo:rerun-if-changed={}", src.display());
         }
-        let keys = cache_keys(&self.crate_name, &blocks)?;
+        let keys = cache_keys(&self.crate_name, &blocks, &self.csimp_key())?;
         let cache = self.cache_dir();
         let mut missing = Vec::new();
         for (i, b) in blocks.iter().enumerate() {
@@ -195,7 +229,7 @@ impl Builder {
                 missing.push(i);
             }
         }
-        if !missing.is_empty() {
+        if !missing.is_empty() && !extracting {
             if std::env::var("LEAN_RUST_OFFLINE").as_deref() == Ok("1") {
                 let names: Vec<String> = missing
                     .iter()
@@ -221,6 +255,114 @@ impl Builder {
         }
         for f in self.lean_user_files() {
             println!("cargo:rerun-if-changed={}", f.display());
+        }
+        println!("cargo:rerun-if-changed={}", self.lock_path().display());
+        let doc_dir = self.out_dir.join("lean_rust").join("doc");
+        fs::create_dir_all(&doc_dir)?;
+        if extracting {
+            return Ok(());
+        }
+        self.verify(&blocks, &doc_dir)
+    }
+
+    fn check_toolchain(&self) -> Result<(), Error> {
+        let file = self.lean_dir().join("lean-toolchain");
+        match fs::read_to_string(&file) {
+            Ok(t) if t.trim() != LEAN_TOOLCHAIN => Err(Error::new(format!(
+                "lean-rust-build: {} is `{}`; this lean-rust needs `{LEAN_TOOLCHAIN}`",
+                file.display(),
+                t.trim()
+            ))),
+            _ => Ok(()),
+        }
+    }
+
+    /// The modelled functions, opaque functions, `use`s and item hashes of `src/**/*.rs`.
+    pub fn scan_items(&self) -> Result<model::CrateItems, Error> {
+        let mut files = Vec::new();
+        collect_rs(&self.manifest_dir.join("src"), &mut files)?;
+        files.sort();
+        let mut items = model::CrateItems::default();
+        for f in &files {
+            let rel = normalize_path(f.strip_prefix(&self.manifest_dir).unwrap_or(f));
+            let text = fs::read_to_string(f)?;
+            let ast = syn::parse_file(&text)
+                .map_err(|e| Error::new(format!("lean-rust-build: cannot parse {rel}: {e}")))?;
+            model::scan_file(&rel, file_module(&rel), &ast, &mut items);
+        }
+        Ok(items)
+    }
+
+    /// The current keys of the specs: the cache keys of the blocks (without the `@[csimp]`
+    /// replacements) by module path, and the hashes of the other functions by unit name.
+    pub fn spec_keys(
+        &self,
+        blocks: &[Block],
+        items: &model::CrateItems,
+    ) -> Result<BTreeMap<String, String>, Error> {
+        let keys = cache_keys(&self.crate_name, blocks, "")?;
+        let mut out: BTreeMap<String, String> = items.hashes.clone();
+        for (b, k) in blocks.iter().zip(&keys) {
+            out.insert(module_path_string(&b.path), k.clone());
+        }
+        Ok(out)
+    }
+
+    /// `require = "proved"` of `[package.metadata.lean-rust]`, or `LEAN_RUST_REQUIRE`.
+    fn require_proved(&self) -> Result<bool, Error> {
+        if let Ok(v) = std::env::var("LEAN_RUST_REQUIRE") {
+            return Ok(v == "proved");
+        }
+        let manifest = self.manifest_dir.join("Cargo.toml");
+        let Ok(text) = fs::read_to_string(&manifest) else {
+            return Ok(false);
+        };
+        let value: toml::Value = toml::from_str(&text)
+            .map_err(|e| Error::new(format!("lean-rust-build: {}: {e}", manifest.display())))?;
+        let require = value
+            .get("package")
+            .and_then(|p| p.get("metadata"))
+            .and_then(|m| m.get("lean-rust"))
+            .and_then(|l| l.get("require"))
+            .and_then(|r| r.as_str());
+        match require {
+            None => Ok(false),
+            Some("proved") => Ok(true),
+            Some(other) => Err(Error::new(format!(
+                "lean-rust-build: {}: [package.metadata.lean-rust] require = \"{other}\"; the supported value is \"proved\"",
+                manifest.display()
+            ))),
+        }
+    }
+
+    fn verify(&self, blocks: &[Block], doc_dir: &Path) -> Result<(), Error> {
+        let items = self.scan_items()?;
+        if !items.errors.is_empty() {
+            return Err(Error::new(format!(
+                "lean-rust-build: invalid #[lean_rust::model]:\n{}",
+                items.errors.join("\n")
+            )));
+        }
+        if items.models.is_empty() {
+            return Ok(());
+        }
+        let lock = lock::Lock::read(&self.lock_path()).map_err(Error::new)?;
+        let spec_keys = self.spec_keys(blocks, &items)?;
+        let states = verify::states(&items, &lock, &spec_keys, &self.crate_ident());
+        for m in &states {
+            write_if_changed(&doc_dir.join(&m.doc_file), verify::doc_text(m).as_bytes())?;
+        }
+        for w in verify::warnings(&states) {
+            println!("cargo:warning={w}");
+        }
+        if self.require_proved()? {
+            let bad = verify::not_proved(&states);
+            if !bad.is_empty() {
+                return Err(Error::new(format!(
+                    "lean-rust-build: require = \"proved\" and these obligations are not proved:\n  {}",
+                    bad.join("\n  ")
+                )));
+            }
         }
         Ok(())
     }
@@ -323,10 +465,14 @@ impl Builder {
                 .map(|b| lean.join(b.lean_file(&crate_ident)))
                 .collect(),
         )?;
-        let modules: Vec<String> = missing
+        let csimp = self.csimp_path().is_file();
+        let mut modules: Vec<String> = missing
             .iter()
             .map(|&i| blocks[i].lean_module(&crate_ident))
             .collect();
+        if csimp {
+            modules.push("LeanRustGen.Csimp".to_string());
+        }
         let build = Command::new("lake")
             .arg("build")
             .args(&modules)
@@ -379,6 +525,7 @@ impl Builder {
                     "module": blocks[i].lean_module(&crate_ident),
                     "namespace": blocks[i].name,
                     "type_paths": type_paths,
+                    "model_namespace": crate_ident,
                     "output_file": tmp.join(format!("{}.rs", keys[i])).to_string_lossy(),
                 })
             })
@@ -386,9 +533,11 @@ impl Builder {
         let batch = tmp.join("batch.json");
         fs::write(&batch, serde_json::Value::Array(jobs).to_string())?;
         let mut cmd = Command::new(&cli);
-        cmd.args(["module", "generate", "--batch"])
-            .arg(&batch)
-            .args(["--output", "json", "--search-path"]);
+        cmd.args(["module", "generate", "--batch"]).arg(&batch);
+        if csimp {
+            cmd.args(["--import", "LeanRustGen.Csimp"]);
+        }
+        cmd.args(["--output", "json", "--search-path"]);
         for p in lean_path.trim().split(':').filter(|p| !p.is_empty()) {
             cmd.arg(p);
         }
@@ -510,24 +659,6 @@ impl<'ast> Visit<'ast> for Scanner {
     }
 }
 
-/// Module path of a file relative to the crate root: `src/a/b.rs` and `src/a/b/mod.rs` →
-/// `[a, b]`; `src/lib.rs`, `src/main.rs` and `src/bin/*.rs` are crate roots.
-fn file_module(rel: &str) -> Vec<String> {
-    let rest = rel.strip_prefix("src/").unwrap_or(rel);
-    if rest == "lib.rs" || rest == "main.rs" || rest.starts_with("bin/") {
-        return Vec::new();
-    }
-    let mut parts: Vec<String> = rest
-        .trim_end_matches(".rs")
-        .split('/')
-        .map(str::to_string)
-        .collect();
-    if parts.last().is_some_and(|p| p == "mod") {
-        parts.pop();
-    }
-    parts
-}
-
 fn resolve_path(module: &[String], p: &syn::Path) -> Vec<String> {
     let segs: Vec<String> = p.segments.iter().map(|s| s.ident.to_string()).collect();
     let mut out: Vec<String> = Vec::new();
@@ -570,7 +701,7 @@ fn used_closure<'a>(
     out
 }
 
-fn module_path_string(path: &[String]) -> String {
+pub fn module_path_string(path: &[String]) -> String {
     let mut s = String::from("crate");
     for p in path {
         s.push_str("::");
@@ -580,8 +711,9 @@ fn module_path_string(path: &[String]) -> String {
 }
 
 /// The cache key of every block: SHA-256 over the crate name, the file, the block name, the
-/// imports, the source, the keys of the used blocks and [`GENERATOR_VERSION`].
-pub fn cache_keys(crate_name: &str, blocks: &[Block]) -> Result<Vec<String>, Error> {
+/// imports, the source, the keys of the used blocks, `extra` (the hash of the `@[csimp]`
+/// replacements) and [`GENERATOR_VERSION`].
+pub fn cache_keys(crate_name: &str, blocks: &[Block], extra: &str) -> Result<Vec<String>, Error> {
     let index: HashMap<&[String], usize> = blocks
         .iter()
         .enumerate()
@@ -591,6 +723,7 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block]) -> Result<Vec<String>, Err
     fn key_of(
         i: usize,
         crate_name: &str,
+        extra: &str,
         blocks: &[Block],
         index: &HashMap<&[String], usize>,
         keys: &mut Vec<Option<String>>,
@@ -627,9 +760,11 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block]) -> Result<Vec<String>, Err
                     module_path_string(u)
                 )));
             };
-            h.update(key_of(j, crate_name, blocks, index, keys, stack)?.as_bytes());
+            h.update(key_of(j, crate_name, extra, blocks, index, keys, stack)?.as_bytes());
             h.update([1]);
         }
+        h.update([0]);
+        h.update(extra.as_bytes());
         h.update([0]);
         h.update(GENERATOR_VERSION.as_bytes());
         stack.pop();
@@ -639,7 +774,7 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block]) -> Result<Vec<String>, Err
     }
     let mut stack = Vec::new();
     (0..blocks.len())
-        .map(|i| key_of(i, crate_name, blocks, &index, &mut keys, &mut stack))
+        .map(|i| key_of(i, crate_name, extra, blocks, &index, &mut keys, &mut stack))
         .collect()
 }
 
@@ -828,3 +963,10 @@ fn collect_user_files(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
         }
     }
 }
+
+/// The rev of Aeneas this lean-rust works with: the `require aeneas` of the crate's Lean
+/// package.
+pub const AENEAS_REV: &str = "c5eb4a28cef65e0aa27743105308243e535a2a2b";
+
+/// The version of the Charon bundled with that Aeneas.
+pub const CHARON_VERSION: &str = "0.1.313";

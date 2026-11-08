@@ -1,6 +1,6 @@
 [package]
 name = "lean-rust-macros"
-description = "Procedural macros of lean-rust: lean! and #[exported]"
+description = "Procedural macros of lean-rust: lean!, #[model], #[opaque], #[derive(Model)] and #[exported]"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -5,6 +5,7 @@ members = [
     "crates/lean-rust-runtime",
     "crates/lean-rust-macros",
     "crates/lean-rust-build",
+    "crates/cargo-lean-rust",
     "tests/difftest",
     "tests/public",
     "tests/embed",

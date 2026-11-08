@@ -2523,3 +2523,9 @@ pub fn word_char(c: char) -> bool {
         (__r) != 0
     }
 }
+
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub mod __lean_rust_spec {
+    pub use super::*;
+}

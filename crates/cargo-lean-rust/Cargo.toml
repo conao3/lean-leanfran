@@ -1,0 +1,15 @@
+[package]
+name = "cargo-lean-rust"
+description = "cargo lean-rust: extract Lean models of Rust functions with Charon and Aeneas, state their obligations and check their proofs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lean-rust-build = { path = "../lean-rust-build", version = "0.1.0" }
+serde_json = "1"
+sha2 = "0.10"
+syn = { version = "2", features = ["full"] }
+toml = "0.8"

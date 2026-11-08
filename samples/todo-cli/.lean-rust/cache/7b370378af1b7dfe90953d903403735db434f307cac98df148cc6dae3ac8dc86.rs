@@ -1173,3 +1173,9 @@ pub fn remove_task(t: Todo, id: rt::Nat) -> Todo {
         __v
     }
 }
+
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub mod __lean_rust_spec {
+    pub use super::*;
+}

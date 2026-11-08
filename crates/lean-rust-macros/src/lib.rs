@@ -5,6 +5,8 @@
 //! does not run Lean. The macro reads `OUT_DIR` and reports a missing build script or a
 //! missing generated file with `compile_error!`.
 
+mod model;
+
 use lean_rust_build::syntax::{file_hash, normalize_path, LeanBlock};
 use proc_macro::TokenStream;
 use quote::quote;
@@ -16,6 +18,46 @@ use syn::parse_macro_input;
 #[proc_macro_attribute]
 pub fn exported(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
+}
+
+/// Binds a function (or the methods of an impl block) to Lean specs.
+///
+/// The item is unchanged. The macro adds the functions that call the specs (`requires`,
+/// `refines`, `ensures_<label>`), so that rustc checks the paths of the specs and their argument
+/// types, a property-based test of each spec under `#[cfg(test)]` (unless `check = false`), and
+/// the documentation of the state of the proofs that the build script writes.
+///
+/// ```ignore
+/// #[lean_rust::model(
+///     requires = sorting::input_sorted,
+///     ensures(sorted = sorting::output_sorted, perm = "OutputPerm"),
+/// )]
+/// pub fn insert_sorted(x: i64, xs: &[i64]) -> Vec<i64> { /* .. */ }
+/// ```
+#[proc_macro_attribute]
+pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match model::expand(attr.into(), item.into()) {
+        Ok(ts) => ts.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// A function whose body is not extracted: its Lean model is written by hand in
+/// `lean/External.lean`. It changes nothing.
+#[proc_macro_attribute]
+pub fn opaque(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+/// Implements `Model` (the representation of the type in Aeneas's model: the constructor
+/// layout of the structure or inductive type Aeneas generates for it) and `SpecArg` (by
+/// `Clone`).
+#[proc_macro_derive(Model)]
+pub fn derive_model(input: TokenStream) -> TokenStream {
+    match model::derive(input.into()) {
+        Ok(ts) => ts.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Lean source checked and compiled by the build script.
@@ -90,6 +132,10 @@ fn expand(block: &LeanBlock) -> Result<TokenStream, String> {
         .join(&hash)
         .join(format!("{name}.rs"));
     if !generated.is_file() {
+        if model::extracting() {
+            let vis = &block.vis;
+            return Ok(quote! { #[allow(dead_code)] #vis mod #name {} }.into());
+        }
         return Err(format!(
             "lean!: {} was not generated for `mod {name}` in {rel}. The build script must call \
              `lean_rust_build::Builder::new().compile()`, which generates the lean! blocks of src/**/*.rs",

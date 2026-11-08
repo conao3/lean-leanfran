@@ -2137,3 +2137,9 @@ pub fn tally(words: Vec<String>) -> Vec<(String, rt::Nat)> {
         __v
     }
 }
+
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub mod __lean_rust_spec {
+    pub use super::*;
+}

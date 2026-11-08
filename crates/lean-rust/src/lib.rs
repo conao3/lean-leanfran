@@ -3,9 +3,21 @@
 //! - [`lean!`] embeds Lean source in a Rust file. The build script of the crate
 //!   (`lean_rust_build::Builder::new().compile()`) checks it with Lean and generates the Rust
 //!   module that the macro includes.
+//! - [`model`] binds a Rust function to Lean specs: `cargo lean-rust extract` translates it to
+//!   Lean with Charon and Aeneas and states the proof obligations, `cargo lean-rust check`
+//!   checks the proofs, and `cargo test` tests the function against the specs.
 //! - [`runtime`] is the runtime of the generated code. [`Nat`] and [`Int`] are the Rust types of
-//!   Lean's `Nat` and `Int`; [`ToLean`] and [`FromLean`] convert values.
+//!   Lean's `Nat` and `Int`; [`ToLean`] and [`FromLean`] convert values, [`Model`] converts them
+//!   to the representation of Aeneas's model.
 
-pub use lean_rust_macros::{exported, lean};
+pub use lean_rust_macros::{exported, lean, model, opaque, Model};
 pub use lean_rust_runtime as runtime;
-pub use lean_rust_runtime::{FromLean, Int, Nat, ToLean};
+pub use lean_rust_runtime::{FromLean, Int, Model, Nat, ToLean};
+
+pub mod spec;
+
+/// The property-based testing of `#[model]` (the `proptest` crate).
+#[cfg(feature = "check")]
+pub mod check {
+    pub use proptest;
+}

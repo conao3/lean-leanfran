@@ -1781,3 +1781,9 @@ pub fn from_roman(s: impl AsRef<str>) -> Option<rt::Nat> {
         __v
     }
 }
+
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub mod __lean_rust_spec {
+    pub use super::*;
+}

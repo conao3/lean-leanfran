@@ -88,6 +88,13 @@ inductive Desc where
   | named (rust : String)
   /-- `Box<T>`, for recursive fields. -/
   | boxed (d : Desc)
+  /-- A type of Aeneas's model of Rust converted by the runtime's `Model` (`Std.U32` as `u32`,
+      `Str` as `String`, the structs and enums of the crate). -/
+  | model (rust : String)
+  /-- Aeneas's `Slice α` and `alloc.vec.Vec α`: `Vec<T>`. -/
+  | slice (d : Desc)
+  /-- Aeneas's `Result α`: the value, a Rust panic when the result is not `ok`. -/
+  | result (d : Desc)
   deriving Inhabited, BEq
 
 /-- Where a constructor field lives in the object. -/
@@ -140,10 +147,13 @@ partial def Desc.rustType : Desc → String
   | .prod a b => s!"({a.rustType}, {b.rustType})"
   | .fin _ => "usize"
   | .boxed d => s!"Box<{d.rustType}>"
+  | .model r => r
+  | .slice d => s!"Vec<{d.rustType}>"
+  | .result d => d.rustType
 
 partial def Desc.named? : Desc → Array String
   | .named r => #[r]
-  | .list d | .array d | .option d | .boxed d => d.named?
+  | .list d | .array d | .option d | .boxed d | .slice d | .result d => d.named?
   | .except a b | .prod a b => a.named? ++ b.named?
   | _ => #[]
 
@@ -159,6 +169,8 @@ structure MarshalConfig where
   strip : Name
   /-- Types of these namespaces are defined by other generated modules at these Rust paths. -/
   typePaths : Array (Name × String) := #[]
+  /-- The namespace of the crate's Aeneas model: its types are the crate's Rust types. -/
+  modelNs : Option Name := none
 
 abbrev MarshalM := ReaderT MarshalConfig (StateRefT MarshalState MetaM)
 
@@ -189,6 +201,17 @@ partial def boxRec (inProgress : Std.HashSet String) : Desc → Desc
   | d => d
 
 def unsupportedTypes : List Name := [``ByteArray, ``FloatArray, ``Thunk, ``Task, ``Subtype]
+
+/-- The Rust types of Aeneas's integer types, by the constructor of `UScalarTy` or `IScalarTy`. -/
+def aeneasScalars : List (Name × String) :=
+  [(`Aeneas.Std.UScalarTy.U8, "u8"), (`Aeneas.Std.UScalarTy.U16, "u16"), (`Aeneas.Std.UScalarTy.U32, "u32"),
+   (`Aeneas.Std.UScalarTy.U64, "u64"), (`Aeneas.Std.UScalarTy.U128, "u128"), (`Aeneas.Std.UScalarTy.Usize, "usize"),
+   (`Aeneas.Std.IScalarTy.I8, "i8"), (`Aeneas.Std.IScalarTy.I16, "i16"), (`Aeneas.Std.IScalarTy.I32, "i32"),
+   (`Aeneas.Std.IScalarTy.I64, "i64"), (`Aeneas.Std.IScalarTy.I128, "i128"), (`Aeneas.Std.IScalarTy.Isize, "isize")]
+
+/-- The Rust path of a type of the crate's model: `my_crate.inv.Item` → `crate::inv::Item`. -/
+def modelRustPath (ns c : Name) : String :=
+  "::".intercalate ("crate" :: (c.replacePrefix ns .anonymous).components.map componentString)
 
 mutual
 
@@ -228,8 +251,21 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
     let some v ← (evalNat (← instantiateMVars n)).run | throwError "`Fin` with a bound that is not a literal: `{n}`"
     if v ≥ 2 ^ 64 then throwError "`Fin {v}` does not fit in usize"
     return .fin v
+  | `Aeneas.Std.UScalar, #[ty] | `Aeneas.Std.IScalar, #[ty] =>
+    let some k := ty.constName? | throwError "scalar type `{t}`"
+    match aeneasScalars.lookup k with
+    | some r => return .model r
+    | none => throwError "scalar type `{t}`"
+  | `Aeneas.Std.Slice, #[a] | `Aeneas.Std.alloc.vec.Vec, #[a] => return .slice (← descOf a)
+  | `Aeneas.Std.Str, #[] => return .model "String"
+  | `Aeneas.Std.Result, #[a] => return .result (← descOf a)
   | _, _ =>
     if unsupportedTypes.contains c then throwError "unsupported type `{c}`"
+    if c.getRoot == `Aeneas then throwError "unsupported type of Aeneas's model `{t}`"
+    if let some ns := (← read).modelNs then
+      if ns.isPrefixOf c && (moduleOf (← getEnv) c).startsWith s!"LeanRustGen.Model.{ns}." then
+        unless args.isEmpty do throwError "generic type of the model `{t}`"
+        return .model (modelRustPath ns c)
     namedDesc c t args
 
 partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : MarshalM Desc := do
@@ -315,6 +351,9 @@ partial def toObj (d : Desc) (x : String) (k : Nat := 0) : String :=
   | .prod a b => s!"rt::prod_to_lean({x}, |{v}| {toObj a v (k + 1)}, |{v}| {toObj b v (k + 1)})"
   | .fin n => s!"rt::fin_to_lean({x}, {n})"
   | .boxed d => toObj d s!"(*{x})" k
+  | .model _ => s!"rt::Model::to_model({x})"
+  | .slice d => s!"rt::slice_to_model({x}, |{v}| {toObj d v (k + 1)})"
+  | .result d => s!"__lr_result_ok({toObj d x k})"
 
 /-- Rust expression reading a Rust value from the borrowed boxed `Obj` `x`. -/
 partial def fromObj (d : Desc) (x : String) (k : Nat := 0) : String :=
@@ -328,6 +367,9 @@ partial def fromObj (d : Desc) (x : String) (k : Nat := 0) : String :=
   | .prod a b => s!"rt::prod_from_lean({x}, |{v}| {fromObj a v (k + 1)}, |{v}| {fromObj b v (k + 1)})"
   | .fin _ => s!"rt::fin_from_lean({x})"
   | .boxed d => s!"Box::new({fromObj d x k})"
+  | .model r => s!"<{r} as rt::Model>::from_model({x})"
+  | .slice d => s!"rt::slice_from_model({x}, |{v}| {fromObj d v (k + 1)})"
+  | .result d => s!"rt::result_value(__lr_result_match({x}), |{v}| {fromObj d v (k + 1)})"
 
 def signedOf : String → Option String
   | "i8" => some "u8"
@@ -346,6 +388,7 @@ partial def toIR (types : Std.HashMap String TypeDef) (d : Desc) (ty : IRType) (
   | .prim r => match signedOf r with
     | some u => s!"({x}) as {u}"
     | none => x
+  | .model _ => s!"rt::lean_unbox(rt::Model::to_model({x})) as {rsType ty}"
   | .named r => match (types[r]?.map (·.kind) : Option TypeKind) with
     | some (.newtype f inner) => toIR types inner ty s!"({x}).{if f.isEmpty then "0" else f}"
     | _ => s!"({x}) as {rsType ty}"
@@ -360,6 +403,7 @@ partial def fromIR (types : Std.HashMap String TypeDef) (d : Desc) (ty : IRType)
   | .prim r => match signedOf r with
     | some _ => s!"({x}) as {r}"
     | none => x
+  | .model r => s!"<{r} as rt::Model>::from_model(rt::lean_box(({x}) as usize))"
   | .named r => match (types[r]?.map (·.kind) : Option TypeKind) with
     | some (.newtype f inner) =>
       if f.isEmpty then s!"{r}({fromIR types inner ty x})" else s!"{r} \{ {f}: {fromIR types inner ty x} }"
@@ -483,6 +527,7 @@ structure PublicSig where
   io : Bool
   /-- Functions instance arguments call. -/
   instFns : Array Name
+  deriving Inhabited
 
 partial def instCode (e : Lean.Expr) : MarshalM (InstCode × Array Name) := do
   let e ← instantiateMVars e
@@ -615,6 +660,120 @@ def emitPublic (types : Std.HashMap String TypeDef) (decls : Std.HashMap Name De
   let stmtStr := String.join (stmts.toList.map (s!"        " ++ · ++ "\n"))
   return s!"#[doc = {quoteString f.doc}]\n#[{facade}::exported({quoteString (toString f.lean)})]\npub fn {f.rust}({", ".intercalate sigParams.toList}) -> {retTy} \{\n    unsafe \{\n{stmtStr}        {body}\n    }\n}\n"
 
+/-! ## Rust functions -/
+
+/-- A Rust function of the crate named by `@[extern "rs:<path>(<modes>)"]`, with `->()` after the
+    modes when it returns `()`. A mode is `_` (by value), `&` or `&mut` per argument; the values
+    of the `&mut` arguments after the call follow the result, as in Aeneas's model. -/
+structure RustCallee where
+  path : String
+  modes : Array String
+  unitRet : Bool
+  deriving Inhabited
+
+def parseRustExtern (sym : String) : Except String RustCallee := do
+  let cs := sym.toList.drop 3
+  let (pathCs, rest) := cs.span (· != '(')
+  let some (args, after) := (match rest with
+      | '(' :: r => let (a, b) := r.span (· != ')'); some (a, b.drop 1)
+      | _ => none) | throw s!"invalid Rust extern `{sym}`: expected `rs:<path>(<modes>)`"
+  let modes := ((String.ofList args).splitOn ",").map (fun m => (String.ofList (m.toList.filter (!·.isWhitespace))))
+    |>.filter (!·.isEmpty) |>.toArray
+  for m in modes do
+    unless m == "_" || m == "&" || m == "&mut" do throw s!"invalid mode `{m}` in the Rust extern `{sym}`"
+  let after := String.ofList (after.filter (!·.isWhitespace))
+  unless after.isEmpty || after == "->()" do throw s!"invalid Rust extern `{sym}`"
+  return { path := String.ofList pathCs, modes, unitRet := after == "->()" }
+
+/-- A Rust value from the Rust values `xs`: `()`, `x` or nested pairs `(a, (b, c))`. -/
+def rustTuple : List String → String
+  | [] => "()"
+  | [a] => a
+  | a :: rest => s!"({a}, {rustTuple rest})"
+
+/-- A block calling the Rust function with the variables `args`, whose value is the result of
+    the model (the result, then the `&mut` arguments). -/
+def rustCall (c : RustCallee) (args : Array String) : String :=
+  let actual := (args.zip c.modes).map fun (a, m) =>
+    if m == "&" then s!"&{a}" else if m == "&mut" then s!"&mut {a}" else a
+  let call := s!"{c.path}({", ".intercalate actual.toList})"
+  let muts := (args.zip c.modes).filterMap fun (a, m) => if m == "&mut" then some a else none
+  let value := rustTuple ((if c.unitRet then [] else ["__v"]) ++ muts.toList)
+  if c.unitRet then s!"\{ {call}; {value} }" else s!"\{ let __v = {call}; {value} }"
+
+/-- The function of an `rs:` extern: it converts the Lean arguments to Rust values, calls the
+    Rust function and converts the result. A `Result` is `ok` of the value, or `fail panic`
+    when the Rust function panics. -/
+def emitRustExtern (types : Std.HashMap String TypeDef) (name : Name) (ps : Array Param) (ty : IRType)
+    (sig : PublicSig) (c : RustCallee) : Except String String := do
+  let mut stmts := #[]
+  let mut args := #[]
+  for h : i in [0:sig.params.size] do
+    let p := ps[i]!
+    match sig.params[i] with
+    | .value nm d =>
+      let m := c.modes[args.size]?.getD "_"
+      let mutKw := if m == "&mut" then "mut " else ""
+      stmts := stmts.push s!"let {mutKw}{nm}: {d.rustType} = {fromIR types d p.ty (varName p.x)};"
+      if !p.borrow && !p.ty.isScalar then stmts := stmts.push s!"rt::lean_dec({varName p.x});"
+      args := args.push nm
+    | .erased => pure ()
+    | _ => throw s!"{name}: the Rust extern takes an argument that is not a value"
+  if args.size != c.modes.size then
+    throw s!"{name}: the Rust function {c.path} takes {c.modes.size} arguments, the Lean function {args.size}"
+  let call := rustCall c args
+  let body := match sig.result with
+    | .result inner =>
+      s!"match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(move || {call})) \{\n        Ok(__v) => __lr_result_ok({toObj inner "__v"}),\n        Err(_) => __lr_result_fail_panic(),\n    }"
+    | d => s!"let __v = {call};\n    {toIR types d ty "__v"}"
+  let stmtStr := String.join (stmts.toList.map (s!"    " ++ · ++ "\n"))
+  return s!"#[allow(dead_code, non_snake_case, unused_mut, clippy::all)]\npub(crate) unsafe fn {fnName name}({paramList ps}) -> {rsType ty} \{\n{stmtStr}    {body}\n}\n"
+
+/-- A public function whose `@[csimp]` replacement is a Rust function: it calls the Rust
+    function with its Rust arguments. -/
+def emitPublicRust (facade : String) (f : PublicFn) (c : RustCallee) : Except String String := do
+  let vals := f.sig.params.filterMap fun | .value nm d => some (nm, d) | _ => none
+  if vals.size != c.modes.size then
+    throw s!"{f.lean}: the Rust function {c.path} takes {c.modes.size} arguments, the Lean function {vals.size}"
+  let sigParams := vals.map fun (nm, d) => if d == .prim "String" then s!"{nm}: impl AsRef<str>" else s!"{nm}: {d.rustType}"
+  let stmts := (vals.zip c.modes).filterMap fun ((nm, d), m) =>
+    let mutKw := if m == "&mut" then "mut " else ""
+    if d == .prim "String" then some s!"let {mutKw}{nm}: String = {nm}.as_ref().to_string();"
+    else if m == "&mut" then some s!"let mut {nm} = {nm};" else none
+  let stmtStr := String.join (stmts.toList.map (s!"    " ++ · ++ "\n"))
+  return s!"#[doc = {quoteString f.doc}]\n#[{facade}::exported({quoteString (toString f.lean)})]\npub fn {f.rust}({", ".intercalate sigParams.toList}) -> {f.sig.result.rustType} \{\n{stmtStr}    {rustCall c (vals.map (·.1))}\n}\n"
+
+/-- A call of the compiled function `d` with the values `vals` for its relevant parameters, an
+    owned result. Owned values passed to a borrowed parameter are released after the call. -/
+def helperCall (d : Decl) (vals : List String) : String := Id.run do
+  let mut args := #[]
+  let mut binds := ""
+  let mut decs := ""
+  let mut rest := vals
+  let mut k := 0
+  for p in d.params do
+    if p.ty.isVoid then continue
+    if p.ty.isErased then args := args.push "rt::lean_box(0)"; continue
+    binds := binds ++ s!"let __h{k} = {rest.headD "rt::lean_box(0)"}; "
+    rest := rest.tail
+    args := args.push s!"__h{k}"
+    if p.borrow && !p.ty.isScalar then decs := decs ++ s!" rt::lean_dec(__h{k});"
+    k := k + 1
+  return "{ " ++ binds ++ s!"let __r = {fnName d.name}({", ".intercalate args.toList});" ++ decs ++ " __r }"
+
+def resultOk : Name := `Aeneas.Std.Result.ok
+def resultMatch : Name := `Aeneas.Std.Result.match
+def resultFail : Name := `Aeneas.Std.Result.fail
+
+/-- `__lr_result_ok`, `__lr_result_match` and `__lr_result_fail_panic`: Aeneas's `Result` from
+    and to Rust. -/
+def emitResultHelpers (decls : Std.HashMap Name Decl) : String := Id.run do
+  let (some ok, some mt, some fl) := (decls[resultOk]?, decls[resultMatch]?, decls[resultFail]?) | return ""
+  let allow := "#[allow(dead_code, non_snake_case, clippy::all)]\n"
+  return allow ++ s!"unsafe fn __lr_result_ok(v: Obj) -> Obj \{\n    {helperCall ok ["v"]}\n}\n" ++
+    allow ++ s!"unsafe fn __lr_result_match(r: Obj) -> Obj \{\n    rt::lean_inc(r);\n    {helperCall mt ["r"]}\n}\n" ++
+    allow ++ s!"unsafe fn __lr_result_fail_panic() -> Obj \{\n    {helperCall fl ["5u8"]}\n}\n"
+
 /-! ## Generation -/
 
 structure Skipped where
@@ -646,15 +805,21 @@ def typeUsesProof (types : Std.HashMap String TypeDef) (d : Desc) : Option Strin
   return none
 
 /-- Generates the module for `roots`: the internal functions they need, the generated types
-    and a public function per root that can be marshalled (the others are `skipped`). -/
-def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × String)) (facade : String) (internalOnly : Bool) :
+    and a public function per root that can be marshalled (the others are `skipped`). A root
+    replaced by a `@[csimp]` lemma also has its own definition as a public function of the
+    module `__lean_rust_spec`, which re-exports the other public functions. `modelNs` is the
+    namespace of the crate's Aeneas model, whose types are the crate's Rust types. -/
+def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × String)) (facade : String) (internalOnly : Bool)
+    (modelNs : Option Name := none) :
     MetaM (Except String GenResult) := do
   let env ← getEnv
   if internalOnly then
     return (generateInternal env roots).map fun o =>
       { items := o.items, externs := o.externs, decls := o.decls, publics := #[], skipped := #[] }
-  let (fns, st) ← (do
+  let cfg : MarshalConfig := { strip, typePaths, modelNs }
+  let ((fns, copies), st) ← (do
       let mut fns : Array (Except Skipped PublicFn) := #[]
+      let mut copies : Array PublicFn := #[]
       for r in roots do
         let t := csimpTarget env r
         let some d := findEnvDecl env t
@@ -664,12 +829,16 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
           let sig ← publicSig r d.params
           let some ci := env.find? r | throwError "unknown constant"
           let doc := s!"Lean: `{r} : {← ppExpr ci.type}` (module `{moduleOf env r}`)."
-          fns := fns.push (.ok { lean := r, rust := rustFnName strip r, target := t, sig, doc })
+          let f : PublicFn := { lean := r, rust := rustFnName strip r, target := t, sig, doc }
+          fns := fns.push (.ok f)
+          if t != r then
+            if let some rd := findEnvDecl env r then
+              copies := copies.push { f with target := r, sig := ← publicSig r rd.params }
         catch e =>
           set saved
           fns := fns.push (.error { name := r, reason := ← e.toMessageData.toString })
-      return fns : MarshalM _).run { strip, typePaths } |>.run {}
-  let types : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
+      return (fns, copies) : MarshalM _).run cfg |>.run {}
+  let types0 : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
   let mut publics : Array PublicFn := #[]
   let mut skipped : Array Skipped := #[]
   for f in fns do
@@ -677,29 +846,61 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
     | .error s => skipped := skipped.push s
     | .ok f =>
       let argProof := f.sig.params.findSome? fun
-        | .value _ d => typeUsesProof types d
+        | .value _ d => typeUsesProof types0 d
         | _ => none
       match argProof with
       | some l => skipped := skipped.push { name := f.lean, reason := s!"argument type `{l}` has proof fields" }
       | none => publics := publics.push f
+  let copies := copies.filter fun c => publics.any (·.lean == c.lean)
   let mut names : Std.HashMap String Name := {}
   for f in publics do
     if let some o := names[f.rust]? then
       return .error s!"Rust name `{f.rust}` is used by both {o} and {f.lean}"
     names := names.insert f.rust f.lean
+  let aeneas := if env.contains resultOk then #[resultOk, resultMatch, resultFail] else #[]
   let extra := publics.foldl (fun acc f => acc ++ f.sig.instFns) #[] ++
-    (if publics.any (·.sig.io) then #[``IO.Error.toString] else #[])
+    (if publics.any (·.sig.io) then #[``IO.Error.toString] else #[]) ++ aeneas
   match generateInternal env (publics.map (·.lean) ++ extra) with
   | .error e => return .error e
   | .ok o =>
     let declMap := o.decls.foldl (fun m d => m.insert d.name d) ({} : Std.HashMap Name Decl)
-    let mut items := o.items
+    let mut rustFns : Array (Name × Array Param × IRType × RustCallee) := #[]
+    for d in o.decls do
+      if let .extern f ps ty _ := d then
+        if let some sym := externSymbol env f then
+          if isRustExtern sym then
+            match parseRustExtern sym with
+            | .ok c => rustFns := rustFns.push (f, ps, ty, c)
+            | .error e => return .error e
+    let (rustSigs, st) ← (do
+        let mut out := #[]
+        for (f, ps, _, _) in rustFns do
+          try out := out.push (← publicSig f ps)
+          catch e => throwError "the Rust extern {f}: {e.toMessageData}"
+        return out : MarshalM _).run cfg |>.run st
+    let types : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
+    let callees : Std.HashMap Name RustCallee := rustFns.foldl (fun m (f, _, _, c) => m.insert f c) {}
+    let mut items := o.items ++ emitResultHelpers declMap ++ "\n"
+    for h : i in [0:rustFns.size] do
+      let (f, ps, ty, c) := rustFns[i]
+      match emitRustExtern types f ps ty rustSigs[i]! c with
+      | .ok s => items := items ++ s ++ "\n"
+      | .error e => return .error e
     for td in st.types do
       unless td.external do items := items ++ emitTypeDef types td ++ "\n"
     for f in publics do
-      match emitPublic types declMap facade f with
+      let res := match callees[f.target]? with
+        | some c => emitPublicRust facade f c
+        | none => emitPublic types declMap facade f
+      match res with
       | .ok s => items := items ++ s ++ "\n"
       | .error e => return .error e
+    let mut specMod := "#[doc(hidden)]\n#[allow(unused_imports)]\npub mod __lean_rust_spec {\n    pub use super::*;\n"
+    for f in copies do
+      match emitPublic types declMap facade f with
+      | .ok s => specMod := specMod ++ s
+      | .error e => return .error e
+    items := items ++ specMod ++ "}\n"
     return .ok { items, externs := o.externs, decls := o.decls,
                  publics := publics.map fun f => (f.lean, f.rust), skipped }
 

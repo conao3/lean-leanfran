@@ -215,3 +215,9 @@ pub fn scale(p: crate::geometry::shapes::Point, k: rt::Nat) -> crate::geometry::
         __v
     }
 }
+
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub mod __lean_rust_spec {
+    pub use super::*;
+}

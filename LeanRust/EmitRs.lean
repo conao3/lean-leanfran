@@ -98,6 +98,9 @@ def argStr : Arg → String
 def externSymbol (env : Environment) (c : Name) : Option String :=
   getExternNameFor env `c c
 
+/-- An extern implemented by a Rust function of the crate (`@[extern "rs:crate::f(_)"]`). -/
+def isRustExtern (sym : String) : Bool := sym.startsWith "rs:"
+
 def isConst (d : Decl) : Bool :=
   match d with
   | .fdecl _ xs .. => xs.isEmpty
@@ -121,6 +124,9 @@ def callStr (c : Name) (ys : Array Arg) : EmitM String := do
   match ctx.decls[c]? with
   | some d@(.extern _ ps _ _) =>
     let some sym := externSymbol ctx.env c | throw s!"extern without a C symbol: {d.name}"
+    if isRustExtern sym then
+      let args := (ps.zip ys).filter (fun (p, _) => !p.ty.isVoid) |>.map (argStr ·.2)
+      return s!"{fnName c}({", ".intercalate args.toList})"
     if let some t := ctx.exports[sym]? then
       if let some td := ctx.decls[t]? then
         if td.params.size == ps.size then
@@ -461,12 +467,15 @@ def collect (env : Environment) (exports : Std.HashMap String Name) (roots : Arr
   return out
 
 /-- The function compiled code runs for `name`: the target of a `@[csimp]`
-    lemma `@name = @target` in the module of `name`, or `name` itself. -/
+    lemma `@name = @target` in an imported module (the module of `name` first), or `name`
+    itself. -/
 def csimpTarget (env : Environment) (name : Name) : Name := Id.run do
-  let some idx := env.getModuleIdxFor? name | return name
-  for e in Compiler.CSimp.ext.ext.getModuleEntries env idx do
-    match e with
-    | .global e | .scoped _ e => if e.fromDeclName == name then return e.toDeclName
+  let own := (env.getModuleIdxFor? name).map (·.toNat)
+  let idxs := own.toList ++ ((List.range env.header.moduleNames.size).filter (some · != own))
+  for idx in idxs do
+    for e in Compiler.CSimp.ext.ext.getModuleEntries env idx do
+      match e with
+      | .global e | .scoped _ e => if e.fromDeclName == name then return e.toDeclName
   return name
 
 /-- C names of the externs the collected functions call. -/
@@ -475,7 +484,7 @@ def externsOf (env : Environment) (exports : Std.HashMap String Name) (decls : A
   for d in decls do
     if let .extern f .. := d then
       match externSymbol env f with
-      | some s => unless out.contains s || exports.contains s do out := out.push s
+      | some s => unless out.contains s || exports.contains s || isRustExtern s do out := out.push s
       | none => throw s!"extern without a C symbol: {f}"
   return out
 

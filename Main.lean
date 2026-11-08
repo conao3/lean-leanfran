@@ -9,6 +9,7 @@ def usage : String := "usage: lean-rust [--version] <command> <subcommand> [para
 commands:
   module generate   Emit a Rust module for functions of a Lean module
   project generate  Build a lake project and emit a Rust module per Lean module
+  crate check       Check the proofs of the obligations of a crate's Lean package
 
 lean-rust module generate
   --module-name <Name>        Lean module to import (required unless --batch)
@@ -18,14 +19,23 @@ lean-rust module generate
                               Types in namespace <Name> are defined by the generated module at
                               the Rust <path> (not emitted again)
   --batch <file>              JSON array of jobs {\"module\", \"output_file\", \"roots\"?, \"namespace\"?,
-                              \"type_paths\"?: {<Name>: <path>}}
+                              \"type_paths\"?: {<Name>: <path>}, \"model_namespace\"?}
                               run against one environment importing all their modules
+  --import <Name> ...         More modules to import (their @[csimp] lemmas apply)
+  --model-namespace <Name>    Namespace of the crate's Aeneas model, whose types are the
+                              crate's Rust types (crate::<module>::<Type>)
   --search-path <dir> ...     Extra .olean search directories
   --output-file <path>        Write the module here (default: standard output)
   --runtime-path <path>       Rust path of the runtime (default: ::lean_rust::runtime)
   --facade-path <path>        Rust path of the lean-rust crate (default: ::lean_rust)
   --internal-only             Do not emit public functions
   --output json|text          Format of the summary (skipped definitions with reasons)
+
+lean-rust crate check
+  --lake-dir <dir>            The crate's Lean package, built (required)
+  --obligations <file>        JSON array of {\"model\": <Lean name>, \"label\": <label>} (required)
+  --modules <Name> ...        Modules to import (default: every module the package built)
+  Prints a JSON array of {\"model\", \"label\", \"status\", \"axioms\"?, \"file\"?, \"line\"?}
 
 lean-rust project generate
   --lake-dir <dir>            Lake project to build (required)
@@ -51,6 +61,9 @@ structure Opts where
   lakeDir : Option System.FilePath := none
   outputDir : Option System.FilePath := none
   modules : Array Name := #[]
+  imports : Array Name := #[]
+  modelNs : Option Name := none
+  obligations : Option System.FilePath := none
 
 def parseTypePath (s : String) : Except String (Name × String) :=
   match s.splitOn "=" with
@@ -71,6 +84,11 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   | "--internal-only" :: rest => parseOpts rest { o with internalOnly := true }
   | "--lake-dir" :: v :: rest => parseOpts rest { o with lakeDir := some v }
   | "--output-dir" :: v :: rest => parseOpts rest { o with outputDir := some v }
+  | "--model-namespace" :: v :: rest => parseOpts rest { o with modelNs := some v.toName }
+  | "--obligations" :: v :: rest => parseOpts rest { o with obligations := some v }
+  | "--import" :: rest =>
+    let (vs, rest) := takeMany rest
+    parseOpts rest { o with imports := o.imports ++ vs.toArray.map String.toName }
   | "--output" :: v :: rest =>
     if v == "json" || v == "text" then parseOpts rest { o with output := v }
     else .error s!"--output must be json or text: {v}"
@@ -100,6 +118,7 @@ structure Job where
   namespace? : Option Name := none
   typePaths : Array (Name × String) := #[]
   outputFile : Option System.FilePath := none
+  modelNs : Option Name := none
 
 /-- The definitions of `mod` exported by default: public, written in the source (with a declaration
     range), not instances or their auxiliary definitions, with IR. -/
@@ -124,7 +143,7 @@ def runJob (env : Environment) (o : Opts) (job : Job) : IO (Json × UInt32) := d
   let roots := if job.roots.isEmpty then defaultRoots env job.module else job.roots
   let strip := job.namespace?.getD job.module
   let ctx : Core.Context := { fileName := "<lean-rust>", fileMap := default, maxHeartbeats := 0 }
-  let (res, _) ← (generate roots strip job.typePaths o.facadePath o.internalOnly).run'.toIO ctx { env }
+  let (res, _) ← (generate roots strip job.typePaths o.facadePath o.internalOnly (job.modelNs <|> o.modelNs)).run'.toIO ctx { env }
   match res with
   | .error e => failed 254 e
   | .ok out =>
@@ -169,13 +188,14 @@ def parseJobs (j : Json) : Except String (Array Job) := do
     let roots := (e.getObjValAs? (Array String) "roots").toOption.getD #[] |>.map String.toName
     let namespace? := (e.getObjValAs? String "namespace").toOption.map String.toName
     let outputFile := (e.getObjValAs? String "output_file").toOption.map System.FilePath.mk
+    let modelNs := (e.getObjValAs? String "model_namespace").toOption.map String.toName
     let typePaths := match e.getObjVal? "type_paths" with
       | .ok (.obj kvs) => kvs.toArray.filterMap fun (k, v) => v.getStr?.toOption.map fun p => (k.toName, p)
       | _ => #[]
-    return { module, roots, namespace?, typePaths, outputFile }
+    return { module, roots, namespace?, typePaths, outputFile, modelNs }
 
 def runJobs (o : Opts) (jobs : Array Job) : IO (Array Json × UInt32) := do
-  let env ← match ← importAll o (jobs.map (·.module)) with
+  let env ← match ← importAll o (jobs.map (·.module) ++ o.imports) with
     | .ok env => pure env
     | .error m =>
       let j := Json.mkObj [("module", toString m), ("error", s!"no .olean for {m} in the search path"), ("code", 252)]
@@ -244,6 +264,27 @@ def projectGenerate (o : Opts) : IO UInt32 := do
   else for j in out do printSummary o false j
   return code
 
+def crateCheck (o : Opts) : IO UInt32 := do
+  let some lakeDir := o.lakeDir | fail 252 "--lake-dir is required"
+  let some file := o.obligations | fail 252 "--obligations is required"
+  let obls ← match Json.parse (← IO.FS.readFile file) >>= parseObligations with
+    | .ok v => pure v
+    | .error e => return ← fail 252 s!"invalid --obligations file {file}: {e}"
+  unless ← lakeDir.isDir do return ← fail 252 s!"not a directory: {lakeDir}"
+  let lake := (← IO.getEnv "LAKE").getD "lake"
+  let leanPath := (← runCmd lake #["env", "printenv", "LEAN_PATH"] lakeDir).trimAscii.toString
+  let paths := (leanPath.splitOn ":").filter (!·.isEmpty) |>.toArray.map System.FilePath.mk
+  let lib := lakeDir / ".lake" / "build" / "lib" / "lean"
+  let mods ← if o.modules.isEmpty then oleanModules lib lib .anonymous else pure o.modules
+  let mods := mods.filter (fun m => !m.toString.endsWith "_Template") |>.qsort (·.toString < ·.toString)
+  match ← importAll { o with searchPath := o.searchPath ++ paths } mods with
+  | .error m => fail 252 s!"no .olean for {m} in the search path"
+  | .ok env =>
+    let ctx : Core.Context := { fileName := "<lean-rust>", fileMap := default, maxHeartbeats := 0 }
+    let (out, _) ← ((obls.mapM checkObligation).run').toIO ctx { env }
+    IO.println (Json.arr out).compress
+    return 0
+
 unsafe def main (args : List String) : IO UInt32 := do
   enableInitializersExecution
   match args with
@@ -260,5 +301,11 @@ unsafe def main (args : List String) : IO UInt32 := do
     | .error e => fail 252 e
     | .ok o =>
       try projectGenerate o
+      catch e => fail 255 (toString e)
+  | "crate" :: "check" :: rest =>
+    match parseOpts rest {} with
+    | .error e => fail 252 e
+    | .ok o =>
+      try crateCheck o
       catch e => fail 255 (toString e)
   | _ => IO.eprint usage; return 252

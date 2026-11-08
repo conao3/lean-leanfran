@@ -32,15 +32,22 @@ fn toolchain_matches_the_repository() {
 fn cache_keys_follow_sources_and_uses() {
     let a = block("a", "def x := 1", vec![]);
     let b = block("b", "def y := x", vec![vec!["a".into()]]);
-    let k1 = cache_keys("c", &[a.clone(), b.clone()]).unwrap();
+    let k1 = cache_keys("c", &[a.clone(), b.clone()], "").unwrap();
     let a2 = block("a", "def x := 2", vec![]);
-    let k2 = cache_keys("c", &[a2, b.clone()]).unwrap();
+    let k2 = cache_keys("c", &[a2, b.clone()], "").unwrap();
     assert_ne!(k1[0], k2[0]);
     assert_ne!(k1[1], k2[1]);
-    assert_ne!(cache_keys("d", &[a.clone(), b.clone()]).unwrap()[0], k1[0]);
+    assert_ne!(
+        cache_keys("d", &[a.clone(), b.clone()], "").unwrap()[0],
+        k1[0]
+    );
+    assert_ne!(
+        cache_keys("c", &[a.clone(), b.clone()], "csimp").unwrap()[0],
+        k1[0]
+    );
     let cyclic = block("a", "", vec![vec!["b".into()]]);
-    assert!(cache_keys("c", &[cyclic, b]).is_err());
-    assert!(cache_keys("c", &[block("z", "", vec![vec!["nope".into()]])]).is_err());
+    assert!(cache_keys("c", &[cyclic, b], "").is_err());
+    assert!(cache_keys("c", &[block("z", "", vec![vec!["nope".into()]])], "").is_err());
 }
 
 #[test]
