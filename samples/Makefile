@@ -1,5 +1,5 @@
-SAMPLES := todo-cli word-count roman-numerals verified-rust sorted-search inventory
-VERIFY_SAMPLES := verified-rust sorted-search inventory
+SAMPLES := todo-cli word-count roman-numerals verified-rust sorted-search inventory generic-search
+VERIFY_SAMPLES := verified-rust sorted-search inventory generic-search
 
 .PHONY: test
 test:

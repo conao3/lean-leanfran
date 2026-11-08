@@ -195,6 +195,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "generic-search"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

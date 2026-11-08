@@ -16,6 +16,7 @@ members = [
     "samples/verified-rust",
     "samples/sorted-search",
     "samples/inventory",
+    "samples/generic-search",
 ]
 
 [workspace.package]

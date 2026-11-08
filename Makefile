@@ -25,7 +25,7 @@ format-check:
 	treefmt --ci
 
 lint:
-	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build -p cargo-lean-rust -p lean-rust-embed-test -p lean-rust-verify-test -p todo-cli -p word-count -p roman-numerals -p verified-rust -p sorted-search -p inventory --all-targets -- -D warnings
+	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build -p cargo-lean-rust -p lean-rust-embed-test -p lean-rust-verify-test -p todo-cli -p word-count -p roman-numerals -p verified-rust -p sorted-search -p inventory -p generic-search --all-targets -- -D warnings
 
 check: format-check lint test
 
