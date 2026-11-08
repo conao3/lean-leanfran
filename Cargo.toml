@@ -24,3 +24,6 @@ edition = "2021"
 rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/conao3/lean-rs"
+readme = "README.md"
+keywords = ["lean", "lean4", "verification", "theorem-prover", "codegen"]
+categories = ["development-tools", "compilers"]
