@@ -4,5 +4,6 @@ pub mod arith;
 pub mod arrays;
 pub mod counter;
 pub mod effects;
+pub mod generic;
 pub mod spec;
 pub mod vecs;

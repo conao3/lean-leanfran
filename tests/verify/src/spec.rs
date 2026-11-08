@@ -50,3 +50,29 @@ lean_rust::lean! {
       | _ => false
     "#
 }
+
+lean_rust::lean! {
+    #[lean(imports = ["Aeneas"])]
+    pub mod generic_specs;
+    r#"
+    open Aeneas Aeneas.Std
+
+    def max_ge {α : Type} [LinearOrder α] (a b r : α) : Bool := decide (a ≤ r ∧ b ≤ r)
+
+    rust_instances max_ge [Std.U32, Std.I64]
+
+    def larger {α : Type} [LinearOrder α] (a b : α) : α := max a b
+
+    rust_instances larger [Std.U32, Std.I64]
+    "#
+}
+
+lean_rust::lean! {
+    #[lean(imports = ["Aeneas", "LeanRustGen.Model.lean_rust_verify_test.Types"])]
+    pub mod pairs;
+    r#"
+    open Aeneas Aeneas.Std lean_rust_verify_test
+
+    def swapped (p : generic.Pair Std.U32) : generic.Pair Std.U32 := ⟨p.b, p.a⟩
+    "#
+}

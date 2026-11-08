@@ -82,6 +82,10 @@ sed -i 's|    def small (x : Std.U32) : Bool := decide (x.val < 1000)|    def sm
 (cd "$d" && cargo build 2>"$work/spec.log")
 grep -q "lean-rust: crate::arith::succ: 1 obligation is stale (a spec changed" "$work/spec.log" ||
   fail "a change of a spec is not reported: $(cat "$work/spec.log")"
+sed -i "s|#\[lean_rust::model(instances = \[u32, i64\], ensures|#[lean_rust::model(instances = [u32], ensures|" "$d/src/generic.rs"
+(cd "$d" && cargo build 2>"$work/instances.log")
+grep -q "lean-rust: crate::generic::max_of: 1 obligation is stale (.*instances of crate::generic::max_of changed" "$work/instances.log" ||
+  fail "a change of the instances is not reported: $(cat "$work/instances.log")"
 echo "verify-test: changes of a function, a called function and a spec make the obligations stale"
 
 d=$(copy require)
@@ -109,6 +113,13 @@ if (cd "$d" && cargo build 2>"$work/wrong-type.log"); then
   fail "a spec of other argument types compiles"
 fi
 grep -q "expected \`Vec<u32>\`, found \`u32\`" "$work/wrong-type.log" || fail "wrong type: $(cat "$work/wrong-type.log")"
+d=$(copy wrong-instance)
+sed -i "s|#\[lean_rust::model(instances = \[u32, i64\], ensures|#[lean_rust::model(instances = [u32, u8], ensures|" "$d/src/generic.rs"
+if (cd "$d" && cargo build 2>"$work/wrong-instance.log"); then
+  fail "a type the spec is not instantiated for compiles"
+fi
+grep -q "the trait bound \`u8: MaxGe\` is not satisfied" "$work/wrong-instance.log" ||
+  fail "wrong instance: $(cat "$work/wrong-instance.log")"
 echo "verify-test: rustc rejects a wrong spec path and a spec of other argument types"
 
 d=$(copy wrong-impl)

@@ -27,4 +27,11 @@ structure counter.Counter where
   count : Std.U32
   active : Bool
 
+/-- [lean_rust_verify_test::generic::Pair]
+    Source: 'tests/verify/src/generic.rs', lines 32:0-35:1
+    Visibility: public -/
+structure generic.Pair (T : Type _) where
+  a : T
+  b : T
+
 end lean_rust_verify_test

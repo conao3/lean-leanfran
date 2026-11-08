@@ -13,8 +13,8 @@ items = [
 label = "refines"
 spec = "specs.bigger"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:1e5d70e4001c1bf5599a7bb1225428654649266345b724837d334c5a4de9f11d"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:c87da29fd0a71e088298bfaf71f29e87b3deef30e9789aa078c90e1d2da543a5"
 status = "proved"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
 proof = "lean/Proofs/Arith.lean:6"
@@ -30,8 +30,8 @@ items = [
 label = "refines"
 spec = "specs.double"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:e679eb08507a56e571ac7def614d34c9c941cd674c10a6e4a99a68c2ee9f5f22"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:eada8a67ecc532b52650f8277b1d8401f7044120d534642b6318ed1013847b3a"
 status = "sorry"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
 proof = "lean/Proofs/Arith.lean:11"
@@ -48,8 +48,8 @@ items = [
 label = "halved"
 spec = "specs.halved"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:041db16ccbc1b7aaa8ad86aff26adfdfd68a4b43a95f3d0e93e0a7bf781a07aa"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:490815711bd27e1318843430cecc92e130e11538f737504c1be850ef6f2c3bc9"
 status = "missing"
 axioms = []
 proof = ""
@@ -65,8 +65,8 @@ items = [
 label = "pos"
 spec = "specs.positive"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:c9666747d96301e70a48e57c9bb17e882361d9ecdf787316790c9d556ce1b433"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:e74932b840a604bd61499f92795f99fa86122472ea7c497db2b862b0c5c50e08"
 status = "mismatch"
 axioms = []
 proof = "lean/Proofs/Arith.lean:14"
@@ -82,8 +82,8 @@ items = [
 label = "refines"
 spec = "specs.arr_sum"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:37df9810aa8d7233cf8a40e3f710398d1f66e0807d91b989fe295dc2b83d1676"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:272eaa1d53b00a8ac9d808ef729d14deed9e282cadab3981fc6719a1b60b3258"
 status = "missing"
 axioms = []
 proof = ""
@@ -100,8 +100,8 @@ items = [
 label = "refines"
 spec = "counters.reset"
 spec_block = "crate::spec::counters"
-spec_hash = "sha256:33cc73b641a181f9f4647b7b617ae8602dcbdb727d8bc039d3f79374eb56b2b6"
-hash = "sha256:e6a331f89f31c3f7da121c6f804f7886a1fe544566b1e65ae426cd39cd723269"
+spec_hash = "sha256:bc39241631154e6b189800b549abc7b9263489c58b2db1ff42168b78cf530a03"
+hash = "sha256:2505be46c8d731dbed439cce82e4c67d4191af5064bd37086dce60a5602c99f4"
 status = "proved"
 axioms = ["Classical.choice", "Quot.sound", "propext"]
 proof = "lean/Proofs/Counter.lean:6"
@@ -117,8 +117,8 @@ items = [
 label = "same"
 spec = "specs.unchanged"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:4133388f0942332e3450e258dc4b7dcceaa638b6aa14213c071b60ba31aef767"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:d4a33504e52b93938e866c403b20d5eceaf95b5a95116d17faf828090e049462"
 status = "axioms"
 axioms = ["Classical.choice", "Quot.sound", "effects.check", "effects.check_ok", "propext"]
 proof = "lean/Proofs/Effects.lean:6"
@@ -131,6 +131,71 @@ items = [
 ]
 
 [[model]]
+rust = "crate::generic::max_of"
+lean = "lean_rust_verify_test.generic.max_of"
+instances = ["u32", "i64"]
+items = [
+  { rust = "crate::generic::max_of", hash = "sha256:3a2072086b4356668af10f3f17e5b885936cb4c8cfbbee25b24935499182f800" },
+]
+
+[[model.obligation]]
+label = "ge"
+spec = "generic_specs.max_ge"
+spec_block = "crate::spec::generic_specs"
+spec_hash = "sha256:d9f1e14c4caa9cf7dad4ecf9bcdb5eedf5dabd61eb98e6daa25cde9025065d3a"
+hash = "sha256:8f05a4c0c131b2c1ea43a1ad208592d4b29070911b9cc27a9c72e3d1632001c7"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Generic.lean:6"
+
+[[model]]
+rust = "crate::generic::larger"
+lean = "lean_rust_verify_test.generic.larger"
+instances = ["u32", "i64"]
+items = [
+  { rust = "crate::generic::larger", hash = "sha256:d89a9cd76cc71c021e5cf388dcf16b7cdb45f769f17e247c06dd3c38a3d17fc5" },
+]
+
+[[model.obligation]]
+label = "refines.u32"
+spec = "generic_specs.larger.inst_U32"
+spec_block = "crate::spec::generic_specs"
+spec_hash = "sha256:d9f1e14c4caa9cf7dad4ecf9bcdb5eedf5dabd61eb98e6daa25cde9025065d3a"
+hash = "sha256:4a0d9a9c72b22e933d5750505a76b46c03ce1ad507fd1425e0e2ebc6ad0cb98d"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Generic.lean:14"
+
+[[model.obligation]]
+label = "refines.i64"
+spec = "generic_specs.larger.inst_I64"
+spec_block = "crate::spec::generic_specs"
+spec_hash = "sha256:d9f1e14c4caa9cf7dad4ecf9bcdb5eedf5dabd61eb98e6daa25cde9025065d3a"
+hash = "sha256:86652627a14181b6da5b4cce630ca3edfb0b8e1bff54ed65662d807f7e32f706"
+status = "sorry"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Generic.lean:29"
+
+[[model]]
+rust = "crate::generic::Pair::swap"
+lean = "lean_rust_verify_test.generic.Pair.swap"
+instances = ["u32"]
+items = [
+  { rust = "crate::generic::Pair", hash = "sha256:8ce558e8d4b410b1fbe0e79e39b9530fd17d44b5ae293ad5dec46c7b811cb167" },
+  { rust = "crate::generic::Pair::swap", hash = "sha256:b8a4cc445a7d5f37f8c57245b82ac4bbaae484a636f2c5d387615197c9f83c5e" },
+]
+
+[[model.obligation]]
+label = "refines.u32"
+spec = "pairs.swapped"
+spec_block = "crate::spec::pairs"
+spec_hash = "sha256:8421c2986c7b522cfb28a557dfc684ae896362f5e95af2e5cbff676c86c3166a"
+hash = "sha256:af47ff1607b9156e0c540aa428adfe7751fc932a4bfe0cf92ebc380ad686326f"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Generic.lean:25"
+
+[[model]]
 rust = "crate::vecs::zero_all"
 lean = "lean_rust_verify_test.vecs.zero_all"
 items = [
@@ -141,8 +206,8 @@ items = [
 label = "zeroed"
 spec = "specs.all_zero"
 spec_block = "crate::spec::specs"
-spec_hash = "sha256:e3ee6b819840a5fa4b6fda04e7be5b1efc9c5c092e0ab3fb0f211f07bfd5021e"
-hash = "sha256:d9fa2fcba2bfe8e9bbc9e59c7bda89953f438a26b9b0497ec6135659baa627b9"
+spec_hash = "sha256:e3f5b2fda5910b1107dda0df3b8caf9075537b47e90ea4880dca7a6cada36b88"
+hash = "sha256:62c22510922f77739263f13f02984ec9677fb9d19d519f5196044fa855bed587"
 status = "missing"
 axioms = []
 proof = ""

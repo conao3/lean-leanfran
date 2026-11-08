@@ -102,6 +102,44 @@ def effects.guarded (x : Std.U32) : Result Std.U32 := do
 def effects.capped (x : Std.U32) : Result Std.U32 := do
   effects.clamp x
 
+/-- [lean_rust_verify_test::generic::max_of]:
+    Source: 'tests/verify/src/generic.rs', lines 8:0-14:1
+    Visibility: public -/
+def generic.max_of
+  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (coremarkerCopyInst :
+  core.marker.Copy T) (a : T) (b : T) :
+  Result T
+  := do
+  let b1 ← corecmpOrdInst.partialOrdInst.ge a b
+  if b1
+  then ok a
+  else ok b
+
+/-- [lean_rust_verify_test::generic::larger]:
+    Source: 'tests/verify/src/generic.rs', lines 23:0-29:1
+    Visibility: public -/
+def generic.larger
+  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (coremarkerCopyInst :
+  core.marker.Copy T) (a : T) (b : T) :
+  Result T
+  := do
+  let b1 ← corecmpOrdInst.partialOrdInst.gt b a
+  if b1
+  then ok b
+  else ok a
+
+/-- [lean_rust_verify_test::generic::{lean_rust_verify_test::generic::Pair<T>}::swap]:
+    Source: 'tests/verify/src/generic.rs', lines 41:4-46:5
+    Visibility: public -/
+def generic.Pair.swap
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (self : generic.Pair T) :
+  Result (generic.Pair T)
+  := do
+  let t ← corecloneCloneInst.clone self.b
+  let t1 ← corecloneCloneInst.clone self.a
+  ok { a := t, b := t1 }
+
 /-- [lean_rust_verify_test::vecs::zero_all]: loop 0:
     Source: 'tests/verify/src/vecs.rs', lines 9:4-12:5
     Visibility: public -/
