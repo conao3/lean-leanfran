@@ -1,0 +1,11 @@
+[package]
+name = "lean-rust-embed-test"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+lean-rust = { path = "../../crates/lean-rust" }
+
+[build-dependencies]
+lean-rust-build = { path = "../../crates/lean-rust-build" }

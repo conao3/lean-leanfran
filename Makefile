@@ -14,7 +14,8 @@ test:
 	lake build
 	./test-diff.sh
 	./test-public.sh
-	cargo nextest run -p lean-rust-runtime -p lean-rust-build
+	LEAN_RUST_CLI=$(CURDIR)/.lake/build/bin/lean-rust cargo nextest run -p lean-rust-runtime -p lean-rust-build -p lean-rust-embed-test
+	tests/embed/test.sh
 
 format:
 	treefmt
@@ -23,6 +24,6 @@ format-check:
 	treefmt --ci
 
 lint:
-	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build --all-targets -- -D warnings
+	cargo clippy -p lean-rust-runtime -p lean-rust -p lean-rust-macros -p lean-rust-build -p lean-rust-embed-test --all-targets -- -D warnings
 
 check: format-check lint test

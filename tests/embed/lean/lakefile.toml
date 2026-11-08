@@ -1,0 +1,6 @@
+name = "lean_rust_embed_test"
+defaultTargets = ["LeanRustGen"]
+
+[[lean_lib]]
+name = "LeanRustGen"
+globs = ["LeanRustGen.+"]

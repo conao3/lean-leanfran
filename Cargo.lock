@@ -94,6 +94,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lean-rust-embed-test"
+version = "0.1.0"
+dependencies = [
+ "lean-rust",
+ "lean-rust-build",
+]
+
+[[package]]
 name = "lean-rust-macros"
 version = "0.1.0"
 dependencies = [

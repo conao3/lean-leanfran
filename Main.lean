@@ -14,7 +14,11 @@ lean-rust module generate
   --module-name <Name>        Lean module to import (required unless --batch)
   --roots <Name> ...          Functions to export (default: the module's public definitions)
   --namespace <Name>          Namespace removed from public Rust names (default: the module name)
-  --batch <file>              JSON array of jobs {\"module\", \"output_file\", \"roots\"?, \"namespace\"?}
+  --type-path <Name>=<path> ...
+                              Types in namespace <Name> are defined by the generated module at
+                              the Rust <path> (not emitted again)
+  --batch <file>              JSON array of jobs {\"module\", \"output_file\", \"roots\"?, \"namespace\"?,
+                              \"type_paths\"?: {<Name>: <path>}}
                               run against one environment importing all their modules
   --search-path <dir> ...     Extra .olean search directories
   --output-file <path>        Write the module here (default: standard output)
@@ -36,6 +40,7 @@ structure Opts where
   moduleName : Option Name := none
   roots : Array Name := #[]
   namespace? : Option Name := none
+  typePaths : Array (Name × String) := #[]
   batch : Option System.FilePath := none
   searchPath : Array System.FilePath := #[]
   outputFile : Option System.FilePath := none
@@ -46,6 +51,11 @@ structure Opts where
   lakeDir : Option System.FilePath := none
   outputDir : Option System.FilePath := none
   modules : Array Name := #[]
+
+def parseTypePath (s : String) : Except String (Name × String) :=
+  match s.splitOn "=" with
+  | [ns, path] => .ok (ns.toName, path)
+  | _ => .error s!"--type-path must be <Name>=<path>: {s}"
 
 partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   let takeMany (rest : List String) : List String × List String :=
@@ -67,6 +77,11 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   | "--roots" :: rest =>
     let (vs, rest) := takeMany rest
     parseOpts rest { o with roots := o.roots ++ vs.toArray.map String.toName }
+  | "--type-path" :: rest =>
+    let (vs, rest) := takeMany rest
+    match vs.mapM parseTypePath with
+    | .ok ps => parseOpts rest { o with typePaths := o.typePaths ++ ps.toArray }
+    | .error e => .error e
   | "--modules" :: rest =>
     let (vs, rest) := takeMany rest
     parseOpts rest { o with modules := o.modules ++ vs.toArray.map String.toName }
@@ -83,6 +98,7 @@ structure Job where
   module : Name
   roots : Array Name := #[]
   namespace? : Option Name := none
+  typePaths : Array (Name × String) := #[]
   outputFile : Option System.FilePath := none
 
 /-- The definitions of `mod` exported by default: public, written in the source (with a declaration
@@ -108,7 +124,7 @@ def runJob (env : Environment) (o : Opts) (job : Job) : IO (Json × UInt32) := d
   let roots := if job.roots.isEmpty then defaultRoots env job.module else job.roots
   let strip := job.namespace?.getD job.module
   let ctx : Core.Context := { fileName := "<lean-rust>", fileMap := default, maxHeartbeats := 0 }
-  let (res, _) ← (generate roots strip o.facadePath o.internalOnly).run'.toIO ctx { env }
+  let (res, _) ← (generate roots strip job.typePaths o.facadePath o.internalOnly).run'.toIO ctx { env }
   match res with
   | .error e => failed 254 e
   | .ok out =>
@@ -150,7 +166,10 @@ def parseJobs (j : Json) : Except String (Array Job) := do
     let roots := (e.getObjValAs? (Array String) "roots").toOption.getD #[] |>.map String.toName
     let namespace? := (e.getObjValAs? String "namespace").toOption.map String.toName
     let outputFile := (e.getObjValAs? String "output_file").toOption.map System.FilePath.mk
-    return { module, roots, namespace?, outputFile }
+    let typePaths := match e.getObjVal? "type_paths" with
+      | .ok (.obj kvs) => kvs.toArray.filterMap fun (k, v) => v.getStr?.toOption.map fun p => (k.toName, p)
+      | _ => #[]
+    return { module, roots, namespace?, typePaths, outputFile }
 
 def runJobs (o : Opts) (jobs : Array Job) : IO (Array Json × UInt32) := do
   let env ← importAll o (jobs.map (·.module))
@@ -172,7 +191,7 @@ def moduleGenerate (o : Opts) : IO UInt32 := do
     else for j in out do printSummary o false j
     return code
   let some mod := o.moduleName | fail 252 "--module-name is required"
-  let (out, code) ← runJobs o #[{ module := mod, roots := o.roots, namespace? := o.namespace?, outputFile := o.outputFile }]
+  let (out, code) ← runJobs o #[{ module := mod, roots := o.roots, namespace? := o.namespace?, typePaths := o.typePaths, outputFile := o.outputFile }]
   printSummary o o.outputFile.isNone out[0]!
   return code
 

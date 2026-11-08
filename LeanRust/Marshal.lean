@@ -128,6 +128,8 @@ structure TypeDef where
   eqHash : Bool
   /-- Some constructor has a proof field: the Rust value cannot carry the invariant. -/
   hasProof : Bool
+  /-- Defined by another generated module (a type path), not emitted here. -/
+  external : Bool := false
   deriving Inhabited
 
 partial def Desc.rustType : Desc → String
@@ -152,7 +154,13 @@ structure MarshalState where
   /-- Lean type of each registered Rust type name, to detect collisions. -/
   leanOf : Std.HashMap String String := {}
 
-abbrev MarshalM := ReaderT Name (StateRefT MarshalState MetaM)
+structure MarshalConfig where
+  /-- Namespace removed from the Rust names. -/
+  strip : Name
+  /-- Types of these namespaces are defined by other generated modules at these Rust paths. -/
+  typePaths : Array (Name × String) := #[]
+
+abbrev MarshalM := ReaderT MarshalConfig (StateRefT MarshalState MetaM)
 
 def moduleOf (env : Environment) (c : Name) : String :=
   match env.getModuleIdxFor? c with
@@ -228,8 +236,11 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
   let env ← getEnv
   let some (.inductInfo ind) := env.find? c | throwError "unsupported type `{t}`"
   if ind.numIndices != 0 then throwError "type family `{t}`"
-  let strip ← read
-  let mut rust := rustTypeName strip c
+  let cfg ← read
+  let ext := cfg.typePaths.find? fun (ns, _) => ns.isPrefixOf c
+  let mut rust := match ext with
+    | some (ns, path) => path ++ "::" ++ rustTypeName ns c
+    | none => rustTypeName cfg.strip c
   for a in args[:ind.numParams] do
     unless ← isProof a do
       rust := rust ++ camelCase (toString (← ppExpr a))
@@ -281,7 +292,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
       pure (← synthInstance? inst).isSome
     catch _ => pure false
   let floats := variants.any fun v => v.fields.any fun f => f.desc == .prim "f64" || f.desc == .prim "f32"
-  let td : TypeDef := { rust, lean := leanStr, module := moduleOf env c, kind, eqHash := eqHash && !floats, hasProof }
+  let td : TypeDef := { rust, lean := leanStr, module := moduleOf env c, kind, eqHash := eqHash && !floats, hasProof, external := ext.isSome }
   modify fun s => { s with
     types := s.types.push td
     index := s.index.insert rust s.types.size
@@ -636,7 +647,7 @@ def typeUsesProof (types : Std.HashMap String TypeDef) (d : Desc) : Option Strin
 
 /-- Generates the module for `roots`: the internal functions they need, the generated types
     and a public function per root that can be marshalled (the others are `skipped`). -/
-def generate (roots : Array Name) (strip : Name) (facade : String) (internalOnly : Bool) :
+def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × String)) (facade : String) (internalOnly : Bool) :
     MetaM (Except String GenResult) := do
   let env ← getEnv
   if internalOnly then
@@ -657,7 +668,7 @@ def generate (roots : Array Name) (strip : Name) (facade : String) (internalOnly
         catch e =>
           set saved
           fns := fns.push (.error { name := r, reason := ← e.toMessageData.toString })
-      return fns : MarshalM _).run strip |>.run {}
+      return fns : MarshalM _).run { strip, typePaths } |>.run {}
   let types : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
   let mut publics : Array PublicFn := #[]
   let mut skipped : Array Skipped := #[]
@@ -683,7 +694,8 @@ def generate (roots : Array Name) (strip : Name) (facade : String) (internalOnly
   | .ok o =>
     let declMap := o.decls.foldl (fun m d => m.insert d.name d) ({} : Std.HashMap Name Decl)
     let mut items := o.items
-    for td in st.types do items := items ++ emitTypeDef types td ++ "\n"
+    for td in st.types do
+      unless td.external do items := items ++ emitTypeDef types td ++ "\n"
     for f in publics do
       match emitPublic types declMap facade f with
       | .ok s => items := items ++ s ++ "\n"

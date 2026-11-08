@@ -370,9 +370,15 @@ impl Builder {
         let jobs: Vec<serde_json::Value> = missing
             .iter()
             .map(|&i| {
+                let type_paths: serde_json::Map<String, serde_json::Value> =
+                    used_closure(i, blocks, &by_path)
+                        .into_iter()
+                        .map(|u| (u.name.clone(), module_path_string(&u.path).into()))
+                        .collect();
                 serde_json::json!({
                     "module": blocks[i].lean_module(&crate_ident),
                     "namespace": blocks[i].name,
+                    "type_paths": type_paths,
                     "output_file": tmp.join(format!("{}.rs", keys[i])).to_string_lossy(),
                 })
             })
@@ -542,6 +548,25 @@ fn resolve_path(module: &[String], p: &syn::Path) -> Vec<String> {
         _ => out = module.to_vec(),
     }
     out.extend(rest.iter().cloned());
+    out
+}
+
+/// The blocks `blocks[i]` uses, directly or through other blocks.
+fn used_closure<'a>(
+    i: usize,
+    blocks: &'a [Block],
+    by_path: &HashMap<&[String], &'a Block>,
+) -> Vec<&'a Block> {
+    let mut out: Vec<&Block> = Vec::new();
+    let mut stack: Vec<&[String]> = blocks[i].uses.iter().map(Vec::as_slice).collect();
+    while let Some(p) = stack.pop() {
+        let u = by_path[p];
+        if out.iter().any(|o| o.path == u.path) {
+            continue;
+        }
+        out.push(u);
+        stack.extend(u.uses.iter().map(Vec::as_slice));
+    }
     out
 }
 
