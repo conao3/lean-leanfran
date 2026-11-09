@@ -132,6 +132,8 @@ def small (n : { n : Nat // n < 100 }) : Nat := n.val * 2
 
 def ioEcho (s : String) : IO String := pure (s ++ "!")
 
+def readBack (path : String) : IO String := IO.FS.readFile path
+
 def failing (_ : Unit) : IO Nat := throw (IO.userError "nope")
 
 def applyTwice (f : α → α) (x : α) : α := f (f x)

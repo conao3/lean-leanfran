@@ -132,3 +132,11 @@ def test_io(pub):
 
 def test_floats(pub):
     assert math.isinf(pub.halve(math.inf))
+
+
+def test_io_files(pub, tmp_path):
+    f = tmp_path / "a.txt"
+    f.write_text("héllo\n")
+    assert pub.readBack(str(f)) == "héllo\n"
+    with pytest.raises(OSError, match="no such file"):
+        pub.readBack(str(tmp_path / "missing"))
