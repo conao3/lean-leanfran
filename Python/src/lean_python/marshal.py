@@ -701,9 +701,11 @@ def register_inductive(base, pairs):
 # Module assembly
 
 
-def attach(g, path, fn):
+def attach(g, path, fn, lean_name=None):
     fn.__name__ = path[-1]
     fn.__qualname__ = ".".join(path)
+    fn.__lean_name__ = lean_name
+    fn.__lean_module__ = g.get("__lean_module__")
     if len(path) == 1:
         g[path[0]] = fn
         return

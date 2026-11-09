@@ -156,12 +156,91 @@ member), `Literal["a", "b"]` (`LeanPythonLiterals.<module>.<Model>_<field>`), an
 docstring lists them. Generated functions take and return your classes; values that did not go
 through validation (`model_construct`) are checked again on the way to Lean.
 
+## Verifying Python functions
+
+`@model` binds a typed, pure Python function to specifications written in a Lean block. The function
+stays ordinary Python; `lean-py check` translates it to Lean and checks your proofs, and
+`check_model` runs the same specifications as a Hypothesis property test.
+
+```python
+from lean_python import lean
+from lean_python.verify import model
+
+spec = lean("spec", r"""
+def clampSpec (x lo hi : Int) : Int := max lo (min hi x)
+def ordered (_x lo hi : Int) : Bool := lo ≤ hi
+def inRange (_x lo hi : Int) (r : Int) : Bool := lo ≤ r && r ≤ hi
+""")
+
+@model(refines=spec.clampSpec, requires=spec.ordered, ensures={"in_range": spec.inRange})
+def clamp(x: int, lo: int, hi: int) -> int:
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+```
+
+`lean-py check --package calc` writes the translation and one obligation per specification:
+
+```lean
+def LeanPythonModel.calc.calc.clamp (x : Int) (lo : Int) (hi : Int) : Int := Id.run do
+  if ((decide (x < lo))) then
+    return lo
+  if ((decide (x > hi))) then
+    return hi
+  return x
+
+abbrev LeanPythonModel.calc.calc.clamp.obligation.refines : Prop :=
+  ∀ (x : Int) (lo : Int) (hi : Int), ordered x lo hi = true → clamp x lo hi = clampSpec x lo hi
+```
+
+and judges the theorems `<function>.proof.<label>` of `lean/Proofs/*.lean` next to `pyproject.toml`:
+
+```lean
+import LeanPythonModel.calc.calc
+open LeanPythonEmbed.calc.spec.spec
+namespace LeanPythonModel.«calc».«calc»
+
+theorem clamp.proof.refines : clamp.obligation.refines := by
+  intro x lo hi h
+  simp only [ordered, decide_eq_true_eq] at h
+  simp only [clamp, clampSpec]
+  split <;> (try split) <;> simp_all <;> omega
+```
+
+```
+proved     calc.calc:clamp refines
+proved     calc.calc:clamp in_range
+sorry      calc.calc:sum_to refines
+missing    calc.calc:sum_abs nonneg
+```
+
+The states are proved, sorry, axioms (non-standard axioms), failed (the proof file does not build),
+missing, mismatch (the theorem states something else). `--require proved` fails unless all are
+proved. The result goes to `lean-python.lock` with a hash of each function's source;
+`lean-py status` reads it without Lean and marks changed functions `stale`.
+
+- `refines=s`: `f x = s x` (`Except.ok (s x)` for a function that may fail); `requires=p`: `p x = true →`
+  before each obligation; `ensures={"label": q}`: `q x (f x) = true`. A function annotated `-> Nat`
+  also gets `returns_nat` (`0 ≤ f x`).
+- The translation: `int` is `Int` (a `Nat` parameter is a `Nat` converted to `Int` on entry);
+  statements become Lean `do` notation (`let mut`, `for`, `while`, `break`, `continue`, early
+  `return`); indexing, `//`, `%`, `assert` and `raise` make the function return
+  `Py.M α = Except Py.Exc α`, with Python's negative indices and floor division (`LeanPythonLib.Py`).
+  Supported: `int`, `bool`, `str`, `float`, `list`, `tuple`, `T | None`, pydantic models (as the
+  Lean structures of `models=`), `len`, `abs`, `min`, `max`, `sum`, list comprehensions, `append` on
+  local lists, and calls of other `@model` functions of the module.
+- `check_model(f)` / `check_module(m)` generate arguments from the annotations (pydantic constraints
+  included), skip those failing `requires`, and compare with `refines` and `ensures`.
+
 ## The CLI
 
 ```
 lean-python module generate --module-name <Name> [--roots <Name> ...] [--namespace <Name>]
   [--search-path <dir> ...] [--output-file <path>] [--internal-only] [--output json|text]
   [--type-module <Name>=<module> ...] [--model-module <Name>=<module> ...] [--batch <file>]
+lean-python obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
 lean-python --version | --generator-version | help
 ```
 
@@ -210,7 +289,7 @@ nix develop -c make bench
 - `Task`s run synchronously.
 - Building a `String` with `String.push` copies the string each time (Python `bytes`), so it grows
   quadratically.
-- Python's own functions are not verified in Lean yet.
+- The translation of Python functions covers the subset above; the guarantee is partial correctness.
 
 ## License
 

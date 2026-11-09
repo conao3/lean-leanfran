@@ -67,7 +67,7 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   let doc := quoteString s!"Lean `{f.lean}`."
   let src := s!"def {pyName}({joinArgs sigParams}) -> {quoteString f.sig.result.pyType}:\n    {doc}\n" ++
     String.join (stmts.toList.map (· ++ "\n")) ++ s!"    return {ret}\n\n\n"
-  let attach := s!"_m.attach(globals(), {pyList f.path}, {pyName})\n"
+  let attach := s!"_m.attach(globals(), {pyList f.path}, {pyName}, {quoteString (toString f.lean)})\n"
   return (src ++ attach, tbl)
 
 def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
