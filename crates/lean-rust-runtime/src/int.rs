@@ -1,5 +1,5 @@
-//! `Int`: scalars in the range of `i32` (as in `lean.h` on 64-bit machines), `num-bigint`
-//! values in mpz objects outside it.
+//! `Int`: scalars in the range of `i32` on 64-bit machines and of 31-bit integers on 32-bit
+//! machines (as in `lean.h`), `num-bigint` values in mpz objects outside it.
 
 use crate::nat::{lean_alloc_mpz, lean_mpz_value, mk_nat, nat_value};
 use crate::object::*;
@@ -7,8 +7,40 @@ use crate::panic::lean_internal_panic;
 use num_bigint::BigInt;
 use num_traits::{Signed, ToPrimitive, Zero};
 
+#[cfg(target_pointer_width = "64")]
 pub const LEAN_MAX_SMALL_INT: i64 = i32::MAX as i64;
+#[cfg(target_pointer_width = "64")]
 pub const LEAN_MIN_SMALL_INT: i64 = i32::MIN as i64;
+#[cfg(not(target_pointer_width = "64"))]
+pub const LEAN_MAX_SMALL_INT: i64 = (1 << 30) - 1;
+#[cfg(not(target_pointer_width = "64"))]
+pub const LEAN_MIN_SMALL_INT: i64 = -(1 << 30);
+
+/// The scalar `Int` of `n`, in the range of the small integers.
+#[inline]
+fn box_small_int(n: i32) -> Obj {
+    #[cfg(target_pointer_width = "64")]
+    {
+        lean_box(n as u32 as usize)
+    }
+    #[cfg(not(target_pointer_width = "64"))]
+    {
+        lean_box(n as usize)
+    }
+}
+
+/// The value of a scalar `Int`.
+#[inline]
+fn unbox_small_int(a: Obj) -> i32 {
+    #[cfg(target_pointer_width = "64")]
+    {
+        lean_unbox(a) as u32 as i32
+    }
+    #[cfg(not(target_pointer_width = "64"))]
+    {
+        (a.addr() as i32) >> 1
+    }
+}
 
 /// The value of an `Int`.
 #[inline]
@@ -24,7 +56,7 @@ pub(crate) unsafe fn int_value(o: Obj) -> BigInt {
 pub(crate) unsafe fn mk_int(v: BigInt) -> Obj {
     match v.to_i64() {
         Some(n) if (LEAN_MIN_SMALL_INT..=LEAN_MAX_SMALL_INT).contains(&n) => {
-            lean_box(n as i32 as u32 as usize)
+            box_small_int(n as i32)
         }
         _ => lean_alloc_mpz(v),
     }
@@ -32,23 +64,23 @@ pub(crate) unsafe fn mk_int(v: BigInt) -> Obj {
 
 #[inline]
 pub unsafe fn lean_scalar_to_int64(a: Obj) -> i64 {
-    lean_unbox(a) as u32 as i32 as i64
+    unbox_small_int(a) as i64
 }
 
 #[inline]
 pub unsafe fn lean_scalar_to_int(a: Obj) -> i32 {
-    lean_unbox(a) as u32 as i32
+    unbox_small_int(a)
 }
 
 #[inline]
 pub unsafe fn lean_int_to_int(n: i32) -> Obj {
-    lean_box(n as u32 as usize)
+    lean_int64_to_int(n as i64)
 }
 
 #[inline]
 pub unsafe fn lean_int64_to_int(n: i64) -> Obj {
     if (LEAN_MIN_SMALL_INT..=LEAN_MAX_SMALL_INT).contains(&n) {
-        lean_box(n as i32 as u32 as usize)
+        box_small_int(n as i32)
     } else {
         lean_big_int64_to_int(n)
     }
