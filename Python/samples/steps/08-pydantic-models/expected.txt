@@ -1,0 +1,2 @@
+Account owner='ann' balance=70 owner='bob' balance=35
+(Account(owner='ann', balance=70), Account(owner='bob', balance=35))

@@ -1,0 +1,30 @@
+{"synthetic": false,
+ "schemaVersion": "2025-09-10",
+ "outputs":
+ {"o": ["b0ed7e64a5ff2c44.olean"],
+  "m": false,
+  "i": "201d9a92fc4e4144.ilean",
+  "c": "665320fc51323167.c"},
+ "log":
+ [{"message":
+   ".> LEAN_PATH=/home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/.lake/build/lib/lean /nix/store/2kbz20qdy9vdnc0ilrnmpnd551dk0z09-lean4-4.35.0/bin/lean /home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/LeanPythonEmbed/step07/code/m.lean -o /home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step07/code/m.olean -i /home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step07/code/m.ilean -c /home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed/step07/code/m.c --setup /home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed/step07/code/m.setup.json --json",
+   "level": "trace"}],
+ "inputs":
+ [["deps",
+   [["«lean-python-workspace»/LeanPythonEmbed:extraDep",
+     [["@«lean-python-workspace»:extraDep", "00000000000006bb"]]],
+    ["imports", "00000000000006bb"]]],
+  ["libs",
+   [["import dynlibs", "00000000000006bb"],
+    ["package external libraries", "00000000000006bb"],
+    ["module dynlibs", "00000000000006bb"],
+    ["module plugins", "00000000000006bb"]]],
+  ["Lean 4.35.0, commit ", "21c42906adea99f5"],
+  ["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/LeanPythonEmbed/step07/code/m.lean",
+   "b14b966e078c4201"],
+  ["options", "00000000000006bb"],
+  ["isModule: false", "feefd2a0d3a1847e"],
+  ["Module.name: LeanPythonEmbed.step07.code.m", "d7ab4031fdbc5679"],
+  ["Package.id?: (some lean-python-workspace)", "38adce80e179aa9a"],
+  ["Module.leanArgs: #[]", "00000000000006bb"]],
+ "depHash": "fee96611c35be741"}

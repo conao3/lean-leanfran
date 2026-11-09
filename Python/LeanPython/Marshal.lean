@@ -330,7 +330,9 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
           let dn := deciderName py (componentString ctor) fname
           compileDecider dn valueFvars ty
           modify fun s => { s with deciders := s.deciders.push dn }
-          invs := invs.push { field := fname, prop := toString (← ppExpr ty), decider := dn, args := valueIdx }
+          let prop ← withTheReader Core.Context (fun c => { c with currNamespace := strip, openDecls := [] }) <|
+            withOptions (fun o => o.setBool `pp.piBinderTypes false |>.setBool `pp.funBinderTypes false) (ppExpr ty)
+          invs := invs.push { field := fname, prop := toString prop, decider := dn, args := valueIdx }
           continue
         if (← whnf ty).isSort then throwError "constructor `{ctor}` has a type field"
         let loc := match layout.fieldInfo[i]? with

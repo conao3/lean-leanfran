@@ -1,0 +1,9 @@
+{"plugins": [],
+ "package": "lean-python-workspace",
+ "options": {},
+ "name": "LeanPythonModels",
+ "isModule": false,
+ "importArts":
+ {"LeanPythonModels.step08.code":
+  [["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/.lake/build/lib/lean/LeanPythonModels/step08/code.olean"]]},
+ "dynlibs": []}

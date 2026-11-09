@@ -1,0 +1,30 @@
+{"synthetic": false,
+ "schemaVersion": "2025-09-10",
+ "outputs":
+ {"o": ["4a3568f3278c4fe0.olean"],
+  "m": false,
+  "i": "5300e619b6182b00.ilean",
+  "c": "47c5a04d791485bb.c"},
+ "log":
+ [{"message":
+   ".> LEAN_PATH=/home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/.lake/build/lib/lean /nix/store/2kbz20qdy9vdnc0ilrnmpnd551dk0z09-lean4-4.35.0/bin/lean /home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/LeanPythonEmbed/step02/code/m.lean -o /home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step02/code/m.olean -i /home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step02/code/m.ilean -c /home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed/step02/code/m.c --setup /home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed/step02/code/m.setup.json --json",
+   "level": "trace"}],
+ "inputs":
+ [["deps",
+   [["«lean-python-workspace»/LeanPythonEmbed:extraDep",
+     [["@«lean-python-workspace»:extraDep", "00000000000006bb"]]],
+    ["imports", "00000000000006bb"]]],
+  ["libs",
+   [["import dynlibs", "00000000000006bb"],
+    ["package external libraries", "00000000000006bb"],
+    ["module dynlibs", "00000000000006bb"],
+    ["module plugins", "00000000000006bb"]]],
+  ["Lean 4.35.0, commit ", "21c42906adea99f5"],
+  ["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/02-theorems/.lean-python/workspace/LeanPythonEmbed/step02/code/m.lean",
+   "689a4bcf84977cac"],
+  ["options", "00000000000006bb"],
+  ["isModule: false", "feefd2a0d3a1847e"],
+  ["Module.name: LeanPythonEmbed.step02.code.m", "24096056c89fa952"],
+  ["Package.id?: (some lean-python-workspace)", "38adce80e179aa9a"],
+  ["Module.leanArgs: #[]", "00000000000006bb"]],
+ "depHash": "a67315574f2a685f"}

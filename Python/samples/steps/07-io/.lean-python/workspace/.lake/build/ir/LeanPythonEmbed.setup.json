@@ -1,0 +1,9 @@
+{"plugins": [],
+ "package": "lean-python-workspace",
+ "options": {},
+ "name": "LeanPythonEmbed",
+ "isModule": false,
+ "importArts":
+ {"LeanPythonEmbed.step07.code.m":
+  [["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/07-io/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step07/code/m.olean"]]},
+ "dynlibs": []}

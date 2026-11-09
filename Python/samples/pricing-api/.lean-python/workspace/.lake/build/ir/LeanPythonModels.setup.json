@@ -1,0 +1,9 @@
+{"plugins": [],
+ "package": "lean-python-workspace",
+ "options": {},
+ "name": "LeanPythonModels",
+ "isModule": false,
+ "importArts":
+ {"LeanPythonModels.pricing.models":
+  [["/home/conao/ghq/github.com/conao3/lean-py/samples/pricing-api/.lean-python/workspace/.lake/build/lib/lean/LeanPythonModels/pricing/models.olean"]]},
+ "dynlibs": []}

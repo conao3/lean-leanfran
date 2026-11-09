@@ -1,0 +1,33 @@
+{"synthetic": false,
+ "schemaVersion": "2025-09-10",
+ "outputs":
+ {"o": ["9a8166529bf07b5d.olean"],
+  "m": false,
+  "i": "f369f7479a2f924c.ilean",
+  "c": "a037b974af769f1b.c"},
+ "log":
+ [{"message":
+   ".> LEAN_PATH=/home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/.lake/build/lib/lean /nix/store/2kbz20qdy9vdnc0ilrnmpnd551dk0z09-lean4-4.35.0/bin/lean /home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/LeanPythonEmbed.lean -o /home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed.olean -i /home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed.ilean -c /home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed.c --setup /home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed.setup.json --json",
+   "level": "trace"}],
+ "inputs":
+ [["deps",
+   [["«lean-python-workspace»/LeanPythonEmbed:extraDep",
+     [["@«lean-python-workspace»:extraDep", "00000000000006bb"]]],
+    ["imports",
+     [["LeanPythonEmbed.step04.code.m transitive imports (legacy)",
+       "00000000000006bb"],
+      ["LeanPythonEmbed.step04.code.m:importAllArts", "4d5a52048892b19f"]]]]],
+  ["libs",
+   [["import dynlibs", "00000000000006bb"],
+    ["package external libraries", "00000000000006bb"],
+    ["module dynlibs", "00000000000006bb"],
+    ["module plugins", "00000000000006bb"]]],
+  ["Lean 4.35.0, commit ", "21c42906adea99f5"],
+  ["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/04-inductives/.lean-python/workspace/LeanPythonEmbed.lean",
+   "cb285dfd9318281c"],
+  ["options", "00000000000006bb"],
+  ["isModule: false", "feefd2a0d3a1847e"],
+  ["Module.name: LeanPythonEmbed", "7fe50e62b4d7c407"],
+  ["Package.id?: (some lean-python-workspace)", "38adce80e179aa9a"],
+  ["Module.leanArgs: #[]", "00000000000006bb"]],
+ "depHash": "150f987928396d5d"}

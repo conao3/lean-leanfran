@@ -22,7 +22,7 @@ packages = ["src/lean_python"]
 
 [tool.ruff]
 line-length = 120
-extend-exclude = ["test-out"]
+extend-exclude = ["test-out", "samples/**/_lean"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

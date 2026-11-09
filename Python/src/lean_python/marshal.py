@@ -12,7 +12,7 @@ from typing import Annotated, Any, ClassVar
 
 import pydantic
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetCoreSchemaHandler, GetJsonSchemaHandler
-from pydantic_core import PydanticCustomError, ValidationError, core_schema
+from pydantic_core import PydanticCustomError, SchemaSerializer, SchemaValidator, ValidationError, core_schema
 
 from lean_python.runtime import Ctor, LArray, _f32, _list_to_py, _py_to_list
 
@@ -544,7 +544,7 @@ class LeanInductive(BaseModel):
     ``{"ctor": value}`` or ``{"ctor": [v1, v2]}`` for unnamed ones.
     """
 
-    model_config = ConfigDict(frozen=True, strict=True, extra="forbid", defer_build=True)
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
 
     __lean_ctors__: ClassVar[dict] = {}
 
@@ -600,22 +600,30 @@ class LeanInductive(BaseModel):
                 return {ci.name: vals[0] if len(vals) == 1 else vals}
             return {ci.name: d}
 
+        def json_schema(_schema, handler):
+            return cls._lean_json_schema(handler)
+
         return core_schema.with_info_plain_validator_function(
             validate,
             serialization=core_schema.plain_serializer_function_ser_schema(serialize, info_arg=True),
+            metadata={"pydantic_js_functions": [json_schema]},
         )
 
     @classmethod
     def __get_pydantic_json_schema__(cls, schema, handler: GetJsonSchemaHandler):
         if "__lean_ctors__" not in cls.__dict__:
             return super().__get_pydantic_json_schema__(schema, handler)
+        return cls._lean_json_schema(handler)
+
+    @classmethod
+    def _lean_json_schema(cls, handler: GetJsonSchemaHandler):
         variants = []
         for tag, sub in cls.__lean_ctors__.items():
             ci = sub.__lean_ctor__
             if ci.unit or not ci.fields:
                 variants.append({"const": tag})
                 continue
-            payload = handler(sub.__pydantic_core_schema__)
+            payload = _inline_defs(sub.model_json_schema(mode=getattr(handler, "mode", "validation")))
             if ci.positional:
                 props = payload.get("properties", {})
                 items = [props.get(f.name, {}) for f in ci.fields]
@@ -628,6 +636,26 @@ class LeanInductive(BaseModel):
                 {"type": "object", "properties": {tag: payload}, "required": [tag], "additionalProperties": False}
             )
         return {"oneOf": variants, "title": cls.__name__, "description": cls.__doc__}
+
+
+def _inline_defs(schema):
+    """The JSON Schema with its ``$defs`` inlined (a recursive reference stays a ``$ref``)."""
+    defs = schema.pop("$defs", {})
+
+    def go(node, seen):
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                name = ref.removeprefix("#/$defs/")
+                if name in seen or name not in defs:
+                    return node
+                return go(defs[name], seen | {name})
+            return {k: go(v, seen) for k, v in node.items()}
+        if isinstance(node, list):
+            return [go(v, seen) for v in node]
+        return node
+
+    return go(schema, frozenset())
 
 
 class InductiveInfo:
@@ -659,11 +687,14 @@ def register_inductive(base, pairs):
     for sub, ci in pairs:
         sub.__lean_ctor__ = ci
         sub.__name__ = ci.name
-        sub.__qualname__ = f"{base.__qualname__}.{ci.name}"
         setattr(base, ci.name, sub)
         ctors[ci.name] = sub
     base.__lean_ctors__ = ctors
     base.__lean__ = InductiveInfo(base, pairs)
+    schema = base.__get_pydantic_core_schema__(base, None)
+    base.__pydantic_core_schema__ = schema
+    base.__pydantic_validator__ = SchemaValidator(schema)
+    base.__pydantic_serializer__ = SchemaSerializer(schema)
 
 
 # ---------------------------------------------------------------------------
@@ -692,5 +723,5 @@ def attach(g, path, fn):
 def finish(g):
     for v in list(g.values()):
         if isinstance(v, type) and issubclass(v, LeanModel) and v is not LeanModel:
-            v.model_rebuild(_types_namespace=g)
+            v.model_rebuild(force=True, _types_namespace=g)
             v.__match_args__ = tuple(v.model_fields)

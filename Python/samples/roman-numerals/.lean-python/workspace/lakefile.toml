@@ -1,0 +1,8 @@
+name = "lean-python-workspace"
+defaultTargets = ["LeanPythonEmbed"]
+
+[[lean_lib]]
+name = "LeanPythonEmbed"
+
+[[lean_lib]]
+name = "LeanPythonModels"

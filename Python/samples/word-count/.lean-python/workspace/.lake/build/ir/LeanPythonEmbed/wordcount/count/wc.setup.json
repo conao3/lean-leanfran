@@ -1,0 +1,7 @@
+{"plugins": [],
+ "package": "lean-python-workspace",
+ "options": {},
+ "name": "LeanPythonEmbed.wordcount.count.wc",
+ "isModule": false,
+ "importArts": {},
+ "dynlibs": []}

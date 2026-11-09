@@ -1,0 +1,6 @@
+"none" 200 560
+{"percent": {"p": 25}} 200 420
+{"fixed": {"amount": 1000}} 200 0
+{"percent": {"p": 150}} 422 Input should be less than or equal to 100
+qty 0 422
+{"additionalProperties": false, "properties": {"percent": {"additionalProperties": false, "properties": {"p": {"maximum": 100.0, "minimum": 0.0, "title": "P", "type": "integer"}}, "required": ["p"], "title": "percent", "type": "object"}}, "required": ["percent"], "type": "object"}

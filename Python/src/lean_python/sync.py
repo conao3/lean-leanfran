@@ -1,5 +1,6 @@
 """``lean-py sync``: check the Lean blocks of a package and generate their Python modules."""
 
+import ast
 import importlib
 import json
 import os
@@ -48,7 +49,7 @@ def record_blocks(pkg_dir):
     try:
         for path in sorted(pkg_dir.rglob("*.py")):
             rel = path.relative_to(pkg_dir)
-            if rel.parts[0] == "_lean" or "__pycache__" in rel.parts:
+            if rel.parts[0] == "_lean" or "__pycache__" in rel.parts or rel.name == "__main__.py":
                 continue
             parts = [pkg, *rel.with_suffix("").parts]
             if parts[-1] == "__init__":
@@ -92,6 +93,21 @@ def block_file(block, by_name):
     return head, head + block.source + f"\n\nend {ns}\n"
 
 
+def source_line(block):
+    """The line of the Python file where the block's source string starts."""
+    try:
+        tree = ast.parse(pathlib.Path(block.file).read_text())
+    except (OSError, SyntaxError):
+        return block.line
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and node.lineno <= block.line <= (node.end_lineno or node.lineno):
+            args = [*node.args, *(k.value for k in node.keywords if k.arg == "source")]
+            for a in args:
+                if isinstance(a, ast.Constant) and a.value == block.source:
+                    return a.lineno
+    return block.line
+
+
 def map_error(line, offsets):
     m = _LAKE_ERROR.match(line.strip())
     if not m:
@@ -100,11 +116,37 @@ def map_error(line, offsets):
     info = offsets.get(path)
     if info is None:
         return f"{path}:{ln}:{col}: {sev}: {msg}"
-    block, head_lines = info
+    block, head_lines, start = info
     k = int(ln) - head_lines
     if k < 1:
         return f"{block.file}:{block.line}: {sev}: (lean block {block.name}, Lean {ln}:{col}) {msg}"
-    return f"{block.file}:{block.line + k - 1}: {sev}: (lean block {block.name}, Lean {k}:{col}) {msg}"
+    return f"{block.file}:{start + k - 1}: {sev}: (lean block {block.name}, Lean {k}:{col}) {msg}"
+
+
+def lake_messages(output, offsets):
+    """The messages of a Lake build mapped to the Python files, with their continuation lines."""
+    out = []
+    lines = output.splitlines()
+    i = 0
+    while i < len(lines):
+        mapped = map_error(lines[i], offsets)
+        i += 1
+        if mapped is None:
+            continue
+        body = [mapped]
+        while (
+            i < len(lines)
+            and lines[i].strip()
+            and map_error(lines[i], offsets) is None
+            and (
+                lines[i].startswith(" ")
+                or not re.match(r"^(✖|✔|⣿|trace:|info:|error:|warning:|Some required|- )", lines[i])
+            )
+        ):
+            body.append(lines[i])
+            i += 1
+        out.append("\n".join(body))
+    return out
 
 
 def sync_package(pkg_dir, cli=None, out=sys.stderr):
@@ -147,7 +189,7 @@ def sync_package(pkg_dir, cli=None, out=sys.stderr):
         p = ws / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
-        offsets[str(rel)] = (b, head.count("\n"))
+        offsets[str(rel)] = (b, head.count("\n"), source_line(b))
     (ws / "LeanPythonEmbed.lean").write_text(
         "".join(f"import {models.dotted(b.lean_module)}\n" for b in blocks) or "\n"
     )
@@ -159,12 +201,12 @@ def sync_package(pkg_dir, cli=None, out=sys.stderr):
         ["lake", "build", "LeanPythonEmbed", "LeanPythonModels"], cwd=ws, capture_output=True, text=True, check=False
     )
     failed = r.returncode != 0
-    for line in (r.stdout + r.stderr).splitlines():
-        mapped = map_error(line, offsets)
-        if mapped is not None and (failed or ": warning:" in mapped):
-            print(f"lean-py: {mapped}", file=out)
+    messages = lake_messages(r.stdout + r.stderr, offsets)
+    for m in messages:
+        if failed or ": warning:" in m.split("\n")[0]:
+            print(f"lean-py: {m}", file=out)
     if failed:
-        if not any(map_error(line, offsets) for line in (r.stdout + r.stderr).splitlines()):
+        if not messages:
             print(r.stdout + r.stderr, file=out)
         raise SyncError("lake build failed", 254)
 

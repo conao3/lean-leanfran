@@ -55,8 +55,14 @@
             programs.nixfmt.enable = true;
             programs.ruff-check.enable = true;
             programs.ruff-format.enable = true;
-            settings.formatter.ruff-check.excludes = [ "test-out/*" ];
-            settings.formatter.ruff-format.excludes = [ "test-out/*" ];
+            settings.formatter.ruff-check.excludes = [
+              "test-out/*"
+              "samples/**/_lean/*"
+            ];
+            settings.formatter.ruff-format.excludes = [
+              "test-out/*"
+              "samples/**/_lean/*"
+            ];
           };
 
           devShells.default = pkgs.mkShell {

@@ -1,0 +1,33 @@
+{"synthetic": false,
+ "schemaVersion": "2025-09-10",
+ "outputs":
+ {"o": ["fb66b92b7ba20aa0.olean"],
+  "m": false,
+  "i": "b86559ffc73211bb.ilean",
+  "c": "3999efe0c77c1bb2.c"},
+ "log":
+ [{"message":
+   ".> LEAN_PATH=/home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/.lake/build/lib/lean /nix/store/2kbz20qdy9vdnc0ilrnmpnd551dk0z09-lean4-4.35.0/bin/lean /home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/LeanPythonEmbed/step08/code/bank.lean -o /home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step08/code/bank.olean -i /home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step08/code/bank.ilean -c /home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed/step08/code/bank.c --setup /home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/.lake/build/ir/LeanPythonEmbed/step08/code/bank.setup.json --json",
+   "level": "trace"}],
+ "inputs":
+ [["deps",
+   [["«lean-python-workspace»/LeanPythonEmbed:extraDep",
+     [["@«lean-python-workspace»:extraDep", "00000000000006bb"]]],
+    ["imports",
+     [["LeanPythonModels.step08.code transitive imports (legacy)",
+       "00000000000006bb"],
+      ["LeanPythonModels.step08.code:importAllArts", "a9a1ecf3f07a284e"]]]]],
+  ["libs",
+   [["import dynlibs", "00000000000006bb"],
+    ["package external libraries", "00000000000006bb"],
+    ["module dynlibs", "00000000000006bb"],
+    ["module plugins", "00000000000006bb"]]],
+  ["Lean 4.35.0, commit ", "21c42906adea99f5"],
+  ["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/08-pydantic-models/.lean-python/workspace/LeanPythonEmbed/step08/code/bank.lean",
+   "6133ca34c17bb86e"],
+  ["options", "00000000000006bb"],
+  ["isModule: false", "feefd2a0d3a1847e"],
+  ["Module.name: LeanPythonEmbed.step08.code.bank", "6ea0ad7ab09487e1"],
+  ["Package.id?: (some lean-python-workspace)", "38adce80e179aa9a"],
+  ["Module.leanArgs: #[]", "00000000000006bb"]],
+ "depHash": "f776690ebaf8eeff"}
