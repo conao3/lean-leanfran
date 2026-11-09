@@ -124,10 +124,10 @@ cargo-lean-rust`). The flake's default package has `lean-rust`, `cargo-lean-rust
 ```toml
 # Cargo.toml
 [dependencies]
-lean-rust = "0.2.0"
+lean-rust = "0.2.1"
 
 [build-dependencies]
-lean-rust-build = "0.2.0"
+lean-rust-build = "0.2.1"
 ```
 
 ```rust

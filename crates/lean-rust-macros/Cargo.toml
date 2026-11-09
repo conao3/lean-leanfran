@@ -14,7 +14,7 @@ categories.workspace = true
 proc-macro = true
 
 [dependencies]
-lean-rust-build = { path = "../lean-rust-build", version = "0.2.0" }
+lean-rust-build = { path = "../lean-rust-build", version = "0.2.1" }
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }
