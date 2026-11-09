@@ -2,7 +2,7 @@
 /.lake/
 /test-out/
 /.claude-dev/
-.lean-python/workspace/
+**/.lean-python/
 __pycache__/
 /.venv/
 /dist/

@@ -1,9 +1,0 @@
-{"plugins": [],
- "package": "lean-python-workspace",
- "options": {},
- "name": "LeanPythonEmbed.step09.code.report",
- "isModule": false,
- "importArts":
- {"LeanPythonEmbed.step09.code.shapes":
-  [["/home/conao/ghq/github.com/conao3/lean-py/samples/steps/09-uses/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/step09/code/shapes.olean"]]},
- "dynlibs": []}

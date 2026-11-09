@@ -1,9 +1,0 @@
-{"plugins": [],
- "package": "lean-python-workspace",
- "options": {},
- "name": "LeanPythonEmbed",
- "isModule": false,
- "importArts":
- {"LeanPythonEmbed.wordcount.count.wc":
-  [["/home/conao/ghq/github.com/conao3/lean-py/samples/word-count/.lean-python/workspace/.lake/build/lib/lean/LeanPythonEmbed/wordcount/count/wc.olean"]]},
- "dynlibs": []}

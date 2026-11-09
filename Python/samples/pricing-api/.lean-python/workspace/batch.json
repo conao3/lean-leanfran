@@ -1,1 +1,0 @@
-[{"module": "LeanPythonEmbed.pricing.api.pricing", "namespace": "LeanPythonEmbed.pricing.api.pricing", "output_file": "/home/conao/ghq/github.com/conao3/lean-py/samples/pricing-api/pricing/_lean/pricing__api__pricing.py", "type_modules": [{"namespace": "LeanPythonModels.pricing.models", "module": "pricing.models", "adopt": true}]}]
