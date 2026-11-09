@@ -516,6 +516,51 @@ for _n, _b in _WIDTHS.items():
     _define_uint(_n, _b)
 
 
+_SWIDTHS = {"int8": 8, "int16": 16, "int32": 32, "int64": 64, "isize": 64}
+
+
+def _define_sint(name, bits):
+    mask = (1 << bits) - 1
+    half = 1 << (bits - 1)
+
+    def val(a):
+        return a - (1 << bits) if a >= half else a
+
+    g = globals()
+    g[f"lean_{name}_of_int"] = lambda a: a & mask
+    g[f"lean_{name}_of_nat"] = lambda a: a & mask
+    g[f"lean_{name}_to_int"] = val
+    g[f"lean_{name}_add"] = lambda a, b: (a + b) & mask
+    g[f"lean_{name}_sub"] = lambda a, b: (a - b) & mask
+    g[f"lean_{name}_mul"] = lambda a, b: (a * b) & mask
+    g[f"lean_{name}_div"] = lambda a, b: lean_int_div(val(a), val(b)) & mask
+    g[f"lean_{name}_mod"] = lambda a, b: lean_int_mod(val(a), val(b)) & mask
+    g[f"lean_{name}_neg"] = lambda a: (-a) & mask
+    g[f"lean_{name}_land"] = lambda a, b: a & b
+    g[f"lean_{name}_lor"] = lambda a, b: a | b
+    g[f"lean_{name}_xor"] = lambda a, b: a ^ b
+    g[f"lean_{name}_shift_left"] = lambda a, b: (a << (val(b) % bits)) & mask
+    g[f"lean_{name}_shift_right"] = lambda a, b: (val(a) >> (val(b) % bits)) & mask
+    g[f"lean_{name}_complement"] = lambda a: a ^ mask
+    g[f"lean_{name}_abs"] = lambda a: abs(val(a)) & mask
+    g[f"lean_{name}_dec_eq"] = lambda a, b: a == b
+    g[f"lean_{name}_dec_lt"] = lambda a, b: val(a) < val(b)
+    g[f"lean_{name}_dec_le"] = lambda a, b: val(a) <= val(b)
+    g[f"lean_{name}_to_float"] = lambda a: float(val(a))
+    g[f"lean_{name}_to_float32"] = lambda a: _f32(float(val(a)))
+    for other, obits in _SWIDTHS.items():
+        if other != name:
+            omask = (1 << obits) - 1
+            g[f"lean_{name}_to_{other}"] = lambda a, omask=omask: val(a) & omask
+    for other, obits in _WIDTHS.items():
+        omask = (1 << obits) - 1
+        g[f"lean_{name}_to_{other}"] = lambda a, omask=omask: val(a) & omask
+
+
+for _n, _b in _SWIDTHS.items():
+    _define_sint(_n, _b)
+
+
 def lean_bool_to_uint64(a):
     return 1 if a else 0
 

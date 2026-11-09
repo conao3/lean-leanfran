@@ -19,3 +19,7 @@ root = "LeanPythonTest.OracleMain"
 [[lean_exe]]
 name = "oracle-io"
 root = "LeanPythonTest.IoMain"
+
+[[lean_exe]]
+name = "oracle-json"
+root = "LeanPythonTest.JsonMain"
