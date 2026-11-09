@@ -23,3 +23,7 @@ root = "LeanPythonTest.IoMain"
 [[lean_exe]]
 name = "oracle-json"
 root = "LeanPythonTest.JsonMain"
+
+[[lean_exe]]
+name = "oracle-bench"
+root = "LeanPythonTest.BenchMain"
