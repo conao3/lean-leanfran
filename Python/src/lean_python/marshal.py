@@ -263,7 +263,10 @@ class NamedD(Desc):
 
     def info(self):
         if self._info is None:
-            t = self.g[self.name]
+            first, *rest = self.name.split(".")
+            t = self.g[first]
+            for r in rest:
+                t = getattr(t, r)
             meta = getattr(t, "__metadata__", ())
             infos = [m for m in meta if isinstance(m, SubtypeInfo)]
             self._info = infos[0] if infos else t.__lean__
@@ -440,6 +443,11 @@ class SubtypeInfo:
         return v
 
 
+def adopt(cls, ctor, trivial=False):
+    """Attaches the layout of the Lean structure made from the user's pydantic model ``cls``."""
+    cls.__lean__ = StructInfo(cls, ctor, trivial)
+
+
 def subtype(pytype, desc, invariant):
     info = SubtypeInfo(desc, invariant)
     return Annotated[pytype, AfterValidator(info), info]
@@ -487,13 +495,15 @@ class EnumInfo:
 # Inductive types: a model per constructor, JSON as Lean's `deriving ToJson, FromJson`
 
 
-class LeanInductive:
+class LeanInductive(BaseModel):
     """Base class of the constructor models of a Lean inductive type.
 
     As a pydantic type it accepts an instance of a constructor model or Lean's JSON encoding:
     ``"ctor"`` for a constructor without arguments, ``{"ctor": {...}}`` for named arguments,
     ``{"ctor": value}`` or ``{"ctor": [v1, v2]}`` for unnamed ones.
     """
+
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid", defer_build=True)
 
     __lean_ctors__: ClassVar[dict] = {}
 
@@ -513,6 +523,8 @@ class LeanInductive:
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source: Any, handler: GetCoreSchemaHandler):
+        if "__lean_ctors__" not in cls.__dict__:
+            return handler(source)
         ctors = cls.__lean_ctors__
 
         def validate(v, info):
@@ -554,6 +566,8 @@ class LeanInductive:
 
     @classmethod
     def __get_pydantic_json_schema__(cls, schema, handler: GetJsonSchemaHandler):
+        if "__lean_ctors__" not in cls.__dict__:
+            return super().__get_pydantic_json_schema__(schema, handler)
         variants = []
         for tag, sub in cls.__lean_ctors__.items():
             ci = sub.__lean_ctor__
