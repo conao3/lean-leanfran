@@ -393,18 +393,20 @@ packages (Mathlib's 7.3 GB) between crates.
 ## The CLI
 
 ```
-lean-rust module generate --module-name <Module> [--roots <Name> ...] [--namespace <Name>]
-          [--search-path <dir> ...] [--output-file <path>] [--runtime-path <path>]
-          [--facade-path <path>] [--type-path <Namespace>=<path> ...] [--internal-only]
-          [--batch <jobs.json>] [--output json|text]
+lean-rust help | --help | --version | --generator-version
+lean-rust module generate (--module-name <Module> | --batch <jobs.json>) [--roots <Name> ...]
+          [--namespace <Name>] [--type-path <Namespace>=<path> ...] [--import <Module> ...]
+          [--model-namespace <Name>] [--search-path <dir> ...] [--output-file <path>]
+          [--runtime-path <path>] [--facade-path <path>] [--internal-only] [--output json|text]
 lean-rust project generate --lake-dir <dir> --output-dir <dir> [--modules <Module> ...]
-lean-rust crate check --lake-dir <dir> --obligations <json> [--modules <Module> ...]
+          [--runtime-path <path>] [--facade-path <path>] [--output json|text]
+lean-rust crate check --lake-dir <dir> --obligations <file> [--modules <Module> ...]
 ```
 
 `--roots` defaults to the module's public definitions written in its source (not instances).
-`--batch` runs several modules against one environment; `--import` adds modules whose `@[csimp]`
-lemmas apply, and `--model-namespace` maps the types of a crate's Aeneas model to its Rust
-types. `crate check` judges the proofs of obligations (used by `cargo lean-rust check`).
+`--batch` runs the jobs of a JSON file against one environment; `--import` adds modules whose
+`@[csimp]` lemmas apply, and `--model-namespace` maps the types of a crate's Aeneas model to its
+Rust types. `crate check` judges the proofs of obligations (used by `cargo lean-rust check`).
 Exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted (externs the
 runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `lean-rust help` prints all options.
 
