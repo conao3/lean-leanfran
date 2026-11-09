@@ -1,6 +1,6 @@
 [project]
 name = "lean-python"
-version = "0.1.0"
+version = "0.2.0"
 description = "Run Lean 4 code as Python: a runtime for code generated from Lean's IR, Lean blocks in Python files, and pydantic models for Lean types"
 readme = "README.md"
 license = "Apache-2.0"
