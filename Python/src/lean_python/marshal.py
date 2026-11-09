@@ -16,6 +16,9 @@ from pydantic_core import PydanticCustomError, ValidationError, core_schema
 
 from lean_python.runtime import Ctor, LArray, _f32, _list_to_py, _py_to_list
 
+Field = pydantic.Field
+"""Used by generated models for the field options (``alias``, ``exclude_if``)."""
+
 
 class LeanIOError(OSError):
     """An `IO.Error` raised by a Lean `IO` action."""
