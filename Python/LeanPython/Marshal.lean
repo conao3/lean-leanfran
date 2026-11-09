@@ -142,6 +142,9 @@ structure TypeDef where
   py : String
   lean : String
   kind : TypeKind
+  /-- Defined by another Python module: `some adopt`, where `adopt` attaches the Lean layout to
+      that module's class (a user's pydantic model). -/
+  external : Option Bool := none
   deriving Inhabited
 
 structure MarshalState where
@@ -150,8 +153,16 @@ structure MarshalState where
   inProgress : Std.HashSet String := {}
   deciders : Array Name := #[]
   subtypes : Std.HashMap String String := {}
+  /-- `import <module> as <alias>` lines of the external types. -/
+  extImports : Array (String × String) := #[]
 
-abbrev MarshalM := StateRefT MarshalState (ReaderT Name MetaM)
+structure MarshalCfg where
+  strip : Name
+  /-- Types in namespace `ns` are classes of the Python module `module` (named by their path
+      under `ns`); `adopt` marks a module of the user's pydantic models. -/
+  typeModules : Array (Name × String × Bool) := #[]
+
+abbrev MarshalM := StateRefT MarshalState (ReaderT MarshalCfg MetaM)
 
 def unsupportedTypes : List Name := [``ByteArray, ``FloatArray, ``Thunk, ``Task, ``Except, ``IO.Ref]
 
@@ -215,8 +226,18 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
   let some (.inductInfo ind) := env.find? c | throwError "unsupported type `{t}`"
   if ind.numIndices != 0 then throwError "type family `{t}`"
   if ind.isRec && ind.ctors.length == 1 then throwError "recursive structure `{t}`"
-  let strip ← read
+  let cfg ← read
+  let strip := cfg.strip
   let mut py := "_".intercalate (pyPath strip c).toList
+  let ext := cfg.typeModules.find? fun (ns, _, _) => ns.isPrefixOf c && c != ns
+  if let some (ns, pymod, _) := ext then
+    let alias ← match (← get).extImports.find? (·.2 == pymod) with
+      | some (a, _) => pure a
+      | none =>
+        let a := s!"_ext{(← get).extImports.size}"
+        modify fun s => { s with extImports := s.extImports.push (a, pymod) }
+        pure a
+    py := alias ++ "." ++ ".".intercalate (pyPath ns c).toList
   if c == ``Subtype then
     let key := toString (← ppExpr t)
     match (← get).subtypes[key]? with
@@ -283,7 +304,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
       pure (TypeKind.enum (variants.map (·.name)))
     else pure (TypeKind.sum variants)
   modify fun s => { s with
-    types := s.types.push { py, lean := leanStr, kind }
+    types := s.types.push { py, lean := leanStr, kind, external := ext.map (·.2.2) }
     index := s.index.insert py
     inProgress := s.inProgress.erase py }
   return .named py
@@ -358,6 +379,14 @@ def fieldLines (v : Variant) : String :=
     | _ => s!"    {f.name}: {quoteString f.desc.pyType}\n")
 
 def emitTypeDef (td : TypeDef) : String :=
+  match td.external with
+  | some true =>
+    match td.kind with
+    | .struct v => s!"_m.adopt({td.py}, {variantInfo v}, trivial=False)\n"
+    | .trivial v => s!"_m.adopt({td.py}, {variantInfo v}, trivial=True)\n"
+    | _ => ""
+  | some false => ""
+  | none =>
   match td.kind with
   | .struct v | .trivial v =>
     let trivial := match td.kind with | .trivial _ => "True" | _ => "False"

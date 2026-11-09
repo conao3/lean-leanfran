@@ -17,8 +17,14 @@ lean-python module generate
   --module-name <Name>        Lean module to import (required unless --batch)
   --roots <Name> ...          Functions to export (default: the module's public definitions)
   --namespace <Name>          Namespace removed from public Python names (default: the module name)
-  --batch <file>              JSON array of jobs {\"module\", \"output_file\", \"roots\"?, \"namespace\"?}
+  --batch <file>              JSON array of jobs {\"module\", \"output_file\", \"roots\"?, \"namespace\"?,
+                              \"type_modules\"?: [{\"namespace\", \"module\", \"adopt\"?}]}
                               run against one environment importing all their modules
+  --type-module <Name>=<module> ...
+                              Types in namespace <Name> are classes of the Python <module>
+  --model-module <Name>=<module> ...
+                              As --type-module, for a module of pydantic models given the
+                              layout of the Lean structures
   --import <Name> ...         More modules to import (their @[csimp] lemmas apply)
   --search-path <dir> ...     Extra .olean search directories
   --output-file <path>        Write the module here (default: standard output)
@@ -38,6 +44,12 @@ structure Opts where
   internalOnly : Bool := false
   output : String := "json"
   imports : Array Name := #[]
+  typeModules : Array (Name × String × Bool) := #[]
+
+def parseTypeModule (adopt : Bool) (s : String) : Except String (Name × String × Bool) :=
+  match s.splitOn "=" with
+  | [ns, m] => .ok (ns.toName, m, adopt)
+  | _ => .error s!"expected <Name>=<module>: {s}"
 
 partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   let takeMany (rest : List String) : List String × List String :=
@@ -58,6 +70,16 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   | "--roots" :: rest =>
     let (vs, rest) := takeMany rest
     parseOpts rest { o with roots := o.roots ++ vs.toArray.map String.toName }
+  | "--type-module" :: rest =>
+    let (vs, rest) := takeMany rest
+    match vs.mapM (parseTypeModule false) with
+    | .ok ps => parseOpts rest { o with typeModules := o.typeModules ++ ps.toArray }
+    | .error e => .error e
+  | "--model-module" :: rest =>
+    let (vs, rest) := takeMany rest
+    match vs.mapM (parseTypeModule true) with
+    | .ok ps => parseOpts rest { o with typeModules := o.typeModules ++ ps.toArray }
+    | .error e => .error e
   | "--search-path" :: rest =>
     let (vs, rest) := takeMany rest
     parseOpts rest { o with searchPath := o.searchPath ++ vs.toArray.map System.FilePath.mk }
@@ -72,6 +94,7 @@ structure Job where
   roots : Array Name := #[]
   namespace? : Option Name := none
   outputFile : Option System.FilePath := none
+  typeModules : Array (Name × String × Bool) := #[]
 
 /-- The definitions of `mod` exported by default: public, written in the source (with a declaration
     range), not instances or their auxiliary definitions, with IR. -/
@@ -96,7 +119,7 @@ def runJob (env : Environment) (o : Opts) (job : Job) : IO (Json × UInt32) := d
   let roots := if job.roots.isEmpty then defaultRoots env job.module else job.roots
   let strip := job.namespace?.getD job.module
   let ctx : Core.Context := { fileName := "<lean-python>", fileMap := default, maxHeartbeats := 0 }
-  let (res, _) ← (generate roots strip o.internalOnly).toIO ctx { env }
+  let (res, _) ← (generate roots strip o.internalOnly (o.typeModules ++ job.typeModules)).toIO ctx { env }
   match res with
   | .error e => failed 254 e
   | .ok out =>
@@ -141,7 +164,13 @@ def parseJobs (j : Json) : Except String (Array Job) := do
     let roots := (e.getObjValAs? (Array String) "roots").toOption.getD #[] |>.map String.toName
     let namespace? := (e.getObjValAs? String "namespace").toOption.map String.toName
     let outputFile := (e.getObjValAs? String "output_file").toOption.map System.FilePath.mk
-    return { module, roots, namespace?, outputFile }
+    let tms := (e.getObjValAs? (Array Json) "type_modules").toOption.getD #[]
+    let typeModules ← tms.mapM fun t => do
+      let ns := (← t.getObjValAs? String "namespace").toName
+      let m ← t.getObjValAs? String "module"
+      let adopt := (t.getObjValAs? Bool "adopt").toOption.getD false
+      pure (ns, m, adopt)
+    return { module, roots, namespace?, outputFile, typeModules }
 
 def moduleGenerate (o : Opts) : IO UInt32 := do
   let jobs ← match o.batch with

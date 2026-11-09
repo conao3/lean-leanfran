@@ -8,7 +8,7 @@ the Lean type (ranges, invariants) while they are converted; values coming back 
 
 import enum
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, ClassVar
 
 import pydantic
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetCoreSchemaHandler, GetJsonSchemaHandler
@@ -495,7 +495,7 @@ class LeanInductive:
     ``{"ctor": value}`` or ``{"ctor": [v1, v2]}`` for unnamed ones.
     """
 
-    __lean_ctors__: dict = {}
+    __lean_ctors__: ClassVar[dict] = {}
 
     @classmethod
     def _lean_payload(cls, sub, payload):

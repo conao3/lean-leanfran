@@ -70,7 +70,8 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   let attach := s!"_m.attach(globals(), {pyList f.path}, {pyName})\n"
   return (src ++ attach, tbl)
 
-def generate (roots : Array Name) (strip : Name) (internalOnly : Bool) : CoreM (Except String GenOutput) := do
+def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
+    (typeModules : Array (Name × String × Bool) := #[]) : CoreM (Except String GenOutput) := do
   let env ← getEnv
   if internalOnly then
     return match generateInternal env roots with
@@ -84,7 +85,7 @@ def generate (roots : Array Name) (strip : Name) (internalOnly : Bool) : CoreM (
     let some d := IR.findEnvDecl (← getEnv) target | skipped := skipped.push { name := r, reason := "no IR" }; continue
     let saved := st
     let res : Except String (PublicSig × MarshalState) ← try
-        let r ← (((publicSig r d.params).run st).run strip).run'
+        let r ← (((publicSig r d.params).run st).run { strip, typeModules }).run'
         pure (.ok r)
       catch e => pure (.error (← e.toMessageData.toString))
     match res with
@@ -105,8 +106,9 @@ def generate (roots : Array Name) (strip : Name) (internalOnly : Bool) : CoreM (
       | .ok (s, t) => fns := fns ++ s; tbl := t
       | .error e => return .error e
     let types := String.join (st.types.toList.map (emitTypeDef · ++ "\n\n"))
-    let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Lt  # noqa: E402\n\nfrom lean_python import marshal as _m  # noqa: E402\nfrom lean_python.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n\n\n" ++
-      types ++ String.join (tbl.defs.toList.map (· ++ "\n")) ++ "\n\n" ++ fns ++ "_m.finish(globals())\n"
+    let imports := String.join (st.extImports.toList.map fun (a, m) => s!"import {m} as {a}  # noqa: E402\n")
+    let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Lt  # noqa: E402\n\nfrom lean_python import marshal as _m  # noqa: E402\nfrom lean_python.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n" ++
+      imports ++ "\n\n" ++ types ++ String.join (tbl.defs.toList.map (· ++ "\n")) ++ "\n\n" ++ fns ++ "_m.finish(globals())\n"
     return .ok { items := out.items, publicItems := pub, externs := out.externs, decls := out.decls,
                  publics := publics.map fun f => (f.lean, ".".intercalate f.path.toList), skipped }
 
