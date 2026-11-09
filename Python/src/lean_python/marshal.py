@@ -485,8 +485,9 @@ class LeanEnum(enum.StrEnum):
 
 
 class EnumInfo:
-    def __init__(self, cls):
+    def __init__(self, cls, plain=False):
         self.cls = cls
+        self.plain = plain
         self.members = list(cls)
         self.index = {m: i for i, m in enumerate(self.members)}
 
@@ -499,7 +500,33 @@ class EnumInfo:
         return self.index[v]
 
     def to_py(self, x):
-        return self.members[x]
+        m = self.members[x]
+        return m.value if self.plain else m
+
+
+def adopt_enum(cls):
+    """Attaches the Lean inductive type made from the user's enum ``cls`` (a constructor per member)."""
+    cls.__lean__ = EnumInfo(cls)
+
+
+class ModelUnion:
+    """A union of the user's models (``Cat | Dog``): a Lean inductive type with a constructor per model."""
+
+    def __init__(self, alternatives):
+        self.alternatives = alternatives
+        self.__lean__ = self
+
+    def to_lean(self, v):
+        for cidx, d in self.alternatives:
+            if isinstance(v, d.info().cls):
+                return Ctor(cidx, [d.to_lean(v)])
+        _fail("expected one of " + ", ".join(d.info().cls.__name__ for _, d in self.alternatives), v)
+
+    def to_py(self, x):
+        for cidx, d in self.alternatives:
+            if cidx == x.tag:
+                return d.to_py(x.objs[0])
+        raise AssertionError(x.tag)
 
 
 # ---------------------------------------------------------------------------

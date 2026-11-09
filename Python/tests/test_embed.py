@@ -125,3 +125,23 @@ def test_auto_sync(project, tmp_path):
 
 
 del pathlib
+
+
+def test_enums_literals_and_unions(project):
+    out = check(
+        project,
+        """
+from pricing.orders import orders
+from pricing.models import Order, Cat, Dog, Status, LineItem
+o = Order(status=Status.open, kind="retail", items=[LineItem(sku="a", qty=1, unitPrice=1)], pet=Cat(name="tama", lives=9))
+print(orders.describe(o))
+print(orders.describe(Order(status="done", kind="wholesale", items=[], pet=Dog(name="pochi", good=True))))
+c = orders.close(o)
+print(type(c).__name__, c.status is Status.closed, c.kind == "retail", c.pet, c.model_dump_json())
+""",
+    )
+    assert out.split("\n")[:3] == [
+        "open retail 1 items, cat tama with 9 lives",
+        "closed wholesale 0 items, dog pochi",
+        'Order True True None {"status":"done","kind":"retail","items":[{"sku":"a","qty":1,"unitPrice":1}],"pet":null}',
+    ]

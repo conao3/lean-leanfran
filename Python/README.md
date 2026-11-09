@@ -148,7 +148,9 @@ structure LineItem where
 
 `int` with a lower bound of at least 0 becomes `Nat`; the other bounds and `min_length`/`max_length`
 become proof fields. Field types: `int`, `bool`, `str`, `float`, `list[T]`, `tuple[...]`, `T | None`,
-and other models. `multiple_of`, `pattern` and validators are not assumed in Lean; the structure's
+other models, enums (an inductive type `LeanPythonModels.<module>.<Enum>` with a constructor per
+member), `Literal["a", "b"]` (`LeanPythonLiterals.<module>.<Model>_<field>`), and unions of models
+(`LeanPythonUnions.<module>.<Model>_<field>`, a constructor per model holding it as `val`). `multiple_of`, `pattern` and validators are not assumed in Lean; the structure's
 docstring lists them. Generated functions take and return your classes; values that did not go
 through validation (`model_construct`) are checked again on the way to Lean.
 

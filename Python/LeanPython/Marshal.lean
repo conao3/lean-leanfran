@@ -143,6 +143,8 @@ inductive TypeKind where
   | subtype (f : Field) (inv : Invariant)
   | enum (ctors : Array String)
   | sum (variants : Array Variant)
+  /-- `LeanPythonUnions.*`: a union of the user's models, by constructor index. -/
+  | modelUnion (variants : Array Variant)
   deriving Inhabited
 
 structure TypeDef where
@@ -355,6 +357,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
     else if variants.size == 1 then
       if (← Compiler.LCNF.hasTrivialStructure? c).isSome then pure (TypeKind.trivial variants[0]!)
       else pure (TypeKind.struct variants[0]!)
+    else if c.getRoot == `LeanPythonUnions then pure (TypeKind.modelUnion variants)
     else if variants.all (·.fields.isEmpty) && variants.all (·.invariants.isEmpty) then
       pure (TypeKind.enum (variants.map (·.name)))
     else pure (TypeKind.sum variants)
@@ -447,6 +450,7 @@ def emitTypeDef (td : TypeDef) : String :=
     match td.kind with
     | .struct v => s!"_m.adopt({td.py}, {variantInfo v}, trivial=False)\n"
     | .trivial v => s!"_m.adopt({td.py}, {variantInfo v}, trivial=True)\n"
+    | .enum _ => s!"_m.adopt_enum({td.py})\n"
     | _ => ""
   | some false => ""
   | none =>
@@ -459,7 +463,11 @@ def emitTypeDef (td : TypeDef) : String :=
     s!"{td.py} = _m.subtype({f.desc.pyType}, {f.desc.pyDesc}, {invariantDescs #[inv]}, [{", ".intercalate f.annotations.toList}])\n"
   | .enum ctors =>
     let members := String.join (ctors.toList.map fun c => s!"    {sanitize c} = {quoteString c}\n")
-    s!"class {td.py}(_m.LeanEnum):\n    {quoteString s!"Lean `{td.lean}`."}\n{members}\n\n{td.py}.__lean__ = _m.EnumInfo({td.py})\n"
+    let plain := if td.py.startsWith "LeanPythonLiterals" then "True" else "False"
+    s!"class {td.py}(_m.LeanEnum):\n    {quoteString s!"Lean `{td.lean}`."}\n{members}\n\n{td.py}.__lean__ = _m.EnumInfo({td.py}, plain={plain})\n"
+  | .modelUnion vs =>
+    let alts := ", ".intercalate (vs.toList.map fun v => s!"({v.cidx}, {(v.fields[0]!).desc.pyDesc})")
+    s!"{td.py} = _m.ModelUnion([{alts}])\n"
   | .sum vs =>
     let base := s!"class {td.py}(_m.LeanInductive):\n    {quoteString s!"Lean `{td.lean}`."}\n\n"
     let subs := String.join (vs.toList.map fun v =>
