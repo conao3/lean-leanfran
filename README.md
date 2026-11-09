@@ -115,8 +115,8 @@ executable is `.lake/build/bin/lean-rust`.
 
 The Rust crates are `lean-rust` (the facade with `lean!`, `#[model]`, the runtime and the
 conversion traits), `lean-rust-runtime`, `lean-rust-macros`, `lean-rust-build` and
-`cargo-lean-rust` (the `cargo lean-rust` command). Until they are published, depend on them by
-path or git. The flake's default package has `lean-rust`, `cargo-lean-rust`, `charon` and
+`cargo-lean-rust` (the `cargo lean-rust` command), all on crates.io (`cargo install
+cargo-lean-rust`). The flake's default package has `lean-rust`, `cargo-lean-rust`, `charon` and
 `aeneas`.
 
 ## Quick start: `lean!`
@@ -124,10 +124,10 @@ path or git. The flake's default package has `lean-rust`, `cargo-lean-rust`, `ch
 ```toml
 # Cargo.toml
 [dependencies]
-lean-rust = { git = "https://github.com/conao3/lean-rs" }
+lean-rust = "0.2.0"
 
 [build-dependencies]
-lean-rust-build = { git = "https://github.com/conao3/lean-rs" }
+lean-rust-build = "0.2.0"
 ```
 
 ```rust
