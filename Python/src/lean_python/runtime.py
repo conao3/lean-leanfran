@@ -99,6 +99,16 @@ class Ref:
 
 _RC = (Ctor, LArray, LByteArray, LFloatArray)
 
+# Classes of external objects with a reference count, and what to do when it reaches 0.
+_FINALIZERS = {}
+
+
+def register_external(cls, finalize):
+    global _RC
+    _RC = (*_RC, cls)
+    _FINALIZERS[cls] = finalize
+
+
 # ---------------------------------------------------------------------------
 # Reference counting
 
@@ -135,6 +145,9 @@ def _free(x):
         elif o.__class__ is LArray:
             children = o.data
         else:
+            fin = _FINALIZERS.get(o.__class__)
+            if fin is not None:
+                fin(o)
             continue
         for c in children:
             if c.__class__ in _RC:
@@ -1382,3 +1395,6 @@ def lean_task_bind(t, f, prio=0, sync=0):
 
 def lean_io_wait(t, _w=0):
     return t.value
+
+
+from lean_python.io_externs import *
