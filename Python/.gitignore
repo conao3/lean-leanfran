@@ -1,0 +1,8 @@
+/result
+/.lake/
+/test-out/
+/.claude-dev/
+.lean-python/workspace/
+__pycache__/
+/.venv/
+/dist/
