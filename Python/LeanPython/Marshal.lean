@@ -100,9 +100,16 @@ inductive FieldLoc where
   deriving Inhabited
 
 structure Field where
+  /-- Python attribute name. -/
   name : String
   loc : FieldLoc
   desc : Desc
+  /-- JSON key (Lean's `ToJson`), when it differs from `name`. -/
+  alias : Option String := none
+  /-- A field named `x?`: the key is omitted when the value is `none`. -/
+  omitNone : Bool := false
+  /-- annotated-types constraints (`Le(100)`) implied by proof fields comparing the field with a constant. -/
+  annotations : Array String := #[]
   deriving Inhabited
 
 /-- A proof field: checked by the compiled decision procedure `decider` applied to the earlier
@@ -133,7 +140,7 @@ inductive TypeKind where
   /-- A structure represented by its one relevant field. -/
   | trivial (v : Variant)
   /-- `{x : α // p x}`: the value, checked by the invariant. -/
-  | subtype (d : Desc) (inv : Invariant)
+  | subtype (f : Field) (inv : Invariant)
   | enum (ctors : Array String)
   | sum (variants : Array Variant)
   deriving Inhabited
@@ -179,6 +186,46 @@ def compileDecider (name : Name) (args : Array Lean.Expr) (prop : Lean.Expr) : M
   if value.hasFVar || value.hasMVar then throwError "the proposition `{prop}` depends on a proof field"
   let type ← inferType value
   addAndCompile (.defnDecl { name, levelParams := [], type, value, hints := .opaque, safety := .safe })
+
+/-- A literal natural number or integer. -/
+def literalInt? (e : Lean.Expr) : MetaM (Option Int) := do
+  let e ← instantiateMVars e
+  if let some i := e.int? then return some i
+  if let some n ← (evalNat e).run then return some (Int.ofNat n)
+  return none
+
+/-- The annotated-types constraint a proposition `x < c`, `c ≤ x`, `x.length ≤ c`, … puts on the
+    field `x` (`v`), as Python source. -/
+def boundOf (v : Lean.Expr) (p : Lean.Expr) : MetaM (Option String) := do
+  let p := p.consumeMData
+  let (op, a, b) ← match p.getAppFnArgs with
+    | (``LT.lt, #[_, _, a, b]) => pure ("lt", a, b)
+    | (``LE.le, #[_, _, a, b]) => pure ("le", a, b)
+    | (``GT.gt, #[_, _, a, b]) => pure ("gt", a, b)
+    | (``GE.ge, #[_, _, a, b]) => pure ("ge", a, b)
+    | _ => return none
+  let isLen (e : Lean.Expr) : Bool := match e.getAppFnArgs with
+    | (``String.length, #[x]) => x == v
+    | (``List.length, #[_, x]) => x == v
+    | (``Array.size, #[_, x]) => x == v
+    | _ => false
+  let flip : String → String
+    | "lt" => "gt" | "le" => "ge" | "gt" => "lt" | _ => "le"
+  let (op, target, lit) :=
+    if a == v || isLen a then (op, a, b) else (flip op, b, a)
+  unless target == v || isLen target do return none
+  let some c ← literalInt? lit | return none
+  if isLen target then
+    match op with
+    | "lt" => return some s!"MaxLen({c - 1})"
+    | "le" => return some s!"MaxLen({c})"
+    | "gt" => return some s!"MinLen({c + 1})"
+    | _ => return some s!"MinLen({c})"
+  match op with
+  | "lt" => return some s!"Lt({c})"
+  | "le" => return some s!"Le({c})"
+  | "gt" => return some s!"Gt({c})"
+  | _ => return some s!"Ge({c})"
 
 mutual
 
@@ -268,9 +315,16 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
         let f := fs[i]
         let ty ← inferType f
         let userName ← f.fvarId!.getUserName
-        let fname := if named then sanitize (componentString userName.eraseMacroScopes) else s!"a{i}"
+        let raw := componentString userName.eraseMacroScopes
+        let optKey := named && raw.endsWith "?" && raw.length > 1
+        let key := if optKey then (raw.dropEnd 1).toString else raw
+        let fname := if named then sanitize key else s!"a{i}"
         if ← isProp ty then
           let ty := ty.headBeta
+          for h : j in [0:valueFvars.size] do
+            if let some ann ← boundOf valueFvars[j] ty then
+              let k := valueIdx[j]!
+              fields := fields.modify k fun f => { f with annotations := f.annotations.push ann }
           let dn := deciderName py (componentString ctor) fname
           compileDecider dn valueFvars ty
           modify fun s => { s with deciders := s.deciders.push dn }
@@ -285,7 +339,8 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
         let d ← descOf ty
         valueIdx := valueIdx.push fields.size
         valueFvars := valueFvars.push f
-        fields := fields.push { name := fname, loc, desc := d }
+        let alias := if named && fname != key then some key else none
+        fields := fields.push { name := fname, loc, desc := d, alias, omitNone := optKey }
       let i := layout.ctorInfo
       return { name := componentString ctor, py := py ++ "_" ++ sanitize (componentString ctor), cidx := i.cidx,
                size := i.size, unit := i.size == 0 && i.usize == 0 && i.ssize == 0, fields,
@@ -296,7 +351,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
       let v := variants[0]!
       let some f := v.fields[0]? | throwError "subtype without a value: {t}"
       let some inv := v.invariants[0]? | throwError "subtype without a property: {t}"
-      pure (TypeKind.subtype f.desc inv)
+      pure (TypeKind.subtype f inv)
     else if variants.size == 1 then
       if (← Compiler.LCNF.hasTrivialStructure? c).isSome then pure (TypeKind.trivial variants[0]!)
       else pure (TypeKind.struct variants[0]!)
@@ -372,11 +427,19 @@ def invariantDescs (vs : Array Invariant) : String :=
 def variantInfo (v : Variant) : String :=
   s!"_m.CtorInfo({quoteString v.name}, {v.cidx}, {v.size}, {if v.unit then "True" else "False"}, [{fieldDescs v.fields}], [{invariantDescs v.invariants}], {if v.positional then "True" else "False"})"
 
+def Field.pyType (f : Field) : String :=
+  if f.annotations.isEmpty then f.desc.pyType
+  else s!"Annotated[{f.desc.pyType}, {", ".intercalate f.annotations.toList}]"
+
 def fieldLines (v : Variant) : String :=
   String.join (v.fields.toList.map fun f =>
-    match f.desc with
-    | .option _ => s!"    {f.name}: {quoteString f.desc.pyType} = None\n"
-    | _ => s!"    {f.name}: {quoteString f.desc.pyType}\n")
+    let isOpt := match f.desc with | .option _ => true | _ => false
+    let parts := (if isOpt then #["default=None"] else #[]) ++
+      (match f.alias with | some a => #[s!"alias={quoteString a}"] | none => #[]) ++
+      (if f.omitNone then #["exclude_if=_m.is_none"] else #[])
+    let dflt := if parts.isEmpty then "" else
+      if parts == #["default=None"] then " = None" else s!" = _m.Field({", ".intercalate parts.toList})"
+    s!"    {f.name}: {quoteString f.pyType}{dflt}\n")
 
 def emitTypeDef (td : TypeDef) : String :=
   match td.external with
@@ -392,8 +455,8 @@ def emitTypeDef (td : TypeDef) : String :=
     let trivial := match td.kind with | .trivial _ => "True" | _ => "False"
     let body := fieldLines v
     s!"class {td.py}(_m.LeanModel):\n    {quoteString s!"Lean `{td.lean}`."}\n{body}\n\n{td.py}.__lean__ = _m.StructInfo({td.py}, {variantInfo v}, trivial={trivial})\n"
-  | .subtype d inv =>
-    s!"{td.py} = _m.subtype({d.pyType}, {d.pyDesc}, {invariantDescs #[inv]})\n"
+  | .subtype f inv =>
+    s!"{td.py} = _m.subtype({f.desc.pyType}, {f.desc.pyDesc}, {invariantDescs #[inv]}, [{", ".intercalate f.annotations.toList}])\n"
   | .enum ctors =>
     let members := String.join (ctors.toList.map fun c => s!"    {sanitize c} = {quoteString c}\n")
     s!"class {td.py}(_m.LeanEnum):\n    {quoteString s!"Lean `{td.lean}`."}\n{members}\n\n{td.py}.__lean__ = _m.EnumInfo({td.py})\n"

@@ -34,7 +34,7 @@ theorem total_le (items : List LineItem) (d : Discount) : total items d ≤ subt
 
 items = [LineItem(sku="a", qty=2, unitPrice=100)]
 pricing.total(items, pricing.Discount.percent(p=10))  # 180
-pricing.Discount.percent(p=150)                       # pydantic.ValidationError: h: p ≤ 100 does not hold
+pricing.Discount.percent(p=150)                       # pydantic.ValidationError: p: Input should be less than or equal to 100
 ```
 
 - `lean-py sync` checks the proofs with Lake and compiles the Lean code from Lean's IR to plain
@@ -45,7 +45,8 @@ pricing.Discount.percent(p=150)                       # pydantic.ValidationError
   kept, so `Array` updates happen in place as in C.
 - Lean structures and inductive types become pydantic models. A proof field (`h : p ≤ 100`) becomes
   a validator that runs a decision procedure compiled from the proposition, so every value that
-  reaches Lean satisfies the invariants the proofs rely on. The JSON of the models is the JSON of
+  reaches Lean satisfies the invariants the proofs rely on; a comparison with a constant also becomes
+  an annotated-types constraint (`Le(100)`), checked by pydantic-core and shown in the JSON Schema. The JSON of the models is the JSON of
   Lean's `deriving ToJson, FromJson`.
 - Your own pydantic models can be used from Lean (`models=[...]`). Their field constraints
   (`ge`, `gt`, `le`, `lt`, `min_length`, `max_length`) become proof fields that Lean proofs may assume.

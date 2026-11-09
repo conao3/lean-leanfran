@@ -107,7 +107,7 @@ def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
       | .error e => return .error e
     let types := String.join (st.types.toList.map (emitTypeDef · ++ "\n\n"))
     let imports := String.join (st.extImports.toList.map fun (a, m) => s!"import {m} as {a}  # noqa: E402\n")
-    let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Lt  # noqa: E402\n\nfrom lean_python import marshal as _m  # noqa: E402\nfrom lean_python.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n" ++
+    let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Gt, Le, Lt, MaxLen, MinLen  # noqa: E402\n\nfrom lean_python import marshal as _m  # noqa: E402\nfrom lean_python.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n" ++
       imports ++ "\n\n" ++ types ++ String.join (tbl.defs.toList.map (· ++ "\n")) ++ "\n\n" ++ fns ++ "_m.finish(globals())\n"
     return .ok { items := out.items, publicItems := pub, externs := out.externs, decls := out.decls,
                  publics := publics.map fun f => (f.lean, ".".intercalate f.path.toList), skipped }

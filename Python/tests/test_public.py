@@ -85,11 +85,15 @@ def test_invariants(pub):
         pub.Range.width(bad)
     assert pub.Range.widen(pub.Range(lo=1, hi=2), 3) == pub.Range(lo=1, hi=5)
     assert pub.Discount.apply(pub.Discount.percent(p=10), 200) == 180
-    with pytest.raises(ValidationError, match="p ≤ 100"):
+    with pytest.raises(ValidationError, match="less than or equal to 100"):
         pub.Discount.percent(p=150)
+    with pytest.raises(ValidationError, match="p ≤ 100"):
+        pub.Discount.apply(pub.Discount.percent.model_construct(p=150), 1)
     assert pub.small(10) == 20
     with pytest.raises(ValidationError, match="val < 100"):
         pub.small(100)
+    with pytest.raises(ValidationError, match="less than 100"):
+        TypeAdapter(pub._Subtype0).validate_python(100)
     with pytest.raises(ValidationError):
         TypeAdapter(pub._Subtype0).validate_python(100)
 
@@ -115,6 +119,12 @@ def test_json_matches_lean(pub):
         "node": {"l": {"node": {"l": "leaf", "v": 1, "r": "leaf"}}, "v": 2, "r": "leaf"}
     }
     assert TypeAdapter(pub.Tree).validate_json(TypeAdapter(pub.Tree).dump_json(tree)) == tree
+
+
+def test_bounds_in_json_schema(pub):
+    percent = pub.Discount.percent.model_json_schema()
+    assert percent["properties"]["p"]["maximum"] == 100
+    assert TypeAdapter(pub._Subtype0).json_schema()["exclusiveMaximum"] == 100
 
 
 def test_json_schema(pub):

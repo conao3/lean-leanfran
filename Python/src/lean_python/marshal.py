@@ -448,15 +448,26 @@ def adopt(cls, ctor, trivial=False):
     cls.__lean__ = StructInfo(cls, ctor, trivial)
 
 
-def subtype(pytype, desc, invariant):
+def subtype(pytype, desc, invariant, annotations=()):
     info = SubtypeInfo(desc, invariant)
-    return Annotated[pytype, AfterValidator(info), info]
+    return Annotated[pytype, *annotations, AfterValidator(info), info]
+
+
+def is_none(v):
+    return v is None
 
 
 class LeanModel(BaseModel):
     """A Lean structure or constructor: frozen, strict, no extra fields."""
 
-    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True,
+        strict=True,
+        extra="forbid",
+        validate_by_name=True,
+        validate_by_alias=True,
+        serialize_by_alias=True,
+    )
 
     @pydantic.model_validator(mode="after")
     def _lean_invariants(self):

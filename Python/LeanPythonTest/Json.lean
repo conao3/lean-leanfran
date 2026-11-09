@@ -42,6 +42,14 @@ inductive Tree where
   | node (l : Tree) (v : Nat) (r : Tree)
   deriving ToJson, FromJson
 
+structure Names where
+  note? : Option String
+  lambda : Nat
+  x' : Nat
+  deriving ToJson, FromJson
+
+def names : List Names := [{ note? := some "n", lambda := 1, x' := 2 }, { note? := none, lambda := 3, x' := 4 }]
+
 def outers : List Outer :=
   [{ name := "a", inner := ⟨"x", 1⟩, note := some "n", tags := ["t1", "t2"], pair := (3, true), scores := #[-1, 2] },
    { name := "é日", inner := ⟨"", 0⟩, note := none, tags := [], pair := (0, false), scores := #[] }]
@@ -57,6 +65,6 @@ def trees : List Tree := [.leaf, .node (.node .leaf 1 .leaf) 2 .leaf]
 def lines : List String :=
   (outers.map fun o => (toJson o).compress) ++ (shapes.map fun s => (toJson s).compress) ++
   (tokens.map fun t => (toJson t).compress) ++ (colors.map fun c => (toJson c).compress) ++
-  (trees.map fun t => (toJson t).compress)
+  (trees.map fun t => (toJson t).compress) ++ (names.map fun n => (toJson n).compress)
 
 end LeanPythonTest.Json
