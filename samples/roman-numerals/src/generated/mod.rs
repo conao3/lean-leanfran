@@ -6,6 +6,7 @@
     non_camel_case_types,
     unused_imports,
     unused_parens,
+    unsafe_op_in_unsafe_fn,
     clippy::all
 )]
 pub mod roman;

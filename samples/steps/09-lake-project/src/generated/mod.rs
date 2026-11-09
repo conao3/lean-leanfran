@@ -6,6 +6,7 @@
     non_camel_case_types,
     unused_imports,
     unused_parens,
+    unsafe_op_in_unsafe_fn,
     clippy::all
 )]
 pub mod stats;
@@ -15,6 +16,7 @@ pub mod stats;
     non_camel_case_types,
     unused_imports,
     unused_parens,
+    unsafe_op_in_unsafe_fn,
     clippy::all
 )]
 pub mod stats_mean;
@@ -24,6 +26,7 @@ pub mod stats_mean;
     non_camel_case_types,
     unused_imports,
     unused_parens,
+    unsafe_op_in_unsafe_fn,
     clippy::all
 )]
 pub mod stats_median;

@@ -155,7 +155,7 @@ fn expand(block: &LeanBlock) -> Result<TokenStream, String> {
     let vis = &block.vis;
     Ok(quote! {
         #(#attrs)*
-        #[allow(dead_code, non_snake_case, non_camel_case_types, unused_imports, unused_parens, clippy::all)]
+        #[allow(dead_code, non_snake_case, non_camel_case_types, unused_imports, unused_parens, unsafe_op_in_unsafe_fn, clippy::all)]
         #vis mod #name {
             include!(concat!(env!("OUT_DIR"), "/lean_rust/", #hash, #file_name));
         }
