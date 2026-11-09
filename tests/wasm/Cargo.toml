@@ -1,0 +1,14 @@
+[package]
+name = "lean-rust-wasm-test"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lean-rust = { path = "../../crates/lean-rust", default-features = false }
+
+[build-dependencies]
+lean-rust-build = { path = "../../crates/lean-rust-build" }

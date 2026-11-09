@@ -177,6 +177,22 @@ builds the project, uses `lake env`'s `LEAN_PATH` as the search path, and writes
 `src/generated/<module>.rs` for each module built by the package (or for `--modules ...`) and a
 `mod.rs`. Declare `mod generated;` in the crate and depend on `lean-rust`.
 
+## WebAssembly
+
+Generated code builds for `wasm32-unknown-unknown` (for a browser through `wasm-bindgen`) with
+
+```toml
+lean-rust = { version = "0.2.1", default-features = false }
+```
+
+Pure functions behave as on Unix. The `IO` actions that need an operating system (files,
+directories, handles other than the standard streams, child processes, locks, the current
+directory, random bytes, `IO.Process.exit`) return `IO.Error.unsupportedOperation` (Rust's
+`ErrorKind::Unsupported`) with the message `<operation> is not supported on
+wasm32-unknown-unknown`. `IO.getEnv` returns `none`, the process id is 0, the monotonic clocks
+stay at their start, `dbgSleep` returns at once, the standard input is empty, and the standard
+output and error (with panic messages) are discarded.
+
 ## Verifying Rust functions
 
 `#[lean_rust::model]` binds a Rust function to specs written in Lean. Charon and Aeneas
@@ -384,7 +400,8 @@ make check
 
 runs the format check, clippy, the diff tests against Lean's C backend (`./test-diff.sh`), the
 public API tests (`./test-public.sh`), the runtime and build tests, the `lean!` tests
-(`tests/embed`), the tests of `tests/verify` and the samples, all without Charon or Mathlib.
+(`tests/embed`), the tests of `tests/verify` and the samples, and builds the runtime for
+`wasm32-unknown-unknown` and runs `tests/wasm` in node, all without Charon or Mathlib.
 
 ```
 make check-verify
@@ -399,7 +416,8 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
 ## Limitations
 
 - Objects use non-atomic reference counts; `Task`s run synchronously where they are created.
-- The runtime builds on Unix (Linux and macOS).
+- The runtime builds on Unix (Linux and macOS) and on `wasm32-unknown-unknown` (see
+  [WebAssembly](#webassembly)).
 - `IO` follows the C runtime: files, directories, the environment, child processes (`fork` and
   `execvp`) and promises, with the same `IO.Error`s. Since tasks run synchronously,
   `IO.Process.output` reads the standard output of the child before its standard error, the

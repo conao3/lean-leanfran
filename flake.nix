@@ -100,6 +100,8 @@
               pkgs.rustfmt
               pkgs.cargo-nextest
               pkgs.gcc
+              pkgs.lld
+              pkgs.nodejs
               inputs.aeneas.packages.${system}.default
               config.treefmt.build.wrapper
             ];

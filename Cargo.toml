@@ -10,6 +10,7 @@ members = [
     "tests/public",
     "tests/embed",
     "tests/verify",
+    "tests/wasm",
     "samples/todo-cli",
     "samples/word-count",
     "samples/roman-numerals",
