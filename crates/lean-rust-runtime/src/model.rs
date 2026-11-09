@@ -288,7 +288,7 @@ pub fn ctor_layout(sizes: &[u32]) -> (Vec<u32>, u32, u32) {
 }
 
 /// Offset of a scalar field of a constructor with `objs` object fields.
-pub fn scalar_offset(objs: u32, off: u32) -> u32 {
+pub const fn scalar_offset(objs: u32, off: u32) -> u32 {
     objs * core::mem::size_of::<usize>() as u32 + off
 }
 

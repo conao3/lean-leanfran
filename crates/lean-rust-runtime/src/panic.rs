@@ -108,9 +108,13 @@ pub unsafe fn lean_dbg_trace(s: Obj, f: Obj) -> Obj {
     lean_apply_1(f, lean_box(0))
 }
 
-/// `dbgSleep`: sleeps `ms` milliseconds and applies `fn` (owned) to `()`.
+/// `dbgSleep`: sleeps `ms` milliseconds (not on a target without an OS) and applies `fn`
+/// (owned) to `()`.
 pub unsafe fn lean_dbg_sleep(ms: u32, f: Obj) -> Obj {
+    #[cfg(unix)]
     std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+    #[cfg(not(unix))]
+    let _ = ms;
     lean_apply_1(f, lean_box(0))
 }
 

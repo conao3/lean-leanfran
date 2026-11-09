@@ -1,6 +1,7 @@
 //! `IO.Error`: its constructors, the translation of OS error codes (`lean_decode_io_error`,
 //! after libuv's classification and messages, as the C runtime does), and `IO.Error.toString`.
 
+use crate::model::scalar_offset;
 use crate::object::*;
 use crate::string::{lean_mk_string, lean_string_to_str};
 
@@ -48,7 +49,7 @@ unsafe fn mk_error(tag: u32, fname: Option<Obj>, code: u32, details: Obj) -> Obj
         };
         lean_ctor_set(r, 0, f);
         lean_ctor_set(r, 1, details);
-        lean_ctor_set_uint32(r, 16, code);
+        lean_ctor_set_uint32(r, scalar_offset(2, 0), code);
         r
     } else {
         if let Some(f) = fname {
@@ -56,7 +57,7 @@ unsafe fn mk_error(tag: u32, fname: Option<Obj>, code: u32, details: Obj) -> Obj
         }
         let r = lean_alloc_ctor(tag, 1, 4);
         lean_ctor_set(r, 0, details);
-        lean_ctor_set_uint32(r, 8, code);
+        lean_ctor_set_uint32(r, scalar_offset(1, 0), code);
         r
     }
 }
@@ -78,24 +79,44 @@ pub unsafe fn lean_mk_io_error_eof(_unit: Obj) -> Obj {
     lean_box(UNEXPECTED_EOF as usize)
 }
 
+/// The OS error codes that the runtime raises itself (Linux's on a target without an OS).
+#[cfg(unix)]
+pub(crate) use libc::{EBADF, EINVAL, ENOENT, ESPIPE};
+#[cfg(not(unix))]
+pub(crate) const EBADF: i32 = 9;
+#[cfg(not(unix))]
+pub(crate) const EINVAL: i32 = 22;
+#[cfg(not(unix))]
+pub(crate) const ESPIPE: i32 = 29;
+
+/// `IO.Error.unsupportedOperation 0 "<what> is not supported on <target>"`: the error of the
+/// operations that need an OS, on a target without one.
+#[cfg(not(unix))]
+pub(crate) unsafe fn unsupported_error(what: &str) -> Obj {
+    let msg = format!("{what} is not supported on {}", env!("LEAN_RUST_TARGET"));
+    mk_error(UNSUPPORTED_OPERATION, None, 0, lean_mk_string(&msg))
+}
+
 /// `IO.Error.noFileOrDirectory fname ENOENT ""` (borrows `fname`).
+#[cfg(unix)]
 pub(crate) unsafe fn file_not_found_error(fname: Obj) -> Obj {
     lean_inc(fname);
     mk_error(
         NO_FILE_OR_DIRECTORY,
         Some(fname),
-        libc::ENOENT as u32,
+        ENOENT as u32,
         lean_mk_string(""),
     )
 }
 
 /// `IO.Error.invalidArgument (some s) EINVAL "string contains NUL bytes"` (borrows `s`).
+#[cfg(unix)]
 pub(crate) unsafe fn embedded_nul_error(s: Obj) -> Obj {
     lean_inc(s);
     mk_error(
         INVALID_ARGUMENT,
         Some(s),
-        libc::EINVAL as u32,
+        EINVAL as u32,
         lean_mk_string("string contains NUL bytes"),
     )
 }
@@ -104,6 +125,7 @@ pub(crate) unsafe fn embedded_nul_error(s: Obj) -> Obj {
 
 /// The libuv error of an OS error code: `(errno of the libuv code, libuv's message)`. The OS
 /// codes of the platform are compared by name through `libc`.
+#[cfg(unix)]
 fn uv_of_errno(e: i32, approximate: bool) -> Option<(i32, &'static str)> {
     use libc as c;
     let table: &[(i32, &str)] = &[
@@ -188,6 +210,7 @@ fn uv_of_errno(e: i32, approximate: bool) -> Option<(i32, &'static str)> {
 }
 
 /// The `IO.Error` of the OS error `errnum` (`decode_uv_error_impl`); `fname` is borrowed.
+#[cfg(unix)]
 unsafe fn decode(errnum: i32, approximate: bool, fname: Option<Obj>) -> Obj {
     use libc as c;
     let (uv, msg) = match uv_of_errno(errnum, approximate) {
@@ -281,6 +304,13 @@ unsafe fn decode(errnum: i32, approximate: bool, fname: Option<Obj>) -> Obj {
     mk_error(tag, fname, code, details)
 }
 
+/// [`decode`] on a target without OS error codes, where every code is an unknown one.
+#[cfg(not(unix))]
+unsafe fn decode(errnum: i32, _approximate: bool, _fname: Option<Obj>) -> Obj {
+    let msg = format!("Unknown system error {}", -errnum);
+    mk_error(OTHER_ERROR, None, errnum as u32, lean_mk_string(&msg))
+}
+
 /// `lean_decode_io_error`: the `IO.Error` of the C library's `errno` value `errnum`; `fname`
 /// (borrowed) is the file name or null.
 pub unsafe fn lean_decode_io_error(errnum: i32, fname: Obj) -> Obj {
@@ -302,6 +332,7 @@ pub(crate) unsafe fn of_std(e: &std::io::Error, fname: Option<Obj>) -> Obj {
 }
 
 /// The same as [`of_std`] for the errors of the calls that the C runtime makes through libuv.
+#[cfg(unix)]
 pub(crate) unsafe fn of_std_uv(e: &std::io::Error, fname: Option<Obj>) -> Obj {
     match e.raw_os_error() {
         Some(n) => decode(n, false, fname),
@@ -365,13 +396,13 @@ pub unsafe fn io_error_to_string(e: Obj) -> String {
         (
             f,
             lean_string_to_str(lean_ctor_get(e, 1)),
-            lean_ctor_get_uint32(e, 16),
+            lean_ctor_get_uint32(e, scalar_offset(2, 0)),
         )
     } else {
         (
             None,
             lean_string_to_str(lean_ctor_get(e, 0)),
-            lean_ctor_get_uint32(e, 8),
+            lean_ctor_get_uint32(e, scalar_offset(1, 0)),
         )
     };
     let d = Some(details);

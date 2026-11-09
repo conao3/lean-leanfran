@@ -7,7 +7,7 @@
 
 use crate::array::{lean_alloc_sarray, lean_sarray_cptr, lean_sarray_set_size, sarray_bytes};
 use crate::closure::lean_alloc_closure;
-use crate::io_error::{io_error_to_string, of_std};
+use crate::io_error::{io_error_to_string, of_std, EBADF, EINVAL, ESPIPE};
 use crate::nat::lean_uint64_to_nat;
 use crate::object::*;
 use crate::string::{lean_mk_string_from_bytes, lean_string_bytes};
@@ -68,6 +68,12 @@ pub unsafe fn lean_io_result_take_value(r: Obj) -> Obj {
 /// The `error` result of a Rust I/O error without a file name.
 pub(crate) unsafe fn io_result_of_error(e: &std::io::Error) -> Obj {
     lean_io_result_mk_error(of_std(e, None))
+}
+
+/// The `error` result of an operation that needs an OS, on a target without one.
+#[cfg(not(unix))]
+pub(crate) unsafe fn io_result_unsupported(what: &str) -> Obj {
+    lean_io_result_mk_error(crate::io_error::unsupported_error(what))
 }
 
 /// `ok ()`, or the `error` result of `r`.
@@ -222,6 +228,7 @@ pub unsafe fn lean_io_wrap_handle(f: HandleFile) -> Obj {
 }
 
 /// An `IO.FS.Handle` for the file `f`.
+#[cfg(unix)]
 pub(crate) unsafe fn wrap_file(f: std::fs::File) -> Obj {
     lean_io_wrap_handle(HandleFile::File(RefCell::new(FileState::new(f))))
 }
@@ -234,13 +241,14 @@ fn write_to(f: &HandleFile, bytes: &[u8]) -> std::io::Result<()> {
     match f {
         HandleFile::Stdout => std::io::stdout().write_all(bytes),
         HandleFile::Stderr => std::io::stderr().write_all(bytes),
-        HandleFile::Stdin => Err(std::io::Error::from_raw_os_error(libc::EBADF)),
+        HandleFile::Stdin => Err(std::io::Error::from_raw_os_error(EBADF)),
         HandleFile::File(s) => s.borrow_mut().write(bytes),
     }
 }
 
 /// `Handle.mk : (@& FilePath) → FS.Mode → IO Handle`: `read`, `write`, `writeNew`, `readWrite`
 /// or `append` (0–4).
+#[cfg(unix)]
 pub unsafe fn lean_io_prim_handle_mk(fname: Obj, mode: u8) -> Obj {
     let path = match crate::fs::path_of(fname) {
         Ok(p) => p,
@@ -258,6 +266,11 @@ pub unsafe fn lean_io_prim_handle_mk(fname: Obj, mode: u8) -> Obj {
         Ok(f) => lean_io_result_mk_ok(wrap_file(f)),
         Err(e) => lean_io_result_mk_error(of_std(&e, Some(fname))),
     }
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_prim_handle_mk(_fname: Obj, _mode: u8) -> Obj {
+    io_result_unsupported("opening a file")
 }
 
 /// `Handle.flush : (@& Handle) → IO Unit`.
@@ -291,7 +304,7 @@ pub unsafe fn lean_io_prim_handle_get_line(h: Obj) -> Obj {
                 .map(|_| line)
         }
         HandleFile::File(s) => s.borrow_mut().get_line(),
-        _ => Err(std::io::Error::from_raw_os_error(libc::EBADF)),
+        _ => Err(std::io::Error::from_raw_os_error(EBADF)),
     };
     match r {
         Ok(line) => lean_io_result_mk_ok(lean_mk_string_from_bytes(&line)),
@@ -303,7 +316,7 @@ pub unsafe fn lean_io_prim_handle_get_line(h: Obj) -> Obj {
 pub unsafe fn lean_io_prim_handle_read(h: Obj, nbytes: usize) -> Obj {
     let f = handle_file(h);
     if matches!(f, HandleFile::Stdout | HandleFile::Stderr) {
-        return io_result_of_error(&std::io::Error::from_raw_os_error(libc::EBADF));
+        return io_result_of_error(&std::io::Error::from_raw_os_error(EBADF));
     }
     let r = lean_alloc_sarray(1, 0, nbytes);
     let buf = core::slice::from_raw_parts_mut(lean_sarray_cptr(r), nbytes);
@@ -338,7 +351,7 @@ pub unsafe fn lean_io_prim_handle_is_tty(h: Obj) -> u8 {
 pub unsafe fn lean_io_prim_handle_rewind(h: Obj) -> Obj {
     io_unit(match handle_file(h) {
         HandleFile::File(s) => s.borrow_mut().rewind(),
-        _ => Err(std::io::Error::from_raw_os_error(libc::ESPIPE)),
+        _ => Err(std::io::Error::from_raw_os_error(ESPIPE)),
     })
 }
 
@@ -346,10 +359,11 @@ pub unsafe fn lean_io_prim_handle_rewind(h: Obj) -> Obj {
 pub unsafe fn lean_io_prim_handle_truncate(h: Obj) -> Obj {
     io_unit(match handle_file(h) {
         HandleFile::File(s) => s.borrow_mut().truncate(),
-        _ => Err(std::io::Error::from_raw_os_error(libc::EINVAL)),
+        _ => Err(std::io::Error::from_raw_os_error(EINVAL)),
     })
 }
 
+#[cfg(unix)]
 fn raw_fd(f: &HandleFile) -> i32 {
     use std::os::fd::AsRawFd;
     match f {
@@ -360,6 +374,7 @@ fn raw_fd(f: &HandleFile) -> i32 {
     }
 }
 
+#[cfg(unix)]
 fn flock(f: &HandleFile, op: i32) -> std::io::Result<()> {
     if unsafe { libc::flock(raw_fd(f), op) } == 0 {
         Ok(())
@@ -369,6 +384,7 @@ fn flock(f: &HandleFile, op: i32) -> std::io::Result<()> {
 }
 
 /// `Handle.lock : (@& Handle) → (exclusive : Bool) → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_prim_handle_lock(h: Obj, exclusive: u8) -> Obj {
     let op = if exclusive != 0 {
         libc::LOCK_EX
@@ -379,6 +395,7 @@ pub unsafe fn lean_io_prim_handle_lock(h: Obj, exclusive: u8) -> Obj {
 }
 
 /// `Handle.tryLock : (@& Handle) → (exclusive : Bool) → IO Bool`.
+#[cfg(unix)]
 pub unsafe fn lean_io_prim_handle_try_lock(h: Obj, exclusive: u8) -> Obj {
     let op = if exclusive != 0 {
         libc::LOCK_EX
@@ -393,8 +410,24 @@ pub unsafe fn lean_io_prim_handle_try_lock(h: Obj, exclusive: u8) -> Obj {
 }
 
 /// `Handle.unlock : (@& Handle) → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_prim_handle_unlock(h: Obj) -> Obj {
     io_unit(flock(handle_file(h), libc::LOCK_UN))
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_prim_handle_lock(_h: Obj, _exclusive: u8) -> Obj {
+    io_result_unsupported("locking a file")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_prim_handle_try_lock(_h: Obj, _exclusive: u8) -> Obj {
+    io_result_unsupported("locking a file")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_prim_handle_unlock(_h: Obj) -> Obj {
+    io_result_unsupported("locking a file")
 }
 
 /* Streams (`IO.FS.Stream.ofHandle`) */
@@ -578,25 +611,44 @@ pub unsafe fn lean_st_ref_ptr_eq(r1: Obj, r2: Obj) -> u8 {
 
 /* Clocks and process */
 
+#[cfg(unix)]
 fn mono_base() -> std::time::Instant {
     static BASE: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     *BASE.get_or_init(std::time::Instant::now)
 }
 
+/// The time since the first call; zero on a target without a clock.
+pub(crate) fn mono_elapsed() -> std::time::Duration {
+    #[cfg(unix)]
+    {
+        mono_base().elapsed()
+    }
+    #[cfg(not(unix))]
+    {
+        std::time::Duration::ZERO
+    }
+}
+
 /// `IO.monoMsNow : BaseIO Nat`.
 pub unsafe fn lean_io_mono_ms_now() -> Obj {
-    lean_uint64_to_nat(mono_base().elapsed().as_millis() as u64 + 1)
+    lean_uint64_to_nat(mono_elapsed().as_millis() as u64 + 1)
 }
 
 /// `IO.monoNanosNow : BaseIO Nat`.
 pub unsafe fn lean_io_mono_nanos_now() -> Obj {
-    lean_uint64_to_nat(mono_base().elapsed().as_nanos() as u64 + 1)
+    lean_uint64_to_nat(mono_elapsed().as_nanos() as u64 + 1)
 }
 
 /// `IO.Process.exit : UInt8 → IO α`.
+#[cfg(unix)]
 pub unsafe fn lean_io_exit(code: u8) -> Obj {
     let _ = std::io::stdout().flush();
     std::process::exit(code as i32)
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_exit(_code: u8) -> Obj {
+    io_result_unsupported("exiting the process")
 }
 
 /// `Runtime.markPersistent : α → BaseIO α`.

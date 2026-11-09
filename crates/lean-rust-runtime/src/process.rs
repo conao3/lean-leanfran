@@ -2,22 +2,35 @@
 //! the C runtime: a command that cannot be executed is reported by the child on its standard
 //! error, and the child exits with 255.
 
+#[cfg(unix)]
 use crate::array::{lean_array_get_core, lean_array_size};
-use crate::io::{io_result_of_error, lean_io_result_mk_ok, wrap_file};
+#[cfg(not(unix))]
+use crate::io::io_result_unsupported;
+use crate::io::lean_io_result_mk_ok;
+#[cfg(unix)]
+use crate::io::{io_result_of_error, wrap_file};
+use crate::model::scalar_offset;
 use crate::object::*;
+#[cfg(unix)]
 use crate::string::lean_string_bytes;
+#[cfg(unix)]
 use std::ffi::CString;
+#[cfg(unix)]
 use std::io::Write;
+#[cfg(unix)]
 use std::os::fd::FromRawFd;
 
 /// `IO.Process.Stdio`: `piped`, `inherit`, `null`.
+#[cfg(unix)]
 const PIPED: u8 = 0;
+#[cfg(unix)]
 const NUL: u8 = 2;
 
 /// Offset of the pid in a `Child` (after its three handle fields), and of the `setsid` flag.
-const PID_OFFSET: u32 = 24;
-const SETSID_OFFSET: u32 = 28;
+const PID_OFFSET: u32 = scalar_offset(3, 0);
+const SETSID_OFFSET: u32 = scalar_offset(3, 4);
 
+#[cfg(unix)]
 unsafe fn c_string(s: Obj) -> CString {
     let b = lean_string_bytes(s);
     let end = b.iter().position(|&c| c == 0).unwrap_or(b.len());
@@ -25,6 +38,7 @@ unsafe fn c_string(s: Obj) -> CString {
 }
 
 /// A pipe whose ends are closed on `exec`: `(read, write)`.
+#[cfg(unix)]
 fn pipe() -> std::io::Result<(i32, i32)> {
     let mut fds = [0i32; 2];
     #[cfg(target_os = "linux")]
@@ -46,11 +60,13 @@ fn pipe() -> std::io::Result<(i32, i32)> {
 }
 
 /// Writes `msg` on the standard error of the child, without allocating or locking.
+#[cfg(unix)]
 unsafe fn child_message(msg: &[u8]) {
     libc::write(2, msg.as_ptr() as *const libc::c_void, msg.len());
 }
 
 /// Connects the standard stream `target` of the child to its pipe end or `/dev/null`.
+#[cfg(unix)]
 unsafe fn child_stdio(mode: u8, pipe: Option<(i32, i32)>, target: i32, null: &CString) {
     if let Some((r, w)) = pipe {
         if target == 0 {
@@ -72,12 +88,20 @@ unsafe fn child_stdio(mode: u8, pipe: Option<(i32, i32)>, target: i32, null: &CS
 }
 
 /// `IO.Process.spawn : SpawnArgs → IO (Child args.toStdioConfig)` (consumes `args`).
+#[cfg(unix)]
 pub unsafe fn lean_io_process_spawn(args: Obj) -> Obj {
     let r = spawn(args);
     lean_dec(args);
     r
 }
 
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_spawn(args: Obj) -> Obj {
+    lean_dec(args);
+    io_result_unsupported("spawning a process")
+}
+
+#[cfg(unix)]
 unsafe fn spawn(args: Obj) -> Obj {
     let cfg = lean_ctor_get(args, 0);
     let modes = [
@@ -89,8 +113,8 @@ unsafe fn spawn(args: Obj) -> Obj {
     let argv_arr = lean_ctor_get(args, 2);
     let cwd = lean_ctor_get(args, 3);
     let env = lean_ctor_get(args, 4);
-    let inherit_env = lean_ctor_get_uint8(args, 40) != 0;
-    let do_setsid = lean_ctor_get_uint8(args, 41) != 0;
+    let inherit_env = lean_ctor_get_uint8(args, scalar_offset(5, 0)) != 0;
+    let do_setsid = lean_ctor_get_uint8(args, scalar_offset(5, 1)) != 0;
     if modes[0] == 1 {
         let _ = std::io::stdout().flush();
     }
@@ -192,6 +216,7 @@ unsafe fn spawn(args: Obj) -> Obj {
 
 /// The exit code of a `waitpid` status: the signal number plus 128 for a signal (bash's
 /// convention).
+#[cfg(unix)]
 fn exit_code(status: i32) -> u32 {
     if libc::WIFEXITED(status) {
         libc::WEXITSTATUS(status) as u32
@@ -205,6 +230,7 @@ unsafe fn pid_of(child: Obj) -> i32 {
 }
 
 /// `Child.wait : (@& Child cfg) → IO UInt32`.
+#[cfg(unix)]
 pub unsafe fn lean_io_process_child_wait(_cfg: Obj, child: Obj) -> Obj {
     let mut status = 0;
     if libc::waitpid(pid_of(child), &mut status, 0) == -1 {
@@ -214,6 +240,7 @@ pub unsafe fn lean_io_process_child_wait(_cfg: Obj, child: Obj) -> Obj {
 }
 
 /// `Child.tryWait : (@& Child cfg) → IO (Option UInt32)`.
+#[cfg(unix)]
 pub unsafe fn lean_io_process_child_try_wait(_cfg: Obj, child: Obj) -> Obj {
     let mut status = 0;
     match libc::waitpid(pid_of(child), &mut status, libc::WNOHANG) {
@@ -229,6 +256,7 @@ pub unsafe fn lean_io_process_child_try_wait(_cfg: Obj, child: Obj) -> Obj {
 
 /// `Child.kill : (@& Child cfg) → IO Unit`: `SIGKILL` to the process, or to its process group
 /// when it was spawned with `setsid`.
+#[cfg(unix)]
 pub unsafe fn lean_io_process_child_kill(_cfg: Obj, child: Obj) -> Obj {
     let pid = pid_of(child);
     let r = if lean_ctor_get_uint8(child, SETSID_OFFSET) != 0 {
@@ -240,6 +268,21 @@ pub unsafe fn lean_io_process_child_kill(_cfg: Obj, child: Obj) -> Obj {
         return io_result_of_error(&std::io::Error::last_os_error());
     }
     lean_io_result_mk_ok(lean_box(0))
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_child_wait(_cfg: Obj, _child: Obj) -> Obj {
+    io_result_unsupported("waiting for a process")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_child_try_wait(_cfg: Obj, _child: Obj) -> Obj {
+    io_result_unsupported("waiting for a process")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_child_kill(_cfg: Obj, _child: Obj) -> Obj {
+    io_result_unsupported("killing a process")
 }
 
 /// `Child.pid : Child cfg → UInt32` (consumes `child`).

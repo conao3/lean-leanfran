@@ -1,19 +1,31 @@
 //! Files, directories and the environment of the process: `IO.FS`, `IO.getEnv`, `IO.appPath`,
 //! the current directory, process and thread ids, random bytes and `timeit`.
 
+#[cfg(unix)]
 use crate::array::{lean_alloc_sarray, lean_array_push, lean_mk_empty_array, lean_sarray_cptr};
+#[cfg(unix)]
 use crate::int::lean_int64_to_int;
+#[cfg(not(unix))]
+use crate::io::io_result_unsupported;
+#[cfg(unix)]
 use crate::io::{io_result_of_error, lean_io_result_mk_error, lean_io_result_mk_ok, wrap_file};
+#[cfg(unix)]
 use crate::io_error::{
     embedded_nul_error, file_not_found_error, lean_mk_io_user_error, of_std, of_std_uv,
 };
+#[cfg(unix)]
+use crate::model::scalar_offset;
 use crate::nat::lean_uint64_to_nat;
 use crate::object::*;
-use crate::string::{lean_mk_string, lean_mk_string_from_bytes, lean_string_bytes};
+use crate::string::lean_mk_string;
+#[cfg(unix)]
+use crate::string::{lean_mk_string_from_bytes, lean_string_bytes};
+#[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
 /// The path of a borrowed `FilePath` (a `String`), or the `error` result for a path with a NUL
 /// byte.
+#[cfg(unix)]
 pub(crate) unsafe fn path_of<'a>(p: Obj) -> Result<&'a std::path::Path, Obj> {
     let b = lean_string_bytes(p);
     if b.contains(&0) {
@@ -23,10 +35,12 @@ pub(crate) unsafe fn path_of<'a>(p: Obj) -> Result<&'a std::path::Path, Obj> {
     }
 }
 
+#[cfg(unix)]
 unsafe fn mk_path(p: &std::path::Path) -> Obj {
     lean_mk_string_from_bytes(p.as_os_str().as_bytes())
 }
 
+#[cfg(unix)]
 unsafe fn unit_or(r: std::io::Result<()>, err: impl FnOnce(&std::io::Error) -> Obj) -> Obj {
     match r {
         Ok(()) => lean_io_result_mk_ok(lean_box(0)),
@@ -34,6 +48,7 @@ unsafe fn unit_or(r: std::io::Result<()>, err: impl FnOnce(&std::io::Error) -> O
     }
 }
 
+#[cfg(unix)]
 macro_rules! path_or_return {
     ($p:expr) => {
         match path_of($p) {
@@ -46,6 +61,7 @@ macro_rules! path_or_return {
 /* Directories and files */
 
 /// `IO.FS.readDir : @& FilePath → IO (Array DirEntry)`: `DirEntry` is `⟨root, fileName⟩`.
+#[cfg(unix)]
 pub unsafe fn lean_io_read_dir(dir: Obj) -> Obj {
     let path = path_or_return!(dir);
     let entries = match std::fs::read_dir(path) {
@@ -67,22 +83,24 @@ pub unsafe fn lean_io_read_dir(dir: Obj) -> Obj {
     lean_io_result_mk_ok(arr)
 }
 
+#[cfg(unix)]
 unsafe fn system_time(sec: i64, nsec: i64) -> Obj {
     let o = lean_alloc_ctor(0, 1, 4);
     lean_ctor_set(o, 0, lean_int64_to_int(sec));
-    lean_ctor_set_uint32(o, 8, nsec as u32);
+    lean_ctor_set_uint32(o, scalar_offset(1, 0), nsec as u32);
     o
 }
 
 /// `IO.FS.Metadata`: `accessed`, `modified`, `byteSize`, `numLinks` and `type` (`dir`, `file`,
 /// `symlink`, `other`).
+#[cfg(unix)]
 unsafe fn metadata_obj(m: &std::fs::Metadata) -> Obj {
     use std::os::unix::fs::MetadataExt;
     let o = lean_alloc_ctor(0, 2, 17);
     lean_ctor_set(o, 0, system_time(m.atime(), m.atime_nsec()));
     lean_ctor_set(o, 1, system_time(m.mtime(), m.mtime_nsec()));
-    lean_ctor_set_uint64(o, 16, m.size());
-    lean_ctor_set_uint64(o, 24, m.nlink());
+    lean_ctor_set_uint64(o, scalar_offset(2, 0), m.size());
+    lean_ctor_set_uint64(o, scalar_offset(2, 8), m.nlink());
     let t = m.file_type();
     let ty = if t.is_dir() {
         0
@@ -93,11 +111,12 @@ unsafe fn metadata_obj(m: &std::fs::Metadata) -> Obj {
     } else {
         3
     };
-    lean_ctor_set_uint8(o, 32, ty);
+    lean_ctor_set_uint8(o, scalar_offset(2, 16), ty);
     o
 }
 
 /// `System.FilePath.metadata : @& FilePath → IO Metadata`.
+#[cfg(unix)]
 pub unsafe fn lean_io_metadata(fname: Obj) -> Obj {
     let path = path_or_return!(fname);
     match std::fs::metadata(path) {
@@ -107,6 +126,7 @@ pub unsafe fn lean_io_metadata(fname: Obj) -> Obj {
 }
 
 /// `System.FilePath.symlinkMetadata : @& FilePath → IO Metadata`.
+#[cfg(unix)]
 pub unsafe fn lean_io_symlink_metadata(fname: Obj) -> Obj {
     let path = path_or_return!(fname);
     match std::fs::symlink_metadata(path) {
@@ -116,18 +136,21 @@ pub unsafe fn lean_io_symlink_metadata(fname: Obj) -> Obj {
 }
 
 /// `IO.FS.createDir : @& FilePath → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_create_dir(p: Obj) -> Obj {
     let path = path_or_return!(p);
     unit_or(std::fs::create_dir(path), |e| of_std(e, Some(p)))
 }
 
 /// `IO.FS.removeDir : @& FilePath → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_remove_dir(p: Obj) -> Obj {
     let path = path_or_return!(p);
     unit_or(std::fs::remove_dir(path), |e| of_std(e, Some(p)))
 }
 
 /// `IO.FS.removeFile : @& FilePath → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_remove_file(p: Obj) -> Obj {
     let path = path_or_return!(p);
     unit_or(std::fs::remove_file(path), |e| of_std_uv(e, Some(p)))
@@ -135,6 +158,7 @@ pub unsafe fn lean_io_remove_file(p: Obj) -> Obj {
 
 /// `IO.FS.rename : (old new : @& FilePath) → IO Unit`; the file name of an error is
 /// `"<old> and/or <new>"`.
+#[cfg(unix)]
 pub unsafe fn lean_io_rename(from: Obj, to: Obj) -> Obj {
     let f = path_or_return!(from);
     let t = path_or_return!(to);
@@ -150,6 +174,7 @@ pub unsafe fn lean_io_rename(from: Obj, to: Obj) -> Obj {
 }
 
 /// `IO.FS.hardLink : (orig link : @& FilePath) → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_hard_link(orig: Obj, link: Obj) -> Obj {
     let o = path_or_return!(orig);
     let l = path_or_return!(link);
@@ -157,6 +182,7 @@ pub unsafe fn lean_io_hard_link(orig: Obj, link: Obj) -> Obj {
 }
 
 /// `IO.FS.realPath : FilePath → IO FilePath` (consumes `fname`).
+#[cfg(unix)]
 pub unsafe fn lean_io_realpath(fname: Obj) -> Obj {
     let r = match path_of(fname) {
         Ok(p) => match std::fs::canonicalize(p) {
@@ -170,6 +196,7 @@ pub unsafe fn lean_io_realpath(fname: Obj) -> Obj {
 }
 
 /// `IO.setAccessRights` through `chmod : (@& FilePath) → UInt32 → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_chmod(fname: Obj, mode: u32) -> Obj {
     use std::os::unix::fs::PermissionsExt;
     let path = path_or_return!(fname);
@@ -180,6 +207,7 @@ pub unsafe fn lean_chmod(fname: Obj, mode: u32) -> Obj {
 }
 
 /// `uv_os_tmpdir`: `TMPDIR`, `TMP`, `TEMP` or `TEMPDIR`, else `/tmp`, without a trailing `/`.
+#[cfg(unix)]
 fn temp_dir() -> Vec<u8> {
     let mut d = ["TMPDIR", "TMP", "TEMP", "TEMPDIR"]
         .iter()
@@ -193,6 +221,7 @@ fn temp_dir() -> Vec<u8> {
 }
 
 /// `<tmpdir>/tmp.XXXXXXXX` as a C string, for `mkstemp` and `mkdtemp`.
+#[cfg(unix)]
 fn temp_template() -> Vec<u8> {
     let mut t = temp_dir();
     t.extend_from_slice(b"/tmp.XXXXXXXX\0");
@@ -200,6 +229,7 @@ fn temp_template() -> Vec<u8> {
 }
 
 /// `IO.FS.createTempFile : IO (Handle × FilePath)`.
+#[cfg(unix)]
 pub unsafe fn lean_io_create_tempfile() -> Obj {
     use std::os::fd::FromRawFd;
     let mut t = temp_template();
@@ -215,6 +245,7 @@ pub unsafe fn lean_io_create_tempfile() -> Obj {
 }
 
 /// `IO.FS.createTempDir : IO FilePath`.
+#[cfg(unix)]
 pub unsafe fn lean_io_create_tempdir() -> Obj {
     let mut t = temp_template();
     if libc::mkdtemp(t.as_mut_ptr() as *mut libc::c_char).is_null() {
@@ -226,6 +257,7 @@ pub unsafe fn lean_io_create_tempdir() -> Obj {
 /* The process */
 
 /// `IO.getEnv : @& String → BaseIO (Option String)`.
+#[cfg(unix)]
 pub unsafe fn lean_io_getenv(var: Obj) -> Obj {
     let name = lean_string_bytes(var);
     if name.contains(&0) {
@@ -242,6 +274,7 @@ pub unsafe fn lean_io_getenv(var: Obj) -> Obj {
 }
 
 /// `IO.appPath : IO FilePath`: the executable, with symbolic links resolved.
+#[cfg(unix)]
 pub unsafe fn lean_io_app_path() -> Obj {
     match std::env::current_exe() {
         Ok(p) => lean_io_result_mk_ok(mk_path(&p)),
@@ -252,6 +285,7 @@ pub unsafe fn lean_io_app_path() -> Obj {
 }
 
 /// `IO.currentDir : IO FilePath`.
+#[cfg(unix)]
 pub unsafe fn lean_io_current_dir() -> Obj {
     match std::env::current_dir() {
         Ok(p) => lean_io_result_mk_ok(mk_path(&p)),
@@ -262,6 +296,7 @@ pub unsafe fn lean_io_current_dir() -> Obj {
 }
 
 /// `IO.Process.getCurrentDir : IO FilePath`.
+#[cfg(unix)]
 pub unsafe fn lean_io_process_get_current_dir() -> Obj {
     match std::env::current_dir() {
         Ok(p) => lean_io_result_mk_ok(mk_path(&p)),
@@ -270,12 +305,14 @@ pub unsafe fn lean_io_process_get_current_dir() -> Obj {
 }
 
 /// `IO.Process.setCurrentDir : @& FilePath → IO Unit`.
+#[cfg(unix)]
 pub unsafe fn lean_io_process_set_current_dir(p: Obj) -> Obj {
     let path = path_or_return!(p);
     unit_or(std::env::set_current_dir(path), |e| of_std(e, Some(p)))
 }
 
 /// `IO.Process.getPID : BaseIO UInt32`.
+#[cfg(unix)]
 pub unsafe fn lean_io_process_get_pid() -> u32 {
     std::process::id()
 }
@@ -299,6 +336,7 @@ pub unsafe fn lean_io_get_tid() -> u64 {
 }
 
 /// `IO.getRandomBytes : USize → IO ByteArray`, from `/dev/urandom`.
+#[cfg(unix)]
 pub unsafe fn lean_io_get_random_bytes(n: usize) -> Obj {
     use std::io::Read;
     if n == 0 {
@@ -325,8 +363,114 @@ pub unsafe fn lean_io_get_random_bytes(n: usize) -> Obj {
 }
 
 /// `IO.Process.forceExit : UInt8 → IO α`: exits without flushing the standard streams.
+#[cfg(unix)]
 pub unsafe fn lean_io_force_exit(code: u8) -> Obj {
     libc::_exit(code as i32)
+}
+
+/* Targets without an OS: the file system and the process are unsupported operations */
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_read_dir(_dir: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_metadata(_fname: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_symlink_metadata(_fname: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_create_dir(_p: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_remove_dir(_p: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_remove_file(_p: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_rename(_from: Obj, _to: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_hard_link(_orig: Obj, _link: Obj) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_realpath(fname: Obj) -> Obj {
+    lean_dec(fname);
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_chmod(_fname: Obj, _mode: u32) -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_create_tempfile() -> Obj {
+    io_result_unsupported("the file system")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_create_tempdir() -> Obj {
+    io_result_unsupported("the file system")
+}
+
+/// No variable is set.
+#[cfg(not(unix))]
+pub unsafe fn lean_io_getenv(_var: Obj) -> Obj {
+    lean_box(0)
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_app_path() -> Obj {
+    io_result_unsupported("the application path")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_current_dir() -> Obj {
+    io_result_unsupported("the current directory")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_get_current_dir() -> Obj {
+    io_result_unsupported("the current directory")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_set_current_dir(_p: Obj) -> Obj {
+    io_result_unsupported("the current directory")
+}
+
+/// The process id 0.
+#[cfg(not(unix))]
+pub unsafe fn lean_io_process_get_pid() -> u32 {
+    0
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_get_random_bytes(_n: usize) -> Obj {
+    io_result_unsupported("random bytes")
+}
+
+#[cfg(not(unix))]
+pub unsafe fn lean_io_force_exit(_code: u8) -> Obj {
+    io_result_unsupported("exiting the process")
 }
 
 /* Profiling */
@@ -366,9 +510,9 @@ unsafe fn eprintln_stream(s: &str) {
 /// `timeit : (@& String) → IO α → IO α`: runs the action and prints `<msg> <time>` on the
 /// standard error stream.
 pub unsafe fn lean_io_timeit(msg: Obj, f: Obj) -> Obj {
-    let start = std::time::Instant::now();
+    let start = crate::io::mono_elapsed();
     let r = crate::closure::lean_apply_1(f, lean_box(0));
-    let d = start.elapsed().as_secs_f64();
+    let d = (crate::io::mono_elapsed() - start).as_secs_f64();
     let m = crate::string::lean_string_to_str(msg);
     let line = if d < 1.0 {
         format!("{m} {}ms", g3(d * 1000.0))
