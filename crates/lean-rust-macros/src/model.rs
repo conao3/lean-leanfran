@@ -166,13 +166,15 @@ fn spec_names(a: &Adapter) -> Vec<Ident> {
 }
 
 /// The adapter functions of `attr`, calling the specs at `spec_path` (their path, or the path
-/// of their copy).
+/// of their copy). With `report`, `refines` and `ensures_<label>` return `Err` with the values
+/// of the function and the spec when they disagree, for the message of the test.
 fn adapter_fns(
     attr: &ModelAttr,
     a: &Adapter,
     has_ret: bool,
     spec_path: &dyn Fn(&Path) -> TokenStream,
     suffix: &str,
+    report: bool,
 ) -> TokenStream {
     let requires = format_ident!("requires{}", suffix);
     let refines = format_ident!("refines{}", suffix);
@@ -196,26 +198,71 @@ fn adapter_fns(
         });
     }
     if let Some(SpecRef::Path(p)) = &attr.refines {
+        let spec = lean_rust_build::model::path_string(p);
         let p = spec_path(p);
         let value = nested_tuple(&a.results);
-        out.extend(quote! {
-            pub fn #refines(#(#params),*) -> bool {
-                #(#specs)*
-                #call_stmt
-                #p(#(#s),*) == #value
+        out.extend(if report {
+            quote! {
+                pub fn #refines(#(#params),*) -> ::core::result::Result<(), ::std::string::String> {
+                    use ::lean_rust::check::{ShowDebug as _, ShowOther as _};
+                    #(#specs)*
+                    #call_stmt
+                    let __value = #value;
+                    let __spec = #p(#(#s),*);
+                    if __spec == __value {
+                        ::core::result::Result::Ok(())
+                    } else {
+                        ::core::result::Result::Err(::std::format!(
+                            "the function returned {}, and the spec {} returned {}",
+                            (&::lean_rust::check::Shown(&__value)).show(),
+                            #spec,
+                            (&::lean_rust::check::Shown(&__spec)).show(),
+                        ))
+                    }
+                }
+            }
+        } else {
+            quote! {
+                pub fn #refines(#(#params),*) -> bool {
+                    #(#specs)*
+                    #call_stmt
+                    #p(#(#s),*) == #value
+                }
             }
         });
     }
     for (label, spec) in &attr.ensures {
         let SpecRef::Path(p) = spec else { continue };
+        let spec = lean_rust_build::model::path_string(p);
         let p = spec_path(p);
         let f = format_ident!("ensures_{}{}", label, suffix);
         let results = &a.results;
-        out.extend(quote! {
-            pub fn #f(#(#params),*) -> bool {
-                #(#specs)*
-                #call_stmt
-                #p(#(#s,)* #(#results),*)
+        let shown = nested_tuple(results);
+        out.extend(if report {
+            quote! {
+                pub fn #f(#(#params),*) -> ::core::result::Result<(), ::std::string::String> {
+                    use ::lean_rust::check::{ShowDebug as _, ShowOther as _};
+                    #(#specs)*
+                    #call_stmt
+                    let __shown = (&::lean_rust::check::Shown(&#shown)).show();
+                    if #p(#(#s,)* #(#results),*) {
+                        ::core::result::Result::Ok(())
+                    } else {
+                        ::core::result::Result::Err(::std::format!(
+                            "the spec {} returned false for the result {}",
+                            #spec,
+                            __shown,
+                        ))
+                    }
+                }
+            }
+        } else {
+            quote! {
+                pub fn #f(#(#params),*) -> bool {
+                    #(#specs)*
+                    #call_stmt
+                    #p(#(#s,)* #(#results),*)
+                }
             }
         });
     }
@@ -282,7 +329,12 @@ fn tests(attr: &ModelAttr, a: &Adapter, suffix: &str, turbofish: TokenStream) ->
             fn #test(__args in #strategy) {
                 #assume
                 let #pat = __args;
-                ::lean_rust::check::proptest::prop_assert!(copy::#f(#(#pass),*));
+                let __checked = copy::#f(#(#pass),*);
+                ::lean_rust::check::proptest::prop_assert!(
+                    __checked.is_ok(),
+                    "{}",
+                    __checked.err().unwrap_or_default()
+                );
             }
         }
     });
@@ -411,13 +463,21 @@ fn expand_fn(
         let a = adapter(&sig_i, callee(1), &owner_i);
         let a2 = adapter(&sig_i, callee(2), &owner_i);
         let has_ret = sig_i.ret.is_some();
-        real.extend(adapter_fns(attr, &a, has_ret, &|p| deeper(p, 1), suffix));
+        real.extend(adapter_fns(
+            attr,
+            &a,
+            has_ret,
+            &|p| deeper(p, 1),
+            suffix,
+            false,
+        ));
         copies.extend(adapter_fns(
             attr,
             &a2,
             has_ret,
             &|p| copy_path(p, 2),
             suffix,
+            true,
         ));
         tests_out.extend(tests(attr, &a, suffix, strategy_turbofish));
     }

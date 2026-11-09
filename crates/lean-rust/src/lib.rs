@@ -20,4 +20,28 @@ pub mod spec;
 #[cfg(feature = "check")]
 pub mod check {
     pub use proptest;
+
+    /// A value in the message of a failed test: `(&Shown(&v)).show()` is the `Debug` form of
+    /// `v` when its type implements `Debug` ([`ShowDebug`]), and `_` otherwise ([`ShowOther`]).
+    pub struct Shown<'a, T>(pub &'a T);
+
+    pub trait ShowDebug {
+        fn show(&self) -> String;
+    }
+
+    impl<T: std::fmt::Debug> ShowDebug for Shown<'_, T> {
+        fn show(&self) -> String {
+            format!("{:?}", self.0)
+        }
+    }
+
+    pub trait ShowOther {
+        fn show(&self) -> String;
+    }
+
+    impl<T> ShowOther for &Shown<'_, T> {
+        fn show(&self) -> String {
+            "_".to_string()
+        }
+    }
 }

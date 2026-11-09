@@ -128,6 +128,8 @@ if (cd "$d" && cargo test -q --lib 2>"$work/wrong-impl.log" >"$work/wrong-impl.o
   fail "the test of refines passes for a wrong implementation"
 fi
 grep -q "check_refines" "$work/wrong-impl.out" || fail "wrong impl: $(cat "$work/wrong-impl.out")"
+grep -Eq "the function returned [0-9]+, and the spec specs::bigger returned [0-9]+" "$work/wrong-impl.out" ||
+  fail "wrong impl message: $(cat "$work/wrong-impl.out")"
 echo "verify-test: the test of a refines catches a wrong implementation"
 
 d=$(copy wrong-model)
