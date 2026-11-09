@@ -1,3 +1,27 @@
+<p align="center">
+  <img src="docs/assets/banner.png" alt="lean-rs: run Lean functions from Rust, embed Lean in Rust, and verify Rust functions in Lean" width="880">
+</p>
+
+<p align="center"><strong>Run Lean 4 functions from Rust, and verify Rust functions in Lean</strong></p>
+
+<p align="center">
+  <a href="https://crates.io/crates/lean-rust"><img src="https://img.shields.io/crates/v/lean-rust" alt="crates.io"></a>
+  <a href="https://github.com/conao3/lean-rs/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-rs/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-rs" alt="License: Apache-2.0"></a>
+  <a href="lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-blue" alt="Lean v4.35.0"></a>
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-1.88%2B-orange" alt="Rust 1.88+"></a>
+  <a href="https://github.com/conao3/lean-rs/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-rs?style=flat" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#quick-start-lean">Quick start</a> ·
+  <a href="#values">Values</a> ·
+  <a href="#verifying-rust-functions">Verifying Rust functions</a> ·
+  <a href="samples/steps">Samples</a> ·
+  <a href="https://crates.io/crates/lean-rust">crates.io</a>
+</p>
+
 # lean-rs
 
 Write functions in Lean 4, prove their properties in Lean, and call them from Rust; verify Rust
@@ -13,9 +37,11 @@ lean-rs has four parts:
   types.
 - **`lean!`**, Lean source in a Rust file. The crate's build script checks the source and its
   proofs with `lake build`, generates the Rust module, and caches it in the repository, so
-  builds without Lean (CI, crates.io users, docs.rs) use the cache.
+  builds without Lean (CI, crates.io users, docs.rs) use the cache
+  ([Quick start: `lean!`](#quick-start-lean)).
 - **`lean-rust project generate`**, which compiles every module of a lake project to a Rust
-  module file plus a `mod.rs`, for committing to a Rust crate.
+  module file plus a `mod.rs`, for committing to a Rust crate
+  ([Quick start: a lake project](#quick-start-a-lake-project)).
 - **`#[lean_rust::model]` and `cargo lean-rust`**, which bind a Rust function to Lean specs,
   translate it to Lean with Charon and Aeneas, check the proofs of its obligations, and test it
   against the specs ([Verifying Rust functions](#verifying-rust-functions)).
@@ -35,71 +61,6 @@ fn main() {
     assert_eq!(arith::double(21u64.into()), 42u64.into());
 }
 ```
-
-## Values
-
-| Lean | Rust |
-|---|---|
-| `Bool` (and `Decidable p`) | `bool` |
-| `Nat`, `Int` | `lean_rust::Nat`, `lean_rust::Int` (arbitrary precision; `From<u64>`, `TryFrom<Nat> for u64`, `Display`, `FromStr`, arithmetic) |
-| `UInt8`…`UInt64`, `USize` | `u8`…`u64`, `usize` |
-| `Int8`…`Int64`, `ISize` | `i8`…`i64`, `isize` |
-| `Float`, `Float32` | `f64`, `f32` |
-| `Char` | `char` |
-| `String` | `String` (arguments take `impl AsRef<str>`) |
-| `Unit` | `()` |
-| `List α`, `Array α` | `Vec<T>` |
-| `Option α` | `Option<T>` |
-| `Except ε α` | `Result<T, E>` |
-| `α × β` | `(A, B)` |
-| `Fin n` (literal `n`) | `usize`, checked against `n` (panics when out of range) |
-| a structure | a generated `pub struct` with snake_case fields |
-| an inductive type | a generated `pub enum` (a field-less `enum` when every constructor is nullary) |
-| `IO α` | `std::io::Result<T>` (`IO.Error` becomes `std::io::Error` with Lean's message) |
-
-Generated structs and enums derive `Debug`, `Clone` and `PartialEq`, plus `Eq` and `Hash` when
-the Lean type has `DecidableEq`. Recursive fields are boxed (`Box<Tree>`).
-
-A definition whose type uses anything else is not public; `--output json` lists it under
-`skipped` with the reason: type variables, function types, `Subtype`, type families, proof
-arguments, and argument types with proof fields (Rust could not keep their invariant). Type
-arguments are dropped, and instance arguments of a concrete type are synthesized at generation
-time. Names are the last components of the Lean name in snake_case relative to the module's
-namespace (`Point.add` → `point_add`, `find?` → `find_q`, `get!` → `get_bang`, `x'` →
-`x_prime`, keywords as `r#type`). Each function has a doc comment with its Lean name and type,
-and `#[lean_rust::exported("<Lean name>")]`. A `@[csimp]` replacement in the definition's module
-is what the function runs.
-
-### Polymorphic functions
-
-`rust_instances` (from `LeanRust.Instances`, which `lean!` blocks that use it import) compiles
-a polymorphic function for chosen types and makes it one generic Rust function:
-
-```rust
-lean_rust::lean! {
-    pub mod sorting;
-    r#"
-    def largest {α : Type} [Ord α] [Inhabited α] (xs : List α) : α :=
-      xs.foldl (fun a b => if compare a b == .lt then b else a) default
-
-    rust_instances largest [Nat, String]
-    "#
-}
-
-fn main() {
-    assert_eq!(sorting::largest(vec!["b".to_string(), "a".to_string()]), "b");
-}
-```
-
-`rust_instances f [Nat, String]` defines `f.inst_Nat := @f Nat _` (the instances synthesized)
-and `f.inst_String`; several type parameters take named arguments, `rust_instances g [(α := Nat)
-(β := String)]`. The Rust function `largest<T: __lean_rust_inst::Largest>(xs: Vec<T>) -> T`
-dispatches through a sealed trait implemented for the instantiated types only (another type is
-a rustc error); the trait of a function with several type parameters is implemented for the
-first one, with the others as associated types (`T::T1`). The instantiations are also public
-functions (`largest_inst_nat`), and a `@[csimp]` lemma can replace one of them. A lake project
-compiled with `project generate` imports `LeanRust.Instances` from this repository's `LeanRust`
-library.
 
 ## Install
 
@@ -177,12 +138,77 @@ builds the project, uses `lake env`'s `LEAN_PATH` as the search path, and writes
 `src/generated/<module>.rs` for each module built by the package (or for `--modules ...`) and a
 `mod.rs`. Declare `mod generated;` in the crate and depend on `lean-rust`.
 
+## Values
+
+| Lean | Rust |
+|---|---|
+| `Bool` (and `Decidable p`) | `bool` |
+| `Nat`, `Int` | `lean_rust::Nat`, `lean_rust::Int` (arbitrary precision; `From<u64>`, `TryFrom<Nat> for u64`, `Display`, `FromStr`, arithmetic) |
+| `UInt8`…`UInt64`, `USize` | `u8`…`u64`, `usize` |
+| `Int8`…`Int64`, `ISize` | `i8`…`i64`, `isize` |
+| `Float`, `Float32` | `f64`, `f32` |
+| `Char` | `char` |
+| `String` | `String` (arguments take `impl AsRef<str>`) |
+| `Unit` | `()` |
+| `List α`, `Array α` | `Vec<T>` |
+| `Option α` | `Option<T>` |
+| `Except ε α` | `Result<T, E>` |
+| `α × β` | `(A, B)` |
+| `Fin n` (literal `n`) | `usize`, checked against `n` (panics when out of range) |
+| a structure | a generated `pub struct` with snake_case fields |
+| an inductive type | a generated `pub enum` (a field-less `enum` when every constructor is nullary) |
+| `IO α` | `std::io::Result<T>` (`IO.Error` becomes `std::io::Error` with Lean's message) |
+
+Generated structs and enums derive `Debug`, `Clone` and `PartialEq`, plus `Eq` and `Hash` when
+the Lean type has `DecidableEq`. Recursive fields are boxed (`Box<Tree>`).
+
+A definition whose type uses anything else is not public; `--output json` lists it under
+`skipped` with the reason: type variables, function types, `Subtype`, type families, proof
+arguments, and argument types with proof fields (Rust could not keep their invariant). Type
+arguments are dropped, and instance arguments of a concrete type are synthesized at generation
+time. Names are the last components of the Lean name in snake_case relative to the module's
+namespace (`Point.add` → `point_add`, `find?` → `find_q`, `get!` → `get_bang`, `x'` →
+`x_prime`, keywords as `r#type`). Each function has a doc comment with its Lean name and type,
+and `#[lean_rust::exported("<Lean name>")]`. A `@[csimp]` replacement in the definition's module
+is what the function runs.
+
+### Polymorphic functions
+
+`rust_instances` (from `LeanRust.Instances`, which `lean!` blocks that use it import) compiles
+a polymorphic function for chosen types and makes it one generic Rust function:
+
+```rust
+lean_rust::lean! {
+    pub mod sorting;
+    r#"
+    def largest {α : Type} [Ord α] [Inhabited α] (xs : List α) : α :=
+      xs.foldl (fun a b => if compare a b == .lt then b else a) default
+
+    rust_instances largest [Nat, String]
+    "#
+}
+
+fn main() {
+    assert_eq!(sorting::largest(vec!["b".to_string(), "a".to_string()]), "b");
+}
+```
+
+`rust_instances f [Nat, String]` defines `f.inst_Nat := @f Nat _` (the instances synthesized)
+and `f.inst_String`; several type parameters take named arguments, `rust_instances g [(α := Nat)
+(β := String)]`. The Rust function `largest<T: __lean_rust_inst::Largest>(xs: Vec<T>) -> T`
+dispatches through a sealed trait implemented for the instantiated types only (another type is
+a rustc error); the trait of a function with several type parameters is implemented for the
+first one, with the others as associated types (`T::T1`). The instantiations are also public
+functions (`largest_inst_nat`), and a `@[csimp]` lemma can replace one of them. A lake project
+compiled with `project generate` imports `LeanRust.Instances` from this repository's `LeanRust`
+library.
+
 ## WebAssembly
 
 Generated code builds for `wasm32-unknown-unknown` (for a browser through `wasm-bindgen`) with
 
 ```toml
-lean-rust = { version = "0.2.1", default-features = false }
+lean-rust = { version = "0.3.0", default-features = false }
 ```
 
 Pure functions behave as on Unix. The `IO` actions that need an operating system (files,

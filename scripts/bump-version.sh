@@ -8,5 +8,6 @@ sed -i "s/\(lean-rust-[a-z]* = { path = \"[^\"]*\", version = \"\)$old\"/\1$new\
 sed -i "s/^def version : String := \"$old\"/def version : String := \"$new\"/" Main.lean
 sed -i "s/version = \"$old\";/version = \"$new\";/; s/name = \"lean-rs-$old\";/name = \"lean-rs-$new\";/" flake.nix
 sed -i "s/^\(lean-rust\(-build\)\? = \"\)$old\"/\1$new\"/" README.md
+sed -i "s/^\(lean-rust = { version = \"\)$old\"/\1$new\"/" README.md
 cargo update --workspace --offline >/dev/null 2>&1 || cargo update --workspace >/dev/null
 echo "$old -> $new"
