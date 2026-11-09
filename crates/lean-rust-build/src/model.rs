@@ -354,7 +354,10 @@ pub fn signature(sig: &syn::Signature, outer: Option<&syn::Generics>) -> syn::Re
     all.extend(outer);
     all.push(&sig.generics);
     let generics = type_params(&all)?;
-    if sig.asyncness.is_some() || sig.unsafety.is_some() || sig.variadic.is_some() {
+    if sig.asyncness.is_some()
+        || matches!(sig.safety, syn::Safety::Unsafe(_))
+        || sig.variadic.is_some()
+    {
         return Err(syn::Error::new(
             sig.span(),
             "lean_rust::model: async, unsafe and variadic functions are not supported",
@@ -364,26 +367,16 @@ pub fn signature(sig: &syn::Signature, outer: Option<&syn::Generics>) -> syn::Re
     for (i, input) in sig.inputs.iter().enumerate() {
         match input {
             FnArg::Receiver(r) => {
-                let mode = match (&r.reference, r.mutability) {
-                    (Some(_), Some(_)) => Mode::RefMut,
-                    (Some(_), None) => Mode::Ref,
-                    (None, _) => Mode::Value,
-                };
-                if r.colon_token.is_some() && r.reference.is_none() {
-                    let ty = &*r.ty;
-                    let mode = match ty {
+                let mode = match &r.kind {
+                    syn::ReceiverKind::Reference(_, _, Some(_)) => Mode::RefMut,
+                    syn::ReceiverKind::Reference(_, _, None) => Mode::Ref,
+                    syn::ReceiverKind::Typed(_, ty) => match &**ty {
                         Type::Reference(t) if t.mutability.is_some() => Mode::RefMut,
                         Type::Reference(_) => Mode::Ref,
                         _ => Mode::Value,
-                    };
-                    params.push(Param {
-                        name: "self".to_string(),
-                        mode,
-                        ty: None,
-                        is_self: true,
-                    });
-                    continue;
-                }
+                    },
+                    _ => Mode::Value,
+                };
                 params.push(Param {
                     name: "self".to_string(),
                     mode,
@@ -858,7 +851,7 @@ impl Scanner<'_> {
         let trait_name = i
             .trait_
             .as_ref()
-            .and_then(|(_, p, _)| p.segments.last().map(|s| s.ident.to_string()));
+            .and_then(|(p, _)| p.segments.last().map(|s| s.ident.to_string()));
         let segs = |p: &Path| {
             p.segments
                 .iter()
@@ -869,7 +862,7 @@ impl Scanner<'_> {
             Type::Path(p) => Some(segs(&p.path)),
             _ => None,
         };
-        let trait_path = i.trait_.as_ref().map(|(_, p, _)| segs(p));
+        let trait_path = i.trait_.as_ref().map(|(p, _)| segs(p));
         let outer = match model_attr(&i.attrs) {
             Ok(a) => a,
             Err(e) => {

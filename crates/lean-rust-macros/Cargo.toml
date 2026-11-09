@@ -17,4 +17,4 @@ proc-macro = true
 lean-rust-build = { path = "../lean-rust-build", version = "0.3.0" }
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "2", features = ["full"] }
+syn = { version = "3", features = ["full"] }

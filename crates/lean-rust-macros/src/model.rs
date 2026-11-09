@@ -57,7 +57,7 @@ fn deeper(p: &Path, depth: usize) -> TokenStream {
 /// The path of the copy of a generated spec: `a::b::f` → `a::b::__lean_rust_spec::f`.
 fn copy_path(p: &Path, depth: usize) -> TokenStream {
     let mut p = p.clone();
-    let last = p.segments.pop().map(|s| s.into_value());
+    let last = p.segments.pop();
     p.segments.push(syn::PathSegment::from(Ident::new(
         "__lean_rust_spec",
         Span::call_site(),
@@ -575,7 +575,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
                     "lean_rust::model: the type of the impl block must be a path",
                 ));
             };
-            let trait_ = imp.trait_.as_ref().map(|(_, p, _)| p.clone());
+            let trait_ = imp.trait_.as_ref().map(|(p, _)| p.clone());
             let trait_name = trait_
                 .as_ref()
                 .and_then(|p| p.segments.last().map(|s| s.ident.to_string()));
