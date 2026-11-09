@@ -39,7 +39,7 @@ EXPECTED = {
     ("calc.calc:first_or", "refines"): "proved",
     ("calc.calc:sum_to", "refines"): "sorry",
     ("calc.calc:sum_to", "returns_nat"): "missing",
-    ("calc.calc:sum_abs", "nonneg"): "missing",
+    ("calc.calc:sum_abs", "nonneg"): "proved",
 }
 
 
@@ -75,13 +75,13 @@ def test_wrong_proof_and_wrong_statement(project, tmp_path):
     )
     proofs.write_text(text)
     (d / "lean/Proofs/Broken.lean").write_text(
-        "import LeanPythonModel.calc.calc\n\ntheorem LeanPythonModel.«calc».«calc».sum_abs.proof.nonneg :\n"
-        "    LeanPythonModel.«calc».«calc».sum_abs.obligation.nonneg := by\n  intro xs r h\n  rfl\n"
+        "import LeanPythonModel.calc.calc\n\ntheorem LeanPythonModel.«calc».«calc».sum_to.proof.returns_nat :\n"
+        "    LeanPythonModel.«calc».«calc».sum_to.obligation.returns_nat := by\n  intro n\n  rfl\n"
     )
     r = run(["-m", "lean_python.cli", "check", "--package", "calc"], d)
     got = statuses(r.stdout)
     assert got[("calc.calc:first_or", "refines")] == "mismatch"
-    assert got[("calc.calc:sum_abs", "nonneg")] == "failed"
+    assert got[("calc.calc:sum_to", "returns_nat")] == "failed"
     assert got[("calc.calc:clamp", "refines")] == "proved"
 
 

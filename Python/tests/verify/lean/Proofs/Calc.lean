@@ -27,4 +27,19 @@ theorem first_or.proof.refines : first_or.obligation.refines := by
 theorem sum_to.proof.refines : sum_to.obligation.refines := by
   sorry
 
+theorem foldl_abs_nonneg (xs : List Int) (init : Int) (h : 0 ≤ init) :
+    0 ≤ xs.foldl (fun acc x => acc + Py.abs x) init := by
+  induction xs generalizing init with
+  | nil => simpa
+  | cons x xs ih =>
+    apply ih
+    show 0 ≤ init + Py.abs x
+    unfold Py.abs; split <;> omega
+
+/-- The `for` loop is a `List.foldl` (`simp` rewrites it with `forIn_pure_yield_eq_foldl`). -/
+theorem sum_abs.proof.nonneg : sum_abs.obligation.nonneg := by
+  intro xs
+  simp [LeanPythonEmbed.calc.spec.spec.nonneg, sum_abs]
+  exact foldl_abs_nonneg xs 0 (Int.le_refl 0)
+
 end LeanPythonModel.«calc».«calc»

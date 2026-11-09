@@ -216,6 +216,9 @@ sorry      calc.calc:sum_to refines
 missing    calc.calc:sum_abs nonneg
 ```
 
+A `for` loop over a list becomes `List.foldl` under `simp` (`forIn_pure_yield_eq_foldl`), so a loop
+is proved by induction on the list (`tests/verify/lean/Proofs/Calc.lean` proves `sum_abs`).
+
 The states are proved, sorry, axioms (non-standard axioms), failed (the proof file does not build),
 missing, mismatch (the theorem states something else). `--require proved` fails unless all are
 proved. The result goes to `lean-python.lock` with a hash of each function's source;
