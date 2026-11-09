@@ -2,7 +2,7 @@ import LeanPython
 
 open Lean LeanPython
 
-def version : String := "0.2.0"
+def version : String := "0.2.1"
 
 /-- Version of the generated code. Raise it when the emitted code changes; `lean-python sync`
     checks it and puts it into its cache keys. -/
