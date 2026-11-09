@@ -83,6 +83,8 @@ imports every module of the package, writes each block to a Lake workspace in
 lean-py: src/myapp/m.py:6: error: (lean block m, Lean 4:28) Tactic `rfl` failed: ...
 ```
 
+Add `.lean-python/` to `.gitignore` and commit `<package>/_lean/`.
+
 At run time `lean(...)` compares a hash of the block (its source, imports, uses, the Lean structures
 of its models and the generator version) with `blocks.json` and raises `LeanBlockStale` when the
 block changed since the last sync. With `LEAN_PYTHON_AUTO_SYNC=1` it runs `lean-py sync` instead.
