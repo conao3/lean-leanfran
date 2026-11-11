@@ -2,10 +2,10 @@
 //!
 //! Aeneas models Rust's integers as `Std.U8` … `Std.I128` (a `BitVec` at run time, so a `Nat`
 //! holding the bits), `Vec<T>` and `&[T]` as `alloc.vec.Vec` and `Slice` (a length and a
-//! `ListN`), `[T; N]` as `Std.Array` (a `ListN`) and `&str` as `Str` (a `Slice U8`). [`Model`]
-//! converts a Rust value to and from that representation. `#[derive(lean_rust::Model)]`
-//! implements it for the structs and enums of a crate, with the constructor layout Lean gives
-//! the structure or inductive type Aeneas generates.
+//! `ListN`), `[T; N]` as `Std.Array` (a `ListN`), `&str` as `Str` (a `Slice U8`) and `String`
+//! as Lean's `String`. [`Model`] converts a Rust value to and from that representation.
+//! `#[derive(lean_rust::Model)]` implements it for the structs and enums of a crate, with the
+//! constructor layout Lean gives the structure or inductive type Aeneas generates.
 
 use crate::nat::{mk_nat, nat_value};
 use crate::object::*;
@@ -186,10 +186,23 @@ impl<T: Model, const N: usize> Model for [T; N] {
 
 impl Model for String {
     unsafe fn to_model(self) -> Obj {
-        self.into_bytes().to_model()
+        crate::string::lean_mk_string(&self)
     }
     unsafe fn from_model(o: Obj) -> Self {
-        String::from_utf8(Vec::<u8>::from_model(o)).expect("a Str of UTF-8")
+        crate::string::lean_string_to_str(o).to_string()
+    }
+}
+
+/// A `&'static str` read back from the model is leaked: tests compare the few values a model
+/// returns, and a field such as `Other(&'static str)` has no owner to borrow from.
+impl Model for &'static str {
+    unsafe fn to_model(self) -> Obj {
+        self.as_bytes().to_vec().to_model()
+    }
+    unsafe fn from_model(o: Obj) -> Self {
+        String::from_utf8(Vec::<u8>::from_model(o))
+            .expect("a Str of UTF-8")
+            .leak()
     }
 }
 

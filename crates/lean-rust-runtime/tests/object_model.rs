@@ -379,3 +379,23 @@ fn standard_streams_are_structures_of_closures() {
         lean_dec(out);
     }
 }
+
+#[test]
+fn static_str_is_a_slice_of_its_bytes() {
+    unsafe {
+        let s = "duckdb".to_model();
+        assert_eq!(Vec::<u8>::from_model(s), b"duckdb");
+        assert_eq!(<&'static str>::from_model(s), "duckdb");
+        lean_dec(s);
+    }
+}
+
+#[test]
+fn string_is_a_lean_string() {
+    unsafe {
+        let t = String::from("héllo").to_model();
+        assert_eq!(lean_string_to_str(t), "héllo");
+        assert_eq!(String::from_model(t), "héllo");
+        lean_dec(t);
+    }
+}

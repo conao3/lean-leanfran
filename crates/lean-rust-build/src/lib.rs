@@ -39,7 +39,7 @@ use syntax::{file_hash, normalize_path, LeanBlock};
 
 /// Version of the generated code: the `lean-rust --generator-version` this crate works with, and part of every
 /// cache key.
-pub const GENERATOR_VERSION: &str = "2";
+pub const GENERATOR_VERSION: &str = "3";
 
 /// The Lean toolchain of the crate's Lean package (`lean/lean-toolchain`).
 pub const LEAN_TOOLCHAIN: &str = "leanprover/lean4:v4.35.0";
@@ -600,7 +600,9 @@ impl Builder {
         let batch = tmp.join("batch.json");
         fs::write(&batch, serde_json::Value::Array(jobs).to_string())?;
         let mut cmd = Command::new(&cli);
-        cmd.args(["module", "generate", "--batch"]).arg(&batch);
+        cmd.current_dir(&lean)
+            .args(["module", "generate", "--batch"])
+            .arg(&batch);
         if csimp {
             cmd.args(["--import", "LeanRustGen.Csimp"]);
         }
@@ -1212,7 +1214,8 @@ impl Builder {
         let batch = tmp.join("opaque.json");
         fs::write(&batch, serde_json::Value::Array(jobs).to_string())?;
         let mut cmd = Command::new(&cli);
-        cmd.args(["module", "generate", "--batch"])
+        cmd.current_dir(&lean)
+            .args(["module", "generate", "--batch"])
             .arg(&batch)
             .args(["--output", "json", "--search-path"]);
         for p in lean_path.trim().split(':').filter(|p| !p.is_empty()) {

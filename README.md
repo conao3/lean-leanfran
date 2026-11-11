@@ -154,7 +154,8 @@ builds the project, uses `lake env`'s `LEAN_PATH` as the search path, and writes
 | `Option α` | `Option<T>` |
 | `Except ε α` | `Result<T, E>` |
 | `α × β` | `(A, B)` |
-| `Fin n` (literal `n`) | `usize`, checked against `n` (panics when out of range) |
+| `Fin n` (`n` reduces to a literal below 2^64) | `usize`, checked against `n` (panics when out of range) |
+| `Fin n` (`n` reduces to a literal of 2^64 or more) | `lean_rust::Nat`, unchecked |
 | a structure | a generated `pub struct` with snake_case fields |
 | an inductive type | a generated `pub enum` (a field-less `enum` when every constructor is nullary) |
 | `IO α` | `std::io::Result<T>` (`IO.Error` becomes `std::io::Error` with Lean's message) |

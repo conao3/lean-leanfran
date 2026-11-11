@@ -976,7 +976,7 @@ pub fn expand_opaque(
         #[allow(dead_code, non_snake_case, unused_mut, unused_imports, unused_variables, clippy::all)]
         mod #module {
             use super::*;
-            #[allow(dead_code, non_snake_case, non_camel_case_types, unused_imports, unused_parens, unsafe_op_in_unsafe_fn, clippy::all)]
+            #[allow(dead_code, non_snake_case, non_camel_case_types, unused_imports, unused_parens, unused_qualifications, unsafe_op_in_unsafe_fn, clippy::all)]
             mod model {
                 include!(concat!(env!("OUT_DIR"), #include));
             }

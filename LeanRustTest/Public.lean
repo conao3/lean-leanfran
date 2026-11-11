@@ -105,6 +105,10 @@ def swap (p : Nat × String) : String × Nat := (p.2, p.1)
 
 def pick (i : Fin 3) : String := #["zero", "one", "two"][i]
 
+def pickPow (i : Fin (2 ^ 2)) : Nat := i.val * 10
+
+def bigFin (i : Fin (2 ^ 70)) : Fin (2 ^ 70) := ⟨(i.val + 1) % 2 ^ 70, Nat.mod_lt _ (by decide)⟩
+
 def lastIndex (n : Nat) : Fin (n + 1) := Fin.last n
 
 def hello (name : String) : IO Nat := do

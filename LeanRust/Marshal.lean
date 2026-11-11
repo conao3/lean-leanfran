@@ -280,8 +280,8 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
   | ``Except, #[e, a] => return .except (← descOf e) (← descOf a)
   | ``Prod, #[a, b] => return .prod (← descOf a) (← descOf b)
   | ``Fin, #[n] =>
-    let some v ← (evalNat (← instantiateMVars n)).run | throwError "`Fin` with a bound that is not a literal: `{n}`"
-    if v ≥ 2 ^ 64 then throwError "`Fin {v}` does not fit in usize"
+    let some v ← (evalNat (← reduce (← instantiateMVars n))).run | throwError "`Fin` with a bound that is not a literal: `{n}`"
+    if v ≥ 2 ^ 64 then return .prim "rt::Nat"
     return .fin v
   | `Aeneas.Std.UScalar, #[ty] | `Aeneas.Std.IScalar, #[ty] =>
     let some k := ty.constName? | throwError "scalar type `{t}`"

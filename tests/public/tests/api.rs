@@ -140,6 +140,18 @@ fn fin() {
 }
 
 #[test]
+fn fin_with_a_bound_that_reduces_to_a_literal() {
+    assert_eq!(p::pick_pow(3), nat(30));
+}
+
+#[test]
+fn fin_above_usize_is_a_nat() {
+    let max = "1180591620717411303423".parse::<lean_rust::Nat>().unwrap();
+    assert_eq!(p::big_fin(nat(41)), nat(42));
+    assert_eq!(p::big_fin(max), nat(0));
+}
+
+#[test]
 #[should_panic(expected = "Fin 3: index 3 is out of range")]
 fn fin_out_of_range_panics() {
     p::pick(3);

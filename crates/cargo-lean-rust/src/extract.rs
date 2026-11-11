@@ -306,8 +306,8 @@ pub fn extract(c: &Crate) -> Result<(), String> {
     }
     let ident = c.ident();
     let lean_dir = c.lean_dir();
-    if items.models.is_empty() {
-        return Err("the crate has no #[lean_rust::model] function".into());
+    if items.models.is_empty() && items.opaque.is_empty() {
+        return Err("the crate has no #[lean_rust::model] or #[lean_rust::opaque] function".into());
     }
     let untyped: Vec<String> = items
         .models
@@ -342,12 +342,15 @@ pub fn extract(c: &Crate) -> Result<(), String> {
             .split("::")
             .map(str::to_string)
             .collect();
-        charon.arg("--opaque").arg(charon_path(&ident, &segs));
+        let path = charon_path(&ident, &segs);
+        charon.arg("--start-from").arg(&path);
+        charon.arg("--opaque").arg(path);
     }
     charon.env("LEAN_RUST_EXTRACTING", "1").current_dir(&c.dir);
     println!(
-        "charon cargo --preset=aeneas ({} functions)",
-        items.models.len()
+        "charon cargo --preset=aeneas ({} functions, {} opaque)",
+        items.models.len(),
+        items.opaque.len()
     );
     run(&mut charon, "charon")?;
     let charon_version = run(

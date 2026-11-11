@@ -419,7 +419,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (exports : Std.
     else out := out ++ inner
     out := out ++ "}\n"
     let mark := if isObjType ty then "rt::lean_mark_persistent(v); " else ""
-    out := out ++ s!"#[allow(dead_code, non_snake_case, clippy::all)]\npub(crate) unsafe fn {fnName f}() -> {rsType ty} \{\n  thread_local! \{ static CELL: core::cell::OnceCell<{cell}> = const \{ core::cell::OnceCell::new() }; }\n  CELL.with(|c| *c.get_or_init(|| unsafe \{ let v = {fnName f}_init(); {mark}v }))\n}\n"
+    out := out ++ s!"#[allow(dead_code, non_snake_case, clippy::all)]\npub(crate) unsafe fn {fnName f}() -> {rsType ty} \{\n  thread_local! \{ static CELL: core::cell::OnceCell<{cell}> = const \{ core::cell::OnceCell::new() }; }\n  if let Some(v) = CELL.with(|c| c.get().copied()) \{ return v; }\n  let v = {fnName f}_init();\n  {mark}CELL.with(|c| *c.get_or_init(|| v))\n}\n"
     return out
   out := out ++ fnHeader d f ps ty
   for (i, t) in vars.toList.mergeSort (fun a b => a.1 ≤ b.1) do
