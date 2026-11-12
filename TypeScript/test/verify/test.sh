@@ -163,7 +163,7 @@ try {
   console.log("no counterexample")
 } catch (e) {
   if (!(e instanceof PropertyFailure)) throw e
-  console.log(e.message.includes("Counterexample") && e.message.includes("the spec gives") ? "counterexample" : e.message)
+  console.log(e.message.includes("the spec gives") ? "counterexample" : e.message)
 }
 EOF
 got="$(cd "$out/wrong-impl" && node wrong.ts)"

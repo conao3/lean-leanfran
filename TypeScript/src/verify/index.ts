@@ -82,11 +82,18 @@ export interface CheckOptions {
 const SAFE = BigInt(Number.MAX_SAFE_INTEGER)
 
 function show(v: unknown): string {
-  return (
-    JSON.stringify(v, (_k, x: unknown) =>
-      typeof x === "bigint" ? `${x}n` : x === undefined ? null : x,
-    ) ?? "undefined"
-  )
+  if (typeof v === "bigint") return `${v}n`
+  if (typeof v === "string") return JSON.stringify(v)
+  if (Array.isArray(v)) return `[${v.map(show).join(", ")}]`
+  if (typeof v === "object" && v !== null)
+    return `{ ${Object.entries(v)
+      .map(([k, x]) => `${k}: ${show(x)}`)
+      .join(", ")} }`
+  return String(v)
+}
+
+function call(name: string, args: unknown[]): string {
+  return `${name}(${args.map(show).join(", ")})`
 }
 
 function normal(v: unknown): unknown {
@@ -254,7 +261,7 @@ export async function checkModel(fn: Spec, options: CheckOptions = {}): Promise<
       result = Reflect.apply(fn, undefined, args)
     } catch (e) {
       throw new PropertyFailure(
-        `${name}${show(args)} raised ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`,
+        `${call(name, args)} raised ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`,
       )
     }
     fc.pre(!unsafeNumber(result))
@@ -262,12 +269,12 @@ export async function checkModel(fn: Spec, options: CheckOptions = {}): Promise<
       const expected: unknown = Reflect.apply(refines, undefined, args)
       if (show(normal(result)) !== show(normal(expected)))
         throw new PropertyFailure(
-          `${name}${show(args)} = ${show(result)}, the spec gives ${show(expected)}`,
+          `${call(name, args)} = ${show(result)}, the spec gives ${show(expected)}`,
         )
     }
     for (const [label, e] of Object.entries(ensures ?? {}))
       if (Reflect.apply(e, undefined, [...args, result]) !== true)
-        throw new PropertyFailure(`${name}${show(args)} = ${show(result)} breaks ${label}`)
+        throw new PropertyFailure(`${call(name, args)} = ${show(result)} breaks ${label}`)
     return true
   })
   try {
@@ -278,7 +285,7 @@ export async function checkModel(fn: Spec, options: CheckOptions = {}): Promise<
   } catch (e) {
     if (e instanceof Error) {
       const c: unknown = e.cause
-      throw new PropertyFailure(c instanceof Error ? `${e.message}\n${c.message}` : e.message, e)
+      throw new PropertyFailure(c instanceof PropertyFailure ? c.message : e.message, e)
     }
     throw e
   }

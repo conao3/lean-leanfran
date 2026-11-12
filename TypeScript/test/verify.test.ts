@@ -43,8 +43,7 @@ describe("checkModel", () => {
   test("a wrong implementation fails with a counterexample", async () => {
     const err: unknown = await checkModel(badClamp).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(PropertyFailure)
-    expect(String(err)).toMatch(/Counterexample/u)
-    expect(String(err)).toMatch(/badClamp\[.*\] = .*, the spec gives /u)
+    expect(String(err)).toMatch(/badClamp\(-?\d+, -?\d+, -?\d+\) = -?\d+, the spec gives -?\d+n$/u)
   })
 
   test("a broken postcondition names its label", async () => {
