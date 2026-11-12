@@ -366,10 +366,11 @@ make format
 `./test-diff.sh` runs `LeanCljTest.Vectors.report` compiled by Lean's C backend
 and the same function generated as Clojure, and compares the output.
 
-The `Release` workflow publishes releases (Actions → Release → Run workflow,
-choosing `patch`, `minor`, or `major`). It raises the version with
-`clojure -T:build bump :part <part>`, runs `make check`, pushes the commit and
-the tag `vX.Y.Z` to `master`, and deploys the jar to Clojars.
+Releases come from the `Release` workflow of conao3/lean-leanfran, which
+releases the four backends together under one version. It writes the version
+with `clojure -T:build set-version :version '"X.Y.Z"'`, runs `make check`,
+pushes the commit and the tag `vX.Y.Z` to `master`, and the `Publish` workflow
+deploys the jar to Clojars.
 
 ## License
 

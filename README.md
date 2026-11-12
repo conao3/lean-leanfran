@@ -13,7 +13,7 @@ Each backend reads the IR of the Lean compiler and emits source code that runs o
 
 Every directory is a self-contained project with its own `flake.nix`, `lakefile.toml` and README. Run `nix develop -c make check` inside a directory to build and test that backend. All of them use Lean `v4.35.0`.
 
-Releases are tagged per backend: `rust-vX.Y.Z`, `python-vX.Y.Z`, `typescript-vX.Y.Z` and `clojure-vX.Y.Z`.
+The four backends are released together under one version: the `Release` workflow writes the version into all of them (`scripts/set-version.sh`), runs their `make check`, and tags `vX.Y.Z`, and the `Publish` workflow publishes the tag to crates.io, PyPI, npm and Clojars.
 
 ## License
 

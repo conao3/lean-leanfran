@@ -36,7 +36,7 @@
                 :resource-dirs resource-dirs
                 :scm {:url url
                       :connection (str "scm:git:" url ".git")
-                      :tag (str "clojure-v" version)}
+                      :tag (str "v" version)}
                 :pom-data [[:description (:description project)]
                            [:url url]
                            [:licenses
@@ -58,32 +58,24 @@
 
 
 (def ^:private version-sites
-  "Files holding the version, with a pattern whose group 2 is the version."
+  "Files holding the version, with a pattern whose group 2 is the version and
+  the text written before the version, if any."
   [["deps.edn" #"(:version \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["Main.lean" #"(def version : String := \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["src/lean_clj/core.clj" #"(\(def generator-version\n(?:  .*\n)*?  \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["flake.nix" #"(version = \")([0-9]+\.[0-9]+\.[0-9]+)(\";)"]
    ["README.md" #"(\{:mvn/version \")([0-9]+\.[0-9]+\.[0-9]+)(\"\})"]
-   ["README.md" #"(github:conao3/lean-leanfran/clojure-v)([0-9]+\.[0-9]+\.[0-9]+)()"]])
+   ["README.md" #"(github:conao3/lean-leanfran/)((?:clojure-)?v[0-9]+\.[0-9]+\.[0-9]+)()" "v"]])
 
 
-(defn- next-version
-  [v part]
-  (let [[major minor patch] (map parse-long (str/split v #"\."))]
-    (case part
-      major (str (inc major) ".0.0")
-      minor (str major "." (inc minor) ".0")
-      patch (str major "." minor "." (inc patch)))))
-
-
-(defn bump
-  "Raise the `:part` (`patch`, `minor`, or `major`) of the version in every
-  file that holds it, and print the new version."
-  [{:keys [part]}]
-  (let [v (next-version version (symbol (name part)))]
-    (doseq [[f re] version-sites]
-      (let [s (slurp f)]
-        (when-not (re-find re s)
-          (throw (ex-info (str "build: no version in " f) {:file f :pattern re})))
-        (spit f (str/replace s re (fn [[_ pre _ post]] (str pre v post))))))
-    (println v)))
+(defn set-version
+  "Write `:version` (a string such as \"0.4.0\") into every file that holds
+  the version."
+  [{v :version}]
+  (when-not (and (string? v) (re-matches #"[0-9]+\.[0-9]+\.[0-9]+" v))
+    (throw (ex-info "build: :version must be a string X.Y.Z" {:version v})))
+  (doseq [[f re prefix] version-sites]
+    (let [s (slurp f)]
+      (when-not (re-find re s)
+        (throw (ex-info (str "build: no version in " f) {:file f :pattern re})))
+      (spit f (str/replace s re (fn [[_ pre _ post]] (str pre prefix v post)))))))
