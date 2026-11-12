@@ -11,3 +11,4 @@ import LeanTsTest.Stress3
 import LeanTsTest.Stress4
 import LeanTsTest.Vectors
 import LeanTsTest.Verify
+import LeanTsTest.Bench

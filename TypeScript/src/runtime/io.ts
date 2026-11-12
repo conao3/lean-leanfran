@@ -8,6 +8,9 @@ import {
   lean_apply,
   lean_bool,
   lean_ctor,
+  lean_dec,
+  lean_inc,
+  lean_is_exclusive,
   lean_tag,
   lean_trampoline,
 } from "./object.ts"
@@ -445,14 +448,17 @@ let stdinStream: Obj = mkStdinStream()
 // IR does `proj[4]` directly on the result). Likewise the set* variants return
 // the previous stream directly.
 export function lean_get_stdout(): Obj {
+  lean_inc(stdoutStream)
   return stdoutStream
 }
 
 export function lean_get_stderr(): Obj {
+  lean_inc(stderrStream)
   return stderrStream
 }
 
 export function lean_get_stdin(): Obj {
+  lean_inc(stdinStream)
   return stdinStream
 }
 
@@ -492,10 +498,13 @@ export function lean_st_mk_ref(a: Obj): Obj {
 }
 
 export function lean_st_ref_get(r: Obj): Obj {
-  return asRef(r).value
+  const v = asRef(r).value
+  lean_inc(v)
+  return v
 }
 
 export function lean_st_ref_set(r: Obj, a: Obj): Obj {
+  lean_dec(asRef(r).value)
   asRef(r).value = a
   return 0
 }
@@ -592,11 +601,11 @@ export function lean_dbg_trace(s: Obj, fn: Obj): Obj {
   return lean_trampoline(lean_apply(fn, [0]))
 }
 
-// dbgTraceIfShared (s) (a): prints s only if `a` is RC-shared (RC(a) > 1). Its
-// second arg is the VALUE `a` itself (not a thunk), and it returns `a`. Refcount
-// is not modeled under JS GC, so a value is never "shared" in the RC sense:
-// never print, just return `a` -- observably identical to native here.
-export function lean_dbg_trace_if_shared(_s: Obj, a: Obj): Obj {
+// dbgTraceIfShared (s) (a): prints "shared RC s" if `a` is RC-shared (RC(a) > 1).
+// Its second arg is the VALUE `a` itself (not a thunk), and it returns `a`.
+export function lean_dbg_trace_if_shared(s: Obj, a: Obj): Obj {
+  if (typeof a === "object" && a !== null && "rc" in a && typeof a.rc === "number" && a.rc > 1)
+    platform.writeStderr(`shared RC ${asString(s)}\n`)
   return a
 }
 
@@ -612,10 +621,9 @@ export function lean_ptr_addr(_a: Obj): bigint {
   return 0n
 }
 
-// isExclusiveUnsafe: no RC in JS; report non-exclusive (0) so copy-on-write paths
-// stay value-correct.
-export function lean_is_exclusive_obj(_a: Obj): number {
-  return 0
+// isExclusiveUnsafe: 1 when the reference count of `a` is 1.
+export function lean_is_exclusive_obj(a: Obj): number {
+  return lean_is_exclusive(a) ? 1 : 0
 }
 
 // ---- module-initialization chain (emitInitFn / emitDeclInit analogue) ----

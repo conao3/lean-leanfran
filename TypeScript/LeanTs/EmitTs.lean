@@ -5,8 +5,9 @@ import Lean.Compiler.CSimpAttr
 
 We obtain IR `Decl`s via `Lean.IR.findEnvDecl`, then walk `FnBody`/`Expr`
 and emit a typed TypeScript module that calls the runtime (`lean-ts/runtime`)
-through the namespace import `L`. Reference-counting nodes
-(inc/dec/del/reset/reuse) are omitted because the JS engine has a tracing GC. -/
+through the namespace import `L`. Reference-counting nodes (inc/dec/reset/
+reuse/isShared) call the runtime's reference counts, so an exclusive array or
+constructor is updated in place as in EmitC; `del` emits nothing. -/
 
 open Lean Lean.IR
 
@@ -540,8 +541,10 @@ def isEffectful (st : EmitState) : IR.Expr → Bool
     `bigint`) and to narrow `Obj`-typed results to scalar bindings. -/
 def emitExpr (ty : IRType) : IR.Expr → EmitM String
   | .ctor i ys      => ctorLit i ys
-  | .reset _ _      => pure "null"          -- GC: reuse token unused
-  | .reuse _ i _ ys => ctorLit i ys         -- GC: identical to a fresh ctor
+  | .reset n x      => do return s!"{← sym "lean_reset"}({varName x}, {n})"
+  | .reuse x i _ ys => do
+    let args := (#[varName x, s!"{i.cidx}", s!"{i.size}", s!"{i.usize}", s!"{i.ssize}"] ++ ys.map argToJs).toList
+    return s!"{← sym "lean_reuse"}({", ".intercalate args})"
   | .proj i x       => do return coerce ty s!"{← sym "lean_ctor_get"}({varName x}, {i})"
   | .uproj i x      => do return s!"{← sym "lean_ctor_uget"}({varName x}, {i})"
   | .sproj _ offset x => do return s!"{← sym s!"lean_ctor_get_{sscalarSuffix ty}"}({varName x}, {offset})"
@@ -579,10 +582,7 @@ def emitExpr (ty : IRType) : IR.Expr → EmitM String
     | .uint8 | .uint16 | .uint32 | .float | .float32 => pure s!"{v}"
     | _ => pure s!"{v}n"
   | .lit (.str v)   => pure (quoteString v)
-  | .isShared _     => pure "1"
-    -- Always report "shared" so the compiler's exclusivity branch takes the
-    -- copying path instead of mutating in place; JS references are shared and
-    -- there is no refcount, so in-place `set`/`reuse` would corrupt aliases.
+  | .isShared x     => do return s!"{← sym "lean_is_shared"}({varName x})"
 
 /-- Emit a `vdecl`: a typed `const` when the variable is read, the bare
     expression when it is not but has an effect, nothing otherwise. -/
@@ -592,6 +592,20 @@ def emitVDecl (x : VarId) (ty : IRType) (e : IR.Expr) : EmitM Unit := do
     line s!"const {varName x}: {tsType ty} = {← emitExpr ty e}"
   else if isEffectful st e then
     line (← emitExpr ty e)
+
+def emitInc (x : VarId) (n : Nat) : EmitM Unit := do
+  if n == 1 then line s!"{← sym "lean_inc"}({varName x})"
+  else line s!"{← sym "lean_inc_n"}({varName x}, {n})"
+
+def emitDec (x : VarId) : EmitM Unit := do
+  line s!"{← sym "lean_dec"}({varName x})"
+
+partial def emitTrailingIncs : FnBody → EmitM Unit
+  | .inc x n _ _ b => do
+    emitInc x n
+    emitTrailingIncs b
+  | .dec _ _ _ _ b | .del _ b => emitTrailingIncs b
+  | _ => pure ()
 
 def emitSet (x : VarId) (i : Nat) (y : Arg) : EmitM Unit := do
   line s!"{← sym "lean_ctor_set"}({varName x}, {i}, {argToJs y})"
@@ -665,7 +679,8 @@ trampoline thunks. -/
 /-- Does this body (a chain of `dec/inc/del`) end in `ret (var x)`? -/
 partial def retsVar (x : VarId) : FnBody → Bool
   | .ret (.var r) => r == x
-  | .inc _ _ _ _ b | .dec _ _ _ _ b | .del _ b => retsVar x b
+  | .inc y _ _ _ b => y != x && retsVar x b
+  | .dec _ _ _ _ b | .del _ b => retsVar x b
   | _ => false
 
 /-- A matched tail call: a direct `.fap` to a named callee (loopable/thunkable
@@ -752,8 +767,10 @@ def useArgs (used : Std.HashSet Nat) (ys : Array Arg) : Std.HashSet Nat :=
   ys.foldl useArg used
 
 def exprUses (ctx : UseCtx) (used : Std.HashSet Nat) : IR.Expr → Std.HashSet Nat
-  | .ctor _ ys | .reuse _ _ _ ys | .pap _ ys => useArgs used ys
-  | .reset .. | .lit _ | .isShared _ => used
+  | .ctor _ ys | .pap _ ys => useArgs used ys
+  | .reuse x _ _ ys => useArgs (used.insert x.idx) ys
+  | .reset _ x | .isShared x => used.insert x.idx
+  | .lit _ => used
   | .proj _ x | .uproj _ x | .sproj _ _ x | .box _ x | .unbox x => used.insert x.idx
   | .fap c ys =>
     match knownFap c with
@@ -779,7 +796,8 @@ partial def bodyUses (ctx : UseCtx) (used : Std.HashSet Nat) : FnBody → Std.Ha
   | .set x _ y k => bodyUses ctx (useArg (used.insert x.idx) y) k
   | .setTag x _ k => bodyUses ctx (used.insert x.idx) k
   | .uset x _ y k | .sset x _ _ y _ k => bodyUses ctx ((used.insert x.idx).insert y.idx) k
-  | .inc _ _ _ _ k | .dec _ _ _ _ k | .del _ k => bodyUses ctx used k
+  | .inc x _ _ _ k | .dec x _ _ _ k => bodyUses ctx (used.insert x.idx) k
+  | .del _ k => bodyUses ctx used k
   | .case _ x _ alts => alts.foldl (fun u alt => bodyUses ctx u alt.body) (used.insert x.idx)
   | .ret y => useArg used y
   | .jmp j ys =>
@@ -839,8 +857,12 @@ partial def emitNonTail (self : FunId) (scc : Std.HashSet Name)
   | .sset x _ offset y ty k => do
     emitSSet x offset y ty
     emitFnBodyLoop self scc params jps k
-  | .inc _ _ _ _ k => emitFnBodyLoop self scc params jps k
-  | .dec _ _ _ _ k => emitFnBodyLoop self scc params jps k
+  | .inc x n _ _ k => do
+    emitInc x n
+    emitFnBodyLoop self scc params jps k
+  | .dec x _ _ _ k => do
+    emitDec x
+    emitFnBodyLoop self scc params jps k
   | .del _ k       => emitFnBodyLoop self scc params jps k
   | .ret x => line s!"return {argToJs x}"
   | .jmp j ys => do
@@ -859,6 +881,7 @@ partial def emitPrefixThenTail (self : FunId) (scc : Std.HashSet Name)
     (params : Array Param) (jps : JpEnv) : FnBody → EmitM Unit
   | .vdecl x ty (.fap c cargs) k => do
     if retsVar x k then
+      emitTrailingIncs k
       if c == self then
         emitTailRebind params cargs
       else
@@ -873,6 +896,7 @@ partial def emitPrefixThenTail (self : FunId) (scc : Std.HashSet Name)
       -- Tail-position closure application: return a `tc:2` apply-thunk the
       -- wrapper's `lean_trampoline` unrolls, instead of forcing `lean_apply`
       -- here (which would stack a JS frame per CPS / continuation step).
+      emitTrailingIncs k
       line ("return { tc: 2, clo: " ++ varName fx ++ ", a: [" ++ argsToJs aargs ++ "] }")
     else
       emitVDecl x ty (.ap fx aargs)
@@ -892,8 +916,12 @@ partial def emitPrefixThenTail (self : FunId) (scc : Std.HashSet Name)
   | .sset x _ offset y ty k => do
     emitSSet x offset y ty
     emitPrefixThenTail self scc params jps k
-  | .inc _ _ _ _ k => emitPrefixThenTail self scc params jps k
-  | .dec _ _ _ _ k => emitPrefixThenTail self scc params jps k
+  | .inc x n _ _ k => do
+    emitInc x n
+    emitPrefixThenTail self scc params jps k
+  | .dec x _ _ _ k => do
+    emitDec x
+    emitPrefixThenTail self scc params jps k
   | .del _ k       => emitPrefixThenTail self scc params jps k
   | b => emitNonTail self scc params jps b
 
@@ -931,8 +959,12 @@ partial def emitFnBody (jps : JpEnv) : FnBody → EmitM Unit
   | .sset x _ offset y ty b => do
     emitSSet x offset y ty
     emitFnBody jps b
-  | .inc _ _ _ _ b => emitFnBody jps b
-  | .dec _ _ _ _ b => emitFnBody jps b
+  | .inc x n _ _ b => do
+    emitInc x n
+    emitFnBody jps b
+  | .dec x _ _ _ b => do
+    emitDec x
+    emitFnBody jps b
   | .del _ b       => emitFnBody jps b
   | .ret x => line s!"return {argToJs x}"
   | .jmp j ys => do
@@ -1167,7 +1199,7 @@ def emitInitRegistrations (env : Environment) (initNames : Array Name) : EmitM U
         withIndent do
           line s!"const r: Obj = {← ref (funRef initFn)}()"
           line s!"if ({← sym "lean_io_result_is_ok"}(r)) \{"
-          withIndent (line s!"{← ref (funRef n)} = {← sym "lean_io_result_get_value"}(r)")
+          withIndent (line s!"{← ref (funRef n)} = {← sym "lean_mark_persistent"}({← sym "lean_io_result_get_value"}(r))")
           line "}"
           line "return r"
         line "})"

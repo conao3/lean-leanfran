@@ -17,7 +17,12 @@ export interface Ctor {
   tag: number
   fields: Obj[]
   sdata: DataView | null
+  rc: number
 }
+
+export type Arr = Obj[] & { rc?: number }
+export type Bytes = Uint8Array & { rc?: number }
+export type Floats = Float64Array & { rc?: number }
 
 export interface Closure {
   fn: Fn
@@ -49,9 +54,9 @@ export type Obj =
   | bigint
   | number
   | string
-  | Obj[]
-  | Uint8Array
-  | Float64Array
+  | Arr
+  | Bytes
+  | Floats
   | null
   | undefined
 
@@ -95,17 +100,17 @@ export function asString(x: Obj): string {
   return fail("a string", x)
 }
 
-export function asArray(x: Obj): Obj[] {
+export function asArray(x: Obj): Arr {
   if (Array.isArray(x)) return x
   return fail("an array", x)
 }
 
-export function asBytes(x: Obj): Uint8Array {
+export function asBytes(x: Obj): Bytes {
   if (x instanceof Uint8Array) return x
   return fail("a Uint8Array", x)
 }
 
-export function asFloats(x: Obj): Float64Array {
+export function asFloats(x: Obj): Floats {
   if (x instanceof Float64Array) return x
   return fail("a Float64Array", x)
 }
@@ -126,6 +131,80 @@ export function lean_tag(x: Obj): number {
   return typeof x === "number" ? x : asCtor(x).tag
 }
 
+type Counted = Ctor | Arr | Bytes | Floats
+
+function counted(x: Obj): x is Counted {
+  return typeof x === "object" && x !== null && "rc" in x && typeof x.rc === "number" && x.rc > 0
+}
+
+export function lean_inc(x: Obj): void {
+  if (counted(x)) x.rc = (x.rc ?? 0) + 1
+}
+
+export function lean_inc_n(x: Obj, n: number): void {
+  if (counted(x)) x.rc = (x.rc ?? 0) + n
+}
+
+export function lean_dec(x: Obj): void {
+  if (!counted(x)) return
+  if (x.rc !== 1) {
+    x.rc = (x.rc ?? 0) - 1
+    return
+  }
+  const stack: Counted[] = [x]
+  for (let o = stack.pop(); o !== undefined; o = stack.pop()) {
+    o.rc = 0
+    const children = Array.isArray(o) ? o : "fields" in o ? o.fields : null
+    if (children === null) continue
+    for (const c of children) {
+      if (!counted(c)) continue
+      if (c.rc === 1) stack.push(c)
+      else c.rc = (c.rc ?? 0) - 1
+    }
+  }
+}
+
+export function lean_is_exclusive(x: Obj): boolean {
+  return counted(x) && x.rc === 1
+}
+
+export function lean_is_shared(x: Obj): number {
+  return lean_is_exclusive(x) ? 0 : 1
+}
+
+export function lean_mark_persistent<T extends Obj>(x: T): T {
+  if (counted(x)) x.rc = 0
+  return x
+}
+
+export function lean_reset(x: Obj, n: number): Obj {
+  if (lean_is_exclusive(x)) {
+    const c = asCtor(x)
+    for (let i = 0; i < n; i++) {
+      lean_dec(c.fields[i])
+      c.fields[i] = 0
+    }
+    return c
+  }
+  lean_dec(x)
+  return null
+}
+
+export function lean_reuse(
+  token: Obj,
+  tag: number,
+  size: number,
+  usize: number,
+  ssize: number,
+  ...objs: Obj[]
+): Ctor {
+  if (token === null) return lean_ctor(tag, size, usize, ssize, ...objs)
+  const c = asCtor(token)
+  c.tag = tag
+  for (let i = 0; i < objs.length; i++) c.fields[i] = objs[i]
+  return c
+}
+
 // ---- constructor objects: three regions mirroring lean_alloc_ctor ----
 // A heap ctor is one block with header + object/usize word slots + packed
 // scalar bytes (Lean.Compiler.IR.Basic CtorInfo {size, usize, ssize}):
@@ -141,6 +220,7 @@ export function lean_alloc_ctor(tag: number, size: number, usize: number, ssize:
     tag,
     fields: Array.from<Obj>({ length: size + usize }),
     sdata: ssize > 0 ? new DataView(new ArrayBuffer(ssize)) : null,
+    rc: 1,
   }
 }
 
@@ -291,6 +371,7 @@ export function lean_apply(clo: Obj, more: Obj[]): Obj | Bounce {
   // but FS.Stream fields and other runtime closures are bare functions).
   if (typeof clo === "function") return { tc: 1, f: clo, a: more }
   let cur = asClosure(clo)
+  for (const a of cur.args) lean_inc(a)
   if (cur.arity < 0) return { tc: 1, f: cur.fn, a: cur.args.concat(more) }
   let i = 0
   while (i < more.length) {
@@ -305,6 +386,7 @@ export function lean_apply(clo: Obj, more: Obj[]): Obj | Bounce {
     const res = lean_trampoline({ tc: 1, f: cur.fn, a: callArgs })
     if (typeof res === "function") return { tc: 1, f: res, a: more.slice(i) }
     const next = asClosure(res)
+    for (const a of next.args) lean_inc(a)
     if (next.arity < 0) return { tc: 1, f: next.fn, a: next.args.concat(more.slice(i)) }
     cur = next
   }
@@ -336,5 +418,7 @@ export function lean_thunk_get(x: Obj): Obj {
 }
 
 export function lean_thunk_get_own(x: Obj): Obj {
-  return lean_thunk_get(x)
+  const v = lean_thunk_get(x)
+  lean_inc(v)
+  return v
 }

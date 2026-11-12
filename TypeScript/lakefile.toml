@@ -71,3 +71,7 @@ root = "LeanTsTest.VerifyMain"
 [[lean_exe]]
 name = "oracle-json"
 root = "LeanTsTest.JsonMain"
+
+[[lean_exe]]
+name = "oracle-bench"
+root = "LeanTsTest.BenchMain"

@@ -62,6 +62,72 @@ function streamIsTty(stream: L.Obj): L.Obj {
   return L.lean_trampoline(L.lean_apply(L.lean_ctor_get(stream, 5), [undefined]))
 }
 
+describe("reference counts", () => {
+  test("an exclusive array is updated in place", () => {
+    const a = L.lean_array_push(L.lean_mk_array(0n, 0), 1n)
+    const b = L.lean_array_push(a, 2n)
+    expect(b).toBe(a)
+    expect(L.lean_array_set(b, 0n, 5n)).toBe(a)
+    expect([...a]).toEqual([5n, 2n])
+  })
+
+  test("a shared array is copied and keeps its elements", () => {
+    const a = L.lean_array_push(L.lean_mk_array(0n, 0), 1n)
+    L.lean_inc(a)
+    const b = L.lean_array_push(a, 2n)
+    expect(b).not.toBe(a)
+    expect([...a]).toEqual([1n])
+    expect([...b]).toEqual([1n, 2n])
+    expect(L.lean_array_push(a, 3n)).toBe(a)
+  })
+
+  test("copying a shared array counts the elements it now shares", () => {
+    const inner = L.lean_array_push(L.lean_mk_array(0n, 0), 1n)
+    const outer = L.lean_array_push(L.lean_mk_array(0n, 0), inner)
+    L.lean_inc(outer)
+    const copy = L.lean_array_push(outer, 0)
+    expect(L.lean_is_shared(inner)).toBe(1)
+    L.lean_dec(copy)
+    expect(L.lean_is_shared(inner)).toBe(0)
+  })
+
+  test("a dec to zero releases the children", () => {
+    const inner = L.lean_array_push(L.lean_mk_array(0n, 0), 1n)
+    L.lean_inc(inner)
+    const pair = L.lean_ctor(0, 2, 0, 0, inner, 0)
+    expect(L.lean_is_shared(inner)).toBe(1)
+    L.lean_dec(pair)
+    expect(L.lean_is_shared(inner)).toBe(0)
+  })
+
+  test("reset hands back an exclusive constructor and reuse writes into it", () => {
+    const c = L.lean_ctor(1, 2, 0, 0, 1n, 2n)
+    const token = L.lean_reset(c, 2)
+    expect(token).toBe(c)
+    expect(L.lean_reuse(token, 1, 2, 0, 0, 3n, 4n)).toBe(c)
+    expect(c.fields).toEqual([3n, 4n])
+    L.lean_inc(c)
+    expect(L.lean_reset(c, 2)).toBeNull()
+  })
+
+  test("a persistent value and a value made outside the runtime are copied", () => {
+    const a = L.lean_mark_persistent(L.lean_array_push(L.lean_mk_array(0n, 0), 1n))
+    expect(L.lean_array_push(a, 2n)).not.toBe(a)
+    const outside = [1n]
+    expect(L.lean_array_push(outside, 2n)).not.toBe(outside)
+    expect(outside).toEqual([1n])
+  })
+
+  test("an exclusive ByteArray grows in place", () => {
+    let b: L.Obj = L.lean_mk_empty_byte_array(0n)
+    for (let i = 0; i < 100; i++) b = L.lean_byte_array_push(b, i)
+    const before = L.asBytes(b).buffer
+    b = L.lean_byte_array_push(b, 100)
+    expect(L.asBytes(b).buffer).toBe(before)
+    expect(Array.from(L.asBytes(b)).slice(-3)).toEqual([98, 99, 100])
+  })
+})
+
 describe("platform", () => {
   test("OS operations return IO.Error.unsupportedOperation without Node", () => {
     L.setPlatform(L.browserPlatform)

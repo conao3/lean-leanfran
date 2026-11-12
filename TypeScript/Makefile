@@ -1,6 +1,6 @@
 # Run the targets inside the dev shell: `nix develop -c make check`.
 
-.PHONY: install build pack gen-externs externs-check test test-public fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples check
+.PHONY: install build pack gen-externs externs-check test test-public fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples bench check
 
 install:
 	pnpm install --frozen-lockfile
@@ -65,6 +65,10 @@ samples: build pack
 	$(MAKE) -C samples verify test
 	git diff --exit-code -- samples
 	test -z "$$(git status --porcelain --untracked-files=all -- samples)"
+
+bench: build
+	lake build oracle-bench
+	node samples/bench/bench.ts
 
 format:
 	treefmt

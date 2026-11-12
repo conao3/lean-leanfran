@@ -480,17 +480,25 @@ export function double(n: bigint | number): bigint {
    `uint8`..`uint32`/`float`/`float32` → `number`, `uint64`/`usize` → `bigint`),
    and only bindings the code reads are emitted.
 
-### GC target
+### Reference counting
 
-The JS engine has a tracing GC, so all Lean reference-counting nodes are no-ops:
+Constructors, arrays, `ByteArray`s and `FloatArray`s carry a reference count `rc`,
+and the IR's reference-counting nodes run on it as in `EmitC`, so an exclusive
+array or constructor is updated in place:
 
-- `FnBody.inc` / `dec` / `del` -> emit nothing
-- `Expr.reset` -> `null` (unused reuse token)
-- `Expr.reuse` -> a fresh ctor allocation (== `Expr.ctor`)
+- `FnBody.inc` / `dec` -> `L.lean_inc` / `L.lean_dec` (a dec to 0 releases the
+  children); `del` -> nothing
+- `Expr.reset` -> `L.lean_reset` (the cell when exclusive, else `null`);
+  `Expr.reuse` -> `L.lean_reuse` (writes into the cell, or allocates for `null`)
+- `Expr.isShared` -> `L.lean_is_shared` (`rc !== 1`)
 - `Expr.box` -> identity; `Expr.unbox` -> `L.lean_unbox` (a checked narrowing)
-- `Expr.isShared` -> `1` ("always shared"), forcing the compiler's
-  exclusivity branch to take the copying path; in-place `set`/`reuse` would corrupt
-  shared JS references since there is no refcount.
+
+A value whose `rc` is not a positive integer counts as shared: a persistent value
+(`initialize` globals, cached constants of the public functions) and a value made
+outside the runtime are copied before they are updated. The runtime keeps `rc` at
+least the number of references: the externs that return a part of their argument
+(`Array.get`, `IO.Ref.get`, `Thunk.get`) inc it, a copy incs the elements, and
+`lean_apply` incs the arguments a closure holds.
 
 ### Object / value model
 
@@ -507,11 +515,31 @@ The JS engine has a tracing GC, so all Lean reference-counting nodes are no-ops:
 - `String` -> JS string; `String.Pos` is a UTF-8 byte offset (`get`/`next`/`prev`/
   `extract`/`atEnd` index bytes, `utf8ByteSize` counts bytes, `length` counts code
   points).
-- `Array` -> JS array; setters (`set`/`uset`/`push`/`pop`/`swap`) return a fresh
-  array so the compiler's assumed-unique in-place paths cannot corrupt aliases.
+- `Array` -> JS array with an `rc` property; setters (`set`/`uset`/`push`/`pop`/
+  `swap`) update an exclusive array in place and copy a shared one. `ByteArray` ->
+  `Uint8Array` and `FloatArray` -> `Float64Array`, whose `push` grows a view over a
+  buffer with spare capacity.
 - `case` on scalar -> `switch (x)`; on object -> `switch (L.lean_tag(x))`.
 - self-tail-recursion -> `for (;;)` loop with staged param rebind + `continue`
   (join points are inlined at each jump, so `continue` stays lexically inside the loop).
+
+## Performance
+
+`make bench` (Node.js 26, x86_64; the native column is the C backend):
+
+| workload                  | n   | TypeScript (s) | native C (s) |
+| ------------------------- | --- | -------------- | ------------ |
+| `Array.push`, `set!`, sum | 10⁴ | 0.008          | 0.005        |
+| `Array.push`, `set!`, sum | 10⁵ | 0.046          | 0.006        |
+| `Array.push`, `set!`, sum | 10⁶ | 0.438          | 0.016        |
+| `fib` (loop)              | 10⁵ | 0.055          | 0.072        |
+| `naiveFib`                | 25  | 0.016          | 0.005        |
+| `String.push`             | 10⁴ | 0.004          | 0.005        |
+| `String.push`             | 10⁵ | 0.018          | 0.006        |
+| `Array.qsort`             | 10⁵ | 0.425          | 0.020        |
+
+Passing 10⁴ structures to a Lean function takes 0.024 s (zod's
+`z.array(z.object(...)).parse` validates 10⁴ objects in 0.011 s).
 
 ## Checks
 
@@ -561,17 +589,16 @@ below is enforced by `test-diff.sh` diffing node output against that native bina
 - **String**: UTF-8 byte-positioned `String.Pos`, get/next/prev/extract/atEnd/posOf,
   `length` (code points) vs `utf8ByteSize` (bytes), `String.hash` (MurmurHash64A,
   seed 11 — bit-identical so `Std.HashMap String _` iteration order matches native).
-- **Collections**: `Array`/`List` operations (setters return a fresh array — the
-  compiler's assumed-unique in-place paths cannot corrupt JS aliases), `ByteArray`
+- **Collections**: `Array`/`List` operations (setters update an exclusive array in
+  place and copy a shared one), `ByteArray`
   (`Uint8Array`), **`FloatArray`** (`Float64Array`: push/get!/set!/get/uget/fold/toList
   with native OOB conventions — `get!`→`0.0`, `set!`→unchanged), `Std.HashMap`/
   `HashSet` with native-matching bucket-order iteration.
 - **Owned/borrowed externs**: Lean 4.35.0 emits four borrowed `@[extern]`
   variants — three for array element access (`lean_array_get_borrowed`,
   `lean_array_fget_borrowed`, `lean_array_uget_borrowed`) and `lean_panic_fn_borrowed`
-  (`panicCore`, borrowed default). All four are mapped as runtime aliases of their
-  owned twins, because the only C-level difference is a refcount `inc`, which is a
-  no-op under JS GC. So `a[i]!` and borrowed
+  (`panicCore`, borrowed default). Each returns the element without the `inc` its
+  owned twin does. So `a[i]!` and borrowed
   indexing/projection work **uniformly** (verified by the matrix-multiply inner loop
   in the `verify` diff-test, which lowers to `lean_array_get_borrowed`).
 - **Control flow**: self- and mutual-recursion plus non-cyclic tail chains are loop-ified

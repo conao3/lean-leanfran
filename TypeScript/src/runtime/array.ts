@@ -1,9 +1,69 @@
-import type { Obj } from "./object.ts"
-import { asArray, asBytes, asCtor, asFloats, asNat, lean_ctor, lean_unbox } from "./object.ts"
+import type { Arr, Bytes, Floats, Obj } from "./object.ts"
+import {
+  asArray,
+  asBytes,
+  asCtor,
+  asFloats,
+  asNat,
+  lean_ctor,
+  lean_dec,
+  lean_inc,
+  lean_inc_n,
+  lean_is_exclusive,
+  lean_unbox,
+} from "./object.ts"
 import { lean_panic_fn } from "./io.ts"
 
-// ---- ByteArray: a Uint8Array (matches IO read buffers). Setters copy, like
-// Array, because the JS reference graph cannot honor Lean's uniqueness. ----
+// ---- ByteArray: a Uint8Array (matches IO read buffers). Setters update an
+// exclusive array in place and copy a shared one, like Array. ----
+function ownBytes(a: Obj, extra: number): Bytes {
+  const src = asBytes(a)
+  if (lean_is_exclusive(src) && src.byteOffset + src.length + extra <= src.buffer.byteLength) {
+    const r: Bytes =
+      extra === 0 ? src : new Uint8Array(src.buffer, src.byteOffset, src.length + extra)
+    r.rc = 1
+    return r
+  }
+  const r: Bytes = new Uint8Array(
+    new ArrayBuffer(Math.max(8, (src.length + extra) * 2)),
+    0,
+    src.length + extra,
+  )
+  r.set(src)
+  r.rc = 1
+  lean_dec(src)
+  return r
+}
+
+function ownFloats(a: Obj, extra: number): Floats {
+  const src = asFloats(a)
+  const cap = src.buffer.byteLength / 8
+  if (lean_is_exclusive(src) && src.byteOffset / 8 + src.length + extra <= cap) {
+    const r: Floats =
+      extra === 0 ? src : new Float64Array(src.buffer, src.byteOffset, src.length + extra)
+    r.rc = 1
+    return r
+  }
+  const r: Floats = new Float64Array(
+    new ArrayBuffer(Math.max(8, (src.length + extra) * 2) * 8),
+    0,
+    src.length + extra,
+  )
+  r.set(src)
+  r.rc = 1
+  lean_dec(src)
+  return r
+}
+
+function ownArray(a: Obj): Arr {
+  const src = asArray(a)
+  if (lean_is_exclusive(src)) return src
+  const r: Arr = src.slice()
+  for (const x of r) lean_inc(x)
+  r.rc = 1
+  lean_dec(src)
+  return r
+}
 export function lean_mk_empty_byte_array(_cap: Obj): Uint8Array {
   return new Uint8Array(0)
 }
@@ -17,10 +77,8 @@ export function lean_sarray_size(a: Obj): bigint {
 }
 
 export function lean_byte_array_push(a: Obj, b: number): Uint8Array {
-  const src = asBytes(a)
-  const r = new Uint8Array(src.length + 1)
-  r.set(src)
-  r[src.length] = b & 0xff
+  const r = ownBytes(a, 1)
+  r[r.length - 1] = b & 0xff
   return r
 }
 
@@ -41,7 +99,7 @@ export function lean_byte_array_set(a: Obj, i: Obj, b: number): Uint8Array {
   const src = asBytes(a)
   const j = Number(i)
   if (j < 0 || j >= src.length) return src
-  const r = src.slice()
+  const r = ownBytes(src, 0)
   r[j] = b & 0xff
   return r
 }
@@ -82,9 +140,8 @@ export function lean_byte_array_copy_slice(
 
 // ---- FloatArray: packed doubles -> Float64Array (mirrors ByteArray=Uint8Array).
 // The C runtime stores packed `double`s in an sarray; Float64Array is the exact
-// JS analog. Setters copy-on-write, like the Array/ByteArray externs, because JS
-// arrays are reference-shared and the compiler's unique-assumed paths would
-// otherwise corrupt the caller.
+// JS analog. Setters update an exclusive array in place and copy a shared one,
+// like the Array/ByteArray externs.
 export function lean_float_array_mk(a: Obj): Float64Array {
   return Float64Array.from(asArray(a), lean_unbox)
 }
@@ -106,10 +163,8 @@ export function lean_float_array_size(a: Obj): bigint {
 }
 
 export function lean_float_array_push(a: Obj, d: number): Float64Array {
-  const src = asFloats(a)
-  const r = new Float64Array(src.length + 1)
-  r.set(src)
-  r[src.length] = d
+  const r = ownFloats(a, 1)
+  r[r.length - 1] = d
   return r
 }
 
@@ -127,13 +182,13 @@ export function lean_float_array_get(a: Obj, i: Obj): number {
 }
 
 export function lean_float_array_uset(a: Obj, i: bigint, d: number): Float64Array {
-  const r = asFloats(a).slice()
+  const r = ownFloats(a, 0)
   r[Number(i)] = d
   return r
 }
 
 export function lean_float_array_fset(a: Obj, i: Obj, d: number): Float64Array {
-  const r = asFloats(a).slice()
+  const r = ownFloats(a, 0)
   r[Number(i)] = d
   return r
 }
@@ -143,7 +198,7 @@ export function lean_float_array_set(a: Obj, i: Obj, d: number): Float64Array {
   const src = asFloats(a)
   const j = Number(i)
   if (j < 0 || j >= src.length) return src
-  const r = src.slice()
+  const r = ownFloats(src, 0)
   r[j] = d
   return r
 }
@@ -154,7 +209,9 @@ export function lean_array_get_size(a: Obj): bigint {
 }
 
 export function lean_array_fget(a: Obj, i: Obj): Obj {
-  return asArray(a)[Number(i)]
+  const v = asArray(a)[Number(i)]
+  lean_inc(v)
+  return v
 }
 
 // Array.get!Internal (extern lean_array_get): the C signature passes the
@@ -165,61 +222,67 @@ export function lean_array_fget(a: Obj, i: Obj): Obj {
 export function lean_array_get(dflt: Obj, a: Obj, i: Obj): Obj {
   const arr = asArray(a)
   const idx = Number(i)
-  return idx >= 0 && idx < arr.length ? arr[idx] : lean_panic_fn(dflt, "Error: index out of bounds")
+  if (idx < 0 || idx >= arr.length) return lean_panic_fn(dflt, "Error: index out of bounds")
+  const v = arr[idx]
+  lean_inc(v)
+  return v
 }
 
 // Array.get!InternalBorrowed (extern lean_array_get_borrowed): identical
-// signature and semantics to lean_array_get; the only C-level difference is the
-// borrowed-vs-owned refcount on `a`, which is a no-op in GC'd JS. The compiler
-// emits this variant when the indexed element is only borrowed (e.g. a[i]!.size).
+// signature and semantics to lean_array_get, except that the returned element
+// is borrowed (no inc). The compiler emits this variant when the indexed
+// element is only borrowed (e.g. a[i]!.size).
 export function lean_array_get_borrowed(dflt: Obj, a: Obj, i: Obj): Obj {
-  return lean_array_get(dflt, a, i)
+  const arr = asArray(a)
+  const idx = Number(i)
+  return idx >= 0 && idx < arr.length ? arr[idx] : lean_panic_fn(dflt, "Error: index out of bounds")
 }
 
 export function lean_array_uget(a: Obj, i: bigint): Obj {
-  return asArray(a)[Number(i)]
+  const v = asArray(a)[Number(i)]
+  lean_inc(v)
+  return v
 }
 
 // Array.getInternalBorrowed (C lean_array_fget_borrowed) and Array.ugetBorrowed
-// (C lean_array_uget_borrowed): the borrowed twins of fget/uget. The only
-// C-level difference is the borrowed-vs-owned refcount on the returned element,
-// which is a no-op in GC'd JS.
+// (C lean_array_uget_borrowed): the borrowed twins of fget/uget, which return
+// the element without an inc.
 export function lean_array_fget_borrowed(a: Obj, i: Obj): Obj {
-  return lean_array_fget(a, i)
+  return asArray(a)[Number(i)]
 }
 
 export function lean_array_uget_borrowed(a: Obj, i: bigint): Obj {
-  return lean_array_uget(a, i)
+  return asArray(a)[Number(i)]
 }
 
 export function lean_array_propagate_mark(_src: Obj, dst: Obj): Obj {
   return dst
 }
 
-// Setters return a fresh array (functional), mirroring the ctor reuse/copy
-// model: JS arrays are reference-shared with no refcount, so in-place updates
-// from the compiler's unsafe (assumed-unique) map/foldl paths would corrupt the
-// caller's array. Copying keeps Array semantics pure and aliases intact.
+// Setters update an exclusive array (rc 1) in place, as lean.h does; a shared
+// array is copied first, with an inc of every element and a dec of the source.
 export function lean_array_set(a: Obj, i: Obj, v: Obj): Obj[] {
-  const b = asArray(a).slice()
-  b[Number(i)] = v
+  const b = ownArray(a)
+  const k = Number(i)
+  lean_dec(b[k])
+  b[k] = v
   return b
 }
 
 export function lean_array_push(a: Obj, v: Obj): Obj[] {
-  const b = asArray(a).slice()
+  const b = ownArray(a)
   b.push(v)
   return b
 }
 
 export function lean_array_pop(a: Obj): Obj[] {
-  const b = asArray(a).slice()
-  b.pop()
+  const b = ownArray(a)
+  lean_dec(b.pop())
   return b
 }
 
 export function lean_array_swap(a: Obj, i: Obj, j: Obj): Obj[] {
-  const b = asArray(a).slice()
+  const b = ownArray(a)
   const x = Number(i)
   const y = Number(j)
   ;[b[x], b[y]] = [b[y], b[x]]
@@ -227,8 +290,10 @@ export function lean_array_swap(a: Obj, i: Obj, j: Obj): Obj[] {
 }
 
 export function lean_array_uset(a: Obj, i: bigint, v: Obj): Obj[] {
-  const b = asArray(a).slice()
-  b[Number(i)] = v
+  const b = ownArray(a)
+  const k = Number(i)
+  lean_dec(b[k])
+  b[k] = v
   return b
 }
 
@@ -237,20 +302,29 @@ export function lean_array_usize(a: Obj): bigint {
 }
 
 export function lean_mk_array(n: Obj, v: Obj): Obj[] {
-  return Array.from<Obj>({ length: Number(asNat(n)) }).fill(v)
+  const k = Number(asNat(n))
+  if (k > 1) lean_inc_n(v, k - 1)
+  const r: Arr = Array.from<Obj>({ length: k }).fill(v)
+  r.rc = 1
+  return r
 }
 
 // Array.toList -> List (tag 0 = nil, tag 1 = cons{head, tail}).
 export function lean_array_to_list(a: Obj): Obj {
-  return asArray(a).reduceRight<Obj>((tl, h) => lean_ctor(1, 2, 0, 0, h, tl), 0)
+  return asArray(a).reduceRight<Obj>((tl, h) => {
+    lean_inc(h)
+    return lean_ctor(1, 2, 0, 0, h, tl)
+  }, 0)
 }
 
 // Array.mk : List a -> Array a (the IR ctor for the Array's backing buffer).
 export function lean_array_mk(lst: Obj): Obj[] {
-  const out: Obj[] = []
+  const out: Arr = []
+  out.rc = 1
   let cur = lst
   while (typeof cur !== "number" && asCtor(cur).tag === 1) {
     const c = asCtor(cur)
+    lean_inc(c.fields[0])
     out.push(c.fields[0])
     cur = c.fields[1]
   }

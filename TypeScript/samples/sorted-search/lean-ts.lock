@@ -1,6 +1,6 @@
 {
   "src/search.ts:sortedIncludes": {
-    "spec_hash": "1e354f1419c0bccd5e20e197aeb0a5b8a6e6a720cf5df257218766a5209437b6",
+    "spec_hash": "aa10d915d49c98f049e3e3862b7221f8ca981700a5a620e51135b016d5f3a154",
     "lean": "LeanTsModel.search.sortedIncludes",
     "obligations": {
       "refines": "proved"

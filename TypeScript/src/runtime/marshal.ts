@@ -28,6 +28,8 @@ import {
   lean_ctor_set_u8,
   lean_ctor_uget,
   lean_ctor_uset,
+  lean_inc,
+  lean_mark_persistent,
   lean_tag,
   lean_unbox,
   type Obj,
@@ -484,7 +486,7 @@ function checkInvariants(
   issues: Issue[],
 ): void {
   for (const inv of variant.invariants) {
-    if (!inv.decide(...inv.args.map((i) => values[i])))
+    if (!inv.decide(...inv.args.map((i) => shared(values[i]))))
       issues.push({ message: `${owner}.${inv.field}: ${inv.prop}`, path })
   }
 }
@@ -552,6 +554,11 @@ function runModel(
     return { ok: false, value: undefined }
   }
   return { ok: true, value: r.value }
+}
+
+function shared(x: Obj): Obj {
+  lean_inc(x)
+  return x
 }
 
 function encode(d: TypeDesc, v: unknown, path: readonly PropertyKey[], cx: Ctx): Obj {
@@ -652,7 +659,7 @@ function encode(d: TypeDesc, v: unknown, path: readonly PropertyKey[], cx: Ctx):
     case "subtype": {
       const before = cx.issues.length
       const x = encode(d.base, v, path, cx)
-      if (cx.issues.length === before && !d.invariant.decide(x))
+      if (cx.issues.length === before && !d.invariant.decide(shared(x)))
         cx.issues.push({ message: `${d.name}.${d.invariant.field}: ${d.invariant.prop}`, path })
       return x
     }
@@ -770,7 +777,7 @@ function check(d: TypeDesc, v: unknown, path: readonly PropertyKey[], issues: Is
       const x = check(d.base, v, path, issues)
       if (issues.length === before) {
         const lean = encode(d.base, x, path, { json: false, issues })
-        if (issues.length === before && !d.invariant.decide(lean))
+        if (issues.length === before && !d.invariant.decide(shared(lean)))
           issues.push({ message: `${d.name}.${d.invariant.field}: ${d.invariant.prop}`, path })
       }
       return x
@@ -1026,7 +1033,7 @@ export function lazy(f: () => Obj): () => Obj {
   let value: Obj
   return () => {
     if (!done) {
-      value = f()
+      value = lean_mark_persistent(f())
       done = true
     }
     return value

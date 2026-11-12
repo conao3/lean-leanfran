@@ -1,12 +1,12 @@
 {
   "src/sort.ts:spec": {
-    "fnv": "7fe59fd7140017e5",
+    "fnv": "9297594d87d64d54",
     "output": "src/_lean/sort__spec.ts",
-    "sha256": "284c37ed101268f025d3615f27110cd4484cce07a5c7c9855358e926ceec76ab"
+    "sha256": "4f36107009c2ffbb017c9a81006b5f0c3866c763dcc28b30c46371e440d7ae22"
   },
   "src/sum.ts:sums": {
-    "fnv": "fdc68f64ba49c5bd",
+    "fnv": "da1a977f73866552",
     "output": "src/_lean/sum__sums.ts",
-    "sha256": "d9a47fa888c8e471217d7ff98c9ec655404d3467a59d101ee0c0a351dcaf774c"
+    "sha256": "4e64f088ea6b4dd05406038f220d1e3411705915d95851f32c521b65716529cf"
   }
 }

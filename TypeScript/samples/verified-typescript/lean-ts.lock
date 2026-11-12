@@ -1,6 +1,6 @@
 {
   "src/sort.ts:insertSorted": {
-    "spec_hash": "e731fb9ba3539d8718794f8749aa8615ef242b666967e24771601e4a9ea5d3fe",
+    "spec_hash": "7f25110249725780d5f18ccbf99a0847ef73d69ea22da212cf007dacb2865fac",
     "lean": "LeanTsModel.sort.insertSorted",
     "obligations": {
       "sorted": "proved",
@@ -8,7 +8,7 @@
     }
   },
   "src/sum.ts:sumTo": {
-    "spec_hash": "ff79866bc7ae20bc57bf9725bdf98512eff21ae9a8371360327ced039ad93195",
+    "spec_hash": "a4c318bf6cb11701da2b7ab064b43902d45f91e4caff2ee1da4c2ca9229ef06b",
     "lean": "LeanTsModel.sum.sumTo",
     "obligations": {
       "refines": "proved",

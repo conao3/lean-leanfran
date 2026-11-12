@@ -1,6 +1,6 @@
 {
   "src/stock.ts:discard": {
-    "spec_hash": "f8ffeb0c95a6602c9de5fbcf5060970c1cfb7cf633b08d02822257bc839373b3",
+    "spec_hash": "eaf9346063108b4dafd4e7e49bc170aa6cf49773295551d7c43962b3d5047348",
     "lean": "LeanTsModel.stock.discard",
     "obligations": {
       "shrinks": "proved",
@@ -8,7 +8,7 @@
     }
   },
   "src/stock.ts:restock": {
-    "spec_hash": "68066b913471febdf761960c05f066ccf2dd6bf456c3406516ef7b4ef133213b",
+    "spec_hash": "aec15edda71b4b68d375fadffb89609bdfb18952f73eb6508c7d6a82a7b1d2ea",
     "lean": "LeanTsModel.stock.restock",
     "obligations": {
       "sameLength": "proved",
@@ -16,7 +16,7 @@
     }
   },
   "src/stock.ts:total": {
-    "spec_hash": "f60efed01bb99c348bf53987696bc2a1adc747afa246f1d397bdc2b27e23c43f",
+    "spec_hash": "a82558ab7461921f21dea92f51bcc39ed019107ae41df01d3fdd37db7addd471",
     "lean": "LeanTsModel.stock.total",
     "obligations": {
       "refines": "proved"

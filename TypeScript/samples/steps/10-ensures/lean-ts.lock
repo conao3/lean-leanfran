@@ -1,6 +1,6 @@
 {
   "src/dist.ts:distance": {
-    "spec_hash": "efe85c7d32e37e5e4faf7253cd8c2b806cedb6063277c0e939ce94755a20d6a8",
+    "spec_hash": "8ca76abe40984af5ae476eeddb00b8380727ad312785027e7b83cee8ab856db5",
     "lean": "LeanTsModel.dist.distance",
     "obligations": {
       "nonneg": "proved",

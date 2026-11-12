@@ -1,13 +1,13 @@
 {
   "src/sums.ts:sumAbs": {
-    "spec_hash": "3bca38f196dafcfdeef5c3c54a444b1002dcf0393fd25272071eb8a45b85cfcf",
+    "spec_hash": "f3f702a95706cc1dd1a0fe2bde4c32ed2cdf572510d378c013e0338def640e6f",
     "lean": "LeanTsModel.sums.sumAbs",
     "obligations": {
       "nonneg": "proved"
     }
   },
   "src/sums.ts:sumOdd": {
-    "spec_hash": "b735bc5ac72b83ccad52879a58b5675feb2544001de293400712cdb5a4f5437f",
+    "spec_hash": "26bf3ef1c7881f84e5c03ab5a343553cad6ee1a847faf6669bd38decfc011771",
     "lean": "LeanTsModel.sums.sumOdd",
     "obligations": {
       "refines": "proved",
