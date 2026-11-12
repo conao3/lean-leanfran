@@ -1,0 +1,4 @@
+5	the
+3	dog
+2	fox
+2	is

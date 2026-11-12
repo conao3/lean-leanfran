@@ -1,0 +1,16 @@
+name = "lean-clj"
+defaultTargets = ["lean-clj"]
+
+[[lean_lib]]
+name = "LeanClj"
+
+[[lean_exe]]
+name = "lean-clj"
+root = "Main"
+
+[[lean_lib]]
+name = "LeanCljTest"
+
+[[lean_exe]]
+name = "oracle"
+root = "LeanCljTest.OracleMain"

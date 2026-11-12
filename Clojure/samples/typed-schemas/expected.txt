@@ -1,0 +1,7 @@
+[:map {:closed true} [:owner :string] [:balance [:and integer? [:>= 0]]] [:frozen :boolean]]
+[:=> [:cat [:map {:closed true} [:owner :string] [:balance [:and integer? [:>= 0]]] [:frozen :boolean]] [:and integer? [:>= 0]]] [:map {:closed true} [:owner :string] [:balance [:and integer? [:>= 0]]] [:frozen :boolean]]]
+{:owner "", :balance 3, :frozen false}
+{:owner "ann", :balance 15, :frozen false}
+:malli.core/invalid-input
+examples/misuse.clj:6:60: error: Expected: natural integer, received: string.
+examples/misuse.clj:7:6: error: Expected: number, received: string.
