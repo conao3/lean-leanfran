@@ -1,0 +1,29 @@
+name = "lean-python"
+defaultTargets = ["lean-python"]
+
+[[lean_lib]]
+name = "LeanPython"
+
+[[lean_exe]]
+name = "lean-python"
+root = "Main"
+supportInterpreter = true
+
+[[lean_lib]]
+name = "LeanPythonTest"
+
+[[lean_exe]]
+name = "oracle"
+root = "LeanPythonTest.OracleMain"
+
+[[lean_exe]]
+name = "oracle-io"
+root = "LeanPythonTest.IoMain"
+
+[[lean_exe]]
+name = "oracle-json"
+root = "LeanPythonTest.JsonMain"
+
+[[lean_exe]]
+name = "oracle-bench"
+root = "LeanPythonTest.BenchMain"
