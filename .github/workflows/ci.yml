@@ -5,12 +5,32 @@ on:
     branches: [master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   check:
-    name: make check
+    name: make check (${{ matrix.dir }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dir: Rust
+            build: false
+          - dir: Python
+            build: true
+          - dir: TypeScript
+            build: true
+          - dir: Clojure
+            build: true
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.3
       - run: nix develop -c make check
+      - if: matrix.build
+        run: nix build

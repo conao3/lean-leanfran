@@ -1,4 +1,4 @@
-name: Release
+name: Release Python
 
 on:
   workflow_dispatch:
@@ -20,12 +20,15 @@ jobs:
     permissions:
       contents: write
       actions: write
+    defaults:
+      run:
+        working-directory: Python
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.3
       - id: bump
         run: |
-          current=$(jq -r .version package.json)
+          current=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
           IFS='.' read -r major minor patch <<< "$current"
           case "$BUMP" in
             major) major=$((major + 1)); minor=0; patch=0 ;;
@@ -42,14 +45,14 @@ jobs:
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "release v$VERSION"
-          git tag -a "v$VERSION" -m "v$VERSION"
+          git commit -am "release python v$VERSION"
+          git tag -a "python-v$VERSION" -m "python-v$VERSION"
           git push origin "HEAD:$BRANCH"
-          git push origin "v$VERSION"
+          git push origin "python-v$VERSION"
         env:
           VERSION: ${{ steps.bump.outputs.new_version }}
           BRANCH: ${{ github.ref_name }}
-      - run: gh workflow run publish.yml -f tag="v$VERSION"
+      - run: gh workflow run publish-python.yml -f tag="python-v$VERSION"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.bump.outputs.new_version }}

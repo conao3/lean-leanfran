@@ -3,11 +3,12 @@
   "version": "0.1.1",
   "description": "Write and prove functions in Lean 4, run them as TypeScript: Lean blocks in TypeScript modules, Standard Schema for Lean types, TypeScript functions verified in Lean",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/conao3/lean-ts#readme",
-  "bugs": "https://github.com/conao3/lean-ts/issues",
+  "homepage": "https://github.com/conao3/lean-leanfran/tree/master/TypeScript#readme",
+  "bugs": "https://github.com/conao3/lean-leanfran/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/conao3/lean-ts.git"
+    "url": "git+https://github.com/conao3/lean-leanfran.git",
+    "directory": "TypeScript"
   },
   "keywords": [
     "lean4",

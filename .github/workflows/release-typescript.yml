@@ -1,4 +1,4 @@
-name: Release
+name: Release TypeScript
 
 on:
   workflow_dispatch:
@@ -20,28 +20,39 @@ jobs:
     permissions:
       contents: write
       actions: write
+    defaults:
+      run:
+        working-directory: TypeScript
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.3
       - id: bump
         run: |
-          current=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          current=$(jq -r .version package.json)
           IFS='.' read -r major minor patch <<< "$current"
-          case "${{ inputs.version_bump }}" in
+          case "$BUMP" in
             major) major=$((major + 1)); minor=0; patch=0 ;;
             minor) minor=$((minor + 1)); patch=0 ;;
             patch) patch=$((patch + 1)) ;;
           esac
           echo "new_version=${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
-      - run: nix develop -c scripts/bump-version.sh "${{ steps.bump.outputs.new_version }}"
+        env:
+          BUMP: ${{ inputs.version_bump }}
+      - run: nix develop -c scripts/bump-version.sh "$VERSION"
+        env:
+          VERSION: ${{ steps.bump.outputs.new_version }}
       - run: nix develop -c make check
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "release v${{ steps.bump.outputs.new_version }}"
-          git tag -a "v${{ steps.bump.outputs.new_version }}" -m "v${{ steps.bump.outputs.new_version }}"
-          git push origin "HEAD:${{ github.ref_name }}"
-          git push origin "v${{ steps.bump.outputs.new_version }}"
-      - run: gh workflow run publish.yml -f tag="v${{ steps.bump.outputs.new_version }}"
+          git commit -am "release typescript v$VERSION"
+          git tag -a "typescript-v$VERSION" -m "typescript-v$VERSION"
+          git push origin "HEAD:$BRANCH"
+          git push origin "typescript-v$VERSION"
+        env:
+          VERSION: ${{ steps.bump.outputs.new_version }}
+          BRANCH: ${{ github.ref_name }}
+      - run: gh workflow run publish-typescript.yml -f tag="typescript-v$VERSION"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.bump.outputs.new_version }}

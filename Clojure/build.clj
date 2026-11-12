@@ -36,7 +36,7 @@
                 :resource-dirs resource-dirs
                 :scm {:url url
                       :connection (str "scm:git:" url ".git")
-                      :tag (str "v" version)}
+                      :tag (str "clojure-v" version)}
                 :pom-data [[:description (:description project)]
                            [:url url]
                            [:licenses

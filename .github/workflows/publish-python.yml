@@ -1,10 +1,10 @@
-name: Publish
+name: Publish Python
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to publish (vX.Y.Z)
+        description: Tag to publish (python-vX.Y.Z)
         required: true
         type: string
 
@@ -22,6 +22,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    defaults:
+      run:
+        working-directory: Python
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -29,6 +32,10 @@ jobs:
       - uses: cachix/install-nix-action@v31.11.3
       - run: |
           v=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
-          test "v$v" = "${{ inputs.tag }}"
+          test "python-v$v" = "$TAG"
+        env:
+          TAG: ${{ inputs.tag }}
       - run: nix develop -c uv build
       - uses: pypa/gh-action-pypi-publish@v1.14.3
+        with:
+          packages-dir: Python/dist/

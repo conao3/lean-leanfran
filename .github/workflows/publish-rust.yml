@@ -1,10 +1,10 @@
-name: Publish
+name: Publish Rust
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to publish (vX.Y.Z)
+        description: Tag to publish (rust-vX.Y.Z)
         required: true
         type: string
 
@@ -18,6 +18,9 @@ jobs:
     environment:
       name: crates.io
       url: https://crates.io/crates/lean-rust
+    defaults:
+      run:
+        working-directory: Rust
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -27,9 +30,9 @@ jobs:
       - uses: rust-lang/crates-io-auth-action@v1.0.6
         id: auth
       - run: |
-          version="${TAG#v}"
+          version="${TAG#rust-v}"
           for crate in lean-rust-runtime lean-rust-build lean-rust-macros lean-rust cargo-lean-rust; do
-            if curl -sf -A "lean-rs publish (github.com/conao3/lean-rs)" "https://crates.io/api/v1/crates/$crate/$version" > /dev/null; then
+            if curl -sf -A "lean-leanfran publish (github.com/conao3/lean-leanfran)" "https://crates.io/api/v1/crates/$crate/$version" > /dev/null; then
               echo "$crate $version is already on crates.io"
             else
               nix develop -c cargo publish -p "$crate"

@@ -1,10 +1,10 @@
-name: Publish
+name: Publish TypeScript
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to publish (vX.Y.Z)
+        description: Tag to publish (typescript-vX.Y.Z)
         required: true
         type: string
 
@@ -22,12 +22,15 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    defaults:
+      run:
+        working-directory: TypeScript
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag }}
       - uses: cachix/install-nix-action@v31.11.3
-      - run: test "v$(jq -r .version package.json)" = "$TAG"
+      - run: test "typescript-v$(jq -r .version package.json)" = "$TAG"
         env:
           TAG: ${{ inputs.tag }}
       - run: nix develop -c make pack

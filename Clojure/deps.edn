@@ -15,5 +15,5 @@
           :build/project {:lib io.github.conao3/lean-clj
                           :version "0.3.0"
                           :description "Write and prove functions in Lean 4, run them on the JVM from Clojure."
-                          :url "https://github.com/conao3/lean-clj"
+                          :url "https://github.com/conao3/lean-leanfran"
                           :license "Apache-2.0"}}}}

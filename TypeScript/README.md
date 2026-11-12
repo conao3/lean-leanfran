@@ -2,11 +2,11 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/lean-ts"><img src="https://img.shields.io/npm/v/lean-ts" alt="npm version"></a>
-  <a href="https://github.com/conao3/lean-ts/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-ts/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
-  <a href="https://github.com/conao3/lean-ts/blob/master/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-ts" alt="License: Apache-2.0"></a>
-  <a href="https://github.com/conao3/lean-ts/blob/master/package.json"><img src="https://img.shields.io/badge/Node-%3E%3D22.18-blue" alt="Node >=22.18"></a>
-  <a href="https://github.com/conao3/lean-ts/blob/master/lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-blue" alt="Lean v4.35.0"></a>
-  <a href="https://github.com/conao3/lean-ts/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-ts?style=flat" alt="GitHub stars"></a>
+  <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/package.json"><img src="https://img.shields.io/badge/Node-%3E%3D22.18-blue" alt="Node >=22.18"></a>
+  <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-blue" alt="Lean v4.35.0"></a>
+  <a href="https://github.com/conao3/lean-leanfran/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-leanfran?style=flat" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
@@ -354,23 +354,23 @@ lean-ts status --package <dir>
 
 ## Examples
 
-[`samples/`](https://github.com/conao3/lean-ts/tree/master/samples) holds packages with Lean blocks
+[`samples/`](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples) holds packages with Lean blocks
 and verified TypeScript functions. `make samples` syncs each one, runs it, compares the output with
 its `expected.txt`, checks the proofs of the verified ones with `lean-ts check --require proved`,
 and fails when a committed generated module is out of date.
 
-| sample                                                                                           | shows                                                                                                                      |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| [word-count](https://github.com/conao3/lean-ts/tree/master/samples/word-count)                   | strings and lists, a proof by induction                                                                                    |
-| [roman-numerals](https://github.com/conao3/lean-ts/tree/master/samples/roman-numerals)           | a lake project compiled with `lean-ts generate`, a round-trip theorem checked for every number below 1000                  |
-| [todo-cli](https://github.com/conao3/lean-ts/tree/master/samples/todo-cli)                       | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected                                     |
-| [generic-search](https://github.com/conao3/lean-ts/tree/master/samples/generic-search)           | polymorphic functions proved for every type, called through monomorphic definitions                                        |
-| [pricing-api](https://github.com/conao3/lean-ts/tree/master/samples/pricing-api)                 | Hono with a zod model and a Lean inductive type as request body, 400 for invalid input, OpenAPI                            |
-| [verified-typescript](https://github.com/conao3/lean-ts/tree/master/samples/verified-typescript) | a `for (let i ...)` loop proved equal to a recursive spec, which it then replaces; an insertion that keeps an array sorted |
-| [sorted-search](https://github.com/conao3/lean-ts/tree/master/samples/sorted-search)             | `refines` under `requires` (a scan of a sorted array)                                                                      |
-| [inventory](https://github.com/conao3/lean-ts/tree/master/samples/inventory)                     | a block's structure and enum in the signatures of verified functions                                                       |
+| sample                                                                                                            | shows                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| [word-count](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/word-count)                   | strings and lists, a proof by induction                                                                                    |
+| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/roman-numerals)           | a lake project compiled with `lean-ts generate`, a round-trip theorem checked for every number below 1000                  |
+| [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/todo-cli)                       | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected                                     |
+| [generic-search](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/generic-search)           | polymorphic functions proved for every type, called through monomorphic definitions                                        |
+| [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/pricing-api)                 | Hono with a zod model and a Lean inductive type as request body, 400 for invalid input, OpenAPI                            |
+| [verified-typescript](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/verified-typescript) | a `for (let i ...)` loop proved equal to a recursive spec, which it then replaces; an insertion that keeps an array sorted |
+| [sorted-search](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/sorted-search)             | `refines` under `requires` (a scan of a sorted array)                                                                      |
+| [inventory](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/inventory)                     | a block's structure and enum in the signatures of verified functions                                                       |
 
-[`samples/steps/`](https://github.com/conao3/lean-ts/tree/master/samples/steps) introduces one
+[`samples/steps/`](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/steps) introduces one
 feature at a time, from functions on `Nat` (01) to types shared between blocks with `uses` (09)
 and the verification of TypeScript functions (10 to 14).
 
