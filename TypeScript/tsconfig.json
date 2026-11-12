@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "isolatedDeclarations": true,
+    "noEmit": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "lean-ts": ["./src/index.ts"],
+      "lean-ts/runtime": ["./src/runtime/index.ts"],
+      "lean-ts/schema": ["./src/schema/index.ts"],
+      "lean-ts/verify": ["./src/verify/index.ts"]
+    }
+  },
+  "include": ["src", "test", "test-out", "samples", "scripts", "vite.config.ts"]
+}

@@ -1,0 +1,123 @@
+import LeanTsTest.Vectors
+
+/-! IO demo program extracted by the lean-ts CLI to prove end-to-end effectful
+programs run under node and match Lean. Kept in a library module so its IR is
+persisted and visible to `findEnvDecl` on re-import. -/
+
+namespace LeanTsTest.Io
+
+open LeanTsTest.Vectors (Todo TodoList)
+
+def fib : Nat → Nat
+  | 0 => 0
+  | 1 => 1
+  | n+2 => fib n + fib (n+1)
+
+def showTodo (t : Todo) : String :=
+  let mark := if t.done then "x" else " "
+  s!"{t.id}:{t.title}:{mark}"
+
+def showList (l : TodoList) : String :=
+  "[" ++ String.intercalate "," (l.items.map showTodo) ++ "]@" ++ toString l.nextId
+
+/-- IO try/catch over a thrown `IO.userError`: the throw lands in the io_result
+    error arm and `tryCatch` recovers it, proving the EST/EIO error channel. -/
+def tryCatchIO : IO String := do
+  try
+    throw (IO.userError "boom")
+  catch e =>
+    pure s!"caught: {e.toString}"
+
+def ioErrorKind : IO.Error → String
+  | .alreadyExists .. => "alreadyExists"
+  | .noFileOrDirectory .. => "noFileOrDirectory"
+  | .inappropriateType .. => "inappropriateType"
+  | .userError .. => "userError"
+  | _ => "other"
+
+def openError (path : String) (mode : IO.FS.Mode) : IO String := do
+  try
+    let _ ← IO.FS.Handle.mk path mode
+    pure "opened"
+  catch e =>
+    pure s!"{ioErrorKind e}: {e}"
+
+def main : IO Unit := do
+  IO.println "lean-ts IO demo"
+  IO.println s!"fib 10 = {fib 10}"
+  IO.println s!"2 + 3 = {2 + 3}"
+  -- Large Nat printed via the COMPILED path (Nat.reprFast). 10^18 sits in the
+  -- reprFast "mid" range [reprArray.size, 2^64): it takes the slow path through
+  -- USize.ofNatLT / USize.repr, which previously emitted a dangling call.
+  IO.println s!"big1 = {(1000000000000000000 : Nat)}"
+  -- A computed mid-range Nat (still < 2^64) also exercises that USize path.
+  IO.println s!"big2 = {(2 : Nat) ^ 60}"
+  -- A Nat >= 2^64 takes reprFast's Nat.toDigits (pure) slow path.
+  IO.println s!"huge = {(123456789012345678901234567890 : Nat)}"
+  let r ← IO.mkRef (0 : Nat)
+  r.set 41
+  r.modify (· + 1)
+  let v ← r.get
+  IO.println s!"ref = {v}"
+  let l0 := TodoList.empty
+  let l1 := l0.add "buy milk"
+  let l2 := l1.add "walk dog"
+  let l3 := l2.toggle 0
+  IO.println s!"todo = {showList l3}"
+  let caught ← tryCatchIO
+  IO.println s!"trycatch = {caught}"
+  IO.println s!"open missing = {← openError "/nonexistent/lean-ts/missing.txt" .read}"
+  IO.println s!"create in missing = {← openError "/nonexistent/lean-ts/new.txt" .write}"
+  let h ← IO.FS.Handle.mk "test-out/io-exists.txt" .write
+  h.putStr "x"
+  IO.println s!"create existing = {← openError "test-out/io-exists.txt" .writeNew}"
+  IO.println s!"handle isTty = {← h.isTty}"
+  IO.println s!"stdin isTty = {← (← IO.getStdin).isTty}"
+  IO.println s!"stdout isTty = {← (← IO.getStdout).isTty}"
+  IO.println s!"stderr isTty = {← (← IO.getStderr).isTty}"
+  IO.eprintln "diagnostic to stderr"
+
+/-- Stdin-echo program: reads all lines from stdin (IO.getStdin / Stream.getLine)
+    and echoes each prefixed, until EOF. Exercises the real fd-0 stdin wiring. -/
+partial def echoLoop (stdin : IO.FS.Stream) (n : Nat) : IO Unit := do
+  let line ← stdin.getLine
+  if line.isEmpty then
+    IO.println s!"EOF after {n} lines"
+  else
+    -- getLine keeps the trailing newline; drop a single trailing '\n' for echo.
+    let trimmed := if line.back == '\n' then line.dropEnd 1 else line
+    IO.println s!"line {n}: {trimmed}"
+    echoLoop stdin (n + 1)
+
+def stdinEcho : IO Unit := do
+  let stdin ← IO.getStdin
+  echoLoop stdin 1
+
+/-- Error program: throws a userError so the process prints the Lean-format
+    "uncaught exception: ..." to stderr and exits 1. -/
+def errMain : IO Unit := do
+  IO.println "before error"
+  throw (IO.userError "boom from lean-ts")
+
+/-- A function with a `panic!` reached on one branch. `panic!` returns the
+    `Inhabited` default and the program CONTINUES (it does not abort), so callers
+    can observe the returned default after the message hits stderr. -/
+def clampPos (n : Int) : Nat :=
+  if n < 0 then panic! "clampPos: negative" else n.toNat
+
+/-- Panic program: triggers a `panic!` (message to stderr) and a `List.head!` on
+    `[]` (another panic), proving compiled panic prints to stderr, returns the
+    default, and the program keeps running to print the post-panic lines and exit
+    0. Diff-tested for stdout, stderr, and exit code against `lean --run`. -/
+def panicMain : IO Unit := do
+  IO.println "before panic"
+  let d := clampPos (-5)
+  IO.println s!"clampPos(-5) = {d}"
+  let h := ([] : List Nat).head!
+  IO.println s!"head! [] = {h}"
+  let a : Array Nat := #[10, 20, 30]
+  let oob := a[a.size + 5]!
+  IO.println s!"a[oob]! = {oob}"
+  IO.println "after panic"
+
+end LeanTsTest.Io

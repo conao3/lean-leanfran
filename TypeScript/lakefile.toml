@@ -1,0 +1,73 @@
+name = "lean-ts"
+description = "Lean 4 IR -> TypeScript backend, Lean embedded in TypeScript, Standard Schema models for Lean types, TypeScript functions verified in Lean"
+keywords = ["typescript", "compiler", "code-generation"]
+license = "Apache-2.0"
+homepage = "https://github.com/conao3/lean-ts"
+defaultTargets = ["lean-typescript"]
+
+[[lean_lib]]
+name = "LeanTs"
+
+[[lean_exe]]
+name = "lean-typescript"
+root = "Main"
+supportInterpreter = true
+
+[[lean_lib]]
+name = "LeanTsLib"
+srcDir = "src/lean"
+
+[[lean_lib]]
+name = "LeanTsTest"
+
+[[lean_exe]]
+name = "oracle-vectors"
+root = "LeanTsTest.VectorsMain"
+
+[[lean_exe]]
+name = "oracle-io"
+root = "LeanTsTest.IoMain"
+
+[[lean_exe]]
+name = "oracle-stdin"
+root = "LeanTsTest.StdinMain"
+
+[[lean_exe]]
+name = "oracle-err"
+root = "LeanTsTest.ErrMain"
+
+[[lean_exe]]
+name = "oracle-panic"
+root = "LeanTsTest.PanicMain"
+
+[[lean_exe]]
+name = "oracle-init"
+root = "LeanTsTest.InitMain"
+
+[[lean_exe]]
+name = "oracle-stress"
+root = "LeanTsTest.StressMain"
+
+[[lean_exe]]
+name = "oracle-stress2"
+root = "LeanTsTest.Stress2Main"
+
+[[lean_exe]]
+name = "oracle-stress3"
+root = "LeanTsTest.Stress3Main"
+
+[[lean_exe]]
+name = "oracle-stress4"
+root = "LeanTsTest.Stress4Main"
+
+[[lean_exe]]
+name = "oracle-fuzz"
+root = "LeanTsTest.FuzzMain"
+
+[[lean_exe]]
+name = "oracle-verify"
+root = "LeanTsTest.VerifyMain"
+
+[[lean_exe]]
+name = "oracle-json"
+root = "LeanTsTest.JsonMain"

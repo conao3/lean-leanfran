@@ -1,0 +1,230 @@
+{
+  "src/calc.ts:addOne": {
+    "spec_hash": "27351097da5d3ec33247a297d7aa3f937ad65f4ac96d71d92c1b04a208aafe92",
+    "lean": "LeanTsModel.calc.addOne",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.calc.spec.succ",
+      "module": "LeanTsEmbed.«calc».«spec»",
+      "modes": [
+        "n"
+      ]
+    }
+  },
+  "src/calc.ts:clamp": {
+    "spec_hash": "53227e34e65f63b9841a3cfe55517cdd41b8d0339c0835b7e1d94b608c66f0fa",
+    "lean": "LeanTsModel.calc.clamp",
+    "obligations": {
+      "refines": "proved",
+      "inRange": "proved"
+    }
+  },
+  "src/calc.ts:firstOr": {
+    "spec_hash": "cd71dd3f1650d3809c3a56b9c5d9608c5426a9bc1ab3dc4e969b67531a677ada",
+    "lean": "LeanTsModel.calc.firstOr",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.calc.spec.firstOr",
+      "module": "LeanTsEmbed.«calc».«spec»",
+      "modes": [
+        "n",
+        "n"
+      ]
+    }
+  },
+  "src/calc.ts:sumAbs": {
+    "spec_hash": "63f4c43d18f3e42d53bbb54c43c23ecae22bbd3c97285b63ab74897cdaf38f80",
+    "lean": "LeanTsModel.calc.sumAbs",
+    "obligations": {
+      "nonneg": "proved"
+    }
+  },
+  "src/calc.ts:sumTo": {
+    "spec_hash": "24ce05e409a4f95265cb50aaf62a5d88e71735db89513e2504e3c396e3a8b2bb",
+    "lean": "LeanTsModel.calc.sumTo",
+    "obligations": {
+      "refines": "sorry",
+      "returnsNat": "missing"
+    }
+  },
+  "src/calc.ts:twice": {
+    "spec_hash": "1ada12f5d4d8cc115da8c8e976667600c4333965a5b23c2ea53770c7a8b5af97",
+    "lean": "LeanTsModel.calc.twice",
+    "obligations": {
+      "refines": "axioms"
+    }
+  },
+  "src/more.ts:area": {
+    "spec_hash": "e2f0ad3cf943407f16b5393140be38218d037a82527f16a29d5ad29805a08424",
+    "lean": "LeanTsModel.more.area",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.more.more.area",
+      "module": "LeanTsEmbed.«more».«more»",
+      "modes": [
+        "_"
+      ]
+    }
+  },
+  "src/more.ts:code": {
+    "spec_hash": "1956d881ac6dcd1a142197a105363ad2d9dbcc9e1c4d0873b4031944a17c530d",
+    "lean": "LeanTsModel.more.code",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.more.more.code",
+      "module": "LeanTsEmbed.«more».«more»",
+      "modes": [
+        "_"
+      ]
+    }
+  },
+  "src/more.ts:countDown": {
+    "spec_hash": "caadda754ad2ec8710e5c1548dbf0bfbcd2c2a0f875f59bd5fc56cced39c9e73",
+    "lean": "LeanTsModel.more.countDown",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:describe": {
+    "spec_hash": "91297e705a59dc3eec6fd36dbfa80da09e5fc750be1125d96a6532c01085fa37",
+    "lean": "LeanTsModel.more.describe",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.more.more.describe",
+      "module": "LeanTsEmbed.«more».«more»",
+      "modes": [
+        "n"
+      ]
+    }
+  },
+  "src/more.ts:evens": {
+    "spec_hash": "b66d2b3cc8630740562045b8aebe61ed0df3fe0d16492cdeefeb18351966dabb",
+    "lean": "LeanTsModel.more.evens",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:firstPositive": {
+    "spec_hash": "2bfd11c6fa337cc0ebc6bcddb2c17d198189d795704505371149e35250e12af8",
+    "lean": "LeanTsModel.more.firstPositive",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:label": {
+    "spec_hash": "8cce8b94ae812a47839249b3645e9cdf91bbbdfd2ac4bef6693bffd5f5155df3",
+    "lean": "LeanTsModel.more.label",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.more.more.label",
+      "module": "LeanTsEmbed.«more».«more»",
+      "modes": [
+        "n"
+      ]
+    }
+  },
+  "src/more.ts:manhattan": {
+    "spec_hash": "cdcbb78c3476c9404b290b66389f532537cd3951322277ad47d2074c199b0ad5",
+    "lean": "LeanTsModel.more.manhattan",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:nonNeg": {
+    "spec_hash": "25d9c28ce9e723b7f710c621e611a71c78becd7e7f3f05cedcdaf215edec2cee",
+    "lean": "LeanTsModel.more.nonNeg",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:safeDiv": {
+    "spec_hash": "bb0aaa94496d382ee25797d96d1a9e6fea355f3e47cc0eaa8b914b97bdde0889",
+    "lean": "LeanTsModel.more.safeDiv",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:shift": {
+    "spec_hash": "cca6707f7ed30f16cf76cbac0bb426f62a77d44da9ab49f563935ff5d7fa9f91",
+    "lean": "LeanTsModel.more.shift",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.more.more.shift",
+      "module": "LeanTsEmbed.«more».«more»",
+      "modes": [
+        "_",
+        "_"
+      ]
+    }
+  },
+  "src/more.ts:sumSquares": {
+    "spec_hash": "67a3b298a4488af19489ab395ef3e526d1bf183b66d20f59f235c25b126ed588",
+    "lean": "LeanTsModel.more.sumSquares",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/more.ts:swap": {
+    "spec_hash": "e595cb8057d2ae219b3746eb111abc61fd3459ef3c036e026ac00cb8896fd6af",
+    "lean": "LeanTsModel.more.swap",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.more.more.swap",
+      "module": "LeanTsEmbed.«more».«more»",
+      "modes": [
+        "n"
+      ]
+    }
+  },
+  "src/more.ts:tag": {
+    "spec_hash": "a67caf0db6cf199303a847bc302a1ef8fb332cc5651f834c7218e33aa1187b0a",
+    "lean": "LeanTsModel.more.tag",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/orders.ts:hasNote": {
+    "spec_hash": "1bc44a50b5efb4a4e2af4e12b7098f5680813f40f01e7c372c11e2f29e170854",
+    "lean": "LeanTsModel.orders.hasNote",
+    "obligations": {
+      "refines": "missing"
+    }
+  },
+  "src/orders.ts:lineTotal": {
+    "spec_hash": "7bf2b83b1bc1d94b12805c8a210b2bd22baf963a2bc8273f68d97112c510cf6b",
+    "lean": "LeanTsModel.orders.lineTotal",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.orders.orders.lineTotal",
+      "module": "LeanTsEmbed.«orders».«orders»",
+      "modes": [
+        "n"
+      ]
+    }
+  },
+  "src/orders.ts:quantity": {
+    "spec_hash": "3bf1a8fd8f9415c7f8d85057c5d364a40e08c7e2f745387c0fdde741ac8a34f1",
+    "lean": "LeanTsModel.orders.quantity",
+    "obligations": {
+      "positive": "proved"
+    }
+  }
+}

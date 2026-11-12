@@ -1,0 +1,70 @@
+{
+  "name": "lean-ts",
+  "version": "0.1.1",
+  "description": "Write and prove functions in Lean 4, run them as TypeScript: Lean blocks in TypeScript modules, Standard Schema for Lean types, TypeScript functions verified in Lean",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/conao3/lean-ts#readme",
+  "bugs": "https://github.com/conao3/lean-ts/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/conao3/lean-ts.git"
+  },
+  "keywords": [
+    "lean4",
+    "typescript",
+    "compiler"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@12.9.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "bin": {
+    "lean-ts": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./runtime/node": {
+      "types": "./dist/runtime/node.d.ts",
+      "import": "./dist/runtime/node.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./verify": {
+      "types": "./dist/verify.d.ts",
+      "import": "./dist/verify.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/lean"
+  ],
+  "devDependencies": {
+    "@hono/standard-validator": "0.4.1",
+    "@types/node": "^26.6.6",
+    "hono": "4.13.14",
+    "vite-plus": "1.5.0",
+    "zod": "4.6.7"
+  },
+  "peerDependencies": {
+    "fast-check": "^4.10.2"
+  },
+  "peerDependenciesMeta": {
+    "fast-check": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@standard-schema/spec": "1.1.0",
+    "oxc-parser": "0.158.0"
+  }
+}
