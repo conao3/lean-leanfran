@@ -139,3 +139,32 @@ if (cd "$d" && cargo test -q --lib 2>"$work/wrong-model.log" >"$work/wrong-model
 fi
 grep -q "__lean_rust_opaque_clamp::check_model" "$work/wrong-model.out" || fail "wrong model: $(cat "$work/wrong-model.out")"
 echo "verify-test: the test of an opaque function catches a wrong model in lean/External.lean"
+
+d=$(copy wrong-method-model)
+sed -i 's|then ok self.value else ok limit|then ok limit else ok self.value|' "$d/lean/External.lean"
+if (cd "$d" && cargo test -q --lib 2>"$work/wrong-method-model.log" >"$work/wrong-method-model.out"); then
+  fail "the test of an opaque method passes for a wrong model"
+fi
+grep -q "__lean_rust_opaque_Meter_lesser::check_model" "$work/wrong-method-model.out" ||
+  fail "wrong method model: $(cat "$work/wrong-method-model.out")"
+echo "verify-test: the test of an opaque method catches a wrong model in lean/External.lean"
+
+d=$(copy opaque-method-clash)
+cat >>"$d/src/effects.rs" <<'RS'
+
+pub struct Gauge {
+    pub value: u32,
+}
+
+impl Gauge {
+    pub fn lesser(&self, limit: u32) -> u32 {
+        self.value.min(limit)
+    }
+}
+RS
+if (cd "$d" && "$clr" lean-rust extract >"$work/opaque-method-clash.out" 2>&1); then
+  fail "extract makes an opaque method that shares its module and name with another method"
+fi
+grep -q "#\[lean_rust::opaque\] method crate::effects::Meter::lesser: .*crate::effects::Gauge::lesser has the same" "$work/opaque-method-clash.out" ||
+  fail "opaque method clash: $(cat "$work/opaque-method-clash.out")"
+echo "verify-test: extract stops at an opaque method whose module and name another method shares"

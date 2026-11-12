@@ -1122,7 +1122,8 @@ impl Builder {
         let types = fs::read(self.lean_dir().join("ExternalTypes.lean")).unwrap_or_default();
         let model_types = fs::read(self.model_dir().join("Types.lean")).unwrap_or_default();
         let mut out = Vec::new();
-        for (unit, file) in &items.opaque {
+        for o in &items.opaque {
+            let unit = &o.unit;
             let Some(d) = decls.iter().find(|d| {
                 d.rust
                     .as_deref()
@@ -1132,8 +1133,7 @@ impl Builder {
             }) else {
                 continue;
             };
-            let name = unit.rsplit("::").next().unwrap_or(unit).to_string();
-            if unit.matches("::").count() != file_module(file).len() + 1 {
+            if o.module != file_module(&o.file) {
                 continue;
             }
             let lean = vec![d.lean.clone(), format!("{ident}.{}", d.lean)];
@@ -1152,8 +1152,8 @@ impl Builder {
                 key,
                 out_file: Path::new("lean_rust")
                     .join("opaque")
-                    .join(file_hash(file))
-                    .join(format!("{name}.rs")),
+                    .join(file_hash(&o.file))
+                    .join(format!("{}.rs", o.file_stem())),
             });
         }
         Ok(out)

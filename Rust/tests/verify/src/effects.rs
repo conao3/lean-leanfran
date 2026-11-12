@@ -43,3 +43,24 @@ pub fn clamp(x: u32) -> u32 {
 pub fn capped(x: u32) -> u32 {
     clamp(x)
 }
+
+/// A reading whose method's model (`lean/External.lean`) is a definition: the test compares the
+/// two.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, lean_rust::Model)]
+pub struct Meter {
+    pub value: u32,
+}
+
+#[lean_rust::opaque(strategy = crate::effects::meter_input)]
+impl Meter {
+    /// The smaller of the reading and `limit`.
+    pub fn lesser(&self, limit: u32) -> u32 {
+        self.value.min(limit)
+    }
+}
+
+#[cfg(test)]
+fn meter_input() -> impl lean_rust::check::proptest::strategy::Strategy<Value = (Meter, u32)> {
+    use lean_rust::check::proptest::prelude::*;
+    (any::<u32>().prop_map(|value| Meter { value }), any::<u32>())
+}

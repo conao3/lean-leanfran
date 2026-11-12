@@ -638,12 +638,37 @@ pub struct Uses {
     pub globs: Vec<Vec<String>>,
 }
 
+/// A function of `#[lean_rust::opaque]`, or a method of an inherent impl block with it.
+#[derive(Debug, Clone)]
+pub struct OpaqueFn {
+    /// The unit name: `crate::<module>::<name>`, or `crate::<module>::<Type>::<name>`.
+    pub unit: String,
+    /// The file, relative to the crate.
+    pub file: String,
+    /// The module path.
+    pub module: Vec<String>,
+    /// The type of the impl block of a method, as written there.
+    pub self_path: Option<Vec<String>>,
+    pub name: String,
+}
+
+impl OpaqueFn {
+    /// The file stem of its generated model below `lean_rust/opaque/<file hash>/`: `<name>`,
+    /// or `<Type>.<name>` for a method.
+    pub fn file_stem(&self) -> String {
+        match self.self_path.as_ref().and_then(|p| p.last()) {
+            Some(t) => format!("{t}.{}", self.name),
+            None => self.name.clone(),
+        }
+    }
+}
+
 /// What a scan of `src/**/*.rs` finds.
 #[derive(Debug, Default)]
 pub struct CrateItems {
     pub models: Vec<ModelFn>,
-    /// `#[lean_rust::opaque]` functions: the unit names and the files.
-    pub opaque: Vec<(String, String)>,
+    /// `#[lean_rust::opaque]` functions and methods.
+    pub opaque: Vec<OpaqueFn>,
     /// Hash of every function, method and type, by unit name.
     pub hashes: BTreeMap<String, String>,
     /// `use` declarations, by module path.
@@ -863,6 +888,7 @@ impl Scanner<'_> {
             _ => None,
         };
         let trait_path = i.trait_.as_ref().map(|(p, _)| segs(p));
+        let opaque = trait_name.is_none() && i.attrs.iter().any(|a| is_attr(a, "opaque"));
         let outer = match model_attr(&i.attrs) {
             Ok(a) => a,
             Err(e) => {
@@ -878,8 +904,14 @@ impl Scanner<'_> {
                 None => unit_name(&self.module, &[&self_ty, &name]),
             };
             self.out.hashes.insert(unit.clone(), method_hash(f));
-            if f.attrs.iter().any(|a| is_attr(a, "opaque")) {
-                self.out.opaque.push((unit.clone(), self.file.clone()));
+            if opaque {
+                self.out.opaque.push(OpaqueFn {
+                    unit: unit.clone(),
+                    file: self.file.clone(),
+                    module: self.module.clone(),
+                    self_path: self_path.clone(),
+                    name: name.clone(),
+                });
             }
             if let Some(n) = exported_name(&f.attrs) {
                 self.out.exported.insert(unit, (n, self.file.clone()));
@@ -917,7 +949,13 @@ impl<'ast> Visit<'ast> for Scanner<'_> {
                 let unit = unit_name(&self.module, &[&name]);
                 self.out.hashes.insert(unit.clone(), fn_hash(f));
                 if f.attrs.iter().any(|a| is_attr(a, "opaque")) {
-                    self.out.opaque.push((unit.clone(), self.file.clone()));
+                    self.out.opaque.push(OpaqueFn {
+                        unit: unit.clone(),
+                        file: self.file.clone(),
+                        module: self.module.clone(),
+                        self_path: None,
+                        name: name.clone(),
+                    });
                 }
                 if let Some(n) = exported_name(&f.attrs) {
                     self.out.exported.insert(unit, (n, self.file.clone()));

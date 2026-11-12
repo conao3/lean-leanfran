@@ -336,15 +336,48 @@ pub fn extract(c: &Crate) -> Result<(), String> {
             .arg("--start-from")
             .arg(start_from(&ident, &items, f));
     }
-    for (o, _) in &items.opaque {
-        let segs: Vec<String> = o
-            .trim_start_matches("crate::")
-            .split("::")
-            .map(str::to_string)
-            .collect();
-        let path = charon_path(&ident, &segs);
-        charon.arg("--start-from").arg(&path);
-        charon.arg("--opaque").arg(path);
+    for o in &items.opaque {
+        let (start, opaque) = match &o.self_path {
+            Some(t) => {
+                let mut segs = resolve(&items, &o.module, t);
+                segs.push(o.name.clone());
+                let start = charon_path(&ident, &segs);
+                let mut glob = o.module.clone();
+                glob.extend(["_".to_string(), o.name.clone()]);
+                let module_prefix = std::iter::once("crate")
+                    .chain(o.module.iter().map(String::as_str))
+                    .map(|s| format!("{s}::"))
+                    .collect::<String>();
+                let clashes: Vec<&String> = items
+                    .hashes
+                    .keys()
+                    .filter(|u| *u != &o.unit)
+                    .filter(|u| {
+                        u.strip_prefix(&module_prefix).is_some_and(|rest| {
+                            rest.split_once("::")
+                                .is_some_and(|(owner, name)| !owner.is_empty() && name == o.name)
+                        })
+                    })
+                    .collect();
+                if !clashes.is_empty() {
+                    return Err(format!(
+                        "{}: #[lean_rust::opaque] method {}: Charon matches the method of an impl block by its module and name only, and {} has the same: rename one",
+                        o.file,
+                        o.unit,
+                        clashes.iter().map(|c| c.as_str()).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+                (start, charon_path(&ident, &glob))
+            }
+            None => {
+                let mut segs = o.module.clone();
+                segs.push(o.name.clone());
+                let p = charon_path(&ident, &segs);
+                (p.clone(), p)
+            }
+        };
+        charon.arg("--start-from").arg(start);
+        charon.arg("--opaque").arg(opaque);
     }
     charon.env("LEAN_RUST_EXTRACTING", "1").current_dir(&c.dir);
     println!(

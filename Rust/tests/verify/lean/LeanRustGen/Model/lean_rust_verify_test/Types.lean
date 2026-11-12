@@ -27,6 +27,12 @@ structure counter.Counter where
   count : Std.U32
   active : Bool
 
+/-- [lean_rust_verify_test::effects::Meter]
+    Source: 'tests/verify/src/effects.rs', lines 50:0-52:1
+    Visibility: public -/
+structure effects.Meter where
+  value : Std.U32
+
 /-- [lean_rust_verify_test::generic::Pair]
     Source: 'tests/verify/src/generic.rs', lines 32:0-35:1
     Visibility: public -/

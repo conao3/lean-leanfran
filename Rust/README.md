@@ -288,11 +288,12 @@ and the crate's structs and enums, which derive `lean_rust::Model` (and `Clone`)
 
 On an impl block, `#[lean_rust::model]` models every method; a method's own
 `#[lean_rust::model(..)]` gives its specs. `#[lean_rust::opaque]` keeps the body of a function
-out of the model: its model is written in `lean/External.lean` (and the types Aeneas does not
-know, such as `BTreeMap`, in `lean/ExternalTypes.lean`), starting from the templates `extract`
-writes. `cargo test` compares an opaque function with its model when the model is a definition
-(the build script compiles it like a `lean!` block): equal results, or a panic of the function
-where the model fails. Every loop of a modelled function has a label: `'scan: for ..` in `insert_sorted` is
+out of the model, and on an inherent impl block, the bodies of its methods (a method's own
+`#[lean_rust::opaque(..)]` gives its `check` and `strategy`): its model is written in
+`lean/External.lean` (and the types Aeneas does not know, such as `BTreeMap`, in
+`lean/ExternalTypes.lean`), starting from the templates `extract` writes. `cargo test` compares
+an opaque function with its model when the model is a definition (the build script compiles it
+like a `lean!` block): equal results, or a panic of the function where the model fails. Every loop of a modelled function has a label: `'scan: for ..` in `insert_sorted` is
 `insert_sorted.scan`, an alias of Aeneas's `insert_sorted_loop`, so proofs keep their names
 when loops are added.
 
@@ -456,10 +457,12 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
   Lean type have two Rust types, except for types of the blocks named in `uses`.
 - Generic structures are generated per instantiation (`Pair Nat Bool` → `PairNatBool`).
 - `#[lean_rust::model]` covers what Aeneas covers (no `unsafe`, interior mutability or
-  concurrency). A trait method is extracted only for a trait of the crate. The model of an
-  opaque method is not tested. Generic functions take neither const generics, trait objects nor
-  `Fn` bounds; Aeneas has no instances of `Ord` for `String`, `char` and `bool`, nor of the
-  traits of `Option`, `Result` and slices, so a generic proof covers those types only by test.
+  concurrency). A trait method is extracted only for a trait of the crate. An opaque method
+  belongs to an inherent impl block that is not generic, and no other method or function of its
+  module has its name (Charon finds the method by its module and name). Generic functions take
+  neither const generics, trait objects nor `Fn` bounds; Aeneas has no instances of `Ord` for
+  `String`, `char` and `bool`, nor of the traits of `Option`, `Result` and slices, so a generic
+  proof covers those types only by test.
 - A polymorphic Lean function is public only for the types of its `rust_instances`.
 - Aeneas's output does not build when a parameter has the name of a module of the crate
   (`item` in the module `item`): rename the parameter.
