@@ -83,7 +83,7 @@ The npm package and the Lean CLI:
 
 ```sh
 pnpm add lean-ts                              # the runtime, lean(), lean-ts sync and check
-nix profile install github:conao3/lean-ts     # the Lean CLI `lean-typescript` (add /vX.Y.Z for a release)
+nix profile install 'github:conao3/lean-leanfran?dir=TypeScript'   # the Lean CLI `lean-typescript`
 ```
 
 `lean-ts sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.

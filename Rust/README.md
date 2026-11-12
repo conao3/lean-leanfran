@@ -67,7 +67,7 @@ fn main() {
 The CLI is a Lean program. With Nix:
 
 ```
-nix profile install github:conao3/lean-rs   # or `nix profile install .` in a checkout
+nix profile install 'github:conao3/lean-leanfran?dir=Rust'   # or `nix profile install .` in a checkout
 lean-rust --version
 ```
 

@@ -88,7 +88,7 @@ The Python package and the Lean CLI:
 
 ```sh
 uv add lean-python                            # the runtime, lean(), lean-py sync
-nix profile install github:conao3/lean-py     # the Lean CLI `lean-python`
+nix profile install 'github:conao3/lean-leanfran?dir=Python'   # the Lean CLI `lean-python`
 ```
 
 `lean-py sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
