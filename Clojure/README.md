@@ -78,7 +78,7 @@ The first expansion of a `deflean` block needs Lean 4.35.0 (`lean`, `lake`)
 and the `lean-clj` CLI on `PATH`:
 
 ```
-nix profile install github:conao3/lean-clj/v0.3.0
+nix profile install 'github:conao3/lean-leanfran/clojure-v0.3.0?dir=Clojure'
 ```
 
 Get Lean from elan (`elan default v4.35.0`) or from `nix develop` of this
