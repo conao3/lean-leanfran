@@ -15,6 +15,6 @@ default = ["check"]
 check = ["dep:proptest"]
 
 [dependencies]
-lean-rust-macros = { path = "../lean-rust-macros", version = "0.4.0" }
-lean-rust-runtime = { path = "../lean-rust-runtime", version = "0.4.0" }
+lean-rust-macros = { path = "../lean-rust-macros", version = "0.5.0" }
+lean-rust-runtime = { path = "../lean-rust-runtime", version = "0.5.0" }
 proptest = { version = "1", optional = true }

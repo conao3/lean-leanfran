@@ -74,7 +74,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cargo-lean-rust"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust-build",
  "serde_json",
@@ -242,7 +242,7 @@ checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "lean-rust"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust-macros",
  "lean-rust-runtime",
@@ -251,7 +251,7 @@ dependencies = [
 
 [[package]]
 name = "lean-rust-build"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -264,14 +264,14 @@ dependencies = [
 
 [[package]]
 name = "lean-rust-difftest"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust-runtime",
 ]
 
 [[package]]
 name = "lean-rust-embed-test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust",
  "lean-rust-build",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "lean-rust-macros"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust-build",
  "proc-macro2",
@@ -289,14 +289,14 @@ dependencies = [
 
 [[package]]
 name = "lean-rust-public-test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust",
 ]
 
 [[package]]
 name = "lean-rust-runtime"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "libc",
  "libm",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "lean-rust-wasm-test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lean-rust",
  "lean-rust-build",

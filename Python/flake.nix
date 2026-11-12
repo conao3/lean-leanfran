@@ -22,7 +22,7 @@
         {
           packages.lean-python = pkgs.stdenv.mkDerivation {
             pname = "lean-python";
-            version = "0.2.1";
+            version = "0.5.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [

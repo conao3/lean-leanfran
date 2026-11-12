@@ -59,7 +59,7 @@
         {
           packages.lean-typescript = pkgs.stdenv.mkDerivation {
             pname = "lean-typescript";
-            version = "0.1.1";
+            version = "0.5.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [
