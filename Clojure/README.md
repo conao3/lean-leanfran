@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/conao3/lean-leanfran/tags"><img src="https://img.shields.io/github/v/tag/conao3/lean-leanfran?sort=semver&filter=clojure-*&label=release" alt="Latest release"></a>
+  <a href="https://github.com/conao3/lean-leanfran/tags"><img src="https://img.shields.io/github/v/tag/conao3/lean-leanfran?sort=semver&label=release" alt="Latest release"></a>
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
   <a href="https://lean-lang.org/"><img src="https://img.shields.io/badge/Lean-v4.35.0-0f4c81.svg" alt="Lean v4.35.0"></a>
