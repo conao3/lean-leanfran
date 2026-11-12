@@ -85,10 +85,10 @@ cargo-lean-rust`). The flake's default package has `lean-rust`, `cargo-lean-rust
 ```toml
 # Cargo.toml
 [dependencies]
-lean-rust = "0.3.0"
+lean-rust = "0.4.0"
 
 [build-dependencies]
-lean-rust-build = "0.3.0"
+lean-rust-build = "0.4.0"
 ```
 
 ```rust
@@ -209,7 +209,7 @@ library.
 Generated code builds for `wasm32-unknown-unknown` (for a browser through `wasm-bindgen`) with
 
 ```toml
-lean-rust = { version = "0.3.0", default-features = false }
+lean-rust = { version = "0.4.0", default-features = false }
 ```
 
 Pure functions behave as on Unix. The `IO` actions that need an operating system (files,
