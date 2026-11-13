@@ -315,7 +315,7 @@ make format
 and the same function generated as Clojure, and compares the output.
 
 Releases come from the `Release` workflow of conao3/lean-leanfran, which
-releases the four backends together under one version. It writes the version
+releases the backends together under one version. It writes the version
 with `clojure -T:build set-version :version '"X.Y.Z"'`, runs `make check`,
 pushes the commit and the tag `vX.Y.Z` to `master`, and the `Publish` workflow
 deploys the jar to Clojars.

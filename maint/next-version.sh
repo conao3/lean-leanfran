@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print the version that follows the highest version of the four backends: next-version.sh patch|minor|major
+# Print the version that follows the highest version of the backends: next-version.sh patch|minor|major
 set -euo pipefail
 cd "$(dirname "$0")/.."
 current=$(

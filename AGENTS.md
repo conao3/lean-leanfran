@@ -1,6 +1,6 @@
 # Development
 
-This repository contains four Lean 4 compiler backends released together as leanfran.
+This repository contains Lean 4 compiler backends released together as leanfran.
 
 ## Repository layout
 
@@ -13,7 +13,7 @@ This repository contains four Lean 4 compiler backends released together as lean
 
 ## Shared conventions
 
-- The root `lean-toolchain` selects Lean for all four backends.
+- The root `lean-toolchain` selects Lean for all backends.
 - Runtime externs follow Lean's C symbols, argument order, erased arguments and ownership conventions. Inspect the toolchain's Lean sources and `lean.h` when implementing an extern.
 - Add runtime behavior to the backend's native-oracle differential tests; compare the generated program with Lean's C backend.
 - Regenerate runtime extern lists with the backend's `make gen-externs` where available.
@@ -24,4 +24,4 @@ This repository contains four Lean 4 compiler backends released together as lean
 
 Run `make check` from the repository root, or `make check BACKENDS=Python` for selected backends. Run `make format` before committing.
 
-The Release and Publish workflows manage the four package versions and the `vX.Y.Z` tag together. Start them only in the session where the user requested a release.
+The Release and Publish workflows manage the package versions and the `vX.Y.Z` tag together. Start them only in the session where the user requested a release.

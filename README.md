@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="leanfran — prove in Lean, run in Rust, Python, TypeScript and Clojure" width="100%">
+  <img src="docs/assets/banner.svg" alt="leanfran — prove in Lean, run in your language" width="100%">
 </p>
 
 <p align="center"><strong>Write it in Lean. Prove it in Lean. Run it in your language.</strong></p>
@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="#get-started">Get started</a> ·
-  <a href="#one-lean-foundation-four-languages">Languages</a> ·
+  <a href="#lean-at-the-core">Languages</a> ·
   <a href="#what-you-can-build">Features</a> ·
   <a href="#documentation">Documentation &amp; examples</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
@@ -29,9 +29,9 @@
 
 # leanfran
 
-leanfran brings Lean 4 to Rust, Python, TypeScript and Clojure. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
+leanfran brings Lean 4 to your programming language. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
 
-## One Lean foundation, four languages
+## Lean at the core
 
 ```lean
 def double (n : Nat) : Nat := n + n
