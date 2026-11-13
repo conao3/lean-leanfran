@@ -1,11 +1,35 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="leanfran — prove in Lean, run in Rust, Python, TypeScript and Clojure" width="100%">
+</p>
+
+<p align="center"><strong>Write it in Lean. Prove it in Lean. Run it in your language.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/conao3/lean-leanfran/tags"><img src="https://img.shields.io/github/v/tag/conao3/lean-leanfran?sort=semver&amp;label=release" alt="Latest release"></a>
+  <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <a href="lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-0f4c81.svg" alt="Lean v4.35.0"></a>
+  <a href="https://github.com/conao3/lean-leanfran/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-leanfran?style=flat" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="https://crates.io/crates/leanfran"><img src="https://img.shields.io/crates/v/leanfran?label=Rust" alt="Rust on crates.io"></a>
+  <a href="https://pypi.org/project/leanfran/"><img src="https://img.shields.io/pypi/v/leanfran?label=Python" alt="Python on PyPI"></a>
+  <a href="https://www.npmjs.com/package/leanfran"><img src="https://img.shields.io/npm/v/leanfran?label=TypeScript" alt="TypeScript on npm"></a>
+  <a href="https://clojars.org/io.github.conao3/leanfran"><img src="https://img.shields.io/clojars/v/io.github.conao3/leanfran.svg?label=Clojure" alt="Clojure on Clojars"></a>
+</p>
+
+<p align="center">
+  <a href="#get-started">Get started</a> ·
+  <a href="#one-lean-foundation-four-languages">Languages</a> ·
+  <a href="#what-you-can-build">Features</a> ·
+  <a href="#documentation">Documentation &amp; examples</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
 # leanfran
 
-**Write it in Lean. Prove it in Lean. Run it in your language.**
-
 leanfran brings Lean 4 to Rust, Python, TypeScript and Clojure. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
-
-[![CI](https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ## One Lean foundation, four languages
 
