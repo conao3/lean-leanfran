@@ -45,5 +45,5 @@ Commit `src/myapp/_lean/` with your package, and add `.leanfran/` to `.gitignore
 ## Next steps
 
 - [Full Python guide](https://github.com/conao3/lean-leanfran/blob/master/docs/python-guide.md): pydantic models, JSON, `@model`, verification, CLI and limitations.
-- [Samples](https://github.com/conao3/lean-leanfran/blob/master/Python/samples/README.md), including pricing, word count and step-by-step examples.
+- [Samples](https://github.com/conao3/lean-leanfran/blob/master/langs/Python/samples/README.md), including pricing, word count and step-by-step examples.
 - [Development](https://github.com/conao3/lean-leanfran/blob/master/CONTRIBUTING.md) and [implementation notes](https://github.com/conao3/lean-leanfran/blob/master/docs/python-development.md).

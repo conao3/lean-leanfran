@@ -8,7 +8,7 @@ class CustomBuildHook(BuildHookInterface):
         root = Path(self.root)
         license_file = root / "LICENSE"
         if not license_file.is_file():
-            license_file = root.parent / "LICENSE"
+            license_file = root.parents[1] / "LICENSE"
         if not license_file.is_file():
             raise FileNotFoundError("The distribution requires the repository LICENSE")
         build_data["force_include"][str(license_file)] = "LICENSE"

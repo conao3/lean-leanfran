@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 v=$1
-cd "$(dirname "$0")/../../TypeScript"
+cd "$(dirname "$0")/../../langs/TypeScript"
 node --input-type=module -e '
 import { readFileSync, writeFileSync } from "node:fs"
 const p = JSON.parse(readFileSync("package.json", "utf8"))

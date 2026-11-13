@@ -53,5 +53,5 @@ fn main() {
 ## Next steps
 
 - [Full Rust guide](https://github.com/conao3/lean-leanfran/blob/master/docs/rust-guide.md): value conversions, Lean projects, `#[model]`, Cargo verification, WebAssembly and limitations.
-- [Samples](https://github.com/conao3/lean-leanfran/blob/master/Rust/samples/README.md) and [step-by-step examples](https://github.com/conao3/lean-leanfran/blob/master/Rust/samples/steps/README.md).
+- [Samples](https://github.com/conao3/lean-leanfran/blob/master/langs/Rust/samples/README.md) and [step-by-step examples](https://github.com/conao3/lean-leanfran/blob/master/langs/Rust/samples/steps/README.md).
 - [Development](https://github.com/conao3/lean-leanfran/blob/master/CONTRIBUTING.md) and [implementation notes](https://github.com/conao3/lean-leanfran/blob/master/docs/rust-development.md).

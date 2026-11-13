@@ -40,5 +40,5 @@ The first expansion of a `deflean` block requires Lean 4.35.0 (`lean` and `lake`
 ## Next steps
 
 - [Full Clojure guide](https://github.com/conao3/lean-leanfran/blob/master/docs/clojure-guide.md): value conversions, Lean blocks, typed functions, malli, clj-kondo, verification and CLI.
-- [Samples](https://github.com/conao3/lean-leanfran/blob/master/Clojure/samples/README.md), including typed schemas and step-by-step examples.
+- [Samples](https://github.com/conao3/lean-leanfran/blob/master/langs/Clojure/samples/README.md), including typed schemas and step-by-step examples.
 - [Development](https://github.com/conao3/lean-leanfran/blob/master/CONTRIBUTING.md) and [implementation notes](https://github.com/conao3/lean-leanfran/blob/master/docs/clojure-development.md).

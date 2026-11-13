@@ -24,13 +24,13 @@ jobs:
       url: https://crates.io/crates/leanfran
     defaults:
       run:
-        working-directory: Rust
+        working-directory: langs/Rust
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag }}
       - uses: cachix/install-nix-action@v31.11.3
-      - run: nix develop ..#rust -c cargo publish --workspace --dry-run
+      - run: nix develop ../..#rust -c cargo publish --workspace --dry-run
       - uses: rust-lang/crates-io-auth-action@v1.0.6
         id: auth
       - run: |
@@ -39,7 +39,7 @@ jobs:
             if curl -sf -A "lean-leanfran publish (github.com/conao3/lean-leanfran)" "https://crates.io/api/v1/crates/$crate/$version" > /dev/null; then
               echo "$crate $version is already on crates.io"
             else
-              nix develop ..#rust -c cargo publish -p "$crate"
+              nix develop ../..#rust -c cargo publish -p "$crate"
             fi
           done
         env:
@@ -58,7 +58,7 @@ jobs:
       url: https://pypi.org/project/leanfran/
     defaults:
       run:
-        working-directory: Python
+        working-directory: langs/Python
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -67,10 +67,10 @@ jobs:
       - run: test "v$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" = "$TAG"
         env:
           TAG: ${{ inputs.tag }}
-      - run: nix develop ..#python -c uv build
+      - run: nix develop ../..#python -c uv build
       - uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
-          packages-dir: Python/dist/
+          packages-dir: langs/Python/dist/
           skip-existing: true
 
   typescript:
@@ -85,7 +85,7 @@ jobs:
       url: https://www.npmjs.com/package/leanfran
     defaults:
       run:
-        working-directory: TypeScript
+        working-directory: langs/TypeScript
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -99,8 +99,8 @@ jobs:
           if curl -sf "https://registry.npmjs.org/leanfran/$version" > /dev/null; then
             echo "leanfran $version is already on npm"
           else
-            nix develop ..#typescript -c make pack
-            nix develop ..#typescript -c npm publish --provenance
+            nix develop ../..#typescript -c make pack
+            nix develop ../..#typescript -c npm publish --provenance
           fi
         env:
           TAG: ${{ inputs.tag }}
@@ -112,7 +112,7 @@ jobs:
     environment: clojars
     defaults:
       run:
-        working-directory: Clojure
+        working-directory: langs/Clojure
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -126,7 +126,7 @@ jobs:
           if curl -sf "https://repo.clojars.org/io/github/conao3/leanfran/$version/leanfran-$version.pom" > /dev/null; then
             echo "io.github.conao3/leanfran $version is already on Clojars"
           else
-            nix develop ..#clojure --command make deploy
+            nix develop ../..#clojure --command make deploy
           fi
         env:
           TAG: ${{ inputs.tag }}

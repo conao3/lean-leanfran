@@ -43,5 +43,5 @@ Commit `src/_lean/` and `.leanfran/blocks.json`. Run sync again when you change 
 ## Next steps
 
 - [Full TypeScript guide](https://github.com/conao3/lean-leanfran/blob/master/docs/typescript-guide.md): schemas, host models, verification, CLI, runtime semantics and limitations.
-- [Samples](https://github.com/conao3/lean-leanfran/blob/master/TypeScript/samples/README.md), including a pricing API and step-by-step examples.
+- [Samples](https://github.com/conao3/lean-leanfran/blob/master/langs/TypeScript/samples/README.md), including a pricing API and step-by-step examples.
 - [Development](https://github.com/conao3/lean-leanfran/blob/master/CONTRIBUTING.md) and [implementation notes](https://github.com/conao3/lean-leanfran/blob/master/docs/typescript-development.md).

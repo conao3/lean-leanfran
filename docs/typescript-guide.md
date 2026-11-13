@@ -1,12 +1,12 @@
 # TypeScript guide
 
-[leanfran](../README.md) · [TypeScript quick start](../TypeScript/README.md)
+[leanfran](../README.md) · [TypeScript quick start](../langs/TypeScript/README.md)
 
-Commands and source paths below are relative to `TypeScript/`.
+Commands and source paths below are relative to `langs/TypeScript/`.
 
 ## Installation
 
-See the [TypeScript quick start](../TypeScript/README.md) for installation.
+See the [TypeScript quick start](../langs/TypeScript/README.md) for installation.
 
 ## Lean blocks
 
@@ -271,23 +271,23 @@ leanfran status --package <dir>
 
 ## Examples
 
-[`samples/`](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples) holds packages with Lean blocks
+[`samples/`](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples) holds packages with Lean blocks
 and verified TypeScript functions. `make samples` syncs each one, runs it, compares the output with
 its `expected.txt`, checks the proofs of the verified ones with `leanfran check --require proved`,
 and fails when a committed generated module is out of date.
 
 | sample                                                                                                            | shows                                                                                                                      |
 | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| [word-count](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/word-count)                   | strings and lists, a proof by induction                                                                                    |
-| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/roman-numerals)           | a lake project compiled with `leanfran generate`, a round-trip theorem checked for every number below 1000                 |
-| [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/todo-cli)                       | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected                                     |
-| [generic-search](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/generic-search)           | polymorphic functions proved for every type, called through monomorphic definitions                                        |
-| [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/pricing-api)                 | Hono with a zod model and a Lean inductive type as request body, 400 for invalid input, OpenAPI                            |
-| [verified-typescript](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/verified-typescript) | a `for (let i ...)` loop proved equal to a recursive spec, which it then replaces; an insertion that keeps an array sorted |
-| [sorted-search](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/sorted-search)             | `refines` under `requires` (a scan of a sorted array)                                                                      |
-| [inventory](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/inventory)                     | a block's structure and enum in the signatures of verified functions                                                       |
+| [word-count](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/word-count)                   | strings and lists, a proof by induction                                                                                    |
+| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/roman-numerals)           | a lake project compiled with `leanfran generate`, a round-trip theorem checked for every number below 1000                 |
+| [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/todo-cli)                       | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected                                     |
+| [generic-search](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/generic-search)           | polymorphic functions proved for every type, called through monomorphic definitions                                        |
+| [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/pricing-api)                 | Hono with a zod model and a Lean inductive type as request body, 400 for invalid input, OpenAPI                            |
+| [verified-typescript](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/verified-typescript) | a `for (let i ...)` loop proved equal to a recursive spec, which it then replaces; an insertion that keeps an array sorted |
+| [sorted-search](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/sorted-search)             | `refines` under `requires` (a scan of a sorted array)                                                                      |
+| [inventory](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/inventory)                     | a block's structure and enum in the signatures of verified functions                                                       |
 
-[`samples/steps/`](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/steps) introduces one
+[`samples/steps/`](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/steps) introduces one
 feature at a time, from functions on `Nat` (01) to types shared between blocks with `uses` (09)
 and the verification of TypeScript functions (10 to 14).
 
@@ -380,7 +380,7 @@ export function double(n: bigint | number): bigint {
   `src/_lean/` and `.leanfran/blocks.json`) and `test/project/`.
 - `samples/` — the samples (pnpm workspace packages that link `leanfran`), `samples/run.sh` and
   `samples/Makefile` (`test`, `verify`).
-- `../maint/TypeScript/bump-version.sh` — sets the version of `package.json` and `Main.lean`;
+- `../../maint/TypeScript/bump-version.sh` — sets the version of `package.json` and `Main.lean`;
   the `Release` workflow runs it, tags `vX.Y.Z` and starts the `Publish` workflow, which packs and
   publishes the tag to npm with trusted publishing.
 
@@ -461,14 +461,14 @@ Passing 10⁴ structures to a Lean function takes 0.024 s (zod's
 ## Checks
 
 ```
-nix develop ..#typescript -c make check
+nix develop ../..#typescript -c make check
 ```
 
-`make check` runs `treefmt --ci`, `../maint/TypeScript/test-diff.sh` (generates the `LeanTsTest`
-modules into `test-out/` and diffs them against the native oracles), `../maint/TypeScript/test-public.sh`
+`make check` runs `treefmt --ci`, `../../maint/TypeScript/test-diff.sh` (generates the `LeanTsTest`
+modules into `test-out/` and diffs them against the native oracles), `../../maint/TypeScript/test-public.sh`
 (generates `test-out/public.ts` with the default settings, `test-out/public-alt.ts`
 with `--tag-key _tag --option undefined` and `test-out/json.ts`, and runs
-`test/public.test.ts` and `test/json.test.ts` against `oracle-json`), `../maint/TypeScript/fuzz.sh`,
+`test/public.test.ts` and `test/json.test.ts` against `oracle-json`), `../../maint/TypeScript/fuzz.sh`,
 the type check of every generated module (`vp lint test-out/**/*.ts`), `leanfran
 status` of the embedding and verification fixtures, `test/verify/test.sh` (copies
 `test/verify/app/` to `test-out/verify/<scene>/` and checks the states proved, sorry,
@@ -477,7 +477,7 @@ called through their specifications, an untranslatable function and a wrong
 implementation that `checkModel` rejects with a counterexample), `make samples` (`leanfran check
 --require proved` on the verified samples, `samples/run.sh` on every sample, and no difference in
 the committed generated modules), and `vp run check` (`vp check && vp test`, which
-includes `test/embed.test.ts`). `../maint/TypeScript/test-diff.sh` covers: 136 function-level
+includes `test/embed.test.ts`). `../../maint/TypeScript/test-diff.sh` covers: 136 function-level
 value assertions (numeric tower, UTF-8 `String` and its order, `Array`/`List`, packed ctors, a
 `TodoList` sequence, closures); deep TCO (incl. closure-boundary tail `.ap`) at
 N=1e6; a 32-bit `USize` profile; the fail-loud extern link check; runnable IO /
@@ -493,7 +493,7 @@ stderr and exit code.
 The oracle for every diff-test is the **native C-compiled Lean binary** (each test
 program built through `lake build` → `leanc`), not `lean --run` (the interpreter
 shares the same naive stack behaviour as JS and would mask divergences). Every claim
-below is enforced by `../maint/TypeScript/test-diff.sh` diffing node output against that native binary.
+below is enforced by `../../maint/TypeScript/test-diff.sh` diffing node output against that native binary.
 
 ### Covered and native-verified
 
@@ -540,7 +540,7 @@ Any extern the runtime does not provide is a **hard generation error** (exit 254
 no output written) — never a silent wrong answer or a dangling runtime call. The
 error names the exact missing C symbols so they can be implemented and retried. The
 CLI checks the symbols against `LeanTs/RuntimeExterns.lean`, which `make gen-externs`
-generates from the runtime's exports. `../maint/TypeScript/test-diff.sh` asserts an unmapped extern
+generates from the runtime's exports. `../../maint/TypeScript/test-diff.sh` asserts an unmapped extern
 (`lean_io_get_random_bytes`) is rejected while a mapped root generates.
 
 ### Out of scope (intentionally left fail-loud) and why

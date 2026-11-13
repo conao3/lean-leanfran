@@ -4,10 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 current=$(
   {
-    sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Rust/Cargo.toml
-    sed -n 's/^version = "\(.*\)"/\1/p' Python/pyproject.toml
-    sed -n 's/^  "version": "\(.*\)",$/\1/p' TypeScript/package.json
-    sed -n 's/.*:version "\([0-9.]*\)".*/\1/p' Clojure/deps.edn
+    sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' langs/Rust/Cargo.toml
+    sed -n 's/^version = "\(.*\)"/\1/p' langs/Python/pyproject.toml
+    sed -n 's/^  "version": "\(.*\)",$/\1/p' langs/TypeScript/package.json
+    sed -n 's/.*:version "\([0-9.]*\)".*/\1/p' langs/Clojure/deps.edn
   } | sort -V | tail -n 1
 )
 IFS='.' read -r major minor patch <<< "$current"

@@ -1,12 +1,12 @@
 # Python guide
 
-[leanfran](../README.md) · [Python quick start](../Python/README.md)
+[leanfran](../README.md) · [Python quick start](../langs/Python/README.md)
 
-Commands and source paths below are relative to `Python/`.
+Commands and source paths below are relative to `langs/Python/`.
 
 ## Installation
 
-See the [Python quick start](../Python/README.md) for installation.
+See the [Python quick start](../langs/Python/README.md) for installation.
 
 ## Lean blocks
 
@@ -201,17 +201,17 @@ reads the lock file without Lean and marks changed functions `stale`.
 
 ## Examples
 
-[`samples/`](https://github.com/conao3/lean-leanfran/tree/master/Python/samples) holds Python packages with Lean
+[`samples/`](https://github.com/conao3/lean-leanfran/tree/master/langs/Python/samples) holds Python packages with Lean
 blocks. `make samples` syncs each one, runs it, and compares the output with its `expected.txt`.
 
 | sample                                                                                              | shows                                                                                          |
 | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| [word-count](https://github.com/conao3/lean-leanfran/tree/master/Python/samples/word-count)         | strings and lists, a proof by induction                                                        |
-| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/Python/samples/roman-numerals) | a round-trip theorem checked for every number below 1000 (`decide +kernel`)                    |
-| [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/Python/samples/todo-cli)             | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected         |
-| [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/Python/samples/pricing-api)       | FastAPI with a pydantic model and a Lean inductive type as request body, 422 for invalid input |
+| [word-count](https://github.com/conao3/lean-leanfran/tree/master/langs/Python/samples/word-count)         | strings and lists, a proof by induction                                                        |
+| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/langs/Python/samples/roman-numerals) | a round-trip theorem checked for every number below 1000 (`decide +kernel`)                    |
+| [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/langs/Python/samples/todo-cli)             | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected         |
+| [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/langs/Python/samples/pricing-api)       | FastAPI with a pydantic model and a Lean inductive type as request body, 422 for invalid input |
 
-[`samples/steps/`](https://github.com/conao3/lean-leanfran/tree/master/Python/samples/steps) introduces one
+[`samples/steps/`](https://github.com/conao3/lean-leanfran/tree/master/langs/Python/samples/steps) introduces one
 feature at a time, from functions on `Nat` (01) to types shared between blocks with `uses=` (09).
 
 ## The CLI
@@ -262,8 +262,8 @@ Passing 10⁴ models to a Lean function takes 0.036 s (pydantic's `TypeAdapter(l
 ## Development
 
 ```sh
-nix develop ..#python -c make check   # treefmt, the diff tests against the C backend, pytest, the samples
-nix develop ..#python -c make bench
+nix develop ../..#python -c make check   # treefmt, the diff tests against the C backend, pytest, the samples
+nix develop ../..#python -c make bench
 ```
 
 - `LeanPython/EmitPy.lean`: IR → Python. `LeanPython/Marshal.lean`, `LeanPython/Generate.lean`: public
@@ -272,7 +272,7 @@ nix develop ..#python -c make bench
   externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `sync.py`, `models.py`, `cli.py`:
   `lean(...)` and `leanfran sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
   `leanfran check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
-- `LeanPythonTest/`: Lean programs of the tests; `../maint/Python/test-diff.sh` runs `Vectors` and `Io` natively and
+- `LeanPythonTest/`: Lean programs of the tests; `../../maint/Python/test-diff.sh` runs `Vectors` and `Io` natively and
   as Python.
 
 ## Limitations

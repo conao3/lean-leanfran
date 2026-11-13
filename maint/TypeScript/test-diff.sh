@@ -5,7 +5,7 @@
 # and exit codes. The oracle is the real production backend with compiled TCO,
 # bignum and libm semantics, not the `lean --run` interpreter.
 set -euo pipefail
-cd "$(dirname "$0")/../../TypeScript"
+cd "$(dirname "$0")/../../langs/TypeScript"
 ulimit -s 65536
 export LEAN_BACKTRACE=0
 lake build leanfran-typescript LeanTsTest oracle-vectors oracle-io oracle-stdin oracle-err oracle-panic oracle-init oracle-stress oracle-stress2 oracle-stress3 oracle-stress4 oracle-verify

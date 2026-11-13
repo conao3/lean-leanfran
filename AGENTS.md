@@ -4,7 +4,7 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 
 ## Repository layout
 
-- `Rust/`, `Python/`, `TypeScript/`, `Clojure/`: emitters, host runtimes, language packages, tests and samples. Each has a Lake project.
+- `langs/Rust/`, `langs/Python/`, `langs/TypeScript/`, `langs/Clojure/`: emitters, host runtimes, language packages, tests and samples. Each has a Lake project.
 - `docs/`: development documentation. Read `CONTRIBUTING.md` and the relevant backend guide before editing a backend.
 - `maint/`: repository maintenance, version management, differential tests and extern-list generators.
 - `.github/`: CI and release automation.

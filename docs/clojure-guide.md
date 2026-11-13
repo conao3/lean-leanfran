@@ -1,8 +1,8 @@
 # Clojure guide
 
-[leanfran](../README.md) · [Clojure quick start](../Clojure/README.md)
+[leanfran](../README.md) · [Clojure quick start](../langs/Clojure/README.md)
 
-Commands and source paths below are relative to `Clojure/`.
+Commands and source paths below are relative to `langs/Clojure/`.
 
 ## Quick start
 
@@ -32,7 +32,7 @@ messages next to the Lean source of the block.
 
 ## Installation
 
-See the [Clojure quick start](../Clojure/README.md) for installation.
+See the [Clojure quick start](../langs/Clojure/README.md) for installation.
 
 ## Values
 
@@ -202,7 +202,7 @@ structures stop the translation with the reason.
 ### The models of clojure.core
 
 The Lean library `Clj`
-([`resources/leanfran/lean/Clj.lean`](../Clojure/resources/leanfran/lean/Clj.lean)) models
+([`resources/leanfran/lean/Clj.lean`](../langs/Clojure/resources/leanfran/lean/Clj.lean)) models
 the arithmetic of `Nat`, `Int`, and `Float`; truthiness and `nil`; the sequence
 functions (`map`, `filter`, `reduce`, `some`, `every?`, `mapcat`, `keep`,
 `partition`, `distinct`, `sort`, `sort-by`, `take-while`, `interpose`, and
@@ -290,16 +290,16 @@ at load time that the runtime has the symbols it uses.
 
 ## Samples
 
-[`samples/`](../Clojure/samples) holds small programs built with leanfran. Each one is a
+[`samples/`](../langs/Clojure/samples) holds small programs built with leanfran. Each one is a
 Clojure project with its own README and a `make test`.
 
 | Use                                                                   | Samples                                                                                                                                                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Write functions in Lean and call them from Clojure (`deflean`)        | [`todo-cli`](../Clojure/samples/todo-cli), [`word-count`](../Clojure/samples/word-count)                                                                                                                                                                                |
-| Compile a Lean project to a Clojure namespace (the CLI)               | [`roman-numerals`](../Clojure/samples/roman-numerals)                                                                                                                                                                                                                   |
-| Write functions in Clojure and verify them in Lean (`leanfran.typed`) | [`verified-clojure`](../Clojure/samples/verified-clojure), [`sorted-search`](../Clojure/samples/sorted-search), [`inventory`](../Clojure/samples/inventory), [`generic-search`](../Clojure/samples/generic-search), [`typed-schemas`](../Clojure/samples/typed-schemas) |
+| Write functions in Lean and call them from Clojure (`deflean`)        | [`todo-cli`](../langs/Clojure/samples/todo-cli), [`word-count`](../langs/Clojure/samples/word-count)                                                                                                                                                                                |
+| Compile a Lean project to a Clojure namespace (the CLI)               | [`roman-numerals`](../langs/Clojure/samples/roman-numerals)                                                                                                                                                                                                                   |
+| Write functions in Clojure and verify them in Lean (`leanfran.typed`) | [`verified-clojure`](../langs/Clojure/samples/verified-clojure), [`sorted-search`](../langs/Clojure/samples/sorted-search), [`inventory`](../langs/Clojure/samples/inventory), [`generic-search`](../langs/Clojure/samples/generic-search), [`typed-schemas`](../langs/Clojure/samples/typed-schemas) |
 
-[`samples/README.md`](../Clojure/samples/README.md) describes what each sample shows and
+[`samples/README.md`](../langs/Clojure/samples/README.md) describes what each sample shows and
 where to start.
 
 ## Development
@@ -311,7 +311,7 @@ make check     # format check, lint, and all tests
 make format
 ```
 
-`../maint/Clojure/test-diff.sh` runs `LeanCljTest.Vectors.report` compiled by Lean's C backend
+`../../maint/Clojure/test-diff.sh` runs `LeanCljTest.Vectors.report` compiled by Lean's C backend
 and the same function generated as Clojure, and compares the output.
 
 Releases come from the `Release` workflow of conao3/lean-leanfran, which

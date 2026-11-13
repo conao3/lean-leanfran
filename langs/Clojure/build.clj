@@ -45,7 +45,7 @@
                              [:url "https://www.apache.org/licenses/LICENSE-2.0"]]]]})
   (b/copy-dir {:src-dirs (concat src-dirs resource-dirs)
                :target-dir class-dir})
-  (b/copy-file {:src "../LICENSE"
+  (b/copy-file {:src "../../LICENSE"
                 :target (str class-dir "/META-INF/LICENSE")})
   (b/jar {:class-dir class-dir
           :jar-file jar-file}))

@@ -13,7 +13,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/conao3/lean-leanfran/tree/master/Python"
+Repository = "https://github.com/conao3/lean-leanfran/tree/master/langs/Python"
 
 [project.scripts]
 leanfran = "leanfran.cli:main"

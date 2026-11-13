@@ -1,4 +1,4 @@
-# Run the targets inside the dev shell: `nix develop ..#typescript -c make check`.
+# Run the targets inside the dev shell: `nix develop ../..#typescript -c make check`.
 
 .PHONY: install build pack gen-externs externs-check test test-public fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples bench check
 
@@ -10,10 +10,10 @@ build: install
 
 pack: install
 	vp pack
-	cp ../LICENSE dist/LICENSE
+	cp ../../LICENSE dist/LICENSE
 
 gen-externs: install
-	node ../maint/TypeScript/gen-externs.ts > LeanTs/RuntimeExterns.lean.tmp
+	node ../../maint/TypeScript/gen-externs.ts > LeanTs/RuntimeExterns.lean.tmp
 	mv LeanTs/RuntimeExterns.lean.tmp LeanTs/RuntimeExterns.lean
 
 # The committed extern list must match the runtime.
@@ -21,13 +21,13 @@ externs-check: gen-externs
 	git diff --exit-code -- LeanTs/RuntimeExterns.lean
 
 test: build
-	../maint/TypeScript/test-diff.sh
+	../../maint/TypeScript/test-diff.sh
 
 fuzz: build
-	../maint/TypeScript/fuzz.sh
+	../../maint/TypeScript/fuzz.sh
 
 test-public: build
-	../maint/TypeScript/test-public.sh
+	../../maint/TypeScript/test-public.sh
 
 # Type-check and lint every module the diff-test generated (test-out/ is gitignored, so it is passed explicitly).
 typecheck-generated: test test-public fuzz
@@ -65,7 +65,7 @@ test-verify: build pack
 samples: build pack
 	$(MAKE) -C samples verify test
 	git diff --exit-code -- samples
-	test -z "$$(git status --porcelain --untracked-files=all -- samples)"
+	test -z "$$(git ls-files --others --exclude-standard -- samples)"
 
 bench: build
 	lake build oracle-bench

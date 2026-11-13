@@ -17,10 +17,10 @@ Build compiler packages with `nix build .#python`, `.#typescript`, `.#clojure` o
 
 | Backend    | Source and usage                             | Implementation guide                                     |
 | ---------- | -------------------------------------------- | -------------------------------------------------------- |
-| Rust       | [Rust/README.md](Rust/README.md)             | [Rust development](docs/rust-development.md)             |
-| Python     | [Python/README.md](Python/README.md)         | [Python development](docs/python-development.md)         |
-| TypeScript | [TypeScript/README.md](TypeScript/README.md) | [TypeScript development](docs/typescript-development.md) |
-| Clojure    | [Clojure/README.md](Clojure/README.md)       | [Clojure development](docs/clojure-development.md)       |
+| Rust       | [langs/Rust/README.md](langs/Rust/README.md)             | [Rust development](docs/rust-development.md)             |
+| Python     | [langs/Python/README.md](langs/Python/README.md)         | [Python development](docs/python-development.md)         |
+| TypeScript | [langs/TypeScript/README.md](langs/TypeScript/README.md) | [TypeScript development](docs/typescript-development.md) |
+| Clojure    | [langs/Clojure/README.md](langs/Clojure/README.md)       | [Clojure development](docs/clojure-development.md)       |
 
 Keep native-oracle differential tests, host-language tests and sample verification in the backend's `make check`. CI executes that command for all backends and builds the Python, TypeScript and Clojure Nix packages.
 

@@ -1,16 +1,16 @@
 # Rust guide
 
-[leanfran](../README.md) · [Rust quick start](../Rust/README.md)
+[leanfran](../README.md) · [Rust quick start](../langs/Rust/README.md)
 
-Commands and source paths below are relative to `Rust/`.
+Commands and source paths below are relative to `langs/Rust/`.
 
 ## Installation
 
-See the [Rust quick start](../Rust/README.md) for installation.
+See the [Rust quick start](../langs/Rust/README.md) for installation.
 
 ## Quick start: `lean!`
 
-Install the [Rust dependencies](../Rust/README.md#install) before adding a block.
+Install the [Rust dependencies](../langs/Rust/README.md#install) before adding a block.
 
 ```rust
 // build.rs
@@ -335,22 +335,22 @@ runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `leanfran
 
 ## Samples
 
-[`samples/steps/`](../Rust/samples/steps) introduces the features one crate at a time, in 17 steps from a
-first `lean!` block to a generic verified function. [`samples/`](../Rust/samples) also has `todo-cli`
+[`samples/steps/`](../langs/Rust/samples/steps) introduces the features one crate at a time, in 17 steps from a
+first `lean!` block to a generic verified function. [`samples/`](../langs/Rust/samples) also has `todo-cli`
 and `word-count` (`lean!`), `roman-numerals` (a lake project with committed generated modules),
 and `verified-rust`, `sorted-search`, `inventory` and `generic-search` (Rust functions verified
 in Lean, the last one generic).
 
 ## Development
 
-Inside `nix develop ..#rust` (elan, Rust, cargo-nextest):
+Inside `nix develop ../..#rust` (elan, Rust, cargo-nextest):
 
 ```
 make check
 ```
 
-runs the format check, clippy, the diff tests against Lean's C backend (`../maint/Rust/test-diff.sh`), the
-public API tests (`../maint/Rust/test-public.sh`), the runtime and build tests, the `lean!` tests
+runs the format check, clippy, the diff tests against Lean's C backend (`../../maint/Rust/test-diff.sh`), the
+public API tests (`../../maint/Rust/test-public.sh`), the runtime and build tests, the `lean!` tests
 (`tests/embed`), the tests of `tests/verify` and the samples, and builds the runtime for
 `wasm32-unknown-unknown` and runs `tests/wasm` in node, all without Charon or Mathlib.
 

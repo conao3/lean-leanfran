@@ -2,7 +2,7 @@
 # Diff-test: run LeanPythonTest.Vectors.report and LeanPythonTest.Io.run on the native C
 # backend and on the generated Python, and compare stdout and stderr.
 set -euo pipefail
-cd "$(dirname "$0")/../../Python"
+cd "$(dirname "$0")/../../langs/Python"
 ulimit -s 65536
 export LEAN_BACKTRACE=0
 export LEANFRAN_PYTHON_TEST_VAR=from-the-environment

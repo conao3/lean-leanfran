@@ -24,7 +24,7 @@
           ...
         }:
         let
-          version = (builtins.fromTOML (builtins.readFile ./Rust/Cargo.toml)).workspace.package.version;
+          version = (builtins.fromTOML (builtins.readFile ./langs/Rust/Cargo.toml)).workspace.package.version;
           nodejs = pkgs.nodejs_26;
           pnpm = pkgs.pnpm.override { nodejs-slim = pkgs.nodejs-slim_26; };
           jdk = pkgs.jdk25;
@@ -66,14 +66,14 @@
                 root = ./.;
                 fileset = pkgs.lib.fileset.unions [
                   ./lean-toolchain
-                  (./. + "/${backend}/lakefile.toml")
-                  (./. + "/${backend}/lake-manifest.json")
-                  (./. + "/${backend}/Main.lean")
-                  (./. + "/${backend}/${library}.lean")
-                  (./. + "/${backend}/${library}")
+                  (./. + "/langs/${backend}/lakefile.toml")
+                  (./. + "/langs/${backend}/lake-manifest.json")
+                  (./. + "/langs/${backend}/Main.lean")
+                  (./. + "/langs/${backend}/${library}.lean")
+                  (./. + "/langs/${backend}/${library}")
                 ];
               };
-              postUnpack = ''sourceRoot="$sourceRoot/${backend}"'';
+              postUnpack = ''sourceRoot="$sourceRoot/langs/${backend}"'';
               nativeBuildInputs = [
                 pkgs.lean4
                 pkgs.makeWrapper
@@ -143,16 +143,16 @@
                 root = ./.;
                 fileset = pkgs.lib.fileset.unions [
                   ./LICENSE
-                  ./Rust/Cargo.toml
-                  ./Rust/Cargo.lock
-                  ./Rust/README.md
-                  ./Rust/crates
-                  ./Rust/tests
-                  ./Rust/samples
+                  ./langs/Rust/Cargo.toml
+                  ./langs/Rust/Cargo.lock
+                  ./langs/Rust/README.md
+                  ./langs/Rust/crates
+                  ./langs/Rust/tests
+                  ./langs/Rust/samples
                 ];
               };
-              postUnpack = ''sourceRoot="$sourceRoot/Rust"'';
-              cargoLock.lockFile = ./Rust/Cargo.lock;
+              postUnpack = ''sourceRoot="$sourceRoot/langs/Rust"'';
+              cargoLock.lockFile = ./langs/Rust/Cargo.lock;
               cargoBuildFlags = [
                 "-p"
                 "cargo-leanfran"
@@ -190,12 +190,12 @@
             programs.ruff-check.enable = true;
             programs.ruff-format.enable = true;
             settings.formatter.ruff-check.excludes = [
-              "Python/test-out/*"
-              "Python/samples/**/_lean/*"
+              "langs/Python/test-out/*"
+              "langs/Python/samples/**/_lean/*"
             ];
             settings.formatter.ruff-format.excludes = [
-              "Python/test-out/*"
-              "Python/samples/**/_lean/*"
+              "langs/Python/test-out/*"
+              "langs/Python/samples/**/_lean/*"
             ];
           };
         };

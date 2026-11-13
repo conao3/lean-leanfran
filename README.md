@@ -45,10 +45,10 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 
 | Language   | Start here                                     | Package                                                                               | Integration                                    |
 | ---------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Rust       | [Rust quick start](Rust/README.md)             | [leanfran on crates.io](https://crates.io/crates/leanfran)                            | `lean!`, Rust types, Cargo build integration   |
-| Python     | [Python quick start](Python/README.md)         | [leanfran on PyPI](https://pypi.org/project/leanfran/)                                | `lean(...)`, pydantic models, Python modules   |
-| TypeScript | [TypeScript quick start](TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
-| Clojure    | [Clojure quick start](Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
+| Rust       | [Rust quick start](langs/Rust/README.md)             | [leanfran on crates.io](https://crates.io/crates/leanfran)                            | `lean!`, Rust types, Cargo build integration   |
+| Python     | [Python quick start](langs/Python/README.md)         | [leanfran on PyPI](https://pypi.org/project/leanfran/)                                | `lean(...)`, pydantic models, Python modules   |
+| TypeScript | [TypeScript quick start](langs/TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
+| Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
 
 ## What you can build
 
@@ -72,14 +72,14 @@ Use `#rust`, `#typescript` or `#clojure` for the other targets. The Rust package
 
 | Language   | Quick start                                   | Full guide                                                | Examples                                           |
 | ---------- | --------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- |
-| Rust       | [Setup and first block](Rust/README.md)       | [Types, verification and CLI](docs/rust-guide.md)         | [Rust samples](Rust/samples/README.md)             |
-| Python     | [Setup and first block](Python/README.md)     | [Models, verification and CLI](docs/python-guide.md)      | [Python samples](Python/samples/README.md)         |
-| TypeScript | [Setup and first block](TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](TypeScript/samples/README.md) |
-| Clojure    | [Setup and first block](Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](Clojure/samples/README.md)       |
+| Rust       | [Setup and first block](langs/Rust/README.md)       | [Types, verification and CLI](docs/rust-guide.md)         | [Rust samples](langs/Rust/samples/README.md)             |
+| Python     | [Setup and first block](langs/Python/README.md)     | [Models, verification and CLI](docs/python-guide.md)      | [Python samples](langs/Python/samples/README.md)         |
+| TypeScript | [Setup and first block](langs/TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](langs/TypeScript/samples/README.md) |
+| Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
 
 ## Development
 
-The repository has one Nix environment and Lean toolchain, with language-specific source and packages in `Rust/`, `Python/`, `TypeScript/` and `Clojure/`.
+The repository has one Nix environment and Lean toolchain, with language-specific source and packages in `langs/Rust/`, `langs/Python/`, `langs/TypeScript/` and `langs/Clojure/`.
 
 ```sh
 nix develop

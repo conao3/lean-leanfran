@@ -21,7 +21,7 @@ lint:
 
 .PHONY: test
 test: build
-	../maint/Clojure/test-diff.sh
+	../../maint/Clojure/test-diff.sh
 	PATH="$(CURDIR)/.lake/build/bin:$$PATH" clojure -M:test
 	$(MAKE) -C samples test
 

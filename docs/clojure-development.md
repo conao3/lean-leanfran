@@ -1,9 +1,9 @@
 # Clojure development
 
 leanfran compiles Lean 4 IR to Clojure (`LeanClj/`, `Main.lean`) and embeds Lean
-in Clojure (`src/leanfran/core.clj`). See the [backend README](../Clojure/README.md) for usage.
+in Clojure (`src/leanfran/core.clj`). See the [backend README](../langs/Clojure/README.md) for usage.
 
-Paths in this guide are relative to `Clojure/`.
+Paths in this guide are relative to `langs/Clojure/`.
 
 ## Layout
 
@@ -22,7 +22,7 @@ Paths in this guide are relative to `Clojure/`.
 
 ## Conventions
 
-- The root `../lean-toolchain` matches nixpkgs-unstable's `lean4`.
+- The root `../../lean-toolchain` matches nixpkgs-unstable's `lean4`.
 - When a generated namespace reports missing runtime symbols, find the extern
   in the Lean sources (`grep -rn 'extern "<symbol>"'` under the toolchain's
   `src/lean`) and implement it with the same argument order, dropping erased
@@ -33,5 +33,5 @@ Paths in this guide are relative to `Clojure/`.
 ## Verification
 
 ```
-nix develop ..#clojure --command make check
+nix develop ../..#clojure --command make check
 ```

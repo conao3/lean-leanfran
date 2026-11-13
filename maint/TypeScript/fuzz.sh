@@ -4,9 +4,9 @@
 # (test/difftest/fuzz.mjs). Both consumers read the IDENTICAL input file, so a
 # failure reproduces from the seed alone. A fixed edge block is always prepended
 # (numeric wrap, large Nats, multibyte strings, empty/large lists).
-# Usage: ../maint/TypeScript/fuzz.sh [SEED] [N]
+# Usage: ../../maint/TypeScript/fuzz.sh [SEED] [N]
 set -euo pipefail
-cd "$(dirname "$0")/../../TypeScript"
+cd "$(dirname "$0")/../../langs/TypeScript"
 SEED="${1:-1}"
 N="${2:-2000}"
 lake build leanfran-typescript LeanTsTest oracle-fuzz
@@ -23,7 +23,7 @@ node test/difftest/fuzz.mjs < "$IN" > test-out/fuzz.node.out
 if diff -q test-out/fuzz.oracle.out test-out/fuzz.node.out >/dev/null; then
   echo "FUZZ PASS (seed=$SEED N=$N, $(wc -l < "$IN" | tr -d ' ') vectors)"
 else
-  echo "FUZZ FAIL (seed=$SEED) -- reproduce with: ../maint/TypeScript/fuzz.sh $SEED $N"
+  echo "FUZZ FAIL (seed=$SEED) -- reproduce with: ../../maint/TypeScript/fuzz.sh $SEED $N"
   echo "--- first divergences ---"
   diff test-out/fuzz.oracle.out test-out/fuzz.node.out | head -20
   L=$(diff test-out/fuzz.oracle.out test-out/fuzz.node.out | grep -oE '^[0-9]+' | head -1)

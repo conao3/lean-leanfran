@@ -1,9 +1,9 @@
 # Python development
 
 leanfran compiles Lean 4 IR to Python (`LeanPython/`, `Main.lean`), exposes Lean types as pydantic
-models, and embeds Lean in Python (`src/leanfran/embed.py`, `sync.py`). See the [backend README](../Python/README.md) for usage.
+models, and embeds Lean in Python (`src/leanfran/embed.py`, `sync.py`). See the [backend README](../langs/Python/README.md) for usage.
 
-Paths in this guide are relative to `Python/`.
+Paths in this guide are relative to `langs/Python/`.
 
 ## Layout
 
@@ -23,7 +23,7 @@ Paths in this guide are relative to `Python/`.
 
 ## Conventions
 
-- The root `../lean-toolchain` matches nixpkgs-unstable's `lean4`.
+- The root `../../lean-toolchain` matches nixpkgs-unstable's `lean4`.
 - When the CLI reports externs not in the runtime, find the extern in the Lean sources
   (`grep -rn 'extern "<symbol>"'` under the toolchain's `src/lean`), implement it following `lean.h`
   (same argument order, erased arguments dropped; never consume a borrowed argument; `inc` values
@@ -37,5 +37,5 @@ Paths in this guide are relative to `Python/`.
 ## Verification
 
 ```
-nix develop ..#python --command make check
+nix develop ../..#python --command make check
 ```
