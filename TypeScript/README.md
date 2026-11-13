@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/leanfran"><img src="https://img.shields.io/npm/v/leanfran" alt="npm version"></a>
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
-  <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/conao3/lean-leanfran/blob/master/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
   <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/package.json"><img src="https://img.shields.io/badge/Node-%3E%3D22.18-blue" alt="Node >=22.18"></a>
   <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-blue" alt="Lean v4.35.0"></a>
   <a href="https://github.com/conao3/lean-leanfran/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-leanfran?style=flat" alt="GitHub stars"></a>
@@ -665,4 +665,4 @@ trade an honest hard error for a silent divergence:
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](https://github.com/conao3/lean-leanfran/blob/master/LICENSE).

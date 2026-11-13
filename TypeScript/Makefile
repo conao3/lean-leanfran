@@ -10,6 +10,7 @@ build: install
 
 pack: install
 	vp pack
+	cp ../LICENSE dist/LICENSE
 
 gen-externs: install
 	node scripts/gen-externs.ts > LeanTs/RuntimeExterns.lean.tmp

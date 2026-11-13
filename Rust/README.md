@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://crates.io/crates/leanfran"><img src="https://img.shields.io/crates/v/leanfran" alt="crates.io"></a>
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/conao3/lean-leanfran/blob/master/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
   <a href="lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-blue" alt="Lean v4.35.0"></a>
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-1.88%2B-orange" alt="Rust 1.88+"></a>
   <a href="https://github.com/conao3/lean-leanfran/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-leanfran?style=flat" alt="GitHub stars"></a>

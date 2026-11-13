@@ -1,8 +1,0 @@
-/result
-/.lake/
-/test-out/
-/.claude-dev/
-**/.leanfran/
-__pycache__/
-/.venv/
-/dist/
