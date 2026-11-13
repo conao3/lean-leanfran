@@ -2,7 +2,7 @@
 //! function.
 
 pub mod spec {
-    lean_rust::lean! {
+    leanfran::lean! {
         #[lean(imports = ["Aeneas"])]
         pub mod calendar;
         r#"
@@ -18,7 +18,7 @@ pub mod spec {
 use spec::calendar;
 
 /// Whether `year` is a leap year, testing the most frequent case first.
-#[lean_rust::model(refines = calendar::leap)]
+#[leanfran::model(refines = calendar::leap)]
 pub fn is_leap(year: u32) -> bool {
     if !year.is_multiple_of(4) {
         false

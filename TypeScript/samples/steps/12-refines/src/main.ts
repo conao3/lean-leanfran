@@ -1,4 +1,4 @@
-import { checkModel } from "lean-ts/verify"
+import { checkModel } from "leanfran/verify"
 import { calendar, isLeap } from "./calendar.ts"
 
 console.log([1900, 2000, 2024, 2026].map((y) => isLeap(y)).join(" "))

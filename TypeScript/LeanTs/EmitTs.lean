@@ -1,10 +1,10 @@
 import Lean.Compiler.IR
 import Lean.Compiler.CSimpAttr
 
-/-! # lean-ts: a Lean IR -> TypeScript backend, mirroring EmitC.
+/-! # leanfran: a Lean IR -> TypeScript backend, mirroring EmitC.
 
 We obtain IR `Decl`s via `Lean.IR.findEnvDecl`, then walk `FnBody`/`Expr`
-and emit a typed TypeScript module that calls the runtime (`lean-ts/runtime`)
+and emit a typed TypeScript module that calls the runtime (`leanfran/runtime`)
 through the namespace import `L`. Reference-counting nodes (inc/dec/reset/
 reuse/isShared) call the runtime's reference counts, so an exclusive array or
 constructor is updated in place as in EmitC; `del` emits nothing. -/

@@ -1,12 +1,12 @@
 # 10-ensures
 
-From here on, the functions are written in Rust and verified in Lean. `#[lean_rust::model]`
-names the specs; `cargo lean-rust extract` translates the function to Lean with Charon and
+From here on, the functions are written in Rust and verified in Lean. `#[leanfran::model]`
+names the specs; `cargo leanfran extract` translates the function to Lean with Charon and
 Aeneas and states one obligation per spec; the proofs in [`lean/Proofs/`](lean/Proofs) prove
-them; `cargo lean-rust check` records the states in [`lean-rust.lock`](lean-rust.lock).
+them; `cargo leanfran check` records the states in [`leanfran.lock`](leanfran.lock).
 
 ```rust
-#[lean_rust::model(ensures(ge = double::ge))]
+#[leanfran::model(ensures(ge = double::ge))]
 pub fn saturating_double(x: u32) -> u32 {
     if x > u32::MAX / 2 { u32::MAX } else { x * 2 }
 }
@@ -27,7 +27,7 @@ tests the function against the spec with proptest.
 
 ```
 make test      # the tests, from the committed caches (no Lean, Charon or Aeneas)
-make verify    # cargo lean-rust extract and check again (Charon, Aeneas, Mathlib)
+make verify    # cargo leanfran extract and check again (Charon, Aeneas, Mathlib)
 ```
 
 Next: [11-prop-specs](../11-prop-specs).

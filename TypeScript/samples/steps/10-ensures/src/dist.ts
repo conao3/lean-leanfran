@@ -1,5 +1,5 @@
-import { lean } from "lean-ts"
-import { model } from "lean-ts/verify"
+import { lean } from "leanfran"
+import { model } from "leanfran/verify"
 import * as spec from "./_lean/dist.ts"
 
 export const block = lean(

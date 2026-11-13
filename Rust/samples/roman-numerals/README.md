@@ -14,7 +14,7 @@ theorem roundtrip : ∀ n, n < 1000 → fromRoman (toRoman n) = if n = 0 then no
   decide +kernel
 ```
 
-`lean-rust project generate` turns the module into the Rust module
+`leanfran project generate` turns the module into the Rust module
 [`src/generated/roman.rs`](src/generated/roman.rs) and [`src/generated/mod.rs`](src/generated/mod.rs),
 which are committed. The crate builds with cargo alone; no Lean is needed:
 
@@ -50,7 +50,7 @@ make generate
 It runs
 
 ```
-lean-rust project generate --lake-dir lean --output-dir src/generated
+leanfran project generate --lake-dir lean --output-dir src/generated
 ```
 
 which checks the proofs with `lake build` and writes a Rust module per Lean module. `make test`

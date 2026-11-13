@@ -3,7 +3,7 @@
 A generic function is proved once for every type, and tested with the types of `instances`.
 
 ```rust
-#[lean_rust::model(instances = [u32, i64], requires = range::ordered, ensures(within = range::within))]
+#[leanfran::model(instances = [u32, i64], requires = range::ordered, ensures(within = range::within))]
 pub fn clamp<T: Ord + Copy>(x: T, lo: T, hi: T) -> T { .. }
 ```
 

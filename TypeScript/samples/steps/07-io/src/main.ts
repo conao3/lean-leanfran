@@ -1,10 +1,10 @@
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { LeanIOError } from "lean-ts/runtime"
+import { LeanIOError } from "leanfran/runtime"
 import { m } from "./code.ts"
 
-const dir = mkdtempSync(join(tmpdir(), "lean-ts-step-07-"))
+const dir = mkdtempSync(join(tmpdir(), "leanfran-step-07-"))
 const f = join(dir, "log.txt")
 writeFileSync(f, "one\ntwo\n")
 m.appendLine(f, "three")

@@ -1,4 +1,4 @@
-import { checkModel } from "lean-ts/verify"
+import { checkModel } from "leanfran/verify"
 import type { Item } from "./_lean/stock.ts"
 import { discard, restock, total } from "./stock.ts"
 

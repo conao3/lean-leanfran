@@ -4,13 +4,13 @@ open Lean LeanClj
 
 def version : String := "0.5.0"
 
-def usage : String := "usage: lean-clj [--version] <command> <subcommand> [parameters]
+def usage : String := "usage: leanfran [--version] <command> <subcommand> [parameters]
 
 commands:
   module generate-namespace  Emit a Clojure namespace for functions of a Lean module
   project generate           Build a lake project and emit a namespace for each of its modules
 
-lean-clj module generate-namespace
+leanfran module generate-namespace
   --module-name <Name>        Lean module to import (required)
   --namespace <ns>            Clojure namespace of the output (required)
   --roots <Name> ...          Functions to export (default: the module's public definitions)
@@ -21,7 +21,7 @@ lean-clj module generate-namespace
                               Omit the `ns` form (used by deflean)
   --output json|text          Format of the summary printed when --output-file is given
 
-lean-clj project generate
+leanfran project generate
   --lake-dir <dir>            Directory of the lake project (required)
   --namespace-prefix <ns>     Prefix of the Clojure namespaces (required)
   --output-dir <dir>          Source directory to write the namespaces in (required)
@@ -104,7 +104,7 @@ def runGenerate (o : Opts) : IO UInt32 := do
   let explicit := !o.roots.isEmpty
   let roots := if explicit then o.roots else defaultRoots env mod
   let strip := o.strip.getD mod
-  let ctx : Core.Context := { fileName := "<lean-clj>", fileMap := default, maxHeartbeats := 0 }
+  let ctx : Core.Context := { fileName := "<leanfran>", fileMap := default, maxHeartbeats := 0 }
   let act : MetaM Output := do
     if explicit then generate roots strip
     else
@@ -116,7 +116,7 @@ def runGenerate (o : Opts) : IO UInt32 := do
           discard <| (publicSig r d.params).run {}
           ok := ok.push r
         catch e =>
-          IO.eprintln s!"lean-clj: skipped {r}: {← e.toMessageData.toString}"
+          IO.eprintln s!"leanfran: skipped {r}: {← e.toMessageData.toString}"
       generate ok strip
   let (out, _) ← (act.run' {}).toIO ctx { env }
   let body := renderForms out.forms
@@ -178,7 +178,7 @@ def runProject (o : Opts) : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 := do
   match args with
-  | ["--version"] => IO.println s!"lean-clj {version} (Lean {Lean.versionString})"; return 0
+  | ["--version"] => IO.println s!"leanfran {version} (Lean {Lean.versionString})"; return 0
   | [] | ["help"] | ["module", "help"] | ["module", "generate-namespace", "help"] =>
     IO.print usage; return 0
   | "project" :: "generate" :: rest =>

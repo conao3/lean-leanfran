@@ -1,9 +1,9 @@
 {
-  "name": "lean-ts-step-10-ensures",
+  "name": "leanfran-step-10-ensures",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../../..",
+    "leanfran": "link:../../..",
     "fast-check": "4.10.2"
   }
 }

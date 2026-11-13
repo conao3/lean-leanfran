@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as shapes from "./_lean/shapes.ts"
 
 export const block = lean(

@@ -1,7 +1,0 @@
-{
-  "src/calendar.ts:calendar": {
-    "fnv": "8e2e6ebc89cb11e3",
-    "output": "src/_lean/calendar__calendar.ts",
-    "sha256": "f194ed7a0344974a95d11f7036095fdb58c1061e0fb5fc72e223630955c7436b"
-  }
-}

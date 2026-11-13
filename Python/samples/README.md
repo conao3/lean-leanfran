@@ -1,7 +1,7 @@
 # Samples
 
 Each sample is a Python package with Lean blocks (`lean(...)`). `samples/run.sh <dir>` runs
-`lean-py sync` on it (checking the proofs and regenerating `<package>/_lean/`) and compares the
+`leanfran sync` on it (checking the proofs and regenerating `<package>/_lean/`) and compares the
 output of `python -m <package>` with `expected.txt`. `make samples` runs all of them and checks that
 the committed generated modules are up to date.
 

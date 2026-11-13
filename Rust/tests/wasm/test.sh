@@ -4,8 +4,8 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
-export LEAN_RUST_CLI="$root/.lake/build/bin/lean-rust"
-cargo build -q -p lean-rust-wasm-test --target wasm32-unknown-unknown --release
+export LEANFRAN_CLI="$root/.lake/build/bin/leanfran"
+cargo build -q -p leanfran-wasm-test --target wasm32-unknown-unknown --release
 node -e '
 const bytes = require("fs").readFileSync(process.argv[1]);
 WebAssembly.instantiate(bytes, {}).then(({ instance }) => {
@@ -16,4 +16,4 @@ WebAssembly.instantiate(bytes, {}).then(({ instance }) => {
   }
   console.log("wasm-test: generated code runs on wasm32-unknown-unknown");
 });
-' target/wasm32-unknown-unknown/release/lean_rust_wasm_test.wasm
+' target/wasm32-unknown-unknown/release/leanfran_wasm_test.wasm

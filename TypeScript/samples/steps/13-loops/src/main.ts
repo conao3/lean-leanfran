@@ -1,4 +1,4 @@
-import { checkModel } from "lean-ts/verify"
+import { checkModel } from "leanfran/verify"
 import { sumAbs, sumOdd } from "./sums.ts"
 
 console.log([0n, 1n, 2n, 3n, 10n].map((n) => sumOdd(n)).join(" "))

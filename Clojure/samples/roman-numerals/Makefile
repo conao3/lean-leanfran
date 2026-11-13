@@ -1,17 +1,17 @@
-LEAN_CLJ := ../../.lake/build/bin/lean-clj
+LEANFRAN_CLJ := ../../.lake/build/bin/leanfran
 
 .PHONY: all
 all: test
 
-.PHONY: lean-clj
-lean-clj:
+.PHONY: leanfran
+leanfran:
 	$(MAKE) -C ../.. build
 
 # Check the Lean library (proofs included) and regenerate src/roman/core.clj.
 .PHONY: generate
-generate: lean-clj
+generate: leanfran
 	cd lean && lake build
-	$(LEAN_CLJ) module generate-namespace --module-name Roman --namespace roman.core \
+	$(LEANFRAN_CLJ) module generate-namespace --module-name Roman --namespace roman.core \
 	  --search-path lean/.lake/build/lib/lean --output-file src/roman/core.clj --output text
 	cljstyle fix src/roman/core.clj
 

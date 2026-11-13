@@ -63,7 +63,7 @@ export type Obj =
 export type Bounce = { tc: 1; f: Fn; a: Obj[] } | { tc: 2; clo: Obj; a: Obj[] }
 
 function fail(what: string, x: unknown): never {
-  throw new TypeError(`lean-ts runtime: expected ${what}, got ${typeof x}`)
+  throw new TypeError(`leanfran runtime: expected ${what}, got ${typeof x}`)
 }
 
 export function lean_bool(b: boolean): number {
@@ -410,7 +410,7 @@ export function lean_thunk_get(x: Obj): Obj {
   const t = asThunk(x)
   if (t.forced) return t.result
   const c = t.closure
-  if (c === null) throw new TypeError("lean-ts runtime: a thunk forced itself")
+  if (c === null) throw new TypeError("leanfran runtime: a thunk forced itself")
   t.closure = null
   t.result = lean_trampoline(lean_apply(c, [0]))
   t.forced = true

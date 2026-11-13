@@ -1,4 +1,4 @@
-//! Modelled functions in each state of their proofs, for the tests of `cargo lean-rust`.
+//! Modelled functions in each state of their proofs, for the tests of `cargo leanfran`.
 
 pub mod arith;
 pub mod arrays;

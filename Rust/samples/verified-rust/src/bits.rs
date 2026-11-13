@@ -3,7 +3,7 @@
 use crate::spec::bits;
 
 /// The number of one bits of `x`, by clearing the lowest one bit until none is left.
-#[lean_rust::model(refines = bits::popcount)]
+#[leanfran::model(refines = bits::popcount)]
 pub fn popcount_fast(mut x: u64) -> u32 {
     let mut n = 0u32;
     'clear: while x != 0 {
@@ -14,7 +14,7 @@ pub fn popcount_fast(mut x: u64) -> u32 {
 }
 
 /// The larger of `a` and `b`.
-#[lean_rust::model(refines = bits::max, ensures(bound = bits::max_bound))]
+#[leanfran::model(refines = bits::max, ensures(bound = bits::max_bound))]
 pub fn max_u32(a: u32, b: u32) -> u32 {
     if a <= b {
         b

@@ -1,6 +1,6 @@
 //! Step 4: a Lean inductive type is a Rust enum.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Shapes, colours and a binary search tree.
     pub mod shapes;
     r#"
@@ -47,7 +47,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::shapes::{self, Color, Shape, Tree};
-    use lean_rust::Nat;
+    use leanfran::Nat;
 
     fn n(x: u64) -> Nat {
         Nat::from(x)

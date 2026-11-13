@@ -1,20 +1,20 @@
-//! Step 15: the crate's structs and enums in specs (`derive(lean_rust::Model)`).
+//! Step 15: the crate's structs and enums in specs (`derive(leanfran::Model)`).
 
 /// A counter that stops at `max`.
-#[derive(Clone, Debug, PartialEq, Eq, lean_rust::Model)]
+#[derive(Clone, Debug, PartialEq, Eq, leanfran::Model)]
 pub struct Counter {
     pub count: u32,
     pub max: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, lean_rust::Model)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, leanfran::Model)]
 pub enum Action {
     Add(u32),
     Reset,
 }
 
 pub mod spec {
-    lean_rust::lean! {
+    leanfran::lean! {
         #[lean(imports = ["Aeneas", "LeanRustGen.Model.step_15_structs_enums.Types"])]
         pub mod counter;
         r#"
@@ -33,7 +33,7 @@ pub mod spec {
 use spec::counter;
 
 /// The counter after the action: adding stops at `max`.
-#[lean_rust::model(refines = counter::apply, requires = counter::within, strategy = crate::inputs)]
+#[leanfran::model(refines = counter::apply, requires = counter::within, strategy = crate::inputs)]
 pub fn apply(c: Counter, a: Action) -> Counter {
     match a {
         Action::Add(n) => {
@@ -49,8 +49,8 @@ pub fn apply(c: Counter, a: Action) -> Counter {
 }
 
 #[cfg(test)]
-fn inputs() -> impl lean_rust::check::proptest::strategy::Strategy<Value = (Counter, Action)> {
-    use lean_rust::check::proptest::prelude::*;
+fn inputs() -> impl leanfran::check::proptest::strategy::Strategy<Value = (Counter, Action)> {
+    use leanfran::check::proptest::prelude::*;
     let counter = (any::<u32>(), any::<u32>()).prop_map(|(a, b)| Counter {
         count: a.min(b),
         max: a.max(b),

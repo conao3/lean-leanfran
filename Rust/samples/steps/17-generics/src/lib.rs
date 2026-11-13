@@ -1,7 +1,7 @@
 //! Step 17: a generic function, proved once for every `Ord` type and tested with `instances`.
 
 pub mod spec {
-    lean_rust::lean! {
+    leanfran::lean! {
         #[lean(imports = ["Aeneas"])]
         pub mod range;
         r#"
@@ -21,7 +21,7 @@ pub mod spec {
 use spec::range;
 
 /// `x` moved into `lo..=hi`.
-#[lean_rust::model(instances = [u32, i64], requires = range::ordered, ensures(within = range::within))]
+#[leanfran::model(instances = [u32, i64], requires = range::ordered, ensures(within = range::within))]
 pub fn clamp<T: Ord + Copy>(x: T, lo: T, hi: T) -> T {
     if x < lo {
         lo

@@ -1,7 +1,0 @@
-{
-  "src/code.ts:bank": {
-    "fnv": "823b99c03b842ede",
-    "output": "src/_lean/code__bank.ts",
-    "sha256": "718f4fc5fef53ed80d5ae167b214b89676f96ba79cee0408ac9490a8cb81280d"
-  }
-}

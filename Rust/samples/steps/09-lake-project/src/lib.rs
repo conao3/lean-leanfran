@@ -8,7 +8,7 @@ pub use generated::{stats_mean, stats_median};
 #[cfg(test)]
 mod tests {
     use super::{stats_mean, stats_median};
-    use lean_rust::Nat;
+    use leanfran::Nat;
 
     fn ns(xs: &[u64]) -> Vec<Nat> {
         xs.iter().map(|&x| Nat::from(x)).collect()

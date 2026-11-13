@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="$root/test-out/verify"
-cli="$root/.lake/build/bin/lean-typescript"
+cli="$root/.lake/build/bin/leanfran-typescript"
 lts=(node "$root/src/cli.ts")
 
 fail() {
@@ -17,7 +17,7 @@ scene() {
   mkdir -p "$out"
   cp -r "$from" "$out/$name"
   mkdir -p "$out/$name/node_modules"
-  ln -sfn ../../../.. "$out/$name/node_modules/lean-ts"
+  ln -sfn ../../../.. "$out/$name/node_modules/leanfran"
   ln -sfn ../../../../node_modules/zod "$out/$name/node_modules/zod"
 }
 
@@ -38,9 +38,9 @@ axioms src/calc.ts:twice refines
 proved src/calc.ts:addOne refines"
 
 scene base "$root/test/verify/app"
-rm -rf "$out/base/node_modules/lean-ts" "$out/base/src/_lean" "$out/base/.lean-ts" "$out/base/lean-ts.lock"
-ln -sfn ../../../.. "$out/base/node_modules/lean-ts"
-rows="$(cd "$out/base" && "${lts[@]}" check --package . --lean-typescript "$cli")"
+rm -rf "$out/base/node_modules/leanfran" "$out/base/src/_lean" "$out/base/.leanfran" "$out/base/leanfran.lock"
+ln -sfn ../../../.. "$out/base/node_modules/leanfran"
+rows="$(cd "$out/base" && "${lts[@]}" check --package . --leanfran-typescript "$cli")"
 expect_rows "$rows" "$base_rows" "check"
 more_rows="missing src/more.ts:manhattan refines
 proved src/more.ts:area refines
@@ -63,11 +63,11 @@ missing src/orders.ts:hasNote refines"
 diff <(printf '%s\n' "$orders_rows") <(printf '%s\n' "$rows" | grep ' src/orders.ts:' | sed -E 's/ +/ /') || fail "check: unexpected states of orders.ts (the zod constraint qty >= 1 is an assumption of quantity)"
 got="$(cd "$out/base" && node --input-type=module -e 'const s = await import("./src/_lean/more.ts"); console.log(String(s.area({ ctor: "rect", w: 3n, h: 4n })), String(s.code("blue")), s.swap([1n, 2n]).map(String).join(","))')"
 [[ "$got" == '12 3 2,1' ]] || fail "the specs of more.ts through the TypeScript functions printed: $got"
-[[ -f "$out/base/lean-ts.lock" ]] || fail "check did not write lean-ts.lock"
-grep -q '"spec_hash"' "$out/base/lean-ts.lock" || fail "the lock has no spec_hash"
+[[ -f "$out/base/leanfran.lock" ]] || fail "check did not write leanfran.lock"
+grep -q '"spec_hash"' "$out/base/leanfran.lock" || fail "the lock has no spec_hash"
 
 set +e
-(cd "$out/base" && "${lts[@]}" check --package . --lean-typescript "$cli" --require proved >/dev/null 2>&1)
+(cd "$out/base" && "${lts[@]}" check --package . --leanfran-typescript "$cli" --require proved >/dev/null 2>&1)
 code=$?
 set -e
 [[ $code -eq 254 ]] || fail "check --require proved exited with $code, expected 254"
@@ -84,9 +84,9 @@ got="$(cd "$out/base" && node --input-type=module -e 'const s = await import("./
 
 scene csimp-off "$out/base"
 sed -i 's/^  simp \[addOne, LeanTsEmbed.calc.spec.succ\]$/  sorry/' "$out/csimp-off/lean/Proofs/Calc.lean"
-(cd "$out/csimp-off" && "${lts[@]}" check --package . --lean-typescript "$cli" >/dev/null 2>&1)
+(cd "$out/csimp-off" && "${lts[@]}" check --package . --leanfran-typescript "$cli" >/dev/null 2>&1)
 grep -q '$s0.addOne(' "$out/csimp-off/src/_lean/calc__spec.ts" && fail "a sorry refines still replaced the specification"
-grep -q '"sorry"' "$out/csimp-off/lean-ts.lock" || fail "the lock of csimp-off has no sorry"
+grep -q '"sorry"' "$out/csimp-off/leanfran.lock" || fail "the lock of csimp-off has no sorry"
 
 scene stale "$out/base"
 sed -i 's/  if (x > hi) return hi/  if (x >= hi) return hi/' "$out/stale/src/calc.ts"
@@ -120,7 +120,7 @@ theorem LeanTsModel.calc.sumTo.proof.returnsNat : LeanTsModel.calc.sumTo.obligat
   intro n
   rfl
 EOF
-rows="$(cd "$out/wrong-proof" && "${lts[@]}" check --package . --lean-typescript "$cli" 2>/dev/null)"
+rows="$(cd "$out/wrong-proof" && "${lts[@]}" check --package . --leanfran-typescript "$cli" 2>/dev/null)"
 expect_rows "$rows" "proved src/calc.ts:clamp refines
 proved src/calc.ts:clamp inRange
 mismatch src/calc.ts:firstOr refines
@@ -140,7 +140,7 @@ export function loose(x: number): boolean {
 model(loose, { ensures: { nonneg: spec.nonneg } })
 EOF
 set +e
-msg="$(cd "$out/outside" && "${lts[@]}" check --package . --lean-typescript "$cli" 2>&1 >/dev/null)"
+msg="$(cd "$out/outside" && "${lts[@]}" check --package . --leanfran-typescript "$cli" 2>&1 >/dev/null)"
 code=$?
 set -e
 [[ $code -eq 254 ]] || fail "check of a function outside the subset exited with $code, expected 254"
@@ -148,7 +148,7 @@ grep -q 'src/calc.ts:[0-9]*:[0-9]*: loose: == is outside the subset' <<<"$msg" |
 
 scene wrong-impl "$out/base"
 cat >"$out/wrong-impl/wrong.ts" <<'EOF'
-import { checkModel, model, PropertyFailure } from "lean-ts/verify"
+import { checkModel, model, PropertyFailure } from "leanfran/verify"
 import * as spec from "./src/_lean/calc.ts"
 
 function badClamp(x: number, lo: number, _hi: number): number {

@@ -21,7 +21,7 @@ jobs:
       id-token: write
     environment:
       name: crates.io
-      url: https://crates.io/crates/lean-rust
+      url: https://crates.io/crates/leanfran
     defaults:
       run:
         working-directory: Rust
@@ -35,7 +35,7 @@ jobs:
         id: auth
       - run: |
           version="${TAG#v}"
-          for crate in lean-rust-runtime lean-rust-build lean-rust-macros lean-rust cargo-lean-rust; do
+          for crate in leanfran-runtime leanfran-build leanfran-macros leanfran cargo-leanfran; do
             if curl -sf -A "lean-leanfran publish (github.com/conao3/lean-leanfran)" "https://crates.io/api/v1/crates/$crate/$version" > /dev/null; then
               echo "$crate $version is already on crates.io"
             else
@@ -47,7 +47,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
   python:
-    name: Publish lean-python to PyPI
+    name: Publish leanfran to PyPI
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -55,7 +55,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/project/lean-python/
+      url: https://pypi.org/project/leanfran/
     defaults:
       run:
         working-directory: Python
@@ -74,7 +74,7 @@ jobs:
           skip-existing: true
 
   typescript:
-    name: Publish lean-ts to npm
+    name: Publish leanfran to npm
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -82,7 +82,7 @@ jobs:
       id-token: write
     environment:
       name: npm
-      url: https://www.npmjs.com/package/lean-ts
+      url: https://www.npmjs.com/package/leanfran
     defaults:
       run:
         working-directory: TypeScript
@@ -96,8 +96,8 @@ jobs:
           TAG: ${{ inputs.tag }}
       - run: |
           version="${TAG#v}"
-          if curl -sf "https://registry.npmjs.org/lean-ts/$version" > /dev/null; then
-            echo "lean-ts $version is already on npm"
+          if curl -sf "https://registry.npmjs.org/leanfran/$version" > /dev/null; then
+            echo "leanfran $version is already on npm"
           else
             nix develop -c make pack
             nix develop -c npm publish --provenance
@@ -106,7 +106,7 @@ jobs:
           TAG: ${{ inputs.tag }}
 
   clojure:
-    name: Deploy lean-clj to Clojars
+    name: Deploy leanfran to Clojars
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: clojars
@@ -123,8 +123,8 @@ jobs:
           TAG: ${{ inputs.tag }}
       - run: |
           version="${TAG#v}"
-          if curl -sf "https://repo.clojars.org/io/github/conao3/lean-clj/$version/lean-clj-$version.pom" > /dev/null; then
-            echo "io.github.conao3/lean-clj $version is already on Clojars"
+          if curl -sf "https://repo.clojars.org/io/github/conao3/leanfran/$version/leanfran-$version.pom" > /dev/null; then
+            echo "io.github.conao3/leanfran $version is already on Clojars"
           else
             nix develop --command make deploy
           fi

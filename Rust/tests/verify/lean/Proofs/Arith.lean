@@ -1,7 +1,7 @@
-import LeanRustGen.Obligation.lean_rust_verify_test.arith
+import LeanRustGen.Obligation.leanfran_verify_test.arith
 open Aeneas Aeneas.Std Result
 
-namespace lean_rust_verify_test.arith
+namespace leanfran_verify_test.arith
 
 theorem bigger.proof.refines : bigger.obligation.refines := by
   intro a b
@@ -13,4 +13,4 @@ theorem double.proof.refines : double.obligation.refines := by
 
 theorem succ.proof.pos : True := trivial
 
-end lean_rust_verify_test.arith
+end leanfran_verify_test.arith

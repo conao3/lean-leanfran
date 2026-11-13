@@ -1,11 +1,11 @@
 import Lean
 import LeanRust.RuntimeExterns
 
-/-! # lean-rs: a Lean IR -> Rust backend
+/-! # leanfran: a Lean IR -> Rust backend
 
 IR `Decl`s are read from the environment with `Lean.IR.findEnvDecl`, collected
 transitively from a set of root functions, and emitted as Rust functions that
-call into the hand-written runtime `lean-rust-runtime`. The emitted code follows
+call into the hand-written runtime `leanfran-runtime`. The emitted code follows
 the C backend (`Lean.Compiler.LCNF.EmitC`): reference counting, `reset`/`reuse`
 and `isShared` run as in C, so the in-place updates of the C backend happen in
 the same places. `goto` is replaced by a state machine over the join points. -/

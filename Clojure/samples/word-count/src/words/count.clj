@@ -1,7 +1,7 @@
 (ns words.count
   "Word frequencies, written in Lean."
   (:require
-    [lean-clj.core :refer [deflean]]))
+    [leanfran.core :refer [deflean]]))
 
 
 (deflean count

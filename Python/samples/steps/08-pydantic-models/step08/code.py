@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from lean_python import lean
+from leanfran import lean
 
 
 class Account(BaseModel):

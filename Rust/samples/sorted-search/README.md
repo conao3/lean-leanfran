@@ -19,5 +19,5 @@ The tests draw sorted slices from `strategy = crate::search::sorted_input`.
 
 ```
 make test      # the tests, from the committed caches (no Lean)
-make verify    # cargo lean-rust extract and check again (Charon, Aeneas, Mathlib)
+make verify    # cargo leanfran extract and check again (Charon, Aeneas, Mathlib)
 ```

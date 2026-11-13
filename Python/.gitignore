@@ -2,7 +2,7 @@
 /.lake/
 /test-out/
 /.claude-dev/
-**/.lean-python/
+**/.leanfran/
 __pycache__/
 /.venv/
 /dist/

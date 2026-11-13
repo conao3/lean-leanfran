@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/conao3/lean-leanfran/master/Python/docs/assets/banner.png" alt="lean-py: write and prove functions in Lean 4, run them as Python" width="880">
+  <img src="https://raw.githubusercontent.com/conao3/lean-leanfran/master/Python/docs/assets/banner.png" alt="leanfran: write and prove functions in Lean 4, run them as Python" width="880">
 </p>
 
 <p align="center"><strong>Write and prove functions in Lean 4, run them as Python</strong></p>
 
 <p align="center">
-  <a href="https://pypi.org/project/lean-python/"><img src="https://img.shields.io/pypi/v/lean-python" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/leanfran/"><img src="https://img.shields.io/pypi/v/leanfran" alt="PyPI version"></a>
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="https://github.com/conao3/lean-leanfran/blob/master/Python/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
   <a href="https://github.com/conao3/lean-leanfran/blob/master/Python/pyproject.toml"><img src="https://img.shields.io/badge/Python-%3E%3D3.12-blue" alt="Python >=3.12"></a>
@@ -20,18 +20,18 @@
   <a href="#verifying-python-functions">Verifying Python functions</a> ·
   <a href="#examples">Examples</a> ·
   <a href="#performance">Performance</a> ·
-  <a href="https://pypi.org/project/lean-python/">PyPI</a>
+  <a href="https://pypi.org/project/leanfran/">PyPI</a>
 </p>
 
-# lean-py
+# leanfran
 
-lean-py lets you write functions in Lean 4, prove theorems about them, and call them from Python
-with pydantic models as arguments and results. The PyPI distribution is `lean-python`; you import
-it as `lean_python`.
+leanfran lets you write functions in Lean 4, prove theorems about them, and call them from Python
+with pydantic models as arguments and results. The PyPI distribution is `leanfran`; you import
+it as `leanfran`.
 
 ```python
 from pydantic import BaseModel, Field
-from lean_python import lean
+from leanfran import lean
 
 
 class LineItem(BaseModel):
@@ -64,9 +64,9 @@ pricing.total(items, pricing.Discount.percent(p=10))  # 180
 pricing.Discount.percent(p=150)                       # pydantic.ValidationError: p: Input should be less than or equal to 100
 ```
 
-- `lean-py sync` checks the proofs with Lake and compiles the Lean code from Lean's IR to plain
+- `leanfran sync` checks the proofs with Lake and compiles the Lean code from Lean's IR to plain
   Python. It writes the generated modules to `<package>/_lean/`, and they ship with your package.
-  To run them you need the `lean-python` wheel and pydantic. You do not need Lean.
+  To run them you need the `leanfran` wheel and pydantic. You do not need Lean.
 - The generated Python computes what the C backend computes. A diff test runs the same Lean
   programs natively and as Python and compares the output byte for byte. The generated code keeps
   reference counting, so `Array` updates happen in place as in C.
@@ -79,7 +79,7 @@ pricing.Discount.percent(p=150)                       # pydantic.ValidationError
   (`ge`, `gt`, `le`, `lt`, `min_length`, `max_length`) become proof fields that Lean proofs may assume.
 - The models work wherever pydantic does: `TypeAdapter`, `model_validate_json`, JSON Schema, FastAPI
   request and response types.
-- `@model` binds a plain Python function to Lean specifications. `lean-py check` translates the
+- `@model` binds a plain Python function to Lean specifications. `leanfran check` translates the
   function to Lean and judges your proofs ([Verifying Python functions](#verifying-python-functions)).
 
 ## Install
@@ -87,11 +87,11 @@ pricing.Discount.percent(p=150)                       # pydantic.ValidationError
 The Python package and the Lean CLI:
 
 ```sh
-uv add lean-python                            # the runtime, lean(), lean-py sync
-nix profile install 'github:conao3/lean-leanfran?dir=Python'   # the Lean CLI `lean-python`
+uv add leanfran                            # the runtime, lean(), leanfran sync
+nix profile install 'github:conao3/lean-leanfran?dir=Python'   # the Lean CLI `leanfran-python`
 ```
 
-`lean-py sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
+`leanfran sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
 
 ## Lean blocks
 
@@ -101,22 +101,22 @@ which must belong to a package. The block's definitions live in the namespace
 (`Discount.percent`, `total`).
 
 ```sh
-lean-py sync --package src/myapp
+leanfran sync --package src/myapp
 ```
 
-`lean-py sync` imports every module of the package, writes each block to a Lake workspace in
-`.lean-python/workspace/`, builds it, and generates `src/myapp/_lean/<module>__<name>.py` and
+`leanfran sync` imports every module of the package, writes each block to a Lake workspace in
+`.leanfran/workspace/`, builds it, and generates `src/myapp/_lean/<module>__<name>.py` and
 `src/myapp/_lean/blocks.json`. Lean errors point at the Python file:
 
 ```
-lean-py: src/myapp/m.py:6: error: (lean block m, Lean 4:28) Tactic `rfl` failed: ...
+leanfran: src/myapp/m.py:6: error: (lean block m, Lean 4:28) Tactic `rfl` failed: ...
 ```
 
-Add `.lean-python/` to `.gitignore` and commit `<package>/_lean/`.
+Add `.leanfran/` to `.gitignore` and commit `<package>/_lean/`.
 
 At run time `lean(...)` compares a hash of the block (its source, imports, uses, the Lean structures
 of its models and the generator version) with `blocks.json`. If the block changed since the last
-sync, it raises `LeanBlockStale`. With `LEAN_PYTHON_AUTO_SYNC=1` it runs `lean-py sync` instead.
+sync, it raises `LeanBlockStale`. With `LEANFRAN_PYTHON_AUTO_SYNC=1` it runs `leanfran sync` instead.
 
 - `imports=["Std.Data.HashMap"]`: Lean modules to import.
 - `uses=["geometry"]`: other blocks of the module (or `"pkg.mod:name"`) to import and open. The
@@ -127,7 +127,7 @@ sync, it raises `LeanBlockStale`. With `LEAN_PYTHON_AUTO_SYNC=1` it runs `lean-p
 
 | Lean | Python |
 |---|---|
-| `Nat` | `int` (`lean_python.types.Nat` = `Annotated[int, Ge(0)]`) |
+| `Nat` | `int` (`leanfran.types.Nat` = `Annotated[int, Ge(0)]`) |
 | `Int` | `int` |
 | `UInt8` … `UInt64`, `USize`, `Int8` … `Int64` | `int` with the range as `Ge`/`Le` |
 | `Fin n` | `Annotated[int, Ge(0), Lt(n)]` |
@@ -194,12 +194,12 @@ them. Generated functions take and return your classes. Values that skipped vali
 ## Verifying Python functions
 
 `@model` binds a typed, pure Python function to specifications written in a Lean block. The function
-stays ordinary Python. `lean-py check` translates it to Lean and checks your proofs, and
+stays ordinary Python. `leanfran check` translates it to Lean and checks your proofs, and
 `check_model` runs the same specifications as a Hypothesis property test.
 
 ```python
-from lean_python import lean
-from lean_python.verify import model
+from leanfran import lean
+from leanfran.verify import model
 
 spec = lean("spec", r"""
 def clampSpec (x lo hi : Int) : Int := max lo (min hi x)
@@ -216,7 +216,7 @@ def clamp(x: int, lo: int, hi: int) -> int:
     return x
 ```
 
-`lean-py check --package calc` writes the translation and one obligation per specification:
+`leanfran check --package calc` writes the translation and one obligation per specification:
 
 ```lean
 def LeanPythonModel.calc.calc.clamp (x : Int) (lo : Int) (hi : Int) : Int := Id.run do
@@ -267,8 +267,8 @@ The states:
 | `mismatch` | the theorem states something else |
 | `unextracted` | the obligation's statement is not defined |
 
-With `--require proved`, `lean-py check` exits with 254 unless every obligation is proved. It
-writes the result to `lean-python.lock` with a hash of each function's source. `lean-py status`
+With `--require proved`, `leanfran check` exits with 254 unless every obligation is proved. It
+writes the result to `leanfran.lock` with a hash of each function's source. `leanfran status`
 reads the lock file without Lean and marks changed functions `stale`.
 
 - `refines=s`: `f x = s x` (`Except.ok (s x)` for a function that may fail); `requires=p`: `p x = true →`
@@ -301,24 +301,24 @@ feature at a time, from functions on `Nat` (01) to types shared between blocks w
 
 ## The CLI
 
-The Python package installs `lean-py`:
+The Python package installs `leanfran`:
 
 ```
-lean-py sync --package <dir> [--lean-python <path>]
-lean-py check --package <dir> [--lean-python <path>] [--require proved]
-lean-py status --package <dir>
+leanfran sync --package <dir> [--leanfran-python <path>]
+leanfran check --package <dir> [--leanfran-python <path>] [--require proved]
+leanfran status --package <dir>
 ```
 
-`--lean-python` defaults to `$LEAN_PYTHON_CLI`, then `lean-python` on `PATH`. The Lean CLI
-`lean-python` does the compilation:
+`--leanfran-python` defaults to `$LEANFRAN_PYTHON_CLI`, then `leanfran-python` on `PATH`. The Lean CLI
+`leanfran-python` does the compilation:
 
 ```
-lean-python module generate --module-name <Name> [--roots <Name> ...] [--namespace <Name>]
+leanfran-python module generate --module-name <Name> [--roots <Name> ...] [--namespace <Name>]
   [--import <Name> ...] [--search-path <dir> ...] [--output-file <path>] [--internal-only]
   [--output json|text] [--type-module <Name>=<module> ...] [--model-module <Name>=<module> ...]
   [--batch <file>]
-lean-python obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
-lean-python --version | --generator-version | help
+leanfran-python obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
+leanfran-python --version | --generator-version | help
 ```
 
 `module generate` writes one Python module with the IR of the roots and of everything they call
@@ -353,16 +353,16 @@ nix develop -c make bench
 
 - `LeanPython/EmitPy.lean`: IR → Python. `LeanPython/Marshal.lean`, `LeanPython/Generate.lean`: public
   types and functions. `LeanPython/Check.lean`: `obligations check`. `Main.lean`: the CLI.
-- `src/lean_python/runtime.py`, `io_externs.py`: the runtime (`lean_*` are the C names of Lean's
+- `src/leanfran/runtime.py`, `io_externs.py`: the runtime (`lean_*` are the C names of Lean's
   externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `sync.py`, `models.py`, `cli.py`:
-  `lean(...)` and `lean-py sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
-  `lean-py check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
+  `lean(...)` and `leanfran sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
+  `leanfran check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
 - `LeanPythonTest/`: Lean programs of the tests; `test-diff.sh` runs `Vectors` and `Io` natively and
   as Python.
 
 ## Limitations
 
-- lean-py does not expose polymorphic functions, functions taking or returning functions, or
+- leanfran does not expose polymorphic functions, functions taking or returning functions, or
   `Thunk`/`Task`/`IO.Ref`/`ByteArray` in public signatures. They still run inside Lean code.
 - `Task`s run synchronously.
 - Building a `String` with `String.push` copies the string each time (Python `bytes`), so it grows

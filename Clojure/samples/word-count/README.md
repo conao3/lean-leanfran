@@ -48,7 +48,7 @@ vectors:
 ## Usage
 
 Inside `nix develop` of the repository root (the first run needs Lean to
-expand `deflean`; `make` builds the `lean-clj` CLI and puts it on `PATH`):
+expand `deflean`; `make` builds the `leanfran` CLI and puts it on `PATH`):
 
 ```
 $ make run ARGS='--limit 4'

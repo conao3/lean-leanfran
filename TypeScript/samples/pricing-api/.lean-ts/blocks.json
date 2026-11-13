@@ -1,7 +1,0 @@
-{
-  "src/pricing.ts:pricing": {
-    "fnv": "0c74751dd1d82a4e",
-    "output": "src/_lean/pricing__pricing.ts",
-    "sha256": "d4d36fd2f7c5bb174b83c8a18a1a931d0933a16b6fea7a38fd6c652f02a4aaac"
-  }
-}

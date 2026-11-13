@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as geometryLean from "./_lean/geometry.ts"
 
 export const geometry = lean(

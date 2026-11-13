@@ -1,17 +1,17 @@
-LEAN_CLJ_BIN := $(abspath ../../.lake/build/bin)
-export PATH := $(LEAN_CLJ_BIN):$(PATH)
+LEANFRAN_CLJ_BIN := $(abspath ../../.lake/build/bin)
+export PATH := $(LEANFRAN_CLJ_BIN):$(PATH)
 
 .PHONY: all
 all: test
 
-.PHONY: lean-clj
-lean-clj:
+.PHONY: leanfran
+leanfran:
 	$(MAKE) -C ../.. build
 
 .PHONY: run
-run: lean-clj
+run: leanfran
 	./word-count text list-top-words $(ARGS) < sample.txt
 
 .PHONY: test
-test: lean-clj
+test: leanfran
 	./test.sh

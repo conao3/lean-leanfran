@@ -172,7 +172,7 @@ def tasks : List String :=
   [toString t.get, toString p.get, toString (t.map (· + 1)).get, toString (p.bind fun n => Task.pure (n * 3)).get]
 
 def traced : List String :=
-  [toString (dbgTrace "lean-clj dbgTrace" fun _ => 11)]
+  [toString (dbgTrace "leanfran dbgTrace" fun _ => 11)]
 
 def report (_ : Unit) : String :=
   let sections : List (String × List String) := [

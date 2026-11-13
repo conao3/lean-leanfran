@@ -1,4 +1,4 @@
-from lean_python import lean
+from leanfran import lean
 
 shapes = lean(
     "shapes",

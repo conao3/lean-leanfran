@@ -1,4 +1,4 @@
-import { checkModel } from "lean-ts/verify"
+import { checkModel } from "leanfran/verify"
 import { distance } from "./dist.ts"
 
 console.log(distance(3, 10), distance(10, 3), distance(-4, 4))

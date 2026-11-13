@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { leanTypescriptCli, readPackage, statusPackage, SyncError, syncPackage } from "./sync.ts"
 import { checkPackage, csimpFiles, statusModels } from "./verify/check.ts"
 
-const USAGE = `usage: lean-ts [--version] <command> [parameters]
+const USAGE = `usage: leanfran [--version] <command> [parameters]
 
 commands:
   sync       Check the Lean blocks of a package and generate their TypeScript modules
@@ -12,24 +12,24 @@ commands:
   status     List the blocks whose generated modules are stale (no Lean)
   generate   Emit a TypeScript module per Lean module of a lake project
 
-lean-ts sync
+leanfran sync
   --package <dir>            The package (the directory with package.json and src/) (required)
-  --lean-typescript <path>   The Lean CLI (default: $LEAN_TYPESCRIPT, then lean-typescript on PATH)
+  --leanfran-typescript <path>   The Lean CLI (default: $LEANFRAN_TYPESCRIPT, then leanfran-typescript on PATH)
 
-lean-ts check
+leanfran check
   --package <dir>            The package (required)
-  --lean-typescript <path>   as for sync
+  --leanfran-typescript <path>   as for sync
   --require proved           Exit with 254 unless every obligation is proved
-  Writes <dir>/lean-ts.lock and prints one line per obligation: <status> <module>:<function> <label>
+  Writes <dir>/leanfran.lock and prints one line per obligation: <status> <module>:<function> <label>
 
-lean-ts status
+leanfran status
   --package <dir>            The package (required); exits with 254 when a block or an obligation is stale
 
-lean-ts generate
+leanfran generate
   --lake-dir <dir>           Lake project to build (required)
   --output-dir <dir>         Directory of the TypeScript modules (required)
   --modules <Name> ...       Modules to emit (default: every module the project builds)
-  --lean-typescript <path>   as for sync
+  --leanfran-typescript <path>   as for sync
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 `
@@ -87,23 +87,23 @@ async function main(argv: readonly string[]): Promise<number> {
     return 0
   }
   if (command === "sync") {
-    const args = parseArgs(rest, ["--package", "--lean-typescript"])
+    const args = parseArgs(rest, ["--package", "--leanfran-typescript"])
     await syncPackage(
       required(args, "--package"),
-      args.single.get("--lean-typescript"),
+      args.single.get("--leanfran-typescript"),
       log,
       csimpFiles,
     )
     return 0
   }
   if (command === "check") {
-    const args = parseArgs(rest, ["--package", "--lean-typescript", "--require"])
+    const args = parseArgs(rest, ["--package", "--leanfran-typescript", "--require"])
     const req = args.single.get("--require")
     if (req !== undefined && req !== "proved")
       throw new SyncError(`--require takes proved (got ${req})`, 252)
     const { rows } = await checkPackage(
       required(args, "--package"),
-      args.single.get("--lean-typescript"),
+      args.single.get("--leanfran-typescript"),
       log,
     )
     for (const r of rows) process.stdout.write(`${r.status.padEnd(12)}${r.fn} ${r.label}\n`)
@@ -122,8 +122,13 @@ async function main(argv: readonly string[]): Promise<number> {
       : 254
   }
   if (command === "generate") {
-    const args = parseArgs(rest, ["--lake-dir", "--output-dir", "--modules", "--lean-typescript"])
-    const cli = leanTypescriptCli(args.single.get("--lean-typescript"))
+    const args = parseArgs(rest, [
+      "--lake-dir",
+      "--output-dir",
+      "--modules",
+      "--leanfran-typescript",
+    ])
+    const cli = leanTypescriptCli(args.single.get("--leanfran-typescript"))
     const modules = args.modules.length === 0 ? [] : ["--modules", ...args.modules]
     const r = spawnSync(
       cli,
@@ -143,12 +148,12 @@ async function main(argv: readonly string[]): Promise<number> {
     if (r.error !== undefined) throw new SyncError(`cannot run ${cli}: ${r.error.message}`, 255)
     return r.status ?? 255
   }
-  throw new SyncError(`unknown command ${command} (see \`lean-ts help\`)`, 252)
+  throw new SyncError(`unknown command ${command} (see \`leanfran help\`)`, 252)
 }
 
 try {
   process.exitCode = await main(process.argv.slice(2))
 } catch (e) {
-  log(`lean-ts: ${e instanceof Error ? e.message : String(e)}`)
+  log(`leanfran: ${e instanceof Error ? e.message : String(e)}`)
   process.exitCode = e instanceof SyncError ? e.code : 255
 }

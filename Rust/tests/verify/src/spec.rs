@@ -1,6 +1,6 @@
 //! The specs.
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod specs;
     r#"
@@ -27,31 +27,31 @@ lean_rust::lean! {
     "#
 }
 
-lean_rust::lean! {
-    #[lean(imports = ["Aeneas", "LeanRustGen.Model.lean_rust_verify_test.Types"])]
+leanfran::lean! {
+    #[lean(imports = ["Aeneas", "LeanRustGen.Model.leanfran_verify_test.Types"])]
     pub mod counters;
     r#"
-    open Aeneas Aeneas.Std lean_rust_verify_test
+    open Aeneas Aeneas.Std leanfran_verify_test
 
     def reset (c : counter.Counter) : counter.Counter := { c with count := 0#u32 }
     "#
 }
 
-lean_rust::lean! {
-    #[lean(imports = ["Aeneas", "LeanRustGen.Extern.lean_rust_verify_test.effects"])]
+leanfran::lean! {
+    #[lean(imports = ["Aeneas", "LeanRustGen.Extern.leanfran_verify_test.effects"])]
     pub mod calls;
     r#"
     open Aeneas Aeneas.Std
 
     /-- Runs the Rust function `guarded`: `false` when it panics. -/
     def runs (x : Std.U32) : Bool :=
-      match (lean_rust_verify_test.effects.guarded.rs x).match with
+      match (leanfran_verify_test.effects.guarded.rs x).match with
       | .ok _ => true
       | _ => false
     "#
 }
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod generic_specs;
     r#"
@@ -67,11 +67,11 @@ lean_rust::lean! {
     "#
 }
 
-lean_rust::lean! {
-    #[lean(imports = ["Aeneas", "LeanRustGen.Model.lean_rust_verify_test.Types"])]
+leanfran::lean! {
+    #[lean(imports = ["Aeneas", "LeanRustGen.Model.leanfran_verify_test.Types"])]
     pub mod pairs;
     r#"
-    open Aeneas Aeneas.Std lean_rust_verify_test
+    open Aeneas Aeneas.Std leanfran_verify_test
 
     def swapped (p : generic.Pair Std.U32) : generic.Pair Std.U32 := ⟨p.b, p.a⟩
     "#

@@ -1,6 +1,6 @@
 //! The todo list as Lean definitions, with proofs of their properties. The CLI is `main.rs`.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Tasks and the operations on the list.
     pub mod model;
     r#"

@@ -1,0 +1,7 @@
+{
+  "src/search.ts:spec": {
+    "fnv": "557d76b9e66a783c",
+    "output": "src/_lean/search__spec.ts",
+    "sha256": "ff6a43c190df06a5ea730b1451e34ea38550c9f82b421e1fae81284e746475d5"
+  }
+}

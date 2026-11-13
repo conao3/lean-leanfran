@@ -1,6 +1,6 @@
 (ns search.main
   (:require
-    [lean-clj.typed :as lt]
+    [leanfran.typed :as lt]
     [search.core :as search]))
 
 

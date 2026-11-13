@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as z from "zod"
 import * as pricing from "./_lean/pricing.ts"
 

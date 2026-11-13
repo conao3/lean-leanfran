@@ -7,7 +7,7 @@ thread_local! {
 }
 
 /// Counts the calls; its model (`lean/External.lean`) does nothing.
-#[lean_rust::opaque]
+#[leanfran::opaque]
 pub fn trace() {
     TRACES.with(|c| c.set(c.get() + 1));
 }
@@ -18,7 +18,7 @@ pub fn traces() -> u32 {
 }
 
 /// Panics on 7; its model (`lean/External.lean`) is an axiom.
-#[lean_rust::opaque]
+#[leanfran::opaque]
 pub fn check(x: u32) {
     if x == 7 {
         panic!("seven");
@@ -26,32 +26,32 @@ pub fn check(x: u32) {
 }
 
 /// `axioms`: the proof relies on the axiom of `check`.
-#[lean_rust::model(ensures(same = crate::spec::specs::unchanged), check = false)]
+#[leanfran::model(ensures(same = crate::spec::specs::unchanged), check = false)]
 pub fn guarded(x: u32) -> u32 {
     check(x);
     x
 }
 
 /// Its model (`lean/External.lean`) is a definition: the test compares the two.
-#[lean_rust::opaque]
+#[leanfran::opaque]
 pub fn clamp(x: u32) -> u32 {
     x.min(100)
 }
 
 /// A model calling `clamp`, without obligations.
-#[lean_rust::model]
+#[leanfran::model]
 pub fn capped(x: u32) -> u32 {
     clamp(x)
 }
 
 /// A reading whose method's model (`lean/External.lean`) is a definition: the test compares the
 /// two.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, lean_rust::Model)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, leanfran::Model)]
 pub struct Meter {
     pub value: u32,
 }
 
-#[lean_rust::opaque(strategy = crate::effects::meter_input)]
+#[leanfran::opaque(strategy = crate::effects::meter_input)]
 impl Meter {
     /// The smaller of the reading and `limit`.
     pub fn lesser(&self, limit: u32) -> u32 {
@@ -60,7 +60,7 @@ impl Meter {
 }
 
 #[cfg(test)]
-fn meter_input() -> impl lean_rust::check::proptest::strategy::Strategy<Value = (Meter, u32)> {
-    use lean_rust::check::proptest::prelude::*;
+fn meter_input() -> impl leanfran::check::proptest::strategy::Strategy<Value = (Meter, u32)> {
+    use leanfran::check::proptest::prelude::*;
     (any::<u32>().prop_map(|value| Meter { value }), any::<u32>())
 }

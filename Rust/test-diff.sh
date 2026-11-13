@@ -4,22 +4,22 @@
 set -euo pipefail
 ulimit -s 65536
 export LEAN_BACKTRACE=0
-export LEAN_RUST_TEST_VAR=from-the-environment
-lake build lean-rust oracle oracle-io LeanRustTest
+export LEANFRAN_TEST_VAR=from-the-environment
+lake build leanfran oracle oracle-io LeanRustTest
 mkdir -p test-out
 generate() {
-  .lake/build/bin/lean-rust module generate \
+  .lake/build/bin/leanfran module generate \
     --module-name "$1" --roots "$2" \
-    --search-path .lake/build/lib/lean --runtime-path ::lean_rust_runtime \
+    --search-path .lake/build/lib/lean --runtime-path ::leanfran_runtime \
     --output-file "$3" --output text --internal-only
 }
 generate LeanRustTest.Vectors LeanRustTest.Vectors.report test-out/vectors.rs
 generate LeanRustTest.Io LeanRustTest.Io.run test-out/io.rs
 .lake/build/bin/oracle > test-out/oracle.txt 2> test-out/oracle.err
 .lake/build/bin/oracle-io < /dev/null > test-out/io-oracle.txt 2> test-out/io-oracle.err
-cargo build -q --release -p lean-rust-difftest
-target/release/lean-rust-difftest > test-out/rust.txt 2> test-out/rust.err
-target/release/lean-rust-difftest-io < /dev/null > test-out/io-rust.txt 2> test-out/io-rust.err
+cargo build -q --release -p leanfran-difftest
+target/release/leanfran-difftest > test-out/rust.txt 2> test-out/rust.err
+target/release/leanfran-difftest-io < /dev/null > test-out/io-rust.txt 2> test-out/io-rust.err
 diff -u test-out/oracle.txt test-out/rust.txt
 diff -u test-out/oracle.err test-out/rust.err
 diff -u test-out/io-oracle.txt test-out/io-rust.txt

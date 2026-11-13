@@ -1,5 +1,5 @@
 {
-  "name": "lean-ts",
+  "name": "leanfran",
   "version": "0.5.0",
   "description": "Write and prove functions in Lean 4, run them as TypeScript: Lean blocks in TypeScript modules, Standard Schema for Lean types, TypeScript functions verified in Lean",
   "license": "Apache-2.0",
@@ -21,7 +21,7 @@
     "node": ">=22.18.0"
   },
   "bin": {
-    "lean-ts": "./dist/cli.js"
+    "leanfran": "./dist/cli.js"
   },
   "exports": {
     ".": {

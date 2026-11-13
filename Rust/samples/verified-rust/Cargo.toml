@@ -3,10 +3,10 @@ name = "verified-rust"
 version = "0.1.0"
 edition = "2021"
 publish = false
-include = ["src/**", "build.rs", ".lean-rust/cache/**", "lean/**", "lean-rust.lock"]
+include = ["src/**", "build.rs", ".leanfran/cache/**", "lean/**", "leanfran.lock"]
 
 [dependencies]
-lean-rust = { path = "../../crates/lean-rust" }
+leanfran = { path = "../../crates/leanfran" }
 
 [build-dependencies]
-lean-rust-build = { path = "../../crates/lean-rust-build" }
+leanfran-build = { path = "../../crates/leanfran-build" }

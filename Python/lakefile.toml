@@ -1,11 +1,11 @@
-name = "lean-python"
-defaultTargets = ["lean-python"]
+name = "leanfran-python"
+defaultTargets = ["leanfran-python"]
 
 [[lean_lib]]
 name = "LeanPython"
 
 [[lean_exe]]
-name = "lean-python"
+name = "leanfran-python"
 root = "Main"
 supportInterpreter = true
 

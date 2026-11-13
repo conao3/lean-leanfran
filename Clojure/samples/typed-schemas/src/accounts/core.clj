@@ -3,8 +3,8 @@
   defined in Lean, and the signatures give malli schemas, clj-kondo types, and
   test.check generators."
   (:require
-    [lean-clj.core :refer [deflean]]
-    [lean-clj.typed :as lt]))
+    [leanfran.core :refer [deflean]]
+    [leanfran.typed :as lt]))
 
 
 (deflean types

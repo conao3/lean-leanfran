@@ -1,5 +1,5 @@
 [project]
-name = "lean-python"
+name = "leanfran"
 version = "0.5.0"
 description = "Run Lean 4 code as Python: a runtime for code generated from Lean's IR, Lean blocks in Python files, and pydantic models for Lean types"
 readme = "README.md"
@@ -16,7 +16,7 @@ classifiers = [
 Repository = "https://github.com/conao3/lean-leanfran/tree/master/Python"
 
 [project.scripts]
-lean-py = "lean_python.cli:main"
+leanfran = "leanfran.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-icdiff>=0.9", "hypothesis>=6", "fastapi>=0.115", "httpx>=0.27"]
@@ -26,10 +26,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lean_python"]
+packages = ["src/leanfran"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src/lean_python", "/README.md", "/LICENSE", "/pyproject.toml"]
+include = ["/src/leanfran", "/README.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.ruff]
 line-length = 120

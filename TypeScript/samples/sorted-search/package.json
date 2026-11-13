@@ -1,9 +1,9 @@
 {
-  "name": "lean-ts-sample-sorted-search",
+  "name": "leanfran-sample-sorted-search",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../..",
+    "leanfran": "link:../..",
     "fast-check": "4.10.2"
   }
 }

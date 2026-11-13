@@ -1,5 +1,5 @@
 /-! IO actions and closures over more than 16 arguments, run by `oracle-io` and by the
-generated Rust (`lean-rust-difftest-io`). -/
+generated Rust (`leanfran-difftest-io`). -/
 
 namespace LeanRustTest.Io
 
@@ -84,7 +84,7 @@ def fsRun : IO Unit := do
   IO.println s!"removed: {← d.pathExists}"
 
 def envRun : IO Unit := do
-  IO.println s!"getEnv: {← IO.getEnv "LEAN_RUST_TEST_VAR"} {← IO.getEnv "LEAN_RUST_TEST_UNSET"}"
+  IO.println s!"getEnv: {← IO.getEnv "LEANFRAN_TEST_VAR"} {← IO.getEnv "LEANFRAN_TEST_UNSET"}"
   let cwd ← IO.currentDir
   IO.println s!"currentDir: {cwd == (← IO.Process.getCurrentDir)}"
   IO.Process.setCurrentDir "test-out"
@@ -101,12 +101,12 @@ def processRun : IO Unit := do
   IO.println s!"run: {← IO.Process.run { cmd := "printf", args := #["%s-%s", "a", "b"] }}"
   let r ← IO.Process.run { cmd := "cat" } (input? := some "from stdin")
   IO.println s!"input: {r}"
-  let script := "echo $LEAN_RUST_FOO; basename $(pwd)"
-  let env := #[("LEAN_RUST_FOO", some "bar")]
+  let script := "echo $LEANFRAN_FOO; basename $(pwd)"
+  let env := #[("LEANFRAN_FOO", some "bar")]
   let r ← IO.Process.run { cmd := "sh", args := #["-c", script], env, cwd := some "test-out" }
   IO.println s!"env and cwd: {r.splitOn "\n"}"
-  let script := "echo ${LEAN_RUST_TEST_VAR:-unset}"
-  let env := #[("LEAN_RUST_TEST_VAR", none)]
+  let script := "echo ${LEANFRAN_TEST_VAR:-unset}"
+  let env := #[("LEANFRAN_TEST_VAR", none)]
   let r ← IO.Process.run { cmd := "sh", args := #["-c", script], env }
   IO.println s!"unset: {r.trimAsciiEnd}"
   let child ← IO.Process.spawn { cmd := "cat", stdin := .piped, stdout := .piped }
@@ -117,7 +117,7 @@ def processRun : IO Unit := do
   IO.println s!"piped: {piped} {← child.wait}"
   let code ← IO.Process.output { cmd := "true" }
   IO.println s!"true: {code.exitCode}"
-  let missing ← IO.Process.output { cmd := "lean-rust-no-such-command" }
+  let missing ← IO.Process.output { cmd := "leanfran-no-such-command" }
   IO.println s!"missing: {missing.exitCode} {missing.stderr.trimAsciiEnd}"
   let sleeper ← IO.Process.spawn { cmd := "sleep", args := #["10"] }
   IO.println s!"tryWait: {← sleeper.tryWait}"

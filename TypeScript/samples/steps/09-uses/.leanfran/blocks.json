@@ -1,0 +1,12 @@
+{
+  "src/report.ts:report": {
+    "fnv": "8032260b4dd95ede",
+    "output": "src/_lean/report__report.ts",
+    "sha256": "662d65c2c14f015d86b9c8759b949471fc31a2c4ca9fd49a84f675ac89f52a90"
+  },
+  "src/shapes.ts:shapes": {
+    "fnv": "00c1c2163947aedd",
+    "output": "src/_lean/shapes__shapes.ts",
+    "sha256": "b36d7c2eed49e08e3852e9ebf9bbcdcf2d3ca0c11b5fde49321d91e7c0b156f4"
+  }
+}

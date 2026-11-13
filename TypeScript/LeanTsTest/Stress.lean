@@ -1,7 +1,7 @@
 import Std.Data.HashMap
 import Std.Data.TreeMap
 
-/-! Candidate stress programs for lean-ts extraction + native diff-test.
+/-! Candidate stress programs for leanfran extraction + native diff-test.
 Each `*Prog : IO Unit` prints deterministic results. Definitions are written
 non-exponentially so the native C-backend oracle runs fast. -/
 

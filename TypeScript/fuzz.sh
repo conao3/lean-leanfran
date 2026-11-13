@@ -8,10 +8,10 @@
 set -euo pipefail
 SEED="${1:-1}"
 N="${2:-2000}"
-lake build lean-typescript LeanTsTest oracle-fuzz
+lake build leanfran-typescript LeanTsTest oracle-fuzz
 ORACLE=.lake/build/bin
 mkdir -p test-out
-"$ORACLE/lean-typescript" module generate --module-name LeanTsTest.Fuzz \
+"$ORACLE/leanfran-typescript" module generate --module-name LeanTsTest.Fuzz \
   --search-path .lake/build/lib/lean --runtime-path ../src/runtime/index.ts \
   --output-file test-out/fuzz.ts --output text --internal-only
 

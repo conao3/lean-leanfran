@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { stringify } from "lean-ts/schema"
+import { stringify } from "leanfran/schema"
 import { wc } from "./count.ts"
 
 const text = readFileSync(new URL("../sample.txt", import.meta.url), "utf8")

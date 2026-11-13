@@ -1,11 +1,11 @@
-name = "lean-rust"
-defaultTargets = ["lean-rust"]
+name = "leanfran"
+defaultTargets = ["leanfran"]
 
 [[lean_lib]]
 name = "LeanRust"
 
 [[lean_exe]]
-name = "lean-rust"
+name = "leanfran"
 root = "Main"
 supportInterpreter = true
 

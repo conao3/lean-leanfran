@@ -3,7 +3,7 @@
 use crate::spec::specs;
 
 #[allow(clippy::ptr_arg)]
-#[lean_rust::model(ensures(zeroed = specs::all_zero))]
+#[leanfran::model(ensures(zeroed = specs::all_zero))]
 pub fn zero_all(v: &mut Vec<u32>) {
     let mut i = 0;
     'zero: while i < v.len() {

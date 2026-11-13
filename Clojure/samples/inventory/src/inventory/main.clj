@@ -1,7 +1,7 @@
 (ns inventory.main
   (:require
     [inventory.core :as inv]
-    [lean-clj.typed :as lt]))
+    [leanfran.typed :as lt]))
 
 
 (defn -main

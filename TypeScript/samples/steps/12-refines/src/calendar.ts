@@ -1,5 +1,5 @@
-import { lean } from "lean-ts"
-import { model } from "lean-ts/verify"
+import { lean } from "leanfran"
+import { model } from "leanfran/verify"
 import * as calendar from "./_lean/calendar.ts"
 
 export const block = lean(

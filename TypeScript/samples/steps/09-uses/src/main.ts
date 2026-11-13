@@ -1,4 +1,4 @@
-import { stringify } from "lean-ts/schema"
+import { stringify } from "leanfran/schema"
 import { report } from "./report.ts"
 import { shapes } from "./shapes.ts"
 

@@ -1,4 +1,4 @@
-import { stringify } from "lean-ts/schema"
+import { stringify } from "leanfran/schema"
 import { m } from "./code.ts"
 
 const suits = ["hearts", "diamonds", "clubs", "spades"] as const

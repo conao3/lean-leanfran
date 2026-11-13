@@ -2,8 +2,8 @@
   "Stock kept in a Clojure map from item names to quantities, with Lean
   proofs about how restocking and taking out change it."
   (:require
-    [lean-clj.core :refer [deflean]]
-    [lean-clj.typed :as lt]))
+    [leanfran.core :refer [deflean]]
+    [leanfran.typed :as lt]))
 
 
 (lt/defn restock

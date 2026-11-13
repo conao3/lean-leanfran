@@ -1,0 +1,22 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::apply"
+lean = "step_15_structs_enums.apply"
+items = [
+  { rust = "crate::Action", hash = "sha256:f9d25c1ab8550ed95f279e19e733828bd554d899947f316eb47d033a22d34682" },
+  { rust = "crate::Counter", hash = "sha256:14f2e86efd23365fd6344e255d6a739323674ce41cb30a35f2adcf5c0ed7091b" },
+  { rust = "crate::apply", hash = "sha256:64c1b0ed721dbbf0d6feb8670431645ea8a778f5eb392650d53f6f578e7c92c5" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "counter.apply"
+spec_block = "crate::spec::counter"
+spec_hash = "sha256:5e624343aca1ff6789ba744608fe45e03ab7e447994abc08b1a42cd0632e9a54"
+hash = "sha256:c4ffbe1c69e9d487955104ccd20e62485bb575528680ec6c45f337f008cb14cf"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Apply.lean:12"

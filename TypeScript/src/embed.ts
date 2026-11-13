@@ -2,7 +2,7 @@ import type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/sp
 import { canonicalJson, fnv1a64, type Json, toJson } from "./key.ts"
 import { type BlockEntry, blockRegistry, type BlockSettings } from "./runtime/block.ts"
 
-export const GENERATOR_VERSION: string = "9"
+export const GENERATOR_VERSION: string = "10"
 
 export type LeanModel = StandardSchemaV1 & StandardJSONSchemaV1
 
@@ -135,13 +135,13 @@ function packageRoot(proc: NodeJS.Process, entries: readonly BlockEntry[]): stri
   for (;;) {
     if (fs.existsSync(path.join(dir, "package.json"))) return dir
     const up = path.dirname(dir)
-    if (up === dir) throw new LeanBlockStale(`lean-ts: no package.json above ${dir}`)
+    if (up === dir) throw new LeanBlockStale(`leanfran: no package.json above ${dir}`)
     dir = up
   }
 }
 
 function autoSync(proc: NodeJS.Process, name: string, entries: readonly BlockEntry[]): boolean {
-  if (proc.env["LEAN_TS_AUTO_SYNC"] !== "1") return false
+  if (proc.env["LEANFRAN_TS_AUTO_SYNC"] !== "1") return false
   const root = packageRoot(proc, entries)
   const cli = proc
     .getBuiltinModule("node:url")
@@ -152,14 +152,14 @@ function autoSync(proc: NodeJS.Process, name: string, entries: readonly BlockEnt
     .getBuiltinModule("node:child_process")
     .spawnSync(proc.execPath, [cli, "sync", "--package", root], {
       stdio: "inherit",
-      env: { ...proc.env, LEAN_TS_AUTO_SYNC: "0" },
+      env: { ...proc.env, LEANFRAN_TS_AUTO_SYNC: "0" },
     })
   if (r.status !== 0)
     throw new LeanBlockStale(
-      `lean-ts: \`lean-ts sync --package ${root}\` failed (exit ${r.status})`,
+      `leanfran: \`leanfran sync --package ${root}\` failed (exit ${r.status})`,
     )
   proc.stderr.write(
-    `lean-ts: regenerated the Lean block ${JSON.stringify(name)} of ${root}; the generated module takes effect when the program starts again\n`,
+    `leanfran: regenerated the Lean block ${JSON.stringify(name)} of ${root}; the generated module takes effect when the program starts again\n`,
   )
   return true
 }
@@ -175,7 +175,7 @@ function packageSettings(
   if (cached !== undefined) return cached
   const file = proc.getBuiltinModule("node:path").join(root, "package.json")
   const pkg: unknown = JSON.parse(proc.getBuiltinModule("node:fs").readFileSync(file, "utf8"))
-  const field: unknown = isRecord(pkg) ? pkg["lean-ts"] : undefined
+  const field: unknown = isRecord(pkg) ? pkg["leanfran"] : undefined
   const settings = isRecord(field) ? field : {}
   packageSettingsCache.set(root, settings)
   return settings
@@ -221,9 +221,9 @@ export function lean(name: string, source: string, options?: LeanBlockOptions): 
     entries.length === 0
       ? "its generated module was not imported"
       : same.length !== 0
-        ? "the lean-ts settings of its package.json changed since `lean-ts sync` generated it"
-        : "it has changed since `lean-ts sync` generated it"
+        ? "the leanfran settings of its package.json changed since `leanfran sync` generated it"
+        : "it has changed since `leanfran sync` generated it"
   throw new LeanBlockStale(
-    `the Lean block ${JSON.stringify(name)} is stale (${where}); run \`lean-ts sync\` (or set LEAN_TS_AUTO_SYNC=1)`,
+    `the Lean block ${JSON.stringify(name)} is stale (${where}); run \`leanfran sync\` (or set LEANFRAN_TS_AUTO_SYNC=1)`,
   )
 }

@@ -1,8 +1,8 @@
 {
-  "name": "lean-ts-step-05-collections",
+  "name": "leanfran-step-05-collections",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../../.."
+    "leanfran": "link:../../.."
   }
 }

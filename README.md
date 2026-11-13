@@ -6,10 +6,10 @@ Each backend reads the IR of the Lean compiler and emits source code that runs o
 
 | Directory | Target | Packages |
 |---|---|---|
-| [`Rust/`](Rust/) | Rust | crates.io: [`lean-rust`](https://crates.io/crates/lean-rust), `lean-rust-runtime`, `lean-rust-macros`, `lean-rust-build`, `cargo-lean-rust` |
-| [`Python/`](Python/) | Python | PyPI: [`lean-python`](https://pypi.org/project/lean-python/) |
-| [`TypeScript/`](TypeScript/) | TypeScript | npm: [`lean-ts`](https://www.npmjs.com/package/lean-ts) |
-| [`Clojure/`](Clojure/) | Clojure | Clojars: [`io.github.conao3/lean-clj`](https://clojars.org/io.github.conao3/lean-clj) |
+| [`Rust/`](Rust/) | Rust | crates.io: [`leanfran`](https://crates.io/crates/leanfran), `leanfran-runtime`, `leanfran-macros`, `leanfran-build`, `cargo-leanfran` |
+| [`Python/`](Python/) | Python | PyPI: [`leanfran`](https://pypi.org/project/leanfran/) |
+| [`TypeScript/`](TypeScript/) | TypeScript | npm: [`leanfran`](https://www.npmjs.com/package/leanfran) |
+| [`Clojure/`](Clojure/) | Clojure | Clojars: [`io.github.conao3/leanfran`](https://clojars.org/io.github.conao3/leanfran) |
 
 Every directory is a self-contained project with its own `flake.nix`, `lakefile.toml` and README. Run `nix develop -c make check` inside a directory to build and test that backend. All of them use Lean `v4.35.0`.
 

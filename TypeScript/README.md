@@ -1,7 +1,7 @@
 <p align="center"><strong>Write and prove functions in Lean 4, run them as TypeScript</strong></p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/lean-ts"><img src="https://img.shields.io/npm/v/lean-ts" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/leanfran"><img src="https://img.shields.io/npm/v/leanfran" alt="npm version"></a>
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
   <a href="https://github.com/conao3/lean-leanfran/blob/master/TypeScript/package.json"><img src="https://img.shields.io/badge/Node-%3E%3D22.18-blue" alt="Node >=22.18"></a>
@@ -15,17 +15,17 @@
   <a href="#values">Values</a> ·
   <a href="#verifying-typescript-functions">Verifying TypeScript functions</a> ·
   <a href="#examples">Examples</a> ·
-  <a href="https://www.npmjs.com/package/lean-ts">npm</a>
+  <a href="https://www.npmjs.com/package/leanfran">npm</a>
 </p>
 
-# lean-ts
+# leanfran
 
-lean-ts lets you write functions in Lean 4, prove theorems about them, and call them from
+leanfran lets you write functions in Lean 4, prove theorems about them, and call them from
 TypeScript with plain values and Standard Schema types as arguments and results. The npm package
-and its CLI are `lean-ts`; the Lean CLI that generates the TypeScript is `lean-typescript`.
+and its CLI are `leanfran`; the Lean CLI that generates the TypeScript is `leanfran-typescript`.
 
 ```ts
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as z from "zod"
 import * as pricing from "./_lean/pricing.ts"
 
@@ -62,7 +62,7 @@ pricing.total([{ sku: "a", qty: 2, unitPrice: 100 }], { ctor: "percent", p: 10n 
 pricing.Discount["~standard"].validate({ percent: { p: 150 } }) // issues: Discount.percent.h: p ≤ 100
 ```
 
-- `lean-ts sync` checks the proofs with Lake and compiles the Lean code from Lean's IR to typed
+- `leanfran sync` checks the proofs with Lake and compiles the Lean code from Lean's IR to typed
   TypeScript modules in `src/_lean/`, which you commit. They pass `tsc --strict` and run with the npm
   package alone, in Node (22.18 or later), Bun and browsers. You do not need Lean to run them.
 - The generated TypeScript computes what the C backend computes. A diff test runs the same Lean
@@ -74,7 +74,7 @@ pricing.Discount["~standard"].validate({ percent: { p: 150 } }) // issues: Disco
 - Lean code can use your own zod, valibot or arktype schemas (`models: { ... }`). Their constraints
   (`min`, `max`, `minLength`, ...) become proof fields that Lean proofs may assume.
 - `model(fn, { refines, requires, ensures })` binds a TypeScript function to Lean specifications.
-  `lean-ts check` translates the function to Lean and judges your proofs
+  `leanfran check` translates the function to Lean and judges your proofs
   ([Verifying TypeScript functions](#verifying-typescript-functions)).
 
 ## Install
@@ -82,11 +82,11 @@ pricing.Discount["~standard"].validate({ percent: { p: 150 } }) // issues: Disco
 The npm package and the Lean CLI:
 
 ```sh
-pnpm add lean-ts                              # the runtime, lean(), lean-ts sync and check
-nix profile install 'github:conao3/lean-leanfran?dir=TypeScript'   # the Lean CLI `lean-typescript`
+pnpm add leanfran                              # the runtime, lean(), leanfran sync and check
+nix profile install 'github:conao3/lean-leanfran?dir=TypeScript'   # the Lean CLI `leanfran-typescript`
 ```
 
-`lean-ts sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
+`leanfran sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
 `checkModel` needs `fast-check` (an optional peer dependency). Bun (1.4.4) turns the non-ASCII
 characters of a `String.raw` template into `\u` escapes, so a block with `⟨`, `·` or `≤` is stale
 there; write such blocks as plain template literals to run them with Bun.
@@ -95,7 +95,7 @@ there; write such blocks as plain template literals to run them with Bun.
 
 ```ts
 // src/arith.ts
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as arith from "./_lean/arith.ts"
 
 export const arithBlock = lean(
@@ -112,17 +112,17 @@ arith.double(21n) // 42n
 ```
 
 ```
-lean-ts sync --package <dir> [--lean-typescript <path>]
-lean-ts status --package <dir>
-lean-ts generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
+leanfran sync --package <dir> [--leanfran-typescript <path>]
+leanfran status --package <dir>
+leanfran generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
 ```
 
-- `lean-ts sync` reads the `lean(...)` calls of `<dir>/src/**/*.ts` with oxc-parser
+- `leanfran sync` reads the `lean(...)` calls of `<dir>/src/**/*.ts` with oxc-parser
   (the name is a string literal, the source a template literal or `String.raw`, the
   options `imports`, `uses`, `models` and `output` an object literal), writes each
-  block to `.lean-ts/workspace/LeanTsEmbed/<module>/<name>.lean`, builds it with Lake
+  block to `.leanfran/workspace/LeanTsEmbed/<module>/<name>.lean`, builds it with Lake
   and generates `_lean/<module>__<name>.ts` next to the module (and `_lean/<module>.ts`
-  when the module has one block) and `.lean-ts/blocks.json`. A Lean error is reported
+  when the module has one block) and `.leanfran/blocks.json`. A Lean error is reported
   at the line of the TypeScript file with exit code 254.
 - `uses: ["./geometry.ts:geometry"]` imports and opens another block of the package;
   the generated module imports the types and schemas of that block's module.
@@ -141,20 +141,20 @@ lean-ts generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
   functions take and return `StandardSchemaV1.InferOutput<typeof LineItem>` (a
   type-only import), run the model's `~standard.validate` on the arguments and return
   plain objects.
-- `output: { tagKey, option }` of a block and the `"lean-ts"` field of `package.json`
-  (`{ "lean-ts": { "tagKey": "kind", "option": "undefined" } }`, overridden by the
+- `output: { tagKey, option }` of a block and the `"leanfran"` field of `package.json`
+  (`{ "leanfran": { "tagKey": "kind", "option": "undefined" } }`, overridden by the
   block) are the generation settings; a block and the blocks it uses must have the
   same settings.
 - A generated module registers its block and its settings when imported;
   `lean(...)` throws `LeanBlockStale` when no registered module was generated from the
   same name, source, options, model JSON Schemas and generator version, or (in Node,
   where it reads the `package.json` above the generated module) with the current
-  settings. With `LEAN_TS_AUTO_SYNC=1` it runs
-  `lean-ts sync` instead, and the regenerated module is used from the next start.
-- `lean-ts status` compares the keys (which also cover the module path and the
-  `"lean-ts"` field of `package.json`) with `.lean-ts/blocks.json` without Lean and
+  settings. With `LEANFRAN_TS_AUTO_SYNC=1` it runs
+  `leanfran sync` instead, and the regenerated module is used from the next start.
+- `leanfran status` compares the keys (which also cover the module path and the
+  `"leanfran"` field of `package.json`) with `.leanfran/blocks.json` without Lean and
   exits with 254 when a block is stale.
-- Commit `_lean/` and `.lean-ts/blocks.json`; ignore `.lean-ts/workspace/`. The
+- Commit `_lean/` and `.leanfran/blocks.json`; ignore `.leanfran/workspace/`. The
   package then runs without Lean.
 
 ## Values
@@ -214,7 +214,7 @@ Discount["~standard"].validate({ percent: { p: 10 } }) // { value: { ctor: "perc
 ```
 
 - Every type is a `LeanSchema<Input, Output>`: a `StandardSchemaV1` and
-  `StandardJSONSchemaV1` (`@standard-schema/spec` 1.1.0, vendor `lean-ts`) with the
+  `StandardJSONSchemaV1` (`@standard-schema/spec` 1.1.0, vendor `leanfran`) with the
   descriptor in `desc`. Hono's `sValidator("json", Range)`, tRPC, TanStack Form and
   zod's `z.custom` take it as it is. `Input` is the JSON of Lean's
   `deriving ToJson`: a structure is an object (the fields of a parent flat, an `x?`
@@ -229,7 +229,7 @@ Discount["~standard"].validate({ percent: { p: 10 } }) // { value: { ctor: "perc
   JSON Schema (`maximum`, `exclusiveMinimum`, `maxLength`, `maxItems`, ...).
 - `jsonSchema.input` and `.output` take `draft-2020-12`, `draft-07` and `openapi-3.0`;
   recursive types use `$defs`/`definitions`.
-- `lean-ts/schema` has the scalar schemas (`Nat`, `Int`, `UInt8`.., `String`, `Float`,
+- `leanfran/schema` has the scalar schemas (`Nat`, `Int`, `UInt8`.., `String`, `Float`,
   ...), `toJSON` (safe integers as numbers, the others as strings), `fromJSON`,
   `stringify` (`bigint` as JSON numbers) and `parse` (integer literals read without
   loss through the `JSON.parse` reviver's source text).
@@ -247,8 +247,8 @@ Discount["~standard"].validate({ percent: { p: 10 } }) // { value: { ctor: "perc
 
 ```ts
 // src/calc.ts
-import { lean } from "lean-ts"
-import { model } from "lean-ts/verify"
+import { lean } from "leanfran"
+import { model } from "leanfran/verify"
 import * as spec from "./_lean/calc.ts"
 
 export const specBlock = lean(
@@ -287,14 +287,14 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
 ```
 
 ```
-lean-ts check --package <dir> [--lean-typescript <path>] [--require proved]
-lean-ts status --package <dir>
+leanfran check --package <dir> [--leanfran-typescript <path>] [--require proved]
+leanfran status --package <dir>
 ```
 
-- `model(fn, { refines?, requires?, ensures? })` (`lean-ts/verify`) returns the function
+- `model(fn, { refines?, requires?, ensures? })` (`leanfran/verify`) returns the function
   and records it; the specifications are public functions of `lean(...)` blocks (each
   generated function carries its Lean name as `__leanName`).
-- `lean-ts check` syncs the package, reads the `model(...)` calls with oxc-parser,
+- `leanfran check` syncs the package, reads the `model(...)` calls with oxc-parser,
   translates each function (a `function` declaration or a `const` arrow function) into
   `LeanTsModel.<module>.<function>` in Lean `do` notation over `LeanTsLib.Ts`
   (`src/lean/LeanTsLib/Ts.lean`), states `<function>.obligation.refines`
@@ -305,16 +305,16 @@ lean-ts status --package <dir>
   `proved`, `sorry`, `axioms` (an axiom outside `propext`, `Quot.sound`,
   `Classical.choice`), `failed` (its proof file does not build), `missing` or
   `mismatch` (the theorem's type is not the obligation). It writes
-  `<dir>/lean-ts.lock` (with a `spec_hash` of each function's AST without positions
+  `<dir>/leanfran.lock` (with a `spec_hash` of each function's AST without positions
   and of the keys of its specification blocks); `--require proved` exits with 254
   unless every obligation is proved. A construct outside the subset stops `check` with
-  254 and the file, line and column. Commit `lean-ts.lock` with `_lean/`; `status` and the
+  254 and the file, line and column. Commit `leanfran.lock` with `_lean/`; `status` and the
   replaced specifications read it.
-- `lean-ts status` also prints the obligations of the lock and marks a function whose
+- `leanfran status` also prints the obligations of the lock and marks a function whose
   hash changed `stale` (exit code 254) without Lean.
 - The subset: parameters and results annotated with `number`, `bigint`, `boolean`,
   `string`, `T[]`, `readonly T[]`, `[A, B]`, `T | null`, `T | undefined`, `Nat` and `Int`
-  of `lean-ts/schema`, the structures, inductive types and enums generated from a block
+  of `leanfran/schema`, the structures, inductive types and enums generated from a block
   and `z.infer<typeof X>` (any type taking `typeof X`) of a model `X` of a block;
   `const`/`let` and reassignment, compound assignment, `++`, `if`, `switch` on a string,
   an enum or the tag of an inductive value, early `return`, `for ... of`,
@@ -337,7 +337,7 @@ lean-ts status --package <dir>
   types from the source of the `model(...)` call, discards arguments that fail
   `requires` and results that are not safe integers, and throws `PropertyFailure` with
   the counterexample. `checkModule(m)` runs it for every model function of a module.
-  `arbitrary(schema, fc)` of `lean-ts/schema` generates the values of a descriptor.
+  `arbitrary(schema, fc)` of `leanfran/schema` generates the values of a descriptor.
 - A proved `refines` without `requires` replaces the specification: the lock records
   it, `sync` writes `LeanTsCsimp/<module>.lean` (`@[extern "ts:src/calc.ts#addOne(n)"]
   def addOne := @spec.succ` and an `rfl` `@[csimp]` theorem), and the emitter makes the
@@ -356,13 +356,13 @@ lean-ts status --package <dir>
 
 [`samples/`](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples) holds packages with Lean blocks
 and verified TypeScript functions. `make samples` syncs each one, runs it, compares the output with
-its `expected.txt`, checks the proofs of the verified ones with `lean-ts check --require proved`,
+its `expected.txt`, checks the proofs of the verified ones with `leanfran check --require proved`,
 and fails when a committed generated module is out of date.
 
 | sample                                                                                                            | shows                                                                                                                      |
 | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | [word-count](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/word-count)                   | strings and lists, a proof by induction                                                                                    |
-| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/roman-numerals)           | a lake project compiled with `lean-ts generate`, a round-trip theorem checked for every number below 1000                  |
+| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/roman-numerals)           | a lake project compiled with `leanfran generate`, a round-trip theorem checked for every number below 1000                 |
 | [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/todo-cli)                       | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected                                     |
 | [generic-search](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/generic-search)           | polymorphic functions proved for every type, called through monomorphic definitions                                        |
 | [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/TypeScript/samples/pricing-api)                 | Hono with a zod model and a Lean inductive type as request body, 400 for invalid input, OpenAPI                            |
@@ -377,14 +377,14 @@ and the verification of TypeScript functions (10 to 14).
 ## The CLI
 
 ```
-lean-typescript module generate --module-name Foo.Bar [--roots <Name> ...] [--main <Name>]
+leanfran-typescript module generate --module-name Foo.Bar [--roots <Name> ...] [--main <Name>]
   [--namespace <Name>] [--import <Name> ...] [--search-path <dir> ...] [--output-file <path>]
   [--runtime-path <specifier>] [--type-module <Name>=<specifier> ...] [--model-module <Name>=<key> ...]
   [--tag-key <key>] [--option null|undefined] [--ts-root <specifier>] [--batch <file>]
   [--internal-only] [--output json|text]
-lean-typescript project generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
-lean-typescript obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
-lean-typescript help | --version | --generator-version
+leanfran-typescript project generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
+leanfran-typescript obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
+leanfran-typescript help | --version | --generator-version
 ```
 
 The roots default to the module's public definitions with IR. Each root becomes a
@@ -399,14 +399,14 @@ inductive types of the module (and those the public functions use) are exported 
 types and schemas (summary `types`). Exit codes: 0 success, 252 invalid parameters,
 254 input that cannot be converted (an extern the runtime does not provide, a name
 without IR, a constructor field named as the `--tag-key`, an invalid `--tag-key` or
-`--option`), 255 other errors. `--batch` runs a JSON array of jobs against one environment (`lean-ts sync`
+`--option`), 255 other errors. `--batch` runs a JSON array of jobs against one environment (`leanfran sync`
 uses it); `project generate` builds a lake project and writes `<A>/<B>.ts` per module
 `A.B`.
 
 ```ts
-// Generated by lean-typescript (generator 4) from LeanTsTest.Public. Do not edit.
-import * as L from "lean-ts/runtime"
-import type { Obj } from "lean-ts/runtime"
+// Generated by leanfran-typescript (generator 4) from LeanTsTest.Public. Do not edit.
+import * as L from "leanfran/runtime"
+import type { Obj } from "leanfran/runtime"
 
 function l_LeanTsTest_Public_double(x_1: Obj): Obj {
   const x_2: Obj = L.lean_nat_add(x_1, x_1)
@@ -433,16 +433,16 @@ export function double(n: bigint | number): bigint {
 - `LeanTs/RuntimeExterns.lean` — the runtime functions the generated code may call
   (generated from `src/runtime` by `make gen-externs`).
 - `LeanTs/Check.lean` — `obligations check`: the state of each obligation from the type and the axioms of its proof.
-- `Main.lean` — the CLI `lean-typescript`.
-- `src/verify/` — `lean-ts/verify` (`model`, `checkModel`, `checkModule`), the translation of TypeScript functions to Lean (`translate.ts`) and `lean-ts check` and `status` with `lean-ts.lock` (`check.ts`); `src/lean/LeanTsLib/Ts.lean` — the meaning of the TypeScript operations; `src/schema/arbitrary.ts` — fast-check arbitraries of the descriptors.
+- `Main.lean` — the CLI `leanfran-typescript`.
+- `src/verify/` — `leanfran/verify` (`model`, `checkModel`, `checkModule`), the translation of TypeScript functions to Lean (`translate.ts`) and `leanfran check` and `status` with `leanfran.lock` (`check.ts`); `src/lean/LeanTsLib/Ts.lean` — the meaning of the TypeScript operations; `src/schema/arbitrary.ts` — fast-check arbitraries of the descriptors.
 - `src/index.ts`, `src/embed.ts` — `lean(...)`, `LeanBlockStale` and the block keys;
-  `src/scan.ts`, `src/sync.ts`, `src/cli.ts` — the CLI `lean-ts` (`sync`, `status`,
+  `src/scan.ts`, `src/sync.ts`, `src/cli.ts` — the CLI `leanfran` (`sync`, `status`,
   `generate`); `src/runtime/block.ts` — the registry the generated modules register in;
   `src/models.ts` — the Lean structures of the user's models (`lean(..., { models })`).
-- `src/schema/` — `lean-ts/schema`: `LeanSchema` (Standard Schema and Standard JSON
+- `src/schema/` — `leanfran/schema`: `LeanSchema` (Standard Schema and Standard JSON
   Schema), the scalar schemas, `toJSON`, `fromJSON`, `stringify`, `parse` and the JSON
   Schema of a descriptor (`desc.ts`).
-- `src/runtime/` — the runtime (npm package `lean-ts`, export `./runtime`):
+- `src/runtime/` — the runtime (npm package `leanfran`, export `./runtime`):
   `object.ts` (the `Obj` type, constructors, closures, `lean_apply`,
   `lean_trampoline`), `nat.ts`/`int.ts`/`uint.ts`/`float.ts` (numeric tower),
   `string.ts`, `array.ts` (Array, ByteArray, FloatArray), `io.ts` (`IO.Error`,
@@ -458,10 +458,10 @@ export function double(n: bigint | number): bigint {
   the 32-bit profile; `test/*.test.ts` — Vitest tests of the runtime and of the
   public functions and schemas with both generation settings (`test/public.test.ts`),
   the JSON against Lean's `ToJson` (`test/json.test.ts`), Standard Schema with Hono and
-  zod (`test/standard.test.ts`); `test/embed.test.ts` — `lean-ts sync`,
+  zod (`test/standard.test.ts`); `test/embed.test.ts` — `leanfran sync`,
   `status` and `generate` on the fixtures `test/embed/app/` (with its committed
-  `src/_lean/` and `.lean-ts/blocks.json`) and `test/project/`.
-- `samples/` — the samples (pnpm workspace packages that link `lean-ts`), `samples/run.sh` and
+  `src/_lean/` and `.leanfran/blocks.json`) and `test/project/`.
+- `samples/` — the samples (pnpm workspace packages that link `leanfran`), `samples/run.sh` and
   `samples/Makefile` (`test`, `verify`).
 - `scripts/bump-version.sh` — sets the version of `package.json`, `Main.lean` and `flake.nix`;
   the `Release` workflow runs it, tags `vX.Y.Z` and starts the `Publish` workflow, which packs and
@@ -552,12 +552,12 @@ modules into `test-out/` and diffs them against the native oracles), `./test-pub
 (generates `test-out/public.ts` with the default settings, `test-out/public-alt.ts`
 with `--tag-key _tag --option undefined` and `test-out/json.ts`, and runs
 `test/public.test.ts` and `test/json.test.ts` against `oracle-json`), `./fuzz.sh`,
-the type check of every generated module (`vp lint test-out/**/*.ts`), `lean-ts
+the type check of every generated module (`vp lint test-out/**/*.ts`), `leanfran
 status` of the embedding and verification fixtures, `test/verify/test.sh` (copies
 `test/verify/app/` to `test-out/verify/<scene>/` and checks the states proved, sorry,
 axioms, missing, mismatch, failed and stale, `--require proved`, the TypeScript functions
 called through their specifications, an untranslatable function and a wrong
-implementation that `checkModel` rejects with a counterexample), `make samples` (`lean-ts check
+implementation that `checkModel` rejects with a counterexample), `make samples` (`leanfran check
 --require proved` on the verified samples, `samples/run.sh` on every sample, and no difference in
 the committed generated modules), and `vp run check` (`vp check && vp test`, which
 includes `test/embed.test.ts`). `test-diff.sh` covers: 136 function-level
@@ -609,11 +609,11 @@ below is enforced by `test-diff.sh` diffing node output against that native bina
   semantics (print to stderr, return the `Inhabited` default, continue), `dbgTrace`/
   `dbgTraceIfShared`/`dbgSleep`.
 
-### Where lean-ts is _more_ robust than the C backend
+### Where leanfran is _more_ robust than the C backend
 
 - **Closure-boundary TCO.** The native C backend does not TCO tail calls that cross a
   closure application (CPS/continuation loops), so programs like `cpsCount`/`cpsSum`
-  abort with `Stack overflow detected` around N≈1e5. lean-ts lowers tail `.ap` to an
+  abort with `Stack overflow detected` around N≈1e5. leanfran lowers tail `.ap` to an
   apply-thunk and runs them in constant JS stack. The diff-tests therefore check value
   equality at a native-safe N, and the no-overflow property at N=1e6 on the node side only.
 
@@ -653,8 +653,8 @@ trade an honest hard error for a silent divergence:
 
 ## Remaining honest gaps vs EmitC
 
-- The closure-boundary TCO divergence above is the one place lean-ts and native cannot
-  agree at large N (lean-ts is the more robust side); value equality holds at native-safe N.
+- The closure-boundary TCO divergence above is the one place leanfran and native cannot
+  agree at large N (leanfran is the more robust side); value equality holds at native-safe N.
 - `Float32` transcendentals use double-precision `Math.*` narrowed via `Math.fround`,
   whose rounding path differs from single-precision libm (`sinf`), so they can differ by
   more than 1 ULP at f32; the `%f` 6-digit `toString` comparison absorbs this but direct

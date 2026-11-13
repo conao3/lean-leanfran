@@ -1,6 +1,6 @@
 //! A `lean!` block in a module file, used by `crate::scaled`.
 
-lean_rust::lean! {
+leanfran::lean! {
     pub mod shapes;
     r#"
     structure Point where

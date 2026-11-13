@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as report from "./_lean/report.ts"
 import "./shapes.ts"
 

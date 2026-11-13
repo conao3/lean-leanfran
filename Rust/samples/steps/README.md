@@ -27,6 +27,6 @@ cargo workspace with a README, tests (`cargo test`), and a `make test` that the 
 | [12-requires](12-requires) | `requires`: an assumption on the arguments |
 | [13-refines](13-refines) | `refines`: equal to a spec, which then runs the Rust function |
 | [14-loops](14-loops) | loop labels and a proof by induction |
-| [15-structs-enums](15-structs-enums) | the crate's structs and enums in specs (`derive(lean_rust::Model)`) |
-| [16-opaque](16-opaque) | `#[lean_rust::opaque]`: a model written by hand |
+| [15-structs-enums](15-structs-enums) | the crate's structs and enums in specs (`derive(leanfran::Model)`) |
+| [16-opaque](16-opaque) | `#[leanfran::opaque]`: a model written by hand |
 | [17-generics](17-generics) | a generic function proved for every `Ord` type |

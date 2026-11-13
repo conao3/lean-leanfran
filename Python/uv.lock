@@ -214,7 +214,7 @@ wheels = [
 ]
 
 [[package]]
-name = "lean-python"
+name = "leanfran"
 version = "0.5.0"
 source = { editable = "." }
 dependencies = [

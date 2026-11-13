@@ -1,6 +1,6 @@
 //! Step 6: importing Lean modules into a block, and `do` notation.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Duplicates in a list, found with a hash set.
     #[lean(imports = ["Std.Data.HashSet"])]
     pub mod dedup;

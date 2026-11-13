@@ -1,8 +1,8 @@
 {
-  "name": "lean-ts-sample-roman-numerals",
+  "name": "leanfran-sample-roman-numerals",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../.."
+    "leanfran": "link:../.."
   }
 }

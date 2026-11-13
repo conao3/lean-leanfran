@@ -1,0 +1,20 @@
+[package]
+name = "leanfran-build"
+description = "Build script support of leanfran: checks the lean! blocks of a crate with Lean, generates their Rust code, and checks the proofs of the modelled functions against the lockfile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+syn = { version = "3", features = ["full", "visit", "visit-mut", "extra-traits"] }
+toml = "1.2"

@@ -14,7 +14,7 @@ def main():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     f = getattr(mod, fn)
-    from lean_python import io
+    from leanfran import io
 
     if kind == "report":
         out = f(0)

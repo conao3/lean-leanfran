@@ -1,0 +1,7 @@
+{
+  "src/mid.ts:spec": {
+    "fnv": "9b12c48889dcbc5b",
+    "output": "src/_lean/mid__spec.ts",
+    "sha256": "86c5d4ded0a82e8b27ba6623f96b20dbf3381bd910314b3b0bbb44af02831668"
+  }
+}

@@ -2,7 +2,7 @@
 
 pub mod geometry;
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Doubling, with a proof.
     pub mod arith;
     r#"
@@ -22,7 +22,7 @@ lean_rust::lean! {
     "#
 }
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Std.Data.HashMap"])]
     pub mod counts;
     r#"
@@ -33,7 +33,7 @@ lean_rust::lean! {
     "#
 }
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(uses = [crate::geometry::shapes, self::arith])]
     pub mod scaled;
     r#"
@@ -46,7 +46,7 @@ lean_rust::lean! {
     "#
 }
 
-lean_rust::lean! {
+leanfran::lean! {
     /// A polymorphic function instantiated for Rust.
     pub mod generic;
     r#"

@@ -1,12 +1,12 @@
 # Samples
 
-Programs built with lean-clj, each small enough to read in one sitting. Every
-directory is a Clojure project that depends on lean-clj through
+Programs built with leanfran, each small enough to read in one sitting. Every
+directory is a Clojure project that depends on leanfran through
 `:local/root`, with its own README and a `make test` that the repository's
 `make check` runs. Run the samples inside `nix develop` of the repository
 root.
 
-lean-clj is used in three ways, and the samples follow them.
+leanfran is used in three ways, and the samples follow them.
 
 ## 1. Write functions in Lean and call them from Clojure
 
@@ -21,7 +21,7 @@ functions of the namespace.
 
 ## 2. Compile a Lean project to a Clojure namespace
 
-The `lean-clj` CLI compiles the modules of a lake project to a Clojure
+The `leanfran` CLI compiles the modules of a lake project to a Clojure
 namespace, which you commit and load without Lean.
 
 | Sample | What it shows |
@@ -30,7 +30,7 @@ namespace, which you commit and load without Lean.
 
 ## 3. Write functions in Clojure and verify them in Lean
 
-`lean-clj.typed/defn` gives a Clojure function a Lean signature, and
+`leanfran.typed/defn` gives a Clojure function a Lean signature, and
 `(clojure f)` in a `deflean` block turns the function into a Lean model to
 prove theorems about. The ways of relating an implementation to its
 specification each have a sample:

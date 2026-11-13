@@ -2,8 +2,8 @@
   "Insertion sort written in Clojure, with Lean proofs that `insert-sorted`
   keeps the elements and the order, and that `sort-ints` returns a sorted list."
   (:require
-    [lean-clj.core :refer [deflean]]
-    [lean-clj.typed :as lt]))
+    [leanfran.core :refer [deflean]]
+    [leanfran.typed :as lt]))
 
 
 (lt/defn insert-sorted

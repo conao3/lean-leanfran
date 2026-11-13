@@ -1,0 +1,32 @@
+{
+  "src/arith.ts:arith": {
+    "fnv": "22bd5148e5f6505f",
+    "output": "src/_lean/arith__arith.ts",
+    "sha256": "07475bf8b744f6c1359b39f8abb1ceb1c1ece09a6f605c1f16c9245a85f9d229"
+  },
+  "src/geometry.ts:geometry": {
+    "fnv": "b355655c27eb67fb",
+    "output": "src/_lean/geometry__geometry.ts",
+    "sha256": "b0685a3ae058096bd874255172e2ea65368f78e8439672bab6c2007dd068a892"
+  },
+  "src/pricing.ts:pricing": {
+    "fnv": "fb16ec6c053af7be",
+    "output": "src/_lean/pricing__pricing.ts",
+    "sha256": "8d8f343b9ec3908f926e10de1191dc2deb952986ea890004908f108267d31587"
+  },
+  "src/report.ts:report": {
+    "fnv": "0cbd58fbd3e2a6ff",
+    "output": "src/_lean/report__report.ts",
+    "sha256": "feff876e7b5bd4389b2bcc9f1738ed01ac1726669965858936ad604870ccc38f"
+  },
+  "src/text.ts:greeting": {
+    "fnv": "d2a426a170d4d083",
+    "output": "src/_lean/text__greeting.ts",
+    "sha256": "cf1f1ca47398b1a3efede8712163e94e3e713c227e33b50eaf3f8a69c7e58de7"
+  },
+  "src/text.ts:words": {
+    "fnv": "fd6ae468bc19b3ff",
+    "output": "src/_lean/text__words.ts",
+    "sha256": "75e1e7634f80db33fea2a480617947a8ca507092c47dcca7f29e5a91b1ccd3c3"
+  }
+}

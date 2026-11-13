@@ -2,20 +2,20 @@
 
 use crate::spec::items;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, lean_rust::Model)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, leanfran::Model)]
 pub enum Kind {
     Tool,
     Part,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, lean_rust::Model)]
+#[derive(Clone, Debug, PartialEq, Eq, leanfran::Model)]
 pub struct Item {
     pub id: u32,
     pub kind: Kind,
     pub qty: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, lean_rust::Model)]
+#[derive(Clone, Debug, PartialEq, Eq, leanfran::Model)]
 pub enum Event {
     Received { id: u32, n: u32 },
     Shipped { id: u32, n: u32 },
@@ -24,7 +24,7 @@ pub enum Event {
 
 /// The item after the event: quantities saturate at 0 and `u32::MAX`, events of other items
 /// change nothing.
-#[lean_rust::model(refines = items::apply, ensures(same_id = items::same_id), strategy = crate::item::inputs)]
+#[leanfran::model(refines = items::apply, ensures(same_id = items::same_id), strategy = crate::item::inputs)]
 pub fn apply(it: Item, e: &Event) -> Item {
     match e {
         Event::Received { id, n } if *id == it.id => Item {
@@ -41,8 +41,8 @@ pub fn apply(it: Item, e: &Event) -> Item {
 }
 
 #[cfg(test)]
-fn inputs() -> impl lean_rust::check::proptest::strategy::Strategy<Value = (Item, Event)> {
-    use lean_rust::check::proptest::prelude::*;
+fn inputs() -> impl leanfran::check::proptest::strategy::Strategy<Value = (Item, Event)> {
+    use leanfran::check::proptest::prelude::*;
     let kind = prop_oneof![Just(Kind::Tool), Just(Kind::Part)];
     let item = (0u32..4, kind, any::<u32>()).prop_map(|(id, kind, qty)| Item { id, kind, qty });
     let event = prop_oneof![

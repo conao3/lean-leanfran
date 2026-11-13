@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as todos from "./_lean/model.ts"
 
 export const block = lean(

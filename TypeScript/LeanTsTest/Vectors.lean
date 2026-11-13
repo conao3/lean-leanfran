@@ -1,4 +1,4 @@
-/-! Target functions extracted by the lean-ts CLI. Kept in a library
+/-! Target functions extracted by the leanfran CLI. Kept in a library
 module (not the executable root) so their IR is persisted in the `.olean` and
 visible to `Lean.IR.findEnvDecl` when the CLI re-imports the modules. -/
 

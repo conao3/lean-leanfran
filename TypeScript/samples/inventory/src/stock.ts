@@ -1,6 +1,6 @@
-import { lean } from "lean-ts"
-import type { Nat } from "lean-ts/schema"
-import { model } from "lean-ts/verify"
+import { lean } from "leanfran"
+import type { Nat } from "leanfran/schema"
+import { model } from "leanfran/verify"
 import * as spec from "./_lean/stock.ts"
 import type { Item, Kind } from "./_lean/stock.ts"
 

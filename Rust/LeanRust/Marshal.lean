@@ -842,7 +842,7 @@ structure GenericInst where
 structure GenericFn where
   lean : Name
   rust : String
-  /-- The sealed trait in `__lean_rust_inst`. -/
+  /-- The sealed trait in `__leanfran_inst`. -/
   traitName : String
   typeParams : Array Name
   params : Array (String × Desc)
@@ -899,12 +899,12 @@ def emitGenericFn (facade : String) (g : GenericFn) : String :=
   let insts := ", ".intercalate (g.insts.toList.map fun i => s!"({quoteString i.typesString}, {quoteString (toString i.lean)})")
   let tps := ", ".intercalate (g.typeParams.toList.map fun n => quoteString (toString n))
   s!"#[doc = {quoteString g.doc}]\n#[{facade}::exported({quoteString (toString g.lean)}, type_params = [{tps}], instances = [{insts}])]\n" ++
-    s!"pub fn {g.rust}<T: __lean_rust_inst::{g.traitName}>({params}) -> {ret} \{\n    <T as __lean_rust_inst::{g.traitName}>::{g.rust}({args})\n}\n"
+    s!"pub fn {g.rust}<T: __leanfran_inst::{g.traitName}>({params}) -> {ret} \{\n    <T as __leanfran_inst::{g.traitName}>::{g.rust}({args})\n}\n"
 
 /-- The module of the sealed traits of the generic functions, implemented for the types of
     their instantiations by calling the public functions of the instantiations. -/
 def emitInstModule (gs : Array GenericFn) : String := Id.run do
-  let mut s := "#[doc(hidden)]\npub mod __lean_rust_inst {\n    #[allow(unused_imports)]\n    use super::*;\n    mod sealed {\n        pub trait Sealed {}\n    }\n"
+  let mut s := "#[doc(hidden)]\npub mod __leanfran_inst {\n    #[allow(unused_imports)]\n    use super::*;\n    mod sealed {\n        pub trait Sealed {}\n    }\n"
   let mut sealed : Std.HashSet String := {}
   for g in gs do
     for i in g.insts do
@@ -955,7 +955,7 @@ def typeUsesProof (types : Std.HashMap String TypeDef) (d : Desc) : Option Strin
 /-- Generates the module for `roots`: the internal functions they need, the generated types
     and a public function per root that can be marshalled (the others are `skipped`). A root
     replaced by a `@[csimp]` lemma also has its own definition as a public function of the
-    module `__lean_rust_spec`, which re-exports the other public functions. `modelNs` is the
+    module `__leanfran_spec`, which re-exports the other public functions. `modelNs` is the
     namespace of the crate's Aeneas model, whose types are the crate's Rust types. -/
 def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × String)) (facade : String) (internalOnly : Bool)
     (modelNs : Option Name := none) :
@@ -1093,7 +1093,7 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
     let genericItems := if generics.isEmpty then "" else
       String.join (generics.toList.map fun g => emitGenericFn facade g ++ "\n") ++ emitInstModule generics ++ "\n"
     items := items ++ genericItems
-    let mut specMod := "#[doc(hidden)]\n#[allow(unused_imports)]\npub mod __lean_rust_spec {\n    pub use super::*;\n"
+    let mut specMod := "#[doc(hidden)]\n#[allow(unused_imports)]\npub mod __leanfran_spec {\n    pub use super::*;\n"
     for f in copies do
       match emitPublic types declMap facade f with
       | .ok s => specMod := specMod ++ s

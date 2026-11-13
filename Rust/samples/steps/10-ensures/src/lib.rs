@@ -1,7 +1,7 @@
 //! Step 10: `ensures`, a condition on the result, proved for every input.
 
 pub mod spec {
-    lean_rust::lean! {
+    leanfran::lean! {
         #[lean(imports = ["Aeneas"])]
         pub mod double;
         r#"
@@ -17,7 +17,7 @@ use spec::double;
 
 /// `2 * x`, or `u32::MAX` when that overflows. The obligation also says that `x * 2` does not
 /// overflow where it runs: the model fails where the Rust function panics.
-#[lean_rust::model(ensures(ge = double::ge))]
+#[leanfran::model(ensures(ge = double::ge))]
 pub fn saturating_double(x: u32) -> u32 {
     if x > u32::MAX / 2 {
         u32::MAX

@@ -1,4 +1,4 @@
-name = "lean_rust_wasm_test"
+name = "leanfran_wasm_test"
 defaultTargets = ["LeanRustGen"]
 
 [[lean_lib]]

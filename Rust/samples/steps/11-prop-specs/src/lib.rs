@@ -1,7 +1,7 @@
 //! Step 11: a `Prop` spec, named by a string: proved, but not tested.
 
 pub mod spec {
-    lean_rust::lean! {
+    leanfran::lean! {
         #[lean(imports = ["Aeneas"])]
         pub mod double;
         r#"
@@ -14,7 +14,7 @@ pub mod spec {
 }
 
 /// `2 * x`, or `u32::MAX` when that overflows.
-#[lean_rust::model(ensures(exact = "IsSaturatingDouble"))]
+#[leanfran::model(ensures(exact = "IsSaturatingDouble"))]
 pub fn saturating_double(x: u32) -> u32 {
     if x > u32::MAX / 2 {
         u32::MAX

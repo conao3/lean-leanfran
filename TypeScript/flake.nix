@@ -1,5 +1,5 @@
 {
-  description = "lean-ts: a Lean IR -> TypeScript backend with a typed runtime";
+  description = "leanfran: a Lean IR -> TypeScript backend with a typed runtime";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -36,7 +36,7 @@
               done
 
               if [[ ! -f "$workspace_root/pnpm-workspace.yaml" ]]; then
-                printf '%s\n' "vp must run inside the lean-ts workspace" >&2
+                printf '%s\n' "vp must run inside the leanfran workspace" >&2
                 exit 1
               fi
 
@@ -57,8 +57,8 @@
           };
         in
         {
-          packages.lean-typescript = pkgs.stdenv.mkDerivation {
-            pname = "lean-typescript";
+          packages.leanfran-typescript = pkgs.stdenv.mkDerivation {
+            pname = "leanfran-typescript";
             version = "0.5.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
@@ -76,16 +76,16 @@
             ];
             buildPhase = ''
               export HOME=$TMPDIR
-              lake build lean-typescript
+              lake build leanfran-typescript
             '';
             installPhase = ''
-              install -Dm755 .lake/build/bin/lean-typescript $out/bin/lean-typescript
-              wrapProgram $out/bin/lean-typescript --set-default LEAN_SYSROOT ${pkgs.lean4}
+              install -Dm755 .lake/build/bin/leanfran-typescript $out/bin/leanfran-typescript
+              wrapProgram $out/bin/leanfran-typescript --set-default LEAN_SYSROOT ${pkgs.lean4}
             '';
-            meta.mainProgram = "lean-typescript";
+            meta.mainProgram = "leanfran-typescript";
           };
 
-          packages.default = config.packages.lean-typescript;
+          packages.default = config.packages.leanfran-typescript;
 
           treefmt = {
             projectRootFile = "flake.nix";
@@ -103,7 +103,7 @@
               excludes = [
                 "lake-manifest.json"
                 "**/_lean/**"
-                "**/.lean-ts/**"
+                "**/.leanfran/**"
               ];
             };
           };

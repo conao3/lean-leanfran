@@ -4,7 +4,7 @@
 satisfy it.
 
 ```rust
-#[lean_rust::model(requires = mid::ordered, ensures(between = mid::between))]
+#[leanfran::model(requires = mid::ordered, ensures(between = mid::between))]
 pub fn midpoint(lo: u32, hi: u32) -> u32 {
     lo + (hi - lo) / 2
 }

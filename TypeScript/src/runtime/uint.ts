@@ -3,7 +3,7 @@ import { asNat, lean_bool } from "./object.ts"
 
 // USize / pointer width. The C runtime's size_t == sizeof(void*) (8 on 64-bit,
 // 4 on 32-bit), and usize ctor slots / the packed-usize accessor width are
-// derived from it. lean-ts targets a 64-bit-like host (BigInt for 64-bit), so
+// derived from it. leanfran targets a 64-bit-like host (BigInt for 64-bit), so
 // WORD_BITS defaults to 64; route every usize-width decision through this single
 // constant so a 32-bit profile is a one-line change.
 export const WORD_BITS: number = 64

@@ -1,7 +1,7 @@
 # verified-clojure
 
 Clojure functions proved correct in Lean. The functions are written with
-`lean-clj.typed/defn`, which keeps a Lean signature on an ordinary Clojure
+`leanfran.typed/defn`, which keeps a Lean signature on an ordinary Clojure
 function; `(clojure f)` in a `deflean` block turns the function into a Lean
 model to state and prove theorems about.
 
@@ -46,5 +46,5 @@ make test    # run verified.main and compare with expected.txt
 make run
 ```
 
-`verified.main` also runs `lean-clj.typed/check` on each function, which
+`verified.main` also runs `leanfran.typed/check` on each function, which
 compares the Clojure function with its Lean model on generated inputs.

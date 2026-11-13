@@ -1,6 +1,6 @@
 //! Step 3: a Lean structure is a Rust struct.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Points on the integer grid.
     pub mod geometry;
     r#"
@@ -23,7 +23,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::geometry::{self, Point};
-    use lean_rust::{Int, Nat};
+    use leanfran::{Int, Nat};
 
     fn pt(x: i64, y: i64) -> Point {
         Point {

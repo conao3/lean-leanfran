@@ -287,7 +287,7 @@ function decap(t: string): string {
 
 function osCode(e: Obj): number {
   const data = asCtor(e).sdata
-  if (data === null) throw new TypeError("lean-ts runtime: IO.Error without an osCode")
+  if (data === null) throw new TypeError("leanfran runtime: IO.Error without an osCode")
   return data.getUint32(0, true)
 }
 
@@ -371,7 +371,7 @@ export function lean_io_error_to_string(e: Obj): string {
     case IO_ERROR_USER:
       return asString(asCtor(e).fields[0])
     default:
-      throw new TypeError(`lean-ts runtime: IO.Error has no constructor ${lean_tag(e)}`)
+      throw new TypeError(`leanfran runtime: IO.Error has no constructor ${lean_tag(e)}`)
   }
 }
 

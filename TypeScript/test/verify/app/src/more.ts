@@ -1,5 +1,5 @@
-import { lean } from "lean-ts"
-import { model } from "lean-ts/verify"
+import { lean } from "leanfran"
+import { model } from "leanfran/verify"
 import * as more from "./_lean/more.ts"
 import type { Color, Point, Shape } from "./_lean/more.ts"
 

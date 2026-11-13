@@ -1,6 +1,6 @@
 //! The specs, over the Lean types Aeneas generates for the Rust types.
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas", "LeanRustGen.Model.inventory.Types"])]
     pub mod items;
     r#"

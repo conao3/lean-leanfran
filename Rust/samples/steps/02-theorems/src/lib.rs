@@ -1,6 +1,6 @@
 //! Step 2: theorems next to the definitions, checked when the crate is built.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// The sum of the numbers up to `n`, and its closed form.
     pub mod sums;
     r#"
@@ -21,7 +21,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::sums;
-    use lean_rust::Nat;
+    use leanfran::Nat;
 
     #[test]
     fn sum_to() {

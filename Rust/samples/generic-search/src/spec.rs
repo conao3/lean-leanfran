@@ -1,6 +1,6 @@
 //! The specs, polymorphic over a linear order and instantiated for the types of the tests.
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas", "Mathlib.Data.String.Basic"])]
     pub mod search;
     r#"

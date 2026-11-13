@@ -1,7 +1,7 @@
-import LeanRustGen.Obligation.lean_rust_verify_test.generic
+import LeanRustGen.Obligation.leanfran_verify_test.generic
 open Aeneas Aeneas.Std Result
 
-namespace lean_rust_verify_test.generic
+namespace leanfran_verify_test.generic
 
 theorem max_of.proof.ge : max_of.obligation.ge := by
   intro T _ ord _ copy a b
@@ -29,4 +29,4 @@ theorem Pair.swap.proof.refines.u32 : Pair.swap.obligation.refines.u32 := by
 theorem larger.proof.refines.i64 : larger.obligation.refines.i64 := by
   sorry
 
-end lean_rust_verify_test.generic
+end leanfran_verify_test.generic

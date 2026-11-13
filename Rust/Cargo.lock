@@ -73,10 +73,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "cargo-lean-rust"
+name = "cargo-leanfran"
 version = "0.5.0"
 dependencies = [
- "lean-rust-build",
+ "leanfran-build",
  "serde_json",
  "sha2",
  "syn",
@@ -185,8 +185,8 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 name = "generic-search"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
@@ -230,8 +230,8 @@ dependencies = [
 name = "inventory"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
@@ -241,16 +241,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
-name = "lean-rust"
+name = "leanfran"
 version = "0.5.0"
 dependencies = [
- "lean-rust-macros",
- "lean-rust-runtime",
+ "leanfran-macros",
+ "leanfran-runtime",
  "proptest",
 ]
 
 [[package]]
-name = "lean-rust-build"
+name = "leanfran-build"
 version = "0.5.0"
 dependencies = [
  "proc-macro2",
@@ -263,39 +263,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "lean-rust-difftest"
+name = "leanfran-difftest"
 version = "0.5.0"
 dependencies = [
- "lean-rust-runtime",
+ "leanfran-runtime",
 ]
 
 [[package]]
-name = "lean-rust-embed-test"
+name = "leanfran-embed-test"
 version = "0.5.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
-name = "lean-rust-macros"
+name = "leanfran-macros"
 version = "0.5.0"
 dependencies = [
- "lean-rust-build",
+ "leanfran-build",
  "proc-macro2",
  "quote",
  "syn",
 ]
 
 [[package]]
-name = "lean-rust-public-test"
+name = "leanfran-public-test"
 version = "0.5.0"
 dependencies = [
- "lean-rust",
+ "leanfran",
 ]
 
 [[package]]
-name = "lean-rust-runtime"
+name = "leanfran-runtime"
 version = "0.5.0"
 dependencies = [
  "libc",
@@ -306,19 +306,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "lean-rust-verify-test"
+name = "leanfran-verify-test"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
-name = "lean-rust-wasm-test"
+name = "leanfran-wasm-test"
 version = "0.5.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
@@ -473,7 +473,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "roman-numerals"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
+ "leanfran",
 ]
 
 [[package]]
@@ -570,143 +570,143 @@ dependencies = [
 name = "sorted-search"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-01-functions"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-02-theorems"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-03-structures"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-04-inductives"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-05-collections"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-06-imports"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-07-io"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-08-polymorphic"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-09-lake-project"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
+ "leanfran",
 ]
 
 [[package]]
 name = "step-10-ensures"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-11-prop-specs"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-12-requires"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-13-refines"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-14-loops"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-15-structs-enums"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-16-opaque"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
 name = "step-17-generics"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
@@ -737,8 +737,8 @@ dependencies = [
 name = "todo-cli"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
  "serde_json",
 ]
 
@@ -815,8 +815,8 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 name = "verified-rust"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]
@@ -856,8 +856,8 @@ dependencies = [
 name = "word-count"
 version = "0.1.0"
 dependencies = [
- "lean-rust",
- "lean-rust-build",
+ "leanfran",
+ "leanfran-build",
 ]
 
 [[package]]

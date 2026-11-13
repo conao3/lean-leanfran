@@ -3,8 +3,8 @@
   and a `@[csimp]` proof that they are equal, so that the specification runs as
   the closed form."
   (:require
-    [lean-clj.core :refer [deflean]]
-    [lean-clj.typed :as lt]))
+    [leanfran.core :refer [deflean]]
+    [leanfran.typed :as lt]))
 
 
 (lt/defn sum-to-fast

@@ -1,7 +1,7 @@
 //! Calls the functions of the `lean!` blocks.
 
-use lean_rust::Nat;
-use lean_rust_embed_test::{arith, counts, geometry::shapes, scaled};
+use leanfran::Nat;
+use leanfran_embed_test::{arith, counts, geometry::shapes, scaled};
 
 fn nat(n: u64) -> Nat {
     n.into()
@@ -49,7 +49,7 @@ fn blocks_use_other_blocks() {
 
 #[test]
 fn instantiated_functions_are_generic() {
-    use lean_rust_embed_test::generic;
+    use leanfran_embed_test::generic;
     assert_eq!(
         generic::count_of(vec![nat(1), nat(2), nat(1)], nat(1)),
         nat(2)

@@ -1,4 +1,4 @@
-import { LeanValidationError, parse, stringify } from "lean-ts/schema"
+import { LeanValidationError, parse, stringify } from "leanfran/schema"
 import { m } from "./code.ts"
 
 const p = m.Point.add({ x: 1n, y: -2n }, { x: 3n, y: 5n })

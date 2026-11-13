@@ -2,7 +2,7 @@
 
 use crate::spec::specs;
 
-#[lean_rust::model(refines = specs::arr_sum)]
+#[leanfran::model(refines = specs::arr_sum)]
 pub fn sum3(a: [u32; 3]) -> u64 {
     let mut s = 0u64;
     let mut i = 0;

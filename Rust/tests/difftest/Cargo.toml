@@ -1,12 +1,12 @@
 [package]
-name = "lean-rust-difftest"
+name = "leanfran-difftest"
 version.workspace = true
 edition.workspace = true
 publish = false
 
 [dependencies]
-lean-rust-runtime = { path = "../../crates/lean-rust-runtime" }
+leanfran-runtime = { path = "../../crates/leanfran-runtime" }
 
 [[bin]]
-name = "lean-rust-difftest-io"
+name = "leanfran-difftest-io"
 path = "src/io_main.rs"

@@ -1,9 +1,9 @@
 {
-  "name": "lean-ts-step-13-loops",
+  "name": "leanfran-step-13-loops",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../../..",
+    "leanfran": "link:../../..",
     "fast-check": "4.10.2"
   }
 }

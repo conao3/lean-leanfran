@@ -1,0 +1,20 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::is_leap"
+lean = "step_13_refines.is_leap"
+items = [
+  { rust = "crate::is_leap", hash = "sha256:0f46c6f8e80162bbea969cb354e55cd226ec186a7e89855c7b2771cdf852184e" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "calendar.leap"
+spec_block = "crate::spec::calendar"
+spec_hash = "sha256:e223aba7ed51647709e89b088636efca3da1bd1a470d6e34f8945e7351adb91f"
+hash = "sha256:02b9f48a8b935d9809b0ed96356d0bf5864a51869f62b953c04a4baf7e86ea79"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/IsLeap.lean:12"

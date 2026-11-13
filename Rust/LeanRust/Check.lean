@@ -2,7 +2,7 @@ import Lean
 
 /-! # Checking the proofs of a crate
 
-`lean-rust crate check` imports the modules of a crate's Lean package once and judges each
+`leanfran crate check` imports the modules of a crate's Lean package once and judges each
 obligation `M.obligation.l` by the theorem `M.proof.l`: its type must be the obligation, and it
 may use only the standard axioms. -/
 

@@ -1,5 +1,5 @@
-LEAN_TYPESCRIPT ?= $(abspath ../.lake/build/bin/lean-typescript)
-export LEAN_TYPESCRIPT
+LEANFRAN_TYPESCRIPT ?= $(abspath ../.lake/build/bin/leanfran-typescript)
+export LEANFRAN_TYPESCRIPT
 
 SAMPLES := word-count roman-numerals todo-cli sorted-search inventory generic-search pricing-api verified-typescript
 STEPS := $(sort $(wildcard steps/*/))
@@ -11,4 +11,4 @@ test:
 	for s in $(STEPS) $(SAMPLES); do ./run.sh $$s || exit 1; done
 
 verify:
-	for s in $(VERIFY); do (cd $$s && node node_modules/lean-ts/dist/cli.js check --package . --require proved) || exit 1; done
+	for s in $(VERIFY); do (cd $$s && node node_modules/leanfran/dist/cli.js check --package . --require proved) || exit 1; done

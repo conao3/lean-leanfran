@@ -1,18 +1,18 @@
-# Building checks the lean! block with Lean when .lean-rust/cache/ has no entry for it; the
-# lean-rust CLI of the repository is used then.
-export LEAN_RUST_CLI := $(abspath ../../.lake/build/bin/lean-rust)
+# Building checks the lean! block with Lean when .leanfran/cache/ has no entry for it; the
+# leanfran CLI of the repository is used then.
+export LEANFRAN_CLI := $(abspath ../../.lake/build/bin/leanfran)
 
 .PHONY: all
 all: test
 
-.PHONY: lean-rust
-lean-rust:
-	cd ../.. && lake build lean-rust
+.PHONY: leanfran
+leanfran:
+	cd ../.. && lake build leanfran
 
 .PHONY: run
-run: lean-rust
+run: leanfran
 	cargo run -q -p todo-cli -- $(ARGS)
 
 .PHONY: test
-test: lean-rust
+test: leanfran
 	./test.sh

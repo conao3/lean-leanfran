@@ -15,7 +15,7 @@ theorem roundtrip : ∀ n, n < 1000 → fromRoman (toRoman n) = if n = 0 then no
   decide +kernel
 ```
 
-The `lean-clj` CLI turns the module into the Clojure namespace
+The `leanfran` CLI turns the module into the Clojure namespace
 [`src/roman/core.clj`](src/roman/core.clj), which is committed. Clojure code
 requires it like any namespace, and running it needs only the JVM — no Lean:
 
@@ -42,7 +42,7 @@ make generate
 It checks the proofs with `lake build`, then runs
 
 ```
-lean-clj module generate-namespace --module-name Roman --namespace roman.core \
+leanfran module generate-namespace --module-name Roman --namespace roman.core \
   --search-path lean/.lake/build/lib/lean --output-file src/roman/core.clj
 ```
 

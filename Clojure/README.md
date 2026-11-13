@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="lean-clj" width="100%">
+  <img src="docs/assets/banner.png" alt="leanfran" width="100%">
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
   <a href="https://lean-lang.org/"><img src="https://img.shields.io/badge/Lean-v4.35.0-0f4c81.svg" alt="Lean v4.35.0"></a>
-  <a href="https://clojars.org/io.github.conao3/lean-clj"><img src="https://img.shields.io/clojars/v/io.github.conao3/lean-clj.svg" alt="Clojars"></a>
+  <a href="https://clojars.org/io.github.conao3/leanfran"><img src="https://img.shields.io/clojars/v/io.github.conao3/leanfran.svg" alt="Clojars"></a>
   <a href="https://github.com/conao3/lean-leanfran/stargazers"><img src="https://img.shields.io/github/stars/conao3/lean-leanfran?style=flat" alt="GitHub stars"></a>
 </p>
 
@@ -22,30 +22,30 @@
   <a href="#verifying-clojure-functions">Verifying Clojure</a> ·
   <a href="#the-cli">CLI</a> ·
   <a href="#samples">Samples</a> ·
-  <a href="https://clojars.org/io.github.conao3/lean-clj">Clojars</a> ·
+  <a href="https://clojars.org/io.github.conao3/leanfran">Clojars</a> ·
   <a href="https://github.com/conao3/lean-leanfran/tags">Releases</a>
 </p>
 
 ---
 
 Write a function in Lean 4, prove its properties, and call it from Clojure on
-the JVM. lean-clj compiles Lean's own compiler IR to Clojure, so the code you
+the JVM. leanfran compiles Lean's own compiler IR to Clojure, so the code you
 run is the program Lean's C backend builds, with types and proofs erased.
 
-lean-clj has three parts:
+leanfran has three parts:
 
 | Part | What you do | What you get |
 |---|---|---|
-| **Lean IR → Clojure backend** | Run the `lean-clj` CLI on a Lean module, from a file or a lake project | A Clojure namespace you can commit and load without Lean |
+| **Lean IR → Clojure backend** | Run the `leanfran` CLI on a Lean module, from a file or a lake project | A Clojure namespace you can commit and load without Lean |
 | **`deflean`** | Write Lean inside a Clojure file, as S-expressions or as Lean source | Functions in the current namespace, checked with `lake build` (proofs included) at macro expansion |
-| **`lean-clj.typed`** | Write a Clojure function with a Lean signature and prove theorems about it in `deflean` | Proofs about the Clojure function, and test.check generators, malli schemas, and clj-kondo types from the signature |
+| **`leanfran.typed`** | Write a Clojure function with a Lean signature and prove theorems about it in `deflean` | Proofs about the Clojure function, and test.check generators, malli schemas, and clj-kondo types from the signature |
 
 ## Quick start
 
 ```clojure
 (ns demo.core
   (:refer-clojure :exclude [double])
-  (:require [lean-clj.core :refer [deflean]]))
+  (:require [leanfran.core :refer [deflean]]))
 
 (deflean arith
   (def double [n Nat] Nat
@@ -68,14 +68,14 @@ messages next to the Lean source of the block.
 
 ## Installation
 
-Add lean-clj to `deps.edn` ([Clojars](https://clojars.org/io.github.conao3/lean-clj)):
+Add leanfran to `deps.edn` ([Clojars](https://clojars.org/io.github.conao3/leanfran)):
 
 ```clojure
-{:deps {io.github.conao3/lean-clj {:mvn/version "0.5.0"}}}
+{:deps {io.github.conao3/leanfran {:mvn/version "0.5.0"}}}
 ```
 
 The first expansion of a `deflean` block needs Lean 4.35.0 (`lean`, `lake`)
-and the `lean-clj` CLI on `PATH`:
+and the `leanfran` CLI on `PATH`:
 
 ```
 nix profile install 'github:conao3/lean-leanfran/v0.5.0?dir=Clojure'
@@ -83,7 +83,7 @@ nix profile install 'github:conao3/lean-leanfran/v0.5.0?dir=Clojure'
 
 Get Lean from elan (`elan default v4.35.0`) or from `nix develop` of this
 repository, which also provides Clojure and a JDK. To run generated code, or to
-expand a block whose output sits in `.lean-clj/cache/`, you need Clojure 1.12
+expand a block whose output sits in `.leanfran/cache/`, you need Clojure 1.12
 on JDK 21 or later and no Lean.
 
 ## Values
@@ -116,7 +116,7 @@ integers and `Bool` are `Long`, `UInt64` holds the 64-bit pattern in a `Long`,
 persistent vector.
 
 At run time, only the JVM runs. Lean runs when a `deflean` block expands or
-when the CLI compiles a module, and `lean-clj.runtime` replaces Lean's C
+when the CLI compiles a module, and `leanfran.runtime` replaces Lean's C
 runtime, so no Lean process, FFI, or second heap takes part. The values that
 cross between Clojure and generated code are immutable, and Lean's mutable
 state runs on Clojure's own: `IO.Ref` and `ST.Ref` are atoms, `Task` is a
@@ -130,8 +130,8 @@ redirects them.
 (deflean <block> [{:imports ["Std.Data.HashMap"]}] <command> ...)
 ```
 
-Each command is an S-expression of `lean-clj.dsl` or a string of Lean source.
-`lean-clj.dsl/render` shows the Lean source of a sequence of commands.
+Each command is an S-expression of `leanfran.dsl` or a string of Lean source.
+`leanfran.dsl/render` shows the Lean source of a sequence of commands.
 
 | S-expression | Lean |
 |---|---|
@@ -153,7 +153,7 @@ Each command is an S-expression of `lean-clj.dsl` or a string of Lean source.
 Names:
 
 - A `-` in a symbol becomes lowerCamelCase in Lean (`is-prime` → `isPrime`),
-  and the public Clojure name converts back (`is-prime`). lean-clj keeps `_`,
+  and the public Clojure name converts back (`is-prime`). leanfran keeps `_`,
   so you write Lean lemma names as they are (`Nat.add_comm`).
 - Binder vectors take `(implicit α Type)` and `(inst (BEq α))`. Metadata on a
   name adds modifiers (`^:partial`, `^:private`, `^{:attrs [simp]}`), and
@@ -170,7 +170,7 @@ band bor land lor xor <<< >>> in not-in cons |> <| >>= <$> comp`.
 
 The block becomes the Lean module `LeanCljEmbed.<Namespace>.<Block>` (for
 `demo.core` and `arith`: `LeanCljEmbed.Demo.Core.Arith`) in the lake workspace
-`.lean-clj/`. The workspace is `$LEAN_CLJ_WORKSPACE`, or `.lean-clj/` of the
+`.leanfran/`. The workspace is `$LEANFRAN_CLJ_WORKSPACE`, or `.leanfran/` of the
 project root, the nearest directory up from the working directory with a
 `deps.edn`.
 
@@ -183,25 +183,25 @@ project root, the nearest directory up from the working directory with a
   with instance arguments, say) is reported when the block expands.
 - Each Clojure function that a block defines carries `:lean/name` and
   `:lean/module` metadata.
-- lean-clj caches the generated code in `.lean-clj/cache/` under a hash of the
+- leanfran caches the generated code in `.leanfran/cache/` under a hash of the
   block's Lean module and of the deflean modules it imports, so changing a
   block regenerates the blocks that use it. With the cache present, expanding a
   block needs no Lean.
 - An error from Lean points at the Clojure file and line of the form it came
   from, followed by the Lean source of the block.
-- The `lean-clj` CLI on `PATH` must be the version of the library.
+- The `leanfran` CLI on `PATH` must be the version of the library.
 
 clj-kondo picks up the names a block defines through the hook exported in
-`resources/clj-kondo.exports/io.github.conao3/lean-clj`.
+`resources/clj-kondo.exports/io.github.conao3/leanfran`.
 
 ## Verifying Clojure functions
 
-`lean-clj.typed/defn` defines an ordinary Clojure function with a Lean
+`leanfran.typed/defn` defines an ordinary Clojure function with a Lean
 signature. `(clojure f ...)` in a `deflean` block translates the function into
 a Lean definition, its model, to state and prove theorems about:
 
 ```clojure
-(require '[lean-clj.typed :as lt])
+(require '[leanfran.typed :as lt])
 
 (lt/defn insert-sorted [x Int xs (List Int)] (List Int)
   (if-let [y (first xs)]
@@ -254,7 +254,7 @@ structures stop the translation with the reason.
 ### The models of clojure.core
 
 The Lean library `Clj`
-([`resources/lean-clj/lean/Clj.lean`](resources/lean-clj/lean/Clj.lean)) models
+([`resources/leanfran/lean/Clj.lean`](resources/leanfran/lean/Clj.lean)) models
 the arithmetic of `Nat`, `Int`, and `Float`; truthiness and `nil`; the sequence
 functions (`map`, `filter`, `reduce`, `some`, `every?`, `mapcat`, `keep`,
 `partition`, `distinct`, `sort`, `sort-by`, `take-while`, `interpose`, and
@@ -263,7 +263,7 @@ depends on the type, a model has instances only for the types on which Lean can
 state it: `-` and `dec` take `Int` (Clojure's `(- 3 5)` is `-2`), and `first`,
 `next`, `seq`, and `get` return `Option`. `simp only [clj_simp]` rewrites the
 models to Lean's own operations. Each model is compared with `clojure.core` on
-generated inputs in `test/lean_clj/core_model_test.clj`.
+generated inputs in `test/leanfran/core_model_test.clj`.
 
 A theorem holds for the Clojure function where the function returns a value:
 calls that throw (`Long` overflow, division by zero, an index out of range)
@@ -291,32 +291,32 @@ it.
 
 ## Types
 
-`lean-clj.types` derives from a Lean type, written as in signatures:
+`leanfran.types` derives from a Lean type, written as in signatures:
 
 | Function | Result |
 |---|---|
 | `gen` | a test.check generator of the Clojure values of the type |
 | `valid?` | whether a value has the type, telling lists from vectors |
 | `malli-schema`, `fn-schema` | a malli schema as data, and the function schema of a `lt/defn` var (`[:function ...]` for several arities) |
-| `kondo-type`, `kondo-config`, `write-kondo-config!` | clj-kondo `:type-mismatch` types of `lt/defn` functions, written to `.clj-kondo/lean-clj/types/config.edn` |
+| `kondo-type`, `kondo-config`, `write-kondo-config!` | clj-kondo `:type-mismatch` types of `lt/defn` functions, written to `.clj-kondo/leanfran/types/config.edn` |
 
 It knows `Nat`, `Int`, `Bool`, `String`, `Char`, `Float`, `UInt8`..`UInt64`,
 `Unit`, `(Fin n)`, `List`, `Array`, `Option`, `Prod`, `(Map K V)`, `(Set α)`,
 and the structures, enumerations, and sum types (as `{:tag :circle :r 1}`)
 of `deflean` blocks and generated namespaces, by full Lean name or by a short
-name that one of them has. `lean-clj.malli/instrument!` registers the malli
+name that one of them has. `leanfran.malli/instrument!` registers the malli
 function schemas of the `lt/defn` functions of namespaces and instruments them
 (malli is your dependency).
 
 ## The CLI
 
 ```
-lean-clj module generate-namespace --module-name <Lean module> --namespace <Clojure ns>
+leanfran module generate-namespace --module-name <Lean module> --namespace <Clojure ns>
          [--roots <Lean name> ...] [--strip-namespace <Lean namespace>]
          [--search-path <dir> ...] [--output-file <path>] [--forms-only]
          [--output json|text]
 
-lean-clj project generate --lake-dir <dir> --namespace-prefix <ns>
+leanfran project generate --lake-dir <dir> --namespace-prefix <ns>
          --output-dir <dir> [--modules <Lean module> ...]
 ```
 
@@ -335,21 +335,21 @@ Public functions take the Lean name relative to the module (or
 for an error; its output goes to `*out*` and `*err*`.
 
 The backend works on Lean's compiler IR. A hand-written runtime
-(`lean-clj.runtime`) provides the C symbols of Lean's `@[extern]`
+(`leanfran.runtime`) provides the C symbols of Lean's `@[extern]`
 declarations, including `Float32`, `ByteArray`, `FloatArray`, `Thunk`, `Task`,
 and the standard streams and references of `IO`. A generated namespace checks
 at load time that the runtime has the symbols it uses.
 
 ## Samples
 
-[`samples/`](samples) holds small programs built with lean-clj. Each one is a
+[`samples/`](samples) holds small programs built with leanfran. Each one is a
 Clojure project with its own README and a `make test`.
 
 | Use | Samples |
 |---|---|
 | Write functions in Lean and call them from Clojure (`deflean`) | [`todo-cli`](samples/todo-cli), [`word-count`](samples/word-count) |
 | Compile a Lean project to a Clojure namespace (the CLI) | [`roman-numerals`](samples/roman-numerals) |
-| Write functions in Clojure and verify them in Lean (`lean-clj.typed`) | [`verified-clojure`](samples/verified-clojure), [`sorted-search`](samples/sorted-search), [`inventory`](samples/inventory), [`generic-search`](samples/generic-search), [`typed-schemas`](samples/typed-schemas) |
+| Write functions in Clojure and verify them in Lean (`leanfran.typed`) | [`verified-clojure`](samples/verified-clojure), [`sorted-search`](samples/sorted-search), [`inventory`](samples/inventory), [`generic-search`](samples/generic-search), [`typed-schemas`](samples/typed-schemas) |
 
 [`samples/README.md`](samples/README.md) describes what each sample shows and
 where to start.

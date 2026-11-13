@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/lean-rust",
-    "crates/lean-rust-runtime",
-    "crates/lean-rust-macros",
-    "crates/lean-rust-build",
-    "crates/cargo-lean-rust",
+    "crates/leanfran",
+    "crates/leanfran-runtime",
+    "crates/leanfran-macros",
+    "crates/leanfran-build",
+    "crates/cargo-leanfran",
     "tests/difftest",
     "tests/public",
     "tests/embed",

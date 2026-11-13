@@ -1,6 +1,6 @@
 //! The specs.
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod search;
     r#"

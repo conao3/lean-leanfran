@@ -1,6 +1,6 @@
 //! Step 7: `IO` actions are Rust functions returning `std::io::Result`.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Files, processes, mutable references and errors.
     pub mod actions;
     r#"
@@ -29,7 +29,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::actions;
-    use lean_rust::{Int, Nat};
+    use leanfran::{Int, Nat};
 
     #[test]
     fn files() {

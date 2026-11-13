@@ -1,5 +1,5 @@
 [package]
-name = "lean-rust-wasm-test"
+name = "leanfran-wasm-test"
 version.workspace = true
 edition.workspace = true
 publish = false
@@ -8,7 +8,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-lean-rust = { path = "../../crates/lean-rust", default-features = false }
+leanfran = { path = "../../crates/leanfran", default-features = false }
 
 [build-dependencies]
-lean-rust-build = { path = "../../crates/lean-rust-build" }
+leanfran-build = { path = "../../crates/leanfran-build" }

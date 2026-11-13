@@ -1,4 +1,4 @@
-import * as L from "lean-ts"
+import * as L from "leanfran"
 import * as greetingLean from "./_lean/text__greeting.ts"
 import * as wordsLean from "./_lean/text__words.ts"
 

@@ -1,8 +1,8 @@
 [package]
-name = "lean-rust-public-test"
+name = "leanfran-public-test"
 version.workspace = true
 edition.workspace = true
 publish = false
 
 [dependencies]
-lean-rust = { path = "../../crates/lean-rust" }
+leanfran = { path = "../../crates/leanfran" }

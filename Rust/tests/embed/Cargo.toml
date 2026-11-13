@@ -1,11 +1,11 @@
 [package]
-name = "lean-rust-embed-test"
+name = "leanfran-embed-test"
 version.workspace = true
 edition.workspace = true
 publish = false
 
 [dependencies]
-lean-rust = { path = "../../crates/lean-rust" }
+leanfran = { path = "../../crates/leanfran" }
 
 [build-dependencies]
-lean-rust-build = { path = "../../crates/lean-rust-build" }
+leanfran-build = { path = "../../crates/leanfran-build" }

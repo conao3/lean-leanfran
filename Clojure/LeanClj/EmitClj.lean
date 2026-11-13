@@ -1,11 +1,11 @@
 import Lean
 import LeanClj.Sx
 
-/-! # lean-clj: a Lean IR -> Clojure backend
+/-! # leanfran: a Lean IR -> Clojure backend
 
 IR `Decl`s are read from the environment with `Lean.IR.findEnvDecl`, collected
 transitively from a set of root functions, and emitted as Clojure forms that
-call into the hand-written runtime `lean-clj.runtime`. Reference counting
+call into the hand-written runtime `leanfran.runtime`. Reference counting
 (`inc`/`dec`/`del`/`reset`/`reuse`) is dropped because the JVM has a tracing GC,
 and `isShared` always answers "shared" so that the compiler's in-place update
 branches are never taken on values that Clojure code may alias. -/
@@ -14,7 +14,7 @@ open Lean Lean.IR
 
 namespace LeanClj
 
-def rtNs : String := "lean-clj.runtime"
+def rtNs : String := "leanfran.runtime"
 
 def rt (fn : String) : Sx := .atom s!"{rtNs}/{fn}"
 
@@ -446,7 +446,7 @@ def moduleOf (env : Environment) (c : Name) : String :=
 /-! ## Marshalling between Clojure values and Lean values -/
 
 /-- A marshalling descriptor, emitted as Clojure data and interpreted by
-    `lean-clj.runtime/to-clj` and `from-clj`. -/
+    `leanfran.runtime/to-clj` and `from-clj`. -/
 inductive Desc where
   | kw (k : String)
   | list (d : Desc)

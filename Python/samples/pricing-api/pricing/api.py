@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from lean_python import lean
+from leanfran import lean
 from pricing.models import LineItem
 
 pricing = lean(

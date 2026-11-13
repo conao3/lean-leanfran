@@ -1,0 +1,17 @@
+{
+  "src/calc.ts:spec": {
+    "fnv": "14d2b65d05e7f4d7",
+    "output": "src/_lean/calc__spec.ts",
+    "sha256": "3f2f3406444fea383170f260f1a8830885f5c5f2f61077a421cbb8379c44ec0d"
+  },
+  "src/more.ts:more": {
+    "fnv": "e3981e08265212aa",
+    "output": "src/_lean/more__more.ts",
+    "sha256": "cad7cf4a4916f06e23c6058e0d8eeddfe1c04c80da782f37c53fc4e9b71d1022"
+  },
+  "src/orders.ts:orders": {
+    "fnv": "fe13f2e72acbb5c0",
+    "output": "src/_lean/orders__orders.ts",
+    "sha256": "e0b2a69cfe9e69b835acfc407e7dd948102d008510407520f9106dc46145423c"
+  }
+}

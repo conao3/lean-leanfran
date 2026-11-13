@@ -1,6 +1,6 @@
 //! The specs, in the types of Aeneas's model of Rust.
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod bits;
     r#"
@@ -15,7 +15,7 @@ lean_rust::lean! {
     "#
 }
 
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod sorting;
     r#"

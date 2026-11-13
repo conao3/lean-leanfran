@@ -23,21 +23,21 @@ export interface ModelEntry {
   readonly file: string | undefined
 }
 
-const KEY: unique symbol = Symbol.for("lean-ts.models")
+const KEY: unique symbol = Symbol.for("leanfran.models")
 
 interface ModelRegistry {
-  readonly brand: "lean-ts.models"
+  readonly brand: "leanfran.models"
   readonly models: Map<Spec, ModelEntry>
 }
 
 function isRegistry(x: unknown): x is ModelRegistry {
-  return typeof x === "object" && x !== null && Reflect.get(x, "brand") === "lean-ts.models"
+  return typeof x === "object" && x !== null && Reflect.get(x, "brand") === "leanfran.models"
 }
 
 export function modelRegistry(): Map<Spec, ModelEntry> {
   const existing: unknown = Reflect.get(globalThis, KEY)
   if (isRegistry(existing)) return existing.models
-  const created: ModelRegistry = { brand: "lean-ts.models", models: new Map() }
+  const created: ModelRegistry = { brand: "leanfran.models", models: new Map() }
   Reflect.set(globalThis, KEY, created)
   return created.models
 }
@@ -57,7 +57,7 @@ function callerFile(): string | undefined {
 function checkSpec(fnName: string, label: string, s: unknown): void {
   if (typeof s !== "function" || leanNameOf(s) === undefined)
     throw new TypeError(
-      `lean-ts: the ${label} specification of ${fnName} is not a function of a lean(...) block`,
+      `leanfran: the ${label} specification of ${fnName} is not a function of a lean(...) block`,
     )
 }
 
@@ -125,7 +125,7 @@ async function loadFastCheck(): Promise<FC> {
   try {
     return await import("fast-check")
   } catch (e) {
-    throw new TypeError("lean-ts: checkModel needs the optional peer dependency fast-check", {
+    throw new TypeError("leanfran: checkModel needs the optional peer dependency fast-check", {
       cause: e,
     })
   }
@@ -139,11 +139,11 @@ interface Tables {
 async function paramTypes(entry: ModelEntry): Promise<{ fn: Fn; tables: Tables }> {
   const file = entry.file
   if (file === undefined)
-    throw new TypeError(`lean-ts: the source file of the model call of ${entry.name} is unknown`)
+    throw new TypeError(`leanfran: the source file of the model call of ${entry.name} is unknown`)
   const src = readSource(dirname(file), file)
   const node = src.fns.get(entry.name)
   if (node === undefined)
-    throw new TypeError(`lean-ts: ${entry.name} is not a function declaration of ${file}`)
+    throw new TypeError(`leanfran: ${entry.name} is not a function declaration of ${file}`)
   const modules = new Map<string, unknown>()
   for (const i of src.imports.values())
     if (i.from.startsWith("/") && !modules.has(i.from))
@@ -163,7 +163,7 @@ async function paramTypes(entry: ModelEntry): Promise<{ fn: Fn; tables: Tables }
       const exportName =
         qualifier === undefined ? i.exportName : i.exportName === null ? name : null
       if (exportName === null) return undefined
-      if (i.from === "lean-ts/schema" && (exportName === "Nat" || exportName === "Int")) return BIG
+      if (i.from === "leanfran/schema" && (exportName === "Nat" || exportName === "Int")) return BIG
       const m = modules.get(i.from)
       const v: unknown =
         typeof m === "object" && m !== null ? Reflect.get(m, exportName) : undefined
@@ -172,7 +172,7 @@ async function paramTypes(entry: ModelEntry): Promise<{ fn: Fn; tables: Tables }
           ? Reflect.get(v, "desc")
           : undefined
       if (!isTypeDesc(d))
-        throw new TypeError(`lean-ts: ${src.where(at)}: ${exportName} is not a lean-ts schema`)
+        throw new TypeError(`leanfran: ${src.where(at)}: ${exportName} is not a leanfran schema`)
       const key = `${i.from}#${exportName}`
       descs.set(key, d)
       return { k: "struct", lean: key, ts: exportName, fields: [] }
@@ -237,7 +237,7 @@ function arbOf(
           .filter((v) => standardValidate(schema, v).issues === null)
       }
       const d = tables.descs.get(t.lean)
-      if (d === undefined) throw new TypeError(`lean-ts: no descriptor for ${t.ts}`)
+      if (d === undefined) throw new TypeError(`leanfran: no descriptor for ${t.ts}`)
       return arbitrary(d, fc)
     }
   }
@@ -245,7 +245,7 @@ function arbOf(
 
 export async function checkModel(fn: Spec, options: CheckOptions = {}): Promise<void> {
   const entry = modelRegistry().get(fn)
-  if (entry === undefined) throw new TypeError(`lean-ts: ${fn.name} has no model(...) call`)
+  if (entry === undefined) throw new TypeError(`leanfran: ${fn.name} has no model(...) call`)
   const fc: FC = await loadFastCheck()
   const { fn: sig, tables } = await paramTypes(entry)
   const arbs = sig.params.map((p) => arbOf(fc, p.type, p.nat, tables, options))
@@ -297,6 +297,6 @@ export async function checkModule(
 ): Promise<void> {
   const values = new Set(Object.values(module))
   const entries = [...modelRegistry().values()].filter((e) => values.has(e.fn))
-  if (entries.length === 0) throw new TypeError("lean-ts: the module has no model(...) functions")
+  if (entries.length === 0) throw new TypeError("leanfran: the module has no model(...) functions")
   for (const entry of entries) await checkModel(entry.fn, options)
 }

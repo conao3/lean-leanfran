@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as m from "./_lean/code.ts"
 
 export const block = lean(

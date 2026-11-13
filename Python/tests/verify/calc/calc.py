@@ -1,6 +1,6 @@
 from calc.spec import spec
-from lean_python import Nat
-from lean_python.verify import model
+from leanfran import Nat
+from leanfran.verify import model
 
 
 @model(refines=spec.clampSpec, requires=spec.ordered, ensures={"in_range": spec.inRange})

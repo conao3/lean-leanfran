@@ -1,4 +1,4 @@
-import { checkModel } from "lean-ts/verify"
+import { checkModel } from "leanfran/verify"
 import { sortedIncludes, spec } from "./search.ts"
 
 console.log(sortedIncludes([1, 3, 5, 7], 5), sortedIncludes([1, 3, 5, 7], 4))

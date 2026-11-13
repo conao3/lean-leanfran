@@ -299,10 +299,10 @@ describe("IO", () => {
     expect(user).toBeInstanceOf(Error)
     expect(user.code).toBe("userError")
     expect(user.message).toBe("nope")
-    const missing = ioErrorOf(() => P.openMissing("/nonexistent/lean-ts/missing.txt"))
+    const missing = ioErrorOf(() => P.openMissing("/nonexistent/leanfran/missing.txt"))
     expect(missing.code).toBe("noFileOrDirectory")
     expect(missing.message).toBe(
-      "no such file or directory (error code: 2)\n  file: /nonexistent/lean-ts/missing.txt",
+      "no such file or directory (error code: 2)\n  file: /nonexistent/leanfran/missing.txt",
     )
   })
 })
@@ -444,7 +444,7 @@ describe("structures, inductive types and subtypes", () => {
   test("a namespace of functions is merged into the schema of the same name", () => {
     expect(P.Point.sum({ x: 2n, y: 3n })).toBe(5n)
     expect(P.Point.new(4)).toEqual({ x: 4n, y: 4n })
-    expect(P.Point["~standard"].vendor).toBe("lean-ts")
+    expect(P.Point["~standard"].vendor).toBe("leanfran")
   })
 })
 

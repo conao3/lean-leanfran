@@ -1,0 +1,39 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::search::max_of"
+lean = "generic_search.search.max_of"
+instances = ["u32", "i64"]
+items = [
+  { rust = "crate::search::max_of", hash = "sha256:2c1fe35c5698bb0b225fa943c0b4afdb622d6adcd66bbc669e9cbb4c5f67b823" },
+]
+
+[[model.obligation]]
+label = "max"
+spec = "search.is_max"
+spec_block = "crate::spec::search"
+spec_hash = "sha256:282ddc8b5c3309df8bbd9ce4087c2f00b07cf506f9f53b2751f7f309f927b46f"
+hash = "sha256:0a9fd0d64fb962ec658d2d0e282da28565d4d142e49dd3b3c50843eaa95e6a23"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Search.lean:6"
+
+[[model]]
+rust = "crate::search::contains"
+lean = "generic_search.search.contains"
+instances = ["u32", "i64", "String"]
+items = [
+  { rust = "crate::search::contains", hash = "sha256:9dccdae5b2c28f4a4017a6be0bb776de8f84316e7189edcbd70eb7eb949d66a9" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "search.mem"
+spec_block = "crate::spec::search"
+spec_hash = "sha256:282ddc8b5c3309df8bbd9ce4087c2f00b07cf506f9f53b2751f7f309f927b46f"
+hash = "sha256:0a4d8967b60d82e0cd6a40cbd27a116aa489c0c782f8d568f948a01aa7429cae"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Search.lean:65"

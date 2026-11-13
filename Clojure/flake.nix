@@ -1,5 +1,5 @@
 {
-  description = "lean-clj: a Lean IR -> Clojure backend and a Lean embedding for Clojure";
+  description = "leanfran: a Lean IR -> Clojure backend and a Lean embedding for Clojure";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -30,21 +30,21 @@
           };
 
           packages.default = pkgs.stdenv.mkDerivation {
-            pname = "lean-clj";
+            pname = "leanfran";
             version = "0.5.0";
             src = ./.;
             nativeBuildInputs = [ pkgs.lean4 ];
             buildPhase = ''
               runHook preBuild
-              lake build lean-clj
+              lake build leanfran
               runHook postBuild
             '';
             installPhase = ''
               runHook preInstall
-              install -Dm755 .lake/build/bin/lean-clj $out/bin/lean-clj
+              install -Dm755 .lake/build/bin/leanfran $out/bin/leanfran
               runHook postInstall
             '';
-            meta.mainProgram = "lean-clj";
+            meta.mainProgram = "leanfran";
           };
 
           devShells.default = pkgs.mkShell {

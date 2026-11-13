@@ -1,4 +1,4 @@
-import { checkModel } from "lean-ts/verify"
+import { checkModel } from "leanfran/verify"
 import { insertSorted } from "./sort.ts"
 import { sums, sumTo } from "./sum.ts"
 

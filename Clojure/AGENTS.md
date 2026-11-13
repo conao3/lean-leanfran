@@ -1,19 +1,19 @@
 # AGENTS.md
 
-lean-clj compiles Lean 4 IR to Clojure (`LeanClj/`, `Main.lean`) and embeds Lean
-in Clojure (`src/lean_clj/core.clj`). See README.md for usage.
+leanfran compiles Lean 4 IR to Clojure (`LeanClj/`, `Main.lean`) and embeds Lean
+in Clojure (`src/leanfran/core.clj`). See README.md for usage.
 
 ## Layout
 
 - `LeanClj/EmitClj.lean`: the emitter. Collects IR decls from roots, emits
   Clojure forms, and derives the marshalling descriptors of public functions.
 - `LeanClj/Sx.lean`: S-expression tree and layout.
-- `Main.lean`: the `lean-clj` CLI.
-- `src/lean_clj/runtime.clj`: runtime. `lean_*` functions are named after the C
+- `Main.lean`: the `leanfran` CLI.
+- `src/leanfran/runtime.clj`: runtime. `lean_*` functions are named after the C
   symbols of Lean externs; generated code checks at load time that every
   symbol it uses exists (`check-symbols!`).
-- `src/lean_clj/core.clj`: `deflean`.
-- `src/lean_clj/dsl.clj`: S-expressions → Lean source for `deflean`.
+- `src/leanfran/core.clj`: `deflean`.
+- `src/leanfran/dsl.clj`: S-expressions → Lean source for `deflean`.
 - `LeanCljTest/`: Lean test programs. `Vectors.lean` holds the diff-test
   cases; `OracleMain.lean` is the native oracle.
 - `test/`: Clojure tests. `test-out/` holds generated code (ignored by git).

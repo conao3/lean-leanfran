@@ -5,7 +5,7 @@ Every loop of a modelled function has a label, which names the loop in Lean: `'a
 their names when other loops are added.
 
 ```rust
-#[lean_rust::model(refines = sums::sum_to, strategy = crate::small)]
+#[leanfran::model(refines = sums::sum_to, strategy = crate::small)]
 pub fn sum_to(n: u32) -> u64 {
     let mut i = 0u32;
     let mut s = 0u64;

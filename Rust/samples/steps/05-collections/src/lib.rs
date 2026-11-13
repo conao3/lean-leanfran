@@ -1,6 +1,6 @@
 //! Step 5: lists, arrays, options, errors and pairs.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Functions over collections.
     pub mod collections;
     r#"
@@ -18,7 +18,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::collections;
-    use lean_rust::{Int, Nat};
+    use leanfran::{Int, Nat};
 
     fn n(x: u64) -> Nat {
         Nat::from(x)

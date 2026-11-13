@@ -3,7 +3,7 @@ import Lean
 /-! # Instantiations of polymorphic functions for Rust
 
 `rust_instances f [Nat, String]` defines `f.inst_Nat := @f Nat _` and `f.inst_String`, with the
-instance arguments synthesized, and records them in `rustInstancesExt`. `lean-rust module
+instance arguments synthesized, and records them in `rustInstancesExt`. `leanfran module
 generate` turns the instantiations into one generic Rust function dispatching through a sealed
 trait implemented for the instantiated types. A function with several type parameters takes
 named arguments: `rust_instances g [(α := Nat) (β := String), (α := Int) (β := Bool)]`. -/

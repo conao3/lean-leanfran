@@ -4,7 +4,7 @@
 /node_modules
 /dist
 /test-out
-**/.lean-ts/workspace/
+**/.leanfran/workspace/
 /.claude-dev
 /test/embed/app/node_modules
 /test/verify/app/node_modules

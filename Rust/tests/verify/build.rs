@@ -1,3 +1,3 @@
 fn main() {
-    lean_rust_build::Builder::new().compile().unwrap();
+    leanfran_build::Builder::new().compile().unwrap();
 }

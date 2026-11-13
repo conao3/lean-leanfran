@@ -1,11 +1,11 @@
 import Lean
 import LeanPython.RuntimeExterns
 
-/-! # lean-py: a Lean IR -> Python backend
+/-! # leanfran: a Lean IR -> Python backend
 
 IR `Decl`s are read from the environment with `Lean.IR.findEnvDecl`, collected
 transitively from a set of root functions, and emitted as Python functions that
-call into the runtime `lean_python.runtime`. The emitted code follows the C backend
+call into the runtime `leanfran.runtime`. The emitted code follows the C backend
 (`Lean.Compiler.LCNF.EmitC`): reference counting, `reset`/`reuse` and `isShared` run
 as in C, so the in-place updates of the C backend happen in the same places. `goto`
 is replaced by a state machine over the join points. -/
@@ -435,6 +435,6 @@ def moduleHeader (externs : Array String) : String :=
     "lean_inc_ret", "lean_dec", "lean_obj_tag", "lean_is_shared", "lean_mark_persistent",
     "lean_internal_panic_unreachable", "lean_py_extern"]
   let names := core ++ (externs.filter (!core.contains ·)).qsort (· < ·)
-  "from lean_python.runtime import (  # noqa: F401\n" ++ String.join (names.toList.map (s!"    {·},\n")) ++ ")\n"
+  "from leanfran.runtime import (  # noqa: F401\n" ++ String.join (names.toList.map (s!"    {·},\n")) ++ ")\n"
 
 end LeanPython

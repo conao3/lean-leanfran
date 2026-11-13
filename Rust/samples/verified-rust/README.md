@@ -1,6 +1,6 @@
 # verified-rust
 
-Rust functions bound to specs written in Lean with `#[lean_rust::model]`: the two ways of
+Rust functions bound to specs written in Lean with `#[leanfran::model]`: the two ways of
 `lean-ritsuryo` beyond running a spec directly.
 
 - [`src/spec.rs`](src/spec.rs): the specs, `lean!` blocks over the types of Aeneas's model of
@@ -33,7 +33,7 @@ proptest, proved or not; `insert_sorted` draws sorted inputs from `strategy`.
 
 ```
 make test      # the tests, from the committed caches (no Lean)
-make verify    # cargo lean-rust extract and check again (Charon, Aeneas, Mathlib)
+make verify    # cargo leanfran extract and check again (Charon, Aeneas, Mathlib)
 ```
 
-`cargo lean-rust status` prints the states; `cargo doc` shows them on each function.
+`cargo leanfran status` prints the states; `cargo doc` shows them on each function.

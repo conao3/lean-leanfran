@@ -1,9 +1,0 @@
-{
-  "src/account.ts:withdraw": {
-    "spec_hash": "585979484773f11951df647e065fb77a364923174b3ff01a53e7df991ee523b6",
-    "lean": "LeanTsModel.account.withdraw",
-    "obligations": {
-      "inLimits": "proved"
-    }
-  }
-}

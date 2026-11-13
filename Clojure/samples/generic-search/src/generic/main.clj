@@ -1,7 +1,7 @@
 (ns generic.main
   (:require
     [generic.core :as s]
-    [lean-clj.typed :as lt]))
+    [leanfran.typed :as lt]))
 
 
 (defn -main

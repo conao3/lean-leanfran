@@ -1,0 +1,40 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::item::apply"
+lean = "inventory.item.apply"
+items = [
+  { rust = "crate::item::Event", hash = "sha256:964ee063eb3936dffabd5a1ea1e3a1958a7f7b402440b9280e6525fd98323d82" },
+  { rust = "crate::item::Item", hash = "sha256:40ffcf3009198f98d08a2370b71128b0ae31bec22d9c52f0f1748ae2d444e794" },
+  { rust = "crate::item::Kind", hash = "sha256:8f4fc8355fe8e321c17063db48bf7b164deddcb5885ded80da58716090bf8fb8" },
+  { rust = "crate::item::apply", hash = "sha256:5e8fd848abd5c4e0d1cfdc6cbde912a4e278c46711e06a4e21675226c86fc7ca" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "items.apply"
+spec_block = "crate::spec::items"
+spec_hash = "sha256:81d04b44fa08f2fff2f6cec16e57c3f904bc6d84c02505eb6d62e8bc76b30de2"
+hash = "sha256:c7569ff716aa4ffd0103aef7a55962db14d90e0ccfbb320fc07c2c4fc65c3af5"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Item.lean:6"
+
+[[model.obligation]]
+label = "same_id"
+spec = "items.same_id"
+spec_block = "crate::spec::items"
+spec_hash = "sha256:81d04b44fa08f2fff2f6cec16e57c3f904bc6d84c02505eb6d62e8bc76b30de2"
+hash = "sha256:956f9141ec1bdf8227dbe9bebc09079c3a52f7e75e346b553413ef6a26ce894c"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Item.lean:11"
+
+[[model]]
+rust = "crate::stock::quantity"
+lean = "inventory.stock.quantity"
+items = [
+  { rust = "crate::stock::quantity", hash = "sha256:adc8ce7a624e4ec744afe1824eae82144301eafb4edf0836d33a2fcb137c4cfb" },
+]

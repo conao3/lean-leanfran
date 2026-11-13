@@ -1,0 +1,25 @@
+{
+  "src/sort.ts:insertSorted": {
+    "spec_hash": "bfbba453dc7b6d7de3b9d134a5a088366d47d06b147b5a8d681cb30c7f77cc3a",
+    "lean": "LeanTsModel.sort.insertSorted",
+    "obligations": {
+      "sorted": "proved",
+      "length": "proved"
+    }
+  },
+  "src/sum.ts:sumTo": {
+    "spec_hash": "9f3f8aab0d12a3fa8efffc68482679ad59ebf820dc07e57c2386242a71e0809d",
+    "lean": "LeanTsModel.sum.sumTo",
+    "obligations": {
+      "refines": "proved",
+      "returnsNat": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.sum.sums.sumTo",
+      "module": "LeanTsEmbed.«sum».«sums»",
+      "modes": [
+        "_"
+      ]
+    }
+  }
+}

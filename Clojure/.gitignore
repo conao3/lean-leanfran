@@ -1,6 +1,6 @@
 /result
 /.lake/
-.lean-clj/
+.leanfran/
 .cpcache/
 /.nrepl-port
 /.lsp/

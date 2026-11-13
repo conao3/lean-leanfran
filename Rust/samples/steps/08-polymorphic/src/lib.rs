@@ -1,6 +1,6 @@
 //! Step 8: a polymorphic Lean function as a generic Rust function.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// The largest element, for the types chosen with `rust_instances`.
     pub mod sorting;
     r#"
@@ -14,7 +14,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::sorting;
-    use lean_rust::Nat;
+    use leanfran::Nat;
 
     #[test]
     fn generic() {

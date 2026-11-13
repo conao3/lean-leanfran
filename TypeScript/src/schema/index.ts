@@ -43,7 +43,7 @@ export function schema<Input, Output>(desc: TypeDesc<Output>): LeanSchema<Input,
   return {
     "~standard": {
       version: 1,
-      vendor: "lean-ts",
+      vendor: "leanfran",
       validate: (value: unknown): StandardSchemaV1.Result<Output> => checkValue(desc, value),
       jsonSchema: { input: converter, output: converter },
     },
@@ -69,7 +69,7 @@ function write(v: unknown): string {
   if (v === null) return "null"
   if (typeof v === "bigint") return v.toString()
   if (typeof v === "number") {
-    if (!Number.isFinite(v)) throw new TypeError(`lean-ts: ${v} is not a JSON number`)
+    if (!Number.isFinite(v)) throw new TypeError(`leanfran: ${v} is not a JSON number`)
     return JSON.stringify(v)
   }
   if (typeof v === "string" || typeof v === "boolean") return JSON.stringify(v)
@@ -81,7 +81,7 @@ function write(v: unknown): string {
     }
     return `{${parts.join(",")}}`
   }
-  throw new TypeError(`lean-ts: a ${typeof v} is not a JSON value`)
+  throw new TypeError(`leanfran: a ${typeof v} is not a JSON value`)
 }
 
 export function stringify<Output>(s: LeanSchema<unknown, Output>, value: Output): string {

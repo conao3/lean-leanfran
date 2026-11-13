@@ -1,4 +1,4 @@
-/-! `@[init]` action + `initialize` value-global coverage for the lean-ts CLI.
+/-! `@[init]` action + `initialize` value-global coverage for the leanfran CLI.
 Kept in a library module so the init metadata (`getInitFnNameFor?` /
 `isIOUnitInitFn`) and the IR persist in the `.olean` and are visible on
 re-import. The module-init chain must run both before `main`: the `@[init]`

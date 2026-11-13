@@ -1,4 +1,4 @@
-"""`lean(...)` blocks: `lean-py sync`, the generated modules, user models, `uses`, and FastAPI."""
+"""`lean(...)` blocks: `leanfran sync`, the generated modules, user models, `uses`, and FastAPI."""
 
 import os
 import pathlib
@@ -11,7 +11,7 @@ from conftest import CLI, ROOT
 
 
 def run(cmd, cwd, **kw):
-    env = {**os.environ, "LEAN_PYTHON_CLI": str(CLI), "PYTHONPATH": str(cwd)}
+    env = {**os.environ, "LEANFRAN_PYTHON_CLI": str(CLI), "PYTHONPATH": str(cwd)}
     return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, check=False, **kw)
 
 
@@ -20,7 +20,7 @@ def project(tmp_path_factory):
     d = tmp_path_factory.mktemp("embed")
     shutil.copytree(ROOT / "tests/embed/pricing", d / "pricing")
     (d / "pyproject.toml").write_text('[project]\nname = "pricing"\nversion = "0"\n')
-    r = run([sys.executable, "-m", "lean_python.cli", "sync", "--package", "pricing"], d)
+    r = run([sys.executable, "-m", "leanfran.cli", "sync", "--package", "pricing"], d)
     assert r.returncode == 0, r.stderr
     return d
 
@@ -106,9 +106,9 @@ def test_lean_error_points_at_python(tmp_path):
     (d / "pyproject.toml").write_text('[project]\nname = "bad"\nversion = "0"\n')
     (d / "bad/__init__.py").write_text("")
     (d / "bad/m.py").write_text(
-        'from lean_python import lean\n\nm = lean("m", r"""\ndef f (n : Nat) : Nat := n\n\ntheorem wrong : f 1 = 2 := by rfl\n""")\n'
+        'from leanfran import lean\n\nm = lean("m", r"""\ndef f (n : Nat) : Nat := n\n\ntheorem wrong : f 1 = 2 := by rfl\n""")\n'
     )
-    r = run([sys.executable, "-m", "lean_python.cli", "sync", "--package", "bad"], d)
+    r = run([sys.executable, "-m", "leanfran.cli", "sync", "--package", "bad"], d)
     assert r.returncode == 254
     assert f"{d / 'bad/m.py'}:6:" in r.stderr, r.stderr
     assert "lean block m" in r.stderr
@@ -119,7 +119,7 @@ def test_auto_sync(project, tmp_path):
     shutil.copytree(project, d)
     api = d / "pricing/api.py"
     api.write_text(api.read_text().replace("width {r.width}", "w={r.width}"))
-    env_code = "import os; os.environ['LEAN_PYTHON_AUTO_SYNC']='1'\nfrom pricing.api import report, geometry\nprint(report.describe(geometry.Range(lo=0, hi=2)))"
+    env_code = "import os; os.environ['LEANFRAN_PYTHON_AUTO_SYNC']='1'\nfrom pricing.api import report, geometry\nprint(report.describe(geometry.Range(lo=0, hi=2)))"
     out = check(d, env_code)
     assert out.strip().endswith("[0, 2] w=2")
 

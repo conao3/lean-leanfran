@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-CLI = ROOT / ".lake/build/bin/lean-python"
+CLI = ROOT / ".lake/build/bin/leanfran-python"
 
 
 def generate(module, out, roots=()):

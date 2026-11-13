@@ -2,7 +2,7 @@
   (:require
     [accounts.core :as accounts]
     [clojure.test.check.generators :as gen]
-    [lean-clj.types :as types]
+    [leanfran.types :as types]
     [malli.core :as m]
     [malli.instrument :as mi]))
 

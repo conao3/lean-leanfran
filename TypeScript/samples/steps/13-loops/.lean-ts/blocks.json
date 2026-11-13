@@ -1,7 +1,0 @@
-{
-  "src/sums.ts:spec": {
-    "fnv": "1c8bd9ea221a501d",
-    "output": "src/_lean/sums__spec.ts",
-    "sha256": "efb33a6239b80dc5cef0b9ba237ee23ff23284ff5cad7e63973bda0154fe0de8"
-  }
-}

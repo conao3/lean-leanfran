@@ -18,11 +18,11 @@ the order in place of the integers: the loop keeps `lo ≤ hi ≤ len`, the elem
 less than `x` and those from `hi` on not less than `x`.
 
 The proofs apply to `u32` and `i64` through Aeneas's instances (`core.cmp.OrdU32`), which
-lean-rs proves to be models. Aeneas has no `Ord` for `String`, so `String` is covered by the
+leanfran proves to be models. Aeneas has no `Ord` for `String`, so `String` is covered by the
 tests only. The tests draw sorted slices from `strategy = crate::search::sorted_input`, a
 generic function called with the type of each instance.
 
 ```
 make test      # the tests, from the committed caches (no Lean)
-make verify    # cargo lean-rust extract and check again (Charon, Aeneas, Mathlib)
+make verify    # cargo leanfran extract and check again (Charon, Aeneas, Mathlib)
 ```

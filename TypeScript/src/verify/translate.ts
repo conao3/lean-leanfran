@@ -134,7 +134,7 @@ function isNat(t: TSType, types: TypeResolver): boolean {
 export function tsType(t: TSType, src: Located, types: TypeResolver): TsType {
   const bad = (): never => {
     throw new TranslateError(
-      `${src.where(t.start)}: the type is outside the subset lean-ts translates`,
+      `${src.where(t.start)}: the type is outside the subset leanfran translates`,
     )
   }
   switch (t.type) {

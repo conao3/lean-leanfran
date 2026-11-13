@@ -1,0 +1,7 @@
+{
+  "src/account.ts:spec": {
+    "fnv": "0141e14dc5cf5611",
+    "output": "src/_lean/account__spec.ts",
+    "sha256": "c7c26193c6ba3ad885b175af1ae41ed119ac935f7cb201e797373c49b455da26"
+  }
+}

@@ -1,10 +1,10 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { LeanValidationError, parse, stringify } from "lean-ts/schema"
+import { LeanValidationError, parse, stringify } from "leanfran/schema"
 import { todos } from "./model.ts"
 
-const store = join(mkdtempSync(join(tmpdir(), "lean-ts-todo-")), "todos.json")
+const store = join(mkdtempSync(join(tmpdir(), "leanfran-todo-")), "todos.json")
 
 let ts = todos.empty()
 ts = todos.add(ts, "write the README", "high")

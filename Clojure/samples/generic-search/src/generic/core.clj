@@ -2,8 +2,8 @@
   "A membership test for any element type, a function with two arities, and
   one with rest arguments, written in Clojure and proved in Lean."
   (:require
-    [lean-clj.core :refer [deflean]]
-    [lean-clj.typed :as lt]))
+    [leanfran.core :refer [deflean]]
+    [leanfran.typed :as lt]))
 
 
 (lt/defn member?

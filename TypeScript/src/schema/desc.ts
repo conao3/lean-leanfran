@@ -28,7 +28,7 @@ function isRecord(v: unknown): v is Readonly<Record<string, unknown>> {
 }
 
 function unreachable(d: never): never {
-  throw new TypeError(`lean-ts: unknown type descriptor ${JSON.stringify(d)}`)
+  throw new TypeError(`leanfran: unknown type descriptor ${JSON.stringify(d)}`)
 }
 
 function withBounds(s: Js, bounds: SchemaBounds): Js {
@@ -45,11 +45,11 @@ function modelJsonSchema(key: string, name: string, target: JsonSchemaTarget): J
   const input: unknown = isRecord(converter) ? converter["input"] : undefined
   if (typeof input !== "function")
     throw new TypeError(
-      `lean-ts: the model ${name} (${key}) is not registered as a Standard JSON Schema; the lean(...) block that declares it has not run`,
+      `leanfran: the model ${name} (${key}) is not registered as a Standard JSON Schema; the lean(...) block that declares it has not run`,
     )
   const out: unknown = Reflect.apply(input, converter, [{ target }])
   if (!isRecord(out))
-    throw new TypeError(`lean-ts: the JSON Schema of the model ${name} is not an object`)
+    throw new TypeError(`leanfran: the JSON Schema of the model ${name} is not an object`)
   const { $schema: _, ...rest } = out
   return rest
 }
@@ -73,7 +73,7 @@ function openapiBounds(v: unknown): unknown {
 export function jsonSchemaOf(root: TypeDesc, target: string): Js {
   if (!isTarget(target))
     throw new TypeError(
-      `lean-ts: unsupported JSON Schema target ${JSON.stringify(target)} (expected one of ${TARGETS.join(", ")})`,
+      `leanfran: unsupported JSON Schema target ${JSON.stringify(target)} (expected one of ${TARGETS.join(", ")})`,
     )
   const defsKey = target === "draft-2020-12" ? "$defs" : "definitions"
   const defs = new Map<string, Js>()
@@ -218,13 +218,13 @@ export function jsonSchemaOf(root: TypeDesc, target: string): Js {
       : target === "draft-07"
         ? "http://json-schema.org/draft-07/schema#"
         : undefined
-  if (!isRecord(out)) throw new TypeError("lean-ts: the generated JSON Schema is not an object")
+  if (!isRecord(out)) throw new TypeError("leanfran: the generated JSON Schema is not an object")
   return schemaUri === undefined ? { ...out } : { $schema: schemaUri, ...out }
 }
 
 function structVariant(d: TypeDesc): VariantDesc {
   const r = resolve(d)
   if (r.kind !== "struct")
-    throw new TypeError(`lean-ts: a flattened field is not a structure (${r.kind})`)
+    throw new TypeError(`leanfran: a flattened field is not a structure (${r.kind})`)
   return r.variant
 }

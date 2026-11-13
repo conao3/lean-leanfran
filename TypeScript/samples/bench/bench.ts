@@ -1,5 +1,5 @@
 // Time the generated TypeScript against the native C build of the same Lean code.
-// usage: node samples/bench/bench.ts   (after `lake build lean-typescript oracle-bench LeanTsTest`)
+// usage: node samples/bench/bench.ts   (after `lake build leanfran-typescript oracle-bench LeanTsTest`)
 import { execFileSync } from "node:child_process"
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -9,7 +9,7 @@ import { z } from "zod"
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..")
 mkdirSync(join(root, "test-out"), { recursive: true })
 execFileSync(
-  join(root, ".lake/build/bin/lean-typescript"),
+  join(root, ".lake/build/bin/leanfran-typescript"),
   [
     "module",
     "generate",

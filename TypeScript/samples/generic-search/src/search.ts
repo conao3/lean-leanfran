@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as search from "./_lean/search.ts"
 
 export const block = lean(

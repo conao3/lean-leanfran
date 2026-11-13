@@ -1,0 +1,7 @@
+{
+  "src/count.ts:wc": {
+    "fnv": "85d3ea10c39cea35",
+    "output": "src/_lean/count__wc.ts",
+    "sha256": "d03648898a0cb37d7af00c625717a2deb5fd200be7dee922001d5faae9e14b23"
+  }
+}

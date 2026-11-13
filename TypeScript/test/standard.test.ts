@@ -24,7 +24,7 @@ function ok(v: unknown): boolean {
 describe("Standard Schema", () => {
   test("the generated schemas are Standard Schema and Standard JSON Schema values", () => {
     expect(discount["~standard"].version).toBe(1)
-    expect(discount["~standard"].vendor).toBe("lean-ts")
+    expect(discount["~standard"].vendor).toBe("leanfran")
     expect(output.ctor).toBe("fixed")
     expect(nat["~standard"].validate("12")).toEqual({ value: 12n })
     expect(discount["~standard"].validate({ fixed: { amount: 2 } })).toEqual({
@@ -66,7 +66,7 @@ describe("Standard Schema", () => {
     expect(await paid.json()).toEqual({ price: "180" })
   })
 
-  test("a lean-ts schema runs inside a zod schema", () => {
+  test("a leanfran schema runs inside a zod schema", () => {
     const Order = z.object({ id: z.string(), d: z.custom<P.Discount>(ok) })
     expect(Order.safeParse({ id: "a", d: { percent: { p: 10 } } }).success).toBe(true)
     expect(Order.safeParse({ id: "a", d: { percent: { p: 101 } } }).success).toBe(false)

@@ -1,6 +1,6 @@
 //! Runs the generated `IO` functions; `tests/api.rs` checks the output.
 
-use lean_rust_public_test as p;
+use leanfran_public_test as p;
 
 fn main() {
     let n = p::hello("Rust").unwrap();

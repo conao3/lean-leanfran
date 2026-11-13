@@ -2,8 +2,8 @@
   "Membership in a sorted list that stops at the first larger element, proved
   equal to `List.contains` for sorted lists."
   (:require
-    [lean-clj.core :refer [deflean]]
-    [lean-clj.typed :as lt]))
+    [leanfran.core :refer [deflean]]
+    [leanfran.typed :as lt]))
 
 
 (lt/defn sorted-member?

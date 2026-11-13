@@ -1,7 +1,7 @@
 # 09-lake-project
 
 A lake project instead of a `lean!` block: [`lean/`](lean) is an ordinary Lean library with the
-modules `Stats.Mean` and `Stats.Median`, and `lean-rust project generate` writes a Rust module
+modules `Stats.Mean` and `Stats.Median`, and `leanfran project generate` writes a Rust module
 per Lean module to [`src/generated/`](src/generated), which is committed. Building the crate
 needs no Lean.
 

@@ -11,7 +11,7 @@ This sample shows what [`todo-cli`](../todo-cli) does not use:
   type, and the public `topWords` uses it internally.
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Std.Data.HashMap"])]
     pub mod count;
     r#"

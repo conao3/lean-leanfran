@@ -1,9 +1,9 @@
 {
-  "name": "lean-ts-sample-verified-typescript",
+  "name": "leanfran-sample-verified-typescript",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../..",
+    "leanfran": "link:../..",
     "fast-check": "4.10.2"
   }
 }

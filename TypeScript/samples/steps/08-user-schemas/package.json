@@ -1,9 +1,9 @@
 {
-  "name": "lean-ts-step-08-user-schemas",
+  "name": "leanfran-step-08-user-schemas",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../../..",
+    "leanfran": "link:../../..",
     "zod": "4.6.7"
   }
 }

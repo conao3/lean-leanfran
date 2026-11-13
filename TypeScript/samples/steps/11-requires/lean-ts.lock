@@ -1,9 +1,0 @@
-{
-  "src/mid.ts:midpoint": {
-    "spec_hash": "f5909b7077b39caa8542da039f14dca388dfea836155fa6f6a0a1be464967fa7",
-    "lean": "LeanTsModel.mid.midpoint",
-    "obligations": {
-      "between": "proved"
-    }
-  }
-}

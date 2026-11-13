@@ -1,6 +1,6 @@
 //! Step 1: Lean definitions called as Rust functions.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Arithmetic and strings.
     pub mod basics;
     r#"
@@ -15,7 +15,7 @@ lean_rust::lean! {
 #[cfg(test)]
 mod tests {
     use super::basics;
-    use lean_rust::Nat;
+    use leanfran::Nat;
 
     #[test]
     fn double() {

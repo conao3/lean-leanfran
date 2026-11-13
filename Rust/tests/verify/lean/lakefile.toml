@@ -1,4 +1,4 @@
-name = "lean_rust_verify_test"
+name = "leanfran_verify_test"
 defaultTargets = ["LeanRustGen", "External", "ExternalTypes", "Proofs"]
 packagesDir = "../../../.lake-aeneas/packages"
 

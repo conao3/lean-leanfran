@@ -1,6 +1,6 @@
 (ns verified.main
   (:require
-    [lean-clj.typed :as lt]
+    [leanfran.typed :as lt]
     [verified.sort :as sort]
     [verified.sum :as sum]))
 

@@ -1,7 +1,7 @@
 (ns todo.model
   "The todo list as Lean definitions, with proofs of their properties."
   (:require
-    [lean-clj.core :refer [deflean]]))
+    [leanfran.core :refer [deflean]]))
 
 
 (deflean model

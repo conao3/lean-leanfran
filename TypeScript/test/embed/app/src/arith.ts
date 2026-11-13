@@ -1,4 +1,4 @@
-import { lean } from "lean-ts"
+import { lean } from "leanfran"
 import * as arith from "./_lean/arith.ts"
 
 export const arithBlock = lean(

@@ -1,6 +1,6 @@
 //! Word frequencies, written in Lean. The CLI is `main.rs`.
 
-lean_rust::lean! {
+leanfran::lean! {
     /// Splitting a text into words and counting them.
     #[lean(imports = ["Std.Data.HashMap"])]
     pub mod count;

@@ -1,11 +1,11 @@
-name = "lean-clj"
-defaultTargets = ["lean-clj"]
+name = "leanfran"
+defaultTargets = ["leanfran"]
 
 [[lean_lib]]
 name = "LeanClj"
 
 [[lean_exe]]
-name = "lean-clj"
+name = "leanfran"
 root = "Main"
 
 [[lean_lib]]

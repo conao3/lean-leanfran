@@ -1,0 +1,5 @@
+{:hooks {:analyze-call {leanfran.core/deflean hooks.leanfran/deflean
+                        leanfran.typed/defn hooks.leanfran/typed-defn
+                        leanfran.typed/loop hooks.leanfran/typed-loop
+                        leanfran.typed/letfn hooks.leanfran/typed-letfn}}
+ :lint-as {leanfran.typed/defcheck clojure.test/deftest}}

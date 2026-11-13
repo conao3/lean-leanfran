@@ -1,7 +1,0 @@
-{
-  "src/model.ts:todos": {
-    "fnv": "3f3d567f35d22065",
-    "output": "src/_lean/model__todos.ts",
-    "sha256": "b2db894aa26c866ef90282d3b830c32cb0c474723872b5f8c63262687c8a1813"
-  }
-}

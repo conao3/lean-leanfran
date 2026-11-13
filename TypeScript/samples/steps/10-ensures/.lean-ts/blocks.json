@@ -1,7 +1,0 @@
-{
-  "src/dist.ts:spec": {
-    "fnv": "7128db5af28ebc71",
-    "output": "src/_lean/dist__spec.ts",
-    "sha256": "b31f123ed7913731c56f2a8e719b1b4144706d81fcf15056922fc71acc442933"
-  }
-}

@@ -253,7 +253,7 @@ def main : IO Unit := do
   IO.println s!"hmDemo = {hmDemo}"
   -- Closure-boundary tail calls (HigherOrder.cpsCount via runStep/cpsLoop applies its
   -- step closure in tail position; cpsSum applies a continuation in tail
-  -- position). At this N both the native C backend and lean-ts agree; the deep
+  -- position). At this N both the native C backend and leanfran agree; the deep
   -- N=1e6 no-overflow check is node-side in test/difftest/tco.mjs (the C backend overflows
   -- there because it does not trampoline closure-boundary tail calls).
   IO.println s!"cpsCount = {cpsCount 10000}"

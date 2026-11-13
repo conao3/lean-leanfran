@@ -1,1 +1,1 @@
-{:files {:ignore #{".lean-clj"}}}
+{:files {:ignore #{".leanfran"}}}

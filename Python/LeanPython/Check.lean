@@ -2,7 +2,7 @@ import Lean
 
 /-! # Checking the proofs of obligations
 
-`lean-python obligations check` imports the modules of a `lean-py check` workspace once and judges each
+`leanfran-python obligations check` imports the modules of a `leanfran check` workspace once and judges each
 obligation `M.obligation.l` by the theorem `M.proof.l`: its type must be the obligation, and it
 may use only the standard axioms. -/
 

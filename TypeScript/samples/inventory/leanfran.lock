@@ -1,0 +1,32 @@
+{
+  "src/stock.ts:discard": {
+    "spec_hash": "e998389f3757df02d63ab30868538634948abbc1661d8ca0f08f6475a3e54368",
+    "lean": "LeanTsModel.stock.discard",
+    "obligations": {
+      "shrinks": "proved",
+      "without": "proved"
+    }
+  },
+  "src/stock.ts:restock": {
+    "spec_hash": "ff5d2753655e9cd6c2500a60e9483d811ad68e5827f471f9cf8e123f980de20c",
+    "lean": "LeanTsModel.stock.restock",
+    "obligations": {
+      "sameLength": "proved",
+      "grows": "proved"
+    }
+  },
+  "src/stock.ts:total": {
+    "spec_hash": "d9b9b0352618c53a09751a0309da51379d79f6e4ddbab1d9125b1271163ee8fd",
+    "lean": "LeanTsModel.stock.total",
+    "obligations": {
+      "refines": "proved"
+    },
+    "csimp": {
+      "spec": "LeanTsEmbed.stock.spec.total",
+      "module": "LeanTsEmbed.«stock».«spec»",
+      "modes": [
+        "_"
+      ]
+    }
+  }
+}

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="lean-rs: run Lean functions from Rust, embed Lean in Rust, and verify Rust functions in Lean" width="880">
+  <img src="docs/assets/banner.png" alt="leanfran: run Lean functions from Rust, embed Lean in Rust, and verify Rust functions in Lean" width="880">
 </p>
 
 <p align="center"><strong>Run Lean 4 functions from Rust, and verify Rust functions in Lean</strong></p>
 
 <p align="center">
-  <a href="https://crates.io/crates/lean-rust"><img src="https://img.shields.io/crates/v/lean-rust" alt="crates.io"></a>
+  <a href="https://crates.io/crates/leanfran"><img src="https://img.shields.io/crates/v/leanfran" alt="crates.io"></a>
   <a href="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml"><img src="https://github.com/conao3/lean-leanfran/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/conao3/lean-leanfran" alt="License: Apache-2.0"></a>
   <a href="lean-toolchain"><img src="https://img.shields.io/badge/Lean-v4.35.0-blue" alt="Lean v4.35.0"></a>
@@ -19,19 +19,19 @@
   <a href="#values">Values</a> ·
   <a href="#verifying-rust-functions">Verifying Rust functions</a> ·
   <a href="samples/steps">Samples</a> ·
-  <a href="https://crates.io/crates/lean-rust">crates.io</a>
+  <a href="https://crates.io/crates/leanfran">crates.io</a>
 </p>
 
-# lean-rs
+# leanfran
 
 Write functions in Lean 4, prove their properties in Lean, and call them from Rust; verify Rust
-functions against specs written in Lean. lean-rs compiles Lean's IR (`Lean.Compiler.IR`) to Rust
+functions against specs written in Lean. leanfran compiles Lean's IR (`Lean.Compiler.IR`) to Rust
 source that builds with cargo alone: the generated code needs neither the Lean toolchain nor
-Lean's C runtime, only the crate `lean-rust-runtime`.
+Lean's C runtime, only the crate `leanfran-runtime`.
 
-lean-rs has four parts:
+leanfran has four parts:
 
-- **A Rust backend for Lean** (`lean-rust module generate`). It reads the IR of a compiled Lean
+- **A Rust backend for Lean** (`leanfran module generate`). It reads the IR of a compiled Lean
   module and emits Rust that mirrors Lean's C backend: the same object layout, reference
   counting and in-place updates. Every public definition becomes a safe Rust function on Rust
   types.
@@ -39,15 +39,15 @@ lean-rs has four parts:
   proofs with `lake build`, generates the Rust module, and caches it in the repository, so
   builds without Lean (CI, crates.io users, docs.rs) use the cache
   ([Quick start: `lean!`](#quick-start-lean)).
-- **`lean-rust project generate`**, which compiles every module of a lake project to a Rust
+- **`leanfran project generate`**, which compiles every module of a lake project to a Rust
   module file plus a `mod.rs`, for committing to a Rust crate
   ([Quick start: a lake project](#quick-start-a-lake-project)).
-- **`#[lean_rust::model]` and `cargo lean-rust`**, which bind a Rust function to Lean specs,
+- **`#[leanfran::model]` and `cargo leanfran`**, which bind a Rust function to Lean specs,
   translate it to Lean with Charon and Aeneas, check the proofs of its obligations, and test it
   against the specs ([Verifying Rust functions](#verifying-rust-functions)).
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     pub mod arith;
     r#"
     def double (n : Nat) : Nat := n + n
@@ -68,16 +68,16 @@ The CLI is a Lean program. With Nix:
 
 ```
 nix profile install 'github:conao3/lean-leanfran?dir=Rust'   # or `nix profile install .` in a checkout
-lean-rust --version
+leanfran --version
 ```
 
-or build it from a checkout with `lake build lean-rust` (Lean 4.35.0, see `lean-toolchain`); the
-executable is `.lake/build/bin/lean-rust`.
+or build it from a checkout with `lake build leanfran` (Lean 4.35.0, see `lean-toolchain`); the
+executable is `.lake/build/bin/leanfran`.
 
-The Rust crates are `lean-rust` (the facade with `lean!`, `#[model]`, the runtime and the
-conversion traits), `lean-rust-runtime`, `lean-rust-macros`, `lean-rust-build` and
-`cargo-lean-rust` (the `cargo lean-rust` command), all on crates.io (`cargo install
-cargo-lean-rust`). The flake's default package has `lean-rust`, `cargo-lean-rust`, `charon` and
+The Rust crates are `leanfran` (the facade with `lean!`, `#[model]`, the runtime and the
+conversion traits), `leanfran-runtime`, `leanfran-macros`, `leanfran-build` and
+`cargo-leanfran` (the `cargo leanfran` command), all on crates.io (`cargo install
+cargo-leanfran`). The flake's default package has `leanfran`, `cargo-leanfran`, `charon` and
 `aeneas`.
 
 ## Quick start: `lean!`
@@ -85,22 +85,22 @@ cargo-lean-rust`). The flake's default package has `lean-rust`, `cargo-lean-rust
 ```toml
 # Cargo.toml
 [dependencies]
-lean-rust = "0.5.0"
+leanfran = "0.5.0"
 
 [build-dependencies]
-lean-rust-build = "0.5.0"
+leanfran-build = "0.5.0"
 ```
 
 ```rust
 // build.rs
 fn main() {
-    lean_rust_build::Builder::new().compile().unwrap();
+    leanfran_build::Builder::new().compile().unwrap();
 }
 ```
 
 ```rust
 // src/lib.rs
-lean_rust::lean! {
+leanfran::lean! {
     /// Documentation of the module.
     #[lean(imports = ["Std.Data.HashMap"], uses = [crate::geometry::shapes])]
     pub mod arith;
@@ -111,39 +111,39 @@ lean_rust::lean! {
 ```
 
 The build script finds every `lean!` in `src/**/*.rs`. For a block that is not in
-`.lean-rust/cache/`, it writes the source (wrapped in `namespace <name>`) into the crate's Lean
+`.leanfran/cache/`, it writes the source (wrapped in `namespace <name>`) into the crate's Lean
 package `lean/LeanRustGen/Embed/`, creating `lean/` with a `lakefile.toml` when it is missing,
-runs `lake build`, and runs `lean-rust module generate`. Lean errors are reported at the Rust
+runs `lake build`, and runs `leanfran module generate`. Lean errors are reported at the Rust
 file and line of the source. `imports` are Lean modules to import; `uses` are other `lean!`
 blocks of the crate, whose module is imported and opened and whose generated types are shared.
 
 | Variable | Effect |
 |---|---|
-| `LEAN_RUST_CLI` | the `lean-rust` executable (default: `lean-rust` on `PATH`; `lake` is always taken from `PATH`) |
-| `LEAN_RUST_OFFLINE=1` | use the cache only; list the blocks missing from it and stop |
-| `LEAN_RUST_EXTRACTING=1` | set by `cargo lean-rust extract` for Charon: use the cache only, skip the lockfile; `lean!` and `#[model]` expand to the bare items |
-| `LEAN_RUST_REQUIRE=proved` | fail unless every obligation of the crate is `proved` |
+| `LEANFRAN_CLI` | the `leanfran` executable (default: `leanfran` on `PATH`; `lake` is always taken from `PATH`) |
+| `LEANFRAN_OFFLINE=1` | use the cache only; list the blocks missing from it and stop |
+| `LEANFRAN_EXTRACTING=1` | set by `cargo leanfran extract` for Charon: use the cache only, skip the lockfile; `lean!` and `#[model]` expand to the bare items |
+| `LEANFRAN_REQUIRE=proved` | fail unless every obligation of the crate is `proved` |
 
-Commit `.lean-rust/cache/` and `lean/` (its `.gitignore` excludes `lean/.lake/`), and add
-`.lean-rust/cache/**` to the crate's `include` when you publish it. The macro only includes the
+Commit `.leanfran/cache/` and `lean/` (its `.gitignore` excludes `lean/.lake/`), and add
+`.leanfran/cache/**` to the crate's `include` when you publish it. The macro only includes the
 generated file, so rust-analyzer never runs Lean.
 
 ## Quick start: a lake project
 
 ```
-lean-rust project generate --lake-dir lean --output-dir src/generated
+leanfran project generate --lake-dir lean --output-dir src/generated
 ```
 
 builds the project, uses `lake env`'s `LEAN_PATH` as the search path, and writes
 `src/generated/<module>.rs` for each module built by the package (or for `--modules ...`) and a
-`mod.rs`. Declare `mod generated;` in the crate and depend on `lean-rust`.
+`mod.rs`. Declare `mod generated;` in the crate and depend on `leanfran`.
 
 ## Values
 
 | Lean | Rust |
 |---|---|
 | `Bool` (and `Decidable p`) | `bool` |
-| `Nat`, `Int` | `lean_rust::Nat`, `lean_rust::Int` (arbitrary precision; `From<u64>`, `TryFrom<Nat> for u64`, `Display`, `FromStr`, arithmetic) |
+| `Nat`, `Int` | `leanfran::Nat`, `leanfran::Int` (arbitrary precision; `From<u64>`, `TryFrom<Nat> for u64`, `Display`, `FromStr`, arithmetic) |
 | `UInt8`…`UInt64`, `USize` | `u8`…`u64`, `usize` |
 | `Int8`…`Int64`, `ISize` | `i8`…`i64`, `isize` |
 | `Float`, `Float32` | `f64`, `f32` |
@@ -155,7 +155,7 @@ builds the project, uses `lake env`'s `LEAN_PATH` as the search path, and writes
 | `Except ε α` | `Result<T, E>` |
 | `α × β` | `(A, B)` |
 | `Fin n` (`n` reduces to a literal below 2^64) | `usize`, checked against `n` (panics when out of range) |
-| `Fin n` (`n` reduces to a literal of 2^64 or more) | `lean_rust::Nat`, unchecked |
+| `Fin n` (`n` reduces to a literal of 2^64 or more) | `leanfran::Nat`, unchecked |
 | a structure | a generated `pub struct` with snake_case fields |
 | an inductive type | a generated `pub enum` (a field-less `enum` when every constructor is nullary) |
 | `IO α` | `std::io::Result<T>` (`IO.Error` becomes `std::io::Error` with Lean's message) |
@@ -170,7 +170,7 @@ arguments are dropped, and instance arguments of a concrete type are synthesized
 time. Names are the last components of the Lean name in snake_case relative to the module's
 namespace (`Point.add` → `point_add`, `find?` → `find_q`, `get!` → `get_bang`, `x'` →
 `x_prime`, keywords as `r#type`). Each function has a doc comment with its Lean name and type,
-and `#[lean_rust::exported("<Lean name>")]`. A `@[csimp]` replacement in the definition's module
+and `#[leanfran::exported("<Lean name>")]`. A `@[csimp]` replacement in the definition's module
 is what the function runs.
 
 ### Polymorphic functions
@@ -179,7 +179,7 @@ is what the function runs.
 a polymorphic function for chosen types and makes it one generic Rust function:
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     pub mod sorting;
     r#"
     def largest {α : Type} [Ord α] [Inhabited α] (xs : List α) : α :=
@@ -196,7 +196,7 @@ fn main() {
 
 `rust_instances f [Nat, String]` defines `f.inst_Nat := @f Nat _` (the instances synthesized)
 and `f.inst_String`; several type parameters take named arguments, `rust_instances g [(α := Nat)
-(β := String)]`. The Rust function `largest<T: __lean_rust_inst::Largest>(xs: Vec<T>) -> T`
+(β := String)]`. The Rust function `largest<T: __leanfran_inst::Largest>(xs: Vec<T>) -> T`
 dispatches through a sealed trait implemented for the instantiated types only (another type is
 a rustc error); the trait of a function with several type parameters is implemented for the
 first one, with the others as associated types (`T::T1`). The instantiations are also public
@@ -209,7 +209,7 @@ library.
 Generated code builds for `wasm32-unknown-unknown` (for a browser through `wasm-bindgen`) with
 
 ```toml
-lean-rust = { version = "0.5.0", default-features = false }
+leanfran = { version = "0.5.0", default-features = false }
 ```
 
 Pure functions behave as on Unix. The `IO` actions that need an operating system (files,
@@ -222,14 +222,14 @@ output and error (with panic messages) are discarded.
 
 ## Verifying Rust functions
 
-`#[lean_rust::model]` binds a Rust function to specs written in Lean. Charon and Aeneas
-translate the function to a Lean model; lean-rs states the obligations (Lean propositions)
+`#[leanfran::model]` binds a Rust function to specs written in Lean. Charon and Aeneas
+translate the function to a Lean model; leanfran states the obligations (Lean propositions)
 from the specs, checks the proofs written in the crate's `lean/` package, and records their
-states in `lean-rust.lock`. The crate stays on stable Rust: only `cargo lean-rust extract` runs
+states in `leanfran.lock`. The crate stays on stable Rust: only `cargo leanfran extract` runs
 Charon (with its own nightly), and `cargo build` reads the lockfile without Lean or Charon.
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod bits;
     r#"
@@ -240,7 +240,7 @@ lean_rust::lean! {
     "#
 }
 
-#[lean_rust::model(refines = bits::max, ensures(bound = bits::max_bound))]
+#[leanfran::model(refines = bits::max, ensures(bound = bits::max_bound))]
 pub fn max_u32(a: u32, b: u32) -> u32 {
     if a <= b { b } else { a }
 }
@@ -260,9 +260,9 @@ theorem max_u32.proof.refines : max_u32.obligation.refines := by
 ```
 
 ```
-$ cargo lean-rust init        # lean/ requiring Aeneas; fetches Mathlib's build cache
-$ cargo lean-rust extract     # Charon + Aeneas → lean/LeanRustGen/Model/, obligations, lockfile
-$ cargo lean-rust check       # lake build, then the state of every obligation
+$ cargo leanfran init        # lean/ requiring Aeneas; fetches Mathlib's build cache
+$ cargo leanfran extract     # Charon + Aeneas → lean/LeanRustGen/Model/, obligations, lockfile
+$ cargo leanfran check       # lake build, then the state of every obligation
 crate::max_u32
   refines  proved    axioms: Quot.sound, propext
   bound    sorry     lean/Proofs/Bits.lean:12
@@ -274,7 +274,7 @@ their Rust path, so rustc checks the name and the argument types; a string names
 definition (a `Prop` is fine) for an obligation without a test. Specs are written in the types
 of Aeneas's model: `Std.U8`…`Std.I128`, `Std.Usize` (Rust `u8`…`i128`, `usize`), `Slice α` and
 `alloc.vec.Vec α` (`Vec<T>`), `Std.Array α n` (`[T; N]`), `Str` (`String`), `Result α` (the value; a panic unless `ok`),
-and the crate's structs and enums, which derive `lean_rust::Model` (and `Clone`).
+and the crate's structs and enums, which derive `leanfran::Model` (and `Clone`).
 
 | Key | Obligation `M.obligation.<label>` (M: the model) |
 |---|---|
@@ -286,10 +286,10 @@ and the crate's structs and enums, which derive `lean_rust::Model` (and `Clone`)
 | `instances = [u32, i64]` | the types a generic function is tested with (a tuple per instance for several type parameters) |
 | `obligations = generic \| per_instance` | the obligations of a generic function: one for every type (default), or one per type of `instances` (label `<label>.<type>`) |
 
-On an impl block, `#[lean_rust::model]` models every method; a method's own
-`#[lean_rust::model(..)]` gives its specs. `#[lean_rust::opaque]` keeps the body of a function
+On an impl block, `#[leanfran::model]` models every method; a method's own
+`#[leanfran::model(..)]` gives its specs. `#[leanfran::opaque]` keeps the body of a function
 out of the model, and on an inherent impl block, the bodies of its methods (a method's own
-`#[lean_rust::opaque(..)]` gives its `check` and `strategy`): its model is written in
+`#[leanfran::opaque(..)]` gives its `check` and `strategy`): its model is written in
 `lean/External.lean` (and the types Aeneas does not know, such as `BTreeMap`, in
 `lean/ExternalTypes.lean`), starting from the templates `extract` writes. `cargo test` compares
 an opaque function with its model when the model is a definition (the build script compiles it
@@ -318,7 +318,7 @@ and Aeneas's instances of the scalars (all classes), `bool` (`PartialEq`, `Clone
 (`PartialEq`, `Clone`), `Box` and arrays (`Clone`) are proved to be models.
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Aeneas"])]
     pub mod spec;
     r#"
@@ -327,7 +327,7 @@ lean_rust::lean! {
     "#
 }
 
-#[lean_rust::model(instances = [u32, i64], ensures(ge = spec::max_ge))]
+#[leanfran::model(instances = [u32, i64], ensures(ge = spec::max_ge))]
 pub fn max_of<T: Ord + Copy>(a: T, b: T) -> T {
     if a >= b { a } else { b }
 }
@@ -357,60 +357,60 @@ types of the instances. A bound without a law class (a trait of the crate, `Hash
 (`spec.max_ge.inst_U32`). A proved `refines` replaces the instantiation of each type whose
 obligation holds: with `generic`, the types whose bounds Aeneas's library models; with
 `per_instance`, the types of the proved obligations. Methods of generic impl blocks take the
-type parameters of the block first, and `derive(lean_rust::Model)` implements `Model` for a
+type parameters of the block first, and `derive(leanfran::Model)` implements `Model` for a
 generic struct or enum when its parameters do (`impl<T: Model> Model for Pair<T>`); a spec
 names it with its Aeneas type (`generic.Pair Std.U32`).
 
 The proof of `M.obligation.l` is `theorem M.proof.l : M.obligation.l` in `lean/Proofs/`.
-`cargo lean-rust check` records one of `proved` (the standard axioms only), `sorry`, `axioms`
+`cargo leanfran check` records one of `proved` (the standard axioms only), `sorry`, `axioms`
 (others, listed), `missing`, `mismatch` (another statement) or `failed` (the proof's file does
 not build). `cargo build` adds `stale` (the function, a function it calls, or the spec changed
 since `extract`) and `unextracted`, warns about them, and fails on any state but `proved` with
-`[package.metadata.lean-rust] require = "proved"` or `LEAN_RUST_REQUIRE=proved`. The states
-are in the rustdoc of each function and in `cargo lean-rust status` (`--output json`).
+`[package.metadata.leanfran] require = "proved"` or `LEANFRAN_REQUIRE=proved`. The states
+are in the rustdoc of each function and in `cargo leanfran status` (`--output json`).
 
 When a `refines` without `requires` is proved, `check` writes `lean/LeanRustGen/Csimp.lean`:
 a `@[csimp]` lemma replacing the spec by an `@[extern "rs:crate::max_u32(_,_)"]` function, so
 the generated `bits::max` calls the Rust `max_u32`. The tests keep comparing with the Lean
-spec (`bits::__lean_rust_spec::max`). Every model also has `M.rs`, an extern calling the Rust
+spec (`bits::__leanfran_spec::max`). Every model also has `M.rs`, an extern calling the Rust
 function from Lean (a panic is `fail panic`).
 
 | Path | Content |
 |---|---|
-| `lean/lakefile.toml`, `lean/lean-toolchain` | the Lean package (`require aeneas` at the rev of this lean-rs), written by `init` |
+| `lean/lakefile.toml`, `lean/lean-toolchain` | the Lean package (`require aeneas` at the rev of this leanfran), written by `init` |
 | `lean/LeanRustGen/Model/<crate>/` | Aeneas's output |
 | `lean/LeanRustGen/{Alias,Obligation,Extern}/`, `Csimp.lean` | the loop aliases, the obligations, the `rs:` externs, the csimp replacements |
 | `lean/External.lean`, `lean/ExternalTypes.lean` | hand-written models of opaque functions and unknown types |
 | `lean/Proofs/` | the proofs |
-| `lean-rust.lock` | the items each model was extracted from with their hashes, and the state of every obligation |
+| `leanfran.lock` | the items each model was extracted from with their hashes, and the state of every obligation |
 
-Commit all of them (and `.lean-rust/cache/`). CI runs `cargo lean-rust extract && cargo lean-rust
-check` and `git diff --exit-code -- lean/LeanRustGen lean-rust.lock`.
+Commit all of them (and `.leanfran/cache/`). CI runs `cargo leanfran extract && cargo leanfran
+check` and `git diff --exit-code -- lean/LeanRustGen leanfran.lock`.
 
-`cargo lean-rust` runs `charon` and `aeneas` (the flake's packages; Aeneas reads only the LLBC
-of its own Charon), `lake` and `lean-rust` (`LEAN_RUST_CLI`) from `PATH`. Lean comes from elan:
+`cargo leanfran` runs `charon` and `aeneas` (the flake's packages; Aeneas reads only the LLBC
+of its own Charon), `lake` and `leanfran` (`LEANFRAN_CLI`) from `PATH`. Lean comes from elan:
 nixpkgs' `leantar` cannot unpack Mathlib's cache. `init --packages-dir <dir>` shares Lake's
 packages (Mathlib's 7.3 GB) between crates.
 
 ## The CLI
 
 ```
-lean-rust help | --help | --version | --generator-version
-lean-rust module generate (--module-name <Module> | --batch <jobs.json>) [--roots <Name> ...]
+leanfran help | --help | --version | --generator-version
+leanfran module generate (--module-name <Module> | --batch <jobs.json>) [--roots <Name> ...]
           [--namespace <Name>] [--type-path <Namespace>=<path> ...] [--import <Module> ...]
           [--model-namespace <Name>] [--search-path <dir> ...] [--output-file <path>]
           [--runtime-path <path>] [--facade-path <path>] [--internal-only] [--output json|text]
-lean-rust project generate --lake-dir <dir> --output-dir <dir> [--modules <Module> ...]
+leanfran project generate --lake-dir <dir> --output-dir <dir> [--modules <Module> ...]
           [--runtime-path <path>] [--facade-path <path>] [--output json|text]
-lean-rust crate check --lake-dir <dir> --obligations <file> [--modules <Module> ...]
+leanfran crate check --lake-dir <dir> --obligations <file> [--modules <Module> ...]
 ```
 
 `--roots` defaults to the module's public definitions written in its source (not instances).
 `--batch` runs the jobs of a JSON file against one environment; `--import` adds modules whose
 `@[csimp]` lemmas apply, and `--model-namespace` maps the types of a crate's Aeneas model to its
-Rust types. `crate check` judges the proofs of obligations (used by `cargo lean-rust check`).
+Rust types. `crate check` judges the proofs of obligations (used by `cargo leanfran check`).
 Exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted (externs the
-runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `lean-rust help` prints all options.
+runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `leanfran help` prints all options.
 
 ## Samples
 
@@ -456,7 +456,7 @@ packages of the repository share `.lake-aeneas/packages/` (7.9 GB, git-ignored),
 - Each generated module defines its own structs and enums; two modules that mention the same
   Lean type have two Rust types, except for types of the blocks named in `uses`.
 - Generic structures are generated per instantiation (`Pair Nat Bool` → `PairNatBool`).
-- `#[lean_rust::model]` covers what Aeneas covers (no `unsafe`, interior mutability or
+- `#[leanfran::model]` covers what Aeneas covers (no `unsafe`, interior mutability or
   concurrency). A trait method is extracted only for a trait of the crate. An opaque method
   belongs to an inherent impl block that is not generic, and no other method or function of its
   module has its name (Charon finds the method by its module and name). Generic functions take

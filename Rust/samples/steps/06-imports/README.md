@@ -4,7 +4,7 @@
 `dedup` and `duplicates`, written with `do` notation and mutable variables (`Id.run do`).
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     #[lean(imports = ["Std.Data.HashSet"])]
     pub mod dedup;
     r#"

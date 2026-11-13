@@ -62,7 +62,7 @@
   the text written before the version, if any."
   [["deps.edn" #"(:version \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["Main.lean" #"(def version : String := \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
-   ["src/lean_clj/core.clj" #"(\(def generator-version\n(?:  .*\n)*?  \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
+   ["src/leanfran/core.clj" #"(\(def generator-version\n(?:  .*\n)*?  \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["flake.nix" #"(version = \")([0-9]+\.[0-9]+\.[0-9]+)(\";)"]
    ["README.md" #"(\{:mvn/version \")([0-9]+\.[0-9]+\.[0-9]+)(\"\})"]
    ["README.md" #"(github:conao3/lean-leanfran/)((?:clojure-)?v[0-9]+\.[0-9]+\.[0-9]+)()" "v"]])

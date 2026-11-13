@@ -1,5 +1,5 @@
 {
-  description = "lean-rs: a Lean IR -> Rust backend, a Lean embedding for Rust, and Lean verification of Rust functions";
+  description = "leanfran: a Lean IR -> Rust backend, a Lean embedding for Rust, and Lean verification of Rust functions";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -26,8 +26,8 @@
           ...
         }:
         {
-          packages.lean-rust = pkgs.stdenv.mkDerivation {
-            pname = "lean-rust";
+          packages.leanfran = pkgs.stdenv.mkDerivation {
+            pname = "leanfran";
             version = "0.5.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
@@ -46,16 +46,16 @@
             ];
             buildPhase = ''
               export HOME=$TMPDIR
-              lake build lean-rust
+              lake build leanfran
             '';
             installPhase = ''
-              install -Dm755 .lake/build/bin/lean-rust $out/bin/lean-rust
-              wrapProgram $out/bin/lean-rust --set-default LEAN_SYSROOT ${pkgs.lean4}
+              install -Dm755 .lake/build/bin/leanfran $out/bin/leanfran
+              wrapProgram $out/bin/leanfran --set-default LEAN_SYSROOT ${pkgs.lean4}
             '';
           };
 
-          packages.cargo-lean-rust = pkgs.rustPlatform.buildRustPackage {
-            pname = "cargo-lean-rust";
+          packages.cargo-leanfran = pkgs.rustPlatform.buildRustPackage {
+            pname = "cargo-leanfran";
             version = "0.5.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
@@ -70,16 +70,16 @@
             cargoLock.lockFile = ./Cargo.lock;
             cargoBuildFlags = [
               "-p"
-              "cargo-lean-rust"
+              "cargo-leanfran"
             ];
             doCheck = false;
           };
 
           packages.default = pkgs.symlinkJoin {
-            name = "lean-rs-0.5.0";
+            name = "leanfran-0.5.0";
             paths = [
-              config.packages.lean-rust
-              config.packages.cargo-lean-rust
+              config.packages.leanfran
+              config.packages.cargo-leanfran
               inputs.aeneas.packages.${system}.default
             ];
           };

@@ -2,7 +2,7 @@
 //! action, and returns the bits of the failed checks (0 when all pass). `tests/wasm/test.sh` calls
 //! it in node, and the test of the crate calls it natively.
 
-lean_rust::lean! {
+leanfran::lean! {
     pub mod funcs;
     r#"
     def fib : Nat → Nat
@@ -36,7 +36,7 @@ lean_rust::lean! {
 
 /// The bits of the failed checks.
 pub fn failures() -> u32 {
-    use lean_rust::{Int, Nat};
+    use leanfran::{Int, Nat};
     let checks = [
         funcs::fib(Nat::from(20u64)) == Nat::from(6765u64),
         funcs::fast_fib(Nat::from(100u64)).to_string() == "354224848179261915075",
@@ -49,7 +49,7 @@ pub fn failures() -> u32 {
         funcs::add_int(Int::from(-7i64), Int::from(3i64)) == Int::from(-4i64),
         funcs::mix(u64::MAX) == u64::MAX.wrapping_mul(0x9e3779b97f4a7c15).wrapping_add(1),
         funcs::half(5.0) == "2.500000",
-        match funcs::read_file("/nonexistent/lean-rust-wasm-test") {
+        match funcs::read_file("/nonexistent/leanfran-wasm-test") {
             Err(e) if cfg!(target_family = "wasm") => {
                 e.kind() == std::io::ErrorKind::Unsupported
                     && e.to_string()

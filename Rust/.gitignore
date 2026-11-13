@@ -3,5 +3,5 @@
 /target/
 /test-out/
 /.claude-dev/
-.lean-rust/workspace/
+.leanfran/workspace/
 /.lake-aeneas/

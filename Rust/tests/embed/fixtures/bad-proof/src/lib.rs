@@ -1,4 +1,4 @@
-lean_rust::lean! {
+leanfran::lean! {
     pub mod bad;
     r#"
     def double (n : Nat) : Nat := n + n

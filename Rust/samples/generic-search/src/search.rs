@@ -3,7 +3,7 @@
 use crate::spec::search;
 
 /// The larger of `a` and `b`.
-#[lean_rust::model(instances = [u32, i64], ensures(max = search::is_max))]
+#[leanfran::model(instances = [u32, i64], ensures(max = search::is_max))]
 pub fn max_of<T: Ord + Copy>(a: T, b: T) -> T {
     if a >= b {
         a
@@ -14,7 +14,7 @@ pub fn max_of<T: Ord + Copy>(a: T, b: T) -> T {
 
 /// Whether `x` is an element of the sorted slice `xs`: halves the range of the elements that
 /// are not less than `x` from below, then compares the first of them.
-#[lean_rust::model(
+#[leanfran::model(
     instances = [u32, i64, String],
     refines = search::mem,
     requires = search::sorted,
@@ -35,11 +35,11 @@ pub fn contains<T: Ord>(xs: &[T], x: &T) -> bool {
 }
 
 #[cfg(test)]
-fn sorted_input<T>() -> impl lean_rust::check::proptest::strategy::Strategy<Value = (Vec<T>, T)>
+fn sorted_input<T>() -> impl leanfran::check::proptest::strategy::Strategy<Value = (Vec<T>, T)>
 where
-    T: lean_rust::check::proptest::arbitrary::Arbitrary + Ord + Clone,
+    T: leanfran::check::proptest::arbitrary::Arbitrary + Ord + Clone,
 {
-    use lean_rust::check::proptest::prelude::*;
+    use leanfran::check::proptest::prelude::*;
     (
         prop::collection::vec(any::<T>(), 0..30),
         any::<T>(),

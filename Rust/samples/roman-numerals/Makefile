@@ -1,16 +1,16 @@
-LEAN_RUST := ../../.lake/build/bin/lean-rust
+LEANFRAN := ../../.lake/build/bin/leanfran
 
 .PHONY: all
 all: test
 
-.PHONY: lean-rust
-lean-rust:
-	cd ../.. && lake build lean-rust
+.PHONY: leanfran
+leanfran:
+	cd ../.. && lake build leanfran
 
 # Check the Lean library (proofs included) and regenerate src/generated/.
 .PHONY: generate
-generate: lean-rust
-	$(LEAN_RUST) project generate --lake-dir lean --output-dir src/generated --output text
+generate: leanfran
+	$(LEANFRAN) project generate --lake-dir lean --output-dir src/generated --output text
 	rustfmt --edition 2021 src/generated/mod.rs
 
 .PHONY: test

@@ -1,0 +1,20 @@
+[package]
+name = "leanfran-macros"
+description = "Procedural macros of leanfran: lean!, #[model], #[opaque], #[derive(Model)] and #[exported]"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+leanfran-build = { path = "../leanfran-build", version = "0.5.0" }
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3", features = ["full"] }

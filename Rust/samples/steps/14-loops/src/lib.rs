@@ -1,7 +1,7 @@
 //! Step 14: a loop, named by its label, and proved by induction.
 
 pub mod spec {
-    lean_rust::lean! {
+    leanfran::lean! {
         #[lean(imports = ["Aeneas"])]
         pub mod sums;
         r#"
@@ -16,7 +16,7 @@ pub mod spec {
 use spec::sums;
 
 /// `0 + 1 + … + n`, adding one number at a time. The loop `'add` is `sum_to.add` in Lean.
-#[lean_rust::model(refines = sums::sum_to, strategy = crate::small)]
+#[leanfran::model(refines = sums::sum_to, strategy = crate::small)]
 pub fn sum_to(n: u32) -> u64 {
     let mut i = 0u32;
     let mut s = 0u64;
@@ -29,6 +29,6 @@ pub fn sum_to(n: u32) -> u64 {
 
 /// Arguments that keep the loop short in the tests.
 #[cfg(test)]
-fn small() -> impl lean_rust::check::proptest::strategy::Strategy<Value = u32> {
+fn small() -> impl leanfran::check::proptest::strategy::Strategy<Value = u32> {
     0u32..100_000
 }

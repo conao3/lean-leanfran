@@ -1,6 +1,6 @@
 //! Runs `LeanRustTest.Io.run` through the generated Rust (diff test against `oracle-io`).
 
-use lean_rust_runtime as rt;
+use leanfran_runtime as rt;
 
 mod generated {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-out/io.rs"));

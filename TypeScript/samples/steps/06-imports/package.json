@@ -1,8 +1,8 @@
 {
-  "name": "lean-ts-step-06-imports",
+  "name": "leanfran-step-06-imports",
   "private": true,
   "type": "module",
   "dependencies": {
-    "lean-ts": "link:../../.."
+    "leanfran": "link:../../.."
   }
 }

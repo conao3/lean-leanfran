@@ -1,0 +1,20 @@
+[package]
+name = "leanfran"
+description = "Run Lean functions from Rust and verify Rust functions in Lean"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["check"]
+check = ["dep:proptest"]
+
+[dependencies]
+leanfran-macros = { path = "../leanfran-macros", version = "0.5.0" }
+leanfran-runtime = { path = "../leanfran-runtime", version = "0.5.0" }
+proptest = { version = "1", optional = true }

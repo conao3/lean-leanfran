@@ -1,7 +1,0 @@
-{
-  "src/search.ts:spec": {
-    "fnv": "7dc7f58675828b8c",
-    "output": "src/_lean/search__spec.ts",
-    "sha256": "1448d27e95a0be4d25d00249aff90929cbba33d0a2a640b7bacd9ce512cd0551"
-  }
-}

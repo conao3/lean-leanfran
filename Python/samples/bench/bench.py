@@ -1,6 +1,6 @@
 """Time the generated Python against the native C build of the same Lean code.
 
-usage: uv run python samples/bench/bench.py   (after `lake build lean-python oracle-bench LeanPythonTest`)
+usage: uv run python samples/bench/bench.py   (after `lake build leanfran-python oracle-bench LeanPythonTest`)
 """
 
 import pathlib

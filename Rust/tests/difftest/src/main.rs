@@ -9,7 +9,7 @@ mod generated {
 
 fn main() {
     unsafe {
-        let s = generated::l_LeanRustTest_Vectors_report(lean_rust_runtime::lean_box(0));
-        println!("{}", lean_rust_runtime::lean_string_to_str(s));
+        let s = generated::l_LeanRustTest_Vectors_report(leanfran_runtime::lean_box(0));
+        println!("{}", leanfran_runtime::lean_string_to_str(s));
     }
 }

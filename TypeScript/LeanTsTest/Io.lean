@@ -1,6 +1,6 @@
 import LeanTsTest.Vectors
 
-/-! IO demo program extracted by the lean-ts CLI to prove end-to-end effectful
+/-! IO demo program extracted by the leanfran CLI to prove end-to-end effectful
 programs run under node and match Lean. Kept in a library module so its IR is
 persisted and visible to `findEnvDecl` on re-import. -/
 
@@ -43,7 +43,7 @@ def openError (path : String) (mode : IO.FS.Mode) : IO String := do
     pure s!"{ioErrorKind e}: {e}"
 
 def main : IO Unit := do
-  IO.println "lean-ts IO demo"
+  IO.println "leanfran IO demo"
   IO.println s!"fib 10 = {fib 10}"
   IO.println s!"2 + 3 = {2 + 3}"
   -- Large Nat printed via the COMPILED path (Nat.reprFast). 10^18 sits in the
@@ -66,8 +66,8 @@ def main : IO Unit := do
   IO.println s!"todo = {showList l3}"
   let caught ← tryCatchIO
   IO.println s!"trycatch = {caught}"
-  IO.println s!"open missing = {← openError "/nonexistent/lean-ts/missing.txt" .read}"
-  IO.println s!"create in missing = {← openError "/nonexistent/lean-ts/new.txt" .write}"
+  IO.println s!"open missing = {← openError "/nonexistent/leanfran/missing.txt" .read}"
+  IO.println s!"create in missing = {← openError "/nonexistent/leanfran/new.txt" .write}"
   let h ← IO.FS.Handle.mk "test-out/io-exists.txt" .write
   h.putStr "x"
   IO.println s!"create existing = {← openError "test-out/io-exists.txt" .writeNew}"
@@ -97,7 +97,7 @@ def stdinEcho : IO Unit := do
     "uncaught exception: ..." to stderr and exits 1. -/
 def errMain : IO Unit := do
   IO.println "before error"
-  throw (IO.userError "boom from lean-ts")
+  throw (IO.userError "boom from leanfran")
 
 /-- A function with a `panic!` reached on one branch. `panic!` returns the
     `Inhabited` default and the program CONTINUES (it does not abort), so callers

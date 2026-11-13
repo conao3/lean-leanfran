@@ -184,9 +184,9 @@ export function readSource(root: string, file: string): Source {
         else if (sp.type === "ImportSpecifier") {
           const name = sp.imported.type === "Literal" ? sp.imported.value : sp.imported.name
           imports.set(sp.local.name, { from, exportName: name })
-          if (from === "lean-ts/verify" && name === "model") modelNames.add(sp.local.name)
+          if (from === "leanfran/verify" && name === "model") modelNames.add(sp.local.name)
         }
-        if (sp.type === "ImportNamespaceSpecifier" && from === "lean-ts/verify")
+        if (sp.type === "ImportNamespaceSpecifier" && from === "leanfran/verify")
           verifyNamespaces.add(sp.local.name)
       }
       continue
@@ -515,7 +515,7 @@ function jsonType(s: unknown, where: string): { t: TsType; nat: boolean } {
       return { t: { k: "list", item: jsonType(s["items"], where).t }, nat: false }
     default:
       throw new TranslateError(
-        `${where}: the model property ${JSON.stringify(s)} is outside the subset lean-ts translates`,
+        `${where}: the model property ${JSON.stringify(s)} is outside the subset leanfran translates`,
       )
   }
 }
@@ -553,7 +553,7 @@ export function typeResolver(
       const exportName =
         qualifier === undefined ? i.exportName : i.exportName === null ? name : undefined
       if (exportName === undefined || exportName === null) return undefined
-      if (i.from === "lean-ts/schema" && (exportName === "Nat" || exportName === "Int")) return BIG
+      if (i.from === "leanfran/schema" && (exportName === "Nat" || exportName === "Int")) return BIG
       const b = blockOf(pkg, i.from)
       if (b === undefined) return undefined
       if (summaries === undefined || descs === undefined)
@@ -665,7 +665,7 @@ function leanFiles(dir: string): string[] {
 }
 
 function lockFile(root: string): string {
-  return join(root, "lean-ts.lock")
+  return join(root, "leanfran.lock")
 }
 
 function readLock(root: string): Lock {
@@ -727,7 +727,7 @@ export async function checkPackage(
   const first = await syncPackage(dir, cliPath, log, csimpFiles)
   const { pkg, summaries } = first
   const before = canonicalJson(Object.fromEntries(csimpFiles(pkg)))
-  const ws = join(pkg.root, ".lean-ts", "workspace")
+  const ws = join(pkg.root, ".leanfran", "workspace")
   const sources = readSources(pkg.root).filter((s) => s.models.length !== 0)
   const descs = loadDescs(pkg, sources)
   rmSync(join(ws, "LeanTsLib"), { recursive: true, force: true })
@@ -826,7 +826,7 @@ export async function checkPackage(
       readFileSync(join(ws, `${m.replaceAll(/[«»]/gu, "").split(".").join("/")}.lean`), "utf8"),
     )
     for (const line of (r.stdout + r.stderr).split("\n"))
-      if (/^(error:|  |⊢|case )/u.test(line) || line.includes(": error")) log(`lean-ts: ${line}`)
+      if (/^(error:|  |⊢|case )/u.test(line) || line.includes(": error")) log(`leanfran: ${line}`)
   }
   const oblFile = join(ws, "obligations.json")
   writeFileSync(oblFile, JSON.stringify(refs.map((r) => ({ model: r.lean, label: r.label }))))
@@ -845,11 +845,14 @@ export async function checkPackage(
     ])
     if (r.status !== 0) {
       log(r.stderr)
-      throw new SyncError("lean-typescript obligations check failed", r.status)
+      throw new SyncError("leanfran-typescript obligations check failed", r.status)
     }
     const parsed: unknown = JSON.parse(r.stdout)
     if (!Array.isArray(parsed) || parsed.length !== refs.length)
-      throw new SyncError("lean-typescript obligations check returned an unexpected result", 255)
+      throw new SyncError(
+        "leanfran-typescript obligations check returned an unexpected result",
+        255,
+      )
     results = parsed
   }
   const lock: Record<
@@ -862,7 +865,7 @@ export async function checkPackage(
     const raw = isRecord(res) ? res["status"] : undefined
     if (!isStatus(raw))
       throw new SyncError(
-        `lean-typescript obligations check returned no status for ${ref.lean} ${ref.label}`,
+        `leanfran-typescript obligations check returned no status for ${ref.lean} ${ref.label}`,
         255,
       )
     let status: Status = raw
@@ -872,7 +875,7 @@ export async function checkPackage(
     )
       status = "failed"
     if (isRecord(res) && typeof res["detail"] === "string" && status === "mismatch")
-      log(`lean-ts: ${res["detail"]}`)
+      log(`leanfran: ${res["detail"]}`)
     const q = qualified(ref.m)
     const entry = lock[q] ?? { spec_hash: hashes.get(q) ?? "", lean: ref.lean, obligations: {} }
     entry.obligations[ref.label] = status

@@ -4,11 +4,11 @@
 set -euo pipefail
 ulimit -s 65536
 export LEAN_BACKTRACE=0
-export LEAN_PYTHON_TEST_VAR=from-the-environment
-lake build lean-python oracle oracle-io LeanPythonTest
+export LEANFRAN_PYTHON_TEST_VAR=from-the-environment
+lake build leanfran-python oracle oracle-io LeanPythonTest
 mkdir -p test-out
 generate() {
-  .lake/build/bin/lean-python module generate \
+  .lake/build/bin/leanfran-python module generate \
     --module-name "$1" --roots "$2" \
     --search-path .lake/build/lib/lean \
     --output-file "$3" --output text --internal-only

@@ -1,7 +1,7 @@
 //! Calls the public functions generated from `LeanRustTest.Public`.
 
-use lean_rust::{Int, Nat};
-use lean_rust_public_test as p;
+use leanfran::{Int, Nat};
+use leanfran_public_test as p;
 use std::process::Command;
 
 fn nat(n: u64) -> Nat {
@@ -31,7 +31,7 @@ fn nat_bignum() {
     assert_eq!(p::double(x).to_string(), "246913578024691357802469135780");
     assert_eq!(
         u64::try_from(p::double(nat(u64::MAX))),
-        Err(lean_rust::runtime::OutOfRange)
+        Err(leanfran::runtime::OutOfRange)
     );
     assert_eq!(p::double(nat(u64::MAX)).to_string(), "36893488147419103230");
 }
@@ -146,7 +146,7 @@ fn fin_with_a_bound_that_reduces_to_a_literal() {
 
 #[test]
 fn fin_above_usize_is_a_nat() {
-    let max = "1180591620717411303423".parse::<lean_rust::Nat>().unwrap();
+    let max = "1180591620717411303423".parse::<leanfran::Nat>().unwrap();
     assert_eq!(p::big_fin(nat(41)), nat(42));
     assert_eq!(p::big_fin(max), nat(0));
 }
@@ -222,7 +222,7 @@ fn instantiated_polymorphic_functions() {
 #[test]
 fn instantiations_are_replaced_by_csimp() {
     assert_eq!(p::same(nat(7)), nat(7));
-    assert_eq!(p::__lean_rust_spec::same(nat(7)), nat(7));
+    assert_eq!(p::__leanfran_spec::same(nat(7)), nat(7));
     let start = p::SOURCE.find("pub fn same_inst_nat(").unwrap();
     let body = &p::SOURCE[start..start + p::SOURCE[start..].find("\n}\n").unwrap()];
     assert!(body.contains("l_LeanRustTest_Public_sameNat("), "{body}");

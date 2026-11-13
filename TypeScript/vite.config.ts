@@ -6,7 +6,7 @@ const config: ViteUserConfig = defineConfig({
     singleQuote: false,
     trailingComma: "all",
     sortPackageJson: false,
-    ignorePatterns: ["lake-manifest.json", "**/_lean/**", "**/.lean-ts/**"],
+    ignorePatterns: ["lake-manifest.json", "**/_lean/**", "**/.leanfran/**"],
   },
   lint: {
     categories: { correctness: "error", suspicious: "warn" },

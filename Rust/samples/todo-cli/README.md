@@ -8,7 +8,7 @@ file and prints the results.
 ## The model
 
 ```rust
-lean_rust::lean! {
+leanfran::lean! {
     pub mod model;
     r#"
     structure Task where
@@ -83,8 +83,8 @@ todo: no task 9
 Global options: `--data-file <path>` (default `todo.json` in the working directory) and
 `--output json|text`. Exit codes: 0 success, 252 invalid parameters, 254 no such task.
 
-Changing the Lean source makes the next build run Lean: `lake` and the `lean-rust` CLI must be
-available (`make` sets `LEAN_RUST_CLI` to the CLI of the repository). The build writes the new
-module to `.lean-rust/cache/` and the Lean file to `lean/LeanRustGen/`; commit both.
+Changing the Lean source makes the next build run Lean: `lake` and the `leanfran` CLI must be
+available (`make` sets `LEANFRAN_CLI` to the CLI of the repository). The build writes the new
+module to `.leanfran/cache/` and the Lean file to `lean/LeanRustGen/`; commit both.
 
 `make test` runs a session and compares its output with `expected.txt`.

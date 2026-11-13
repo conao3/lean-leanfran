@@ -54,7 +54,7 @@ fn load(path: &str) -> Result<Todo, String> {
     })
 }
 
-fn num(n: &lean_rust::Nat) -> u64 {
+fn num(n: &leanfran::Nat) -> u64 {
     u64::try_from(n).expect("task ids fit in u64")
 }
 

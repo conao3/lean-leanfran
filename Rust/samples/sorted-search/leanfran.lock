@@ -1,0 +1,38 @@
+version = 1
+aeneas = "c5eb4a28cef65e0aa27743105308243e535a2a2b"
+charon = "0.1.313"
+
+[[model]]
+rust = "crate::search::lower_bound"
+lean = "sorted_search.search.lower_bound"
+items = [
+  { rust = "crate::search::lower_bound", hash = "sha256:89a6c86d5c22aa089b0ba468ffdb24bc6f7a7025d84bad04e04beec3aa37008a" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "search.lower_bound"
+spec_block = "crate::spec::search"
+spec_hash = "sha256:ab3ce041864fccb618d9e8a6cbe88641e1c43abdc8f0785df492fbe80861bec0"
+hash = "sha256:4ad8f2824306ca4a894e2779ce14fa05b2b005261c81dd69b16035fc41afd697"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Search.lean:89"
+
+[[model]]
+rust = "crate::search::contains"
+lean = "sorted_search.search.contains"
+items = [
+  { rust = "crate::search::contains", hash = "sha256:0da5273c5f43469c4436f52ee785a62de4b6711a98f24f419c1846fbc4582c04" },
+  { rust = "crate::search::lower_bound", hash = "sha256:89a6c86d5c22aa089b0ba468ffdb24bc6f7a7025d84bad04e04beec3aa37008a" },
+]
+
+[[model.obligation]]
+label = "refines"
+spec = "search.mem"
+spec_block = "crate::spec::search"
+spec_hash = "sha256:ab3ce041864fccb618d9e8a6cbe88641e1c43abdc8f0785df492fbe80861bec0"
+hash = "sha256:25a72199f22989e8c817e7ed5467912d34069644cff4874b3e00bfa5b846a219"
+status = "proved"
+axioms = ["Classical.choice", "Quot.sound", "propext"]
+proof = "lean/Proofs/Search.lean:99"

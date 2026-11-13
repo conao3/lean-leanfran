@@ -126,7 +126,7 @@ function gen(fc: FC, desc: TypeDesc, depth: number): FastCheck.Arbitrary<unknown
     case "subtype":
       return gen(fc, d.base, depth)
     case "model":
-      throw new TypeError(`lean-ts: no arbitrary for the user schema ${d.name}`)
+      throw new TypeError(`leanfran: no arbitrary for the user schema ${d.name}`)
     default:
       return gen(fc, d.get(), depth)
   }

@@ -2,7 +2,7 @@
 set -euo pipefail
 dir=$(cd "$1" && pwd)
 cd "$dir"
-lts=(node node_modules/lean-ts/dist/cli.js)
+lts=(node node_modules/leanfran/dist/cli.js)
 if [ -f lean/lakefile.toml ]; then
   "${lts[@]}" generate --lake-dir lean --output-dir src/_lean > sync.log 2>&1 || { cat sync.log; exit 1; }
 else

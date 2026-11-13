@@ -211,7 +211,8 @@ const IO_ERROR_CTORS: readonly string[] = [
 
 function ioErrorCtor(tag: number): string {
   const name = IO_ERROR_CTORS[tag]
-  if (name === undefined) throw new TypeError(`lean-ts runtime: IO.Error has no constructor ${tag}`)
+  if (name === undefined)
+    throw new TypeError(`leanfran runtime: IO.Error has no constructor ${tag}`)
   return name
 }
 
@@ -230,7 +231,7 @@ const LONE_SURROGATE = /[\uD800-\uDFFF]/u
 const DECIMAL = /^-?(?:0|[1-9][0-9]*)$/u
 
 function unreachable(d: never): never {
-  throw new TypeError(`lean-ts runtime: unknown type descriptor ${JSON.stringify(d)}`)
+  throw new TypeError(`leanfran runtime: unknown type descriptor ${JSON.stringify(d)}`)
 }
 
 export function resolve(d: TypeDesc): TypeDesc {
@@ -514,10 +515,10 @@ export function standardValidate(schema: unknown, value: unknown): StandardResul
   const std = record(schema, "~standard").value
   const validate = record(std, "validate").value
   if (typeof validate !== "function")
-    throw new TypeError("lean-ts runtime: the model is not a Standard Schema")
+    throw new TypeError("leanfran runtime: the model is not a Standard Schema")
   const r: unknown = Reflect.apply(validate, std, [value])
   if (r instanceof Promise)
-    throw new TypeError("lean-ts runtime: the model's ~standard.validate returned a Promise")
+    throw new TypeError("leanfran runtime: the model's ~standard.validate returned a Promise")
   const issues = record(r, "issues").value
   if (Array.isArray(issues)) {
     const items: unknown[] = issues
@@ -537,7 +538,7 @@ function modelSchema(d: { readonly key: string; readonly name: string }): unknow
   const s = blockRegistry().models.get(d.key)
   if (s === undefined)
     throw new TypeError(
-      `lean-ts runtime: the model ${d.name} (${d.key}) is not registered; the lean(...) block that declares it has not run`,
+      `leanfran runtime: the model ${d.name} (${d.key}) is not registered; the lean(...) block that declares it has not run`,
     )
   return s
 }
@@ -900,14 +901,14 @@ function decode(d: TypeDesc, x: Obj): unknown {
       const cidx = lean_unbox(x)
       const name = d.ctors[cidx]
       if (name === undefined)
-        throw new TypeError(`lean-ts runtime: ${d.name} has no constructor ${cidx}`)
+        throw new TypeError(`leanfran runtime: ${d.name} has no constructor ${cidx}`)
       return name
     }
     case "inductive": {
       const tag = lean_tag(x)
       const variant = d.variants.find((v) => v.cidx === tag)
       if (variant === undefined)
-        throw new TypeError(`lean-ts runtime: ${d.name} has no constructor ${tag}`)
+        throw new TypeError(`leanfran runtime: ${d.name} has no constructor ${tag}`)
       return decodeVariant(variant, x, null, { [d.tagKey]: variant.name })
     }
     case "subtype":

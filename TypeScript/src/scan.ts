@@ -183,7 +183,7 @@ export function scanFile(root: string, file: string): ScannedBlock[] {
     )
   }
   for (const s of parsed.program.body) {
-    if (s.type !== "ImportDeclaration" || s.source.value !== "lean-ts" || s.importKind === "type")
+    if (s.type !== "ImportDeclaration" || s.source.value !== "leanfran" || s.importKind === "type")
       continue
     for (const sp of s.specifiers) {
       if (sp.type === "ImportNamespaceSpecifier") namespaces.add(sp.local.name)

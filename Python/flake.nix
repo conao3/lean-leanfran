@@ -1,5 +1,5 @@
 {
-  description = "lean-py: a Lean IR -> Python backend, a Lean embedding for Python, and pydantic models for Lean types";
+  description = "leanfran: a Lean IR -> Python backend, a Lean embedding for Python, and pydantic models for Lean types";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -20,8 +20,8 @@
       perSystem =
         { pkgs, config, ... }:
         {
-          packages.lean-python = pkgs.stdenv.mkDerivation {
-            pname = "lean-python";
+          packages.leanfran = pkgs.stdenv.mkDerivation {
+            pname = "leanfran-python";
             version = "0.5.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
@@ -39,16 +39,16 @@
             ];
             buildPhase = ''
               export HOME=$TMPDIR
-              lake build lean-python
+              lake build leanfran-python
             '';
             installPhase = ''
-              install -Dm755 .lake/build/bin/lean-python $out/bin/lean-python
-              wrapProgram $out/bin/lean-python --set-default LEAN_SYSROOT ${pkgs.lean4}
+              install -Dm755 .lake/build/bin/leanfran-python $out/bin/leanfran-python
+              wrapProgram $out/bin/leanfran-python --set-default LEAN_SYSROOT ${pkgs.lean4}
             '';
-            meta.mainProgram = "lean-python";
+            meta.mainProgram = "leanfran-python";
           };
 
-          packages.default = config.packages.lean-python;
+          packages.default = config.packages.leanfran;
 
           treefmt = {
             projectRootFile = "flake.nix";
