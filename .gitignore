@@ -35,3 +35,7 @@
 /langs/Clojure/test-out/
 /langs/Clojure/target/
 !/langs/Clojure/resources/clj-kondo.exports/io.github.conao3/
+/Rust/**/target/
+/Rust/**/.lake/
+/Rust/**/.lake-aeneas/
+/Rust/**/test-out/
