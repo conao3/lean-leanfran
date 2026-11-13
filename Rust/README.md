@@ -85,10 +85,10 @@ cargo-leanfran`). The flake's default package has `leanfran`, `cargo-leanfran`, 
 ```toml
 # Cargo.toml
 [dependencies]
-leanfran = "0.5.0"
+leanfran = "0.6.0"
 
 [build-dependencies]
-leanfran-build = "0.5.0"
+leanfran-build = "0.6.0"
 ```
 
 ```rust
@@ -209,7 +209,7 @@ library.
 Generated code builds for `wasm32-unknown-unknown` (for a browser through `wasm-bindgen`) with
 
 ```toml
-leanfran = { version = "0.5.0", default-features = false }
+leanfran = { version = "0.6.0", default-features = false }
 ```
 
 Pure functions behave as on Unix. The `IO` actions that need an operating system (files,

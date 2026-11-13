@@ -1,6 +1,6 @@
 {
   "name": "leanfran",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Write and prove functions in Lean 4, run them as TypeScript: Lean blocks in TypeScript modules, Standard Schema for Lean types, TypeScript functions verified in Lean",
   "license": "Apache-2.0",
   "homepage": "https://github.com/conao3/lean-leanfran/tree/master/TypeScript#readme",

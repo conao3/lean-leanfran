@@ -28,7 +28,7 @@
         {
           packages.leanfran = pkgs.stdenv.mkDerivation {
             pname = "leanfran";
-            version = "0.5.0";
+            version = "0.6.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [
@@ -56,7 +56,7 @@
 
           packages.cargo-leanfran = pkgs.rustPlatform.buildRustPackage {
             pname = "cargo-leanfran";
-            version = "0.5.0";
+            version = "0.6.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [
@@ -76,7 +76,7 @@
           };
 
           packages.default = pkgs.symlinkJoin {
-            name = "leanfran-0.5.0";
+            name = "leanfran-0.6.0";
             paths = [
               config.packages.leanfran
               config.packages.cargo-leanfran

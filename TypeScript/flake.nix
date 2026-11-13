@@ -59,7 +59,7 @@
         {
           packages.leanfran-typescript = pkgs.stdenv.mkDerivation {
             pname = "leanfran-typescript";
-            version = "0.5.0";
+            version = "0.6.0";
             src = pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.unions [
