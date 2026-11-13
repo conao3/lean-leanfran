@@ -23,7 +23,7 @@ Paths in this guide are relative to `Python/`.
 
 ## Conventions
 
-- The toolchain in `lean-toolchain` matches nixpkgs-unstable's `lean4`.
+- The root `../lean-toolchain` matches nixpkgs-unstable's `lean4`.
 - When the CLI reports externs not in the runtime, find the extern in the Lean sources
   (`grep -rn 'extern "<symbol>"'` under the toolchain's `src/lean`), implement it following `lean.h`
   (same argument order, erased arguments dropped; never consume a borrowed argument; `inc` values
@@ -37,5 +37,5 @@ Paths in this guide are relative to `Python/`.
 ## Verification
 
 ```
-nix develop --command make check
+nix develop ..#python --command make check
 ```

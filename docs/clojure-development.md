@@ -22,7 +22,7 @@ Paths in this guide are relative to `Clojure/`.
 
 ## Conventions
 
-- The toolchain in `lean-toolchain` matches nixpkgs-unstable's `lean4`.
+- The root `../lean-toolchain` matches nixpkgs-unstable's `lean4`.
 - When a generated namespace reports missing runtime symbols, find the extern
   in the Lean sources (`grep -rn 'extern "<symbol>"'` under the toolchain's
   `src/lean`) and implement it with the same argument order, dropping erased
@@ -33,5 +33,5 @@ Paths in this guide are relative to `Clojure/`.
 ## Verification
 
 ```
-nix develop --command make check
+nix develop ..#clojure --command make check
 ```

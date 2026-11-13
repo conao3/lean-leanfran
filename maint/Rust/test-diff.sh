@@ -2,6 +2,7 @@
 # Diff-test: run LeanRustTest.Vectors.report and LeanRustTest.Io.run on the native C
 # backend and on the generated Rust, and compare stdout and stderr.
 set -euo pipefail
+cd "$(dirname "$0")/../../Rust"
 ulimit -s 65536
 export LEAN_BACKTRACE=0
 export LEANFRAN_TEST_VAR=from-the-environment

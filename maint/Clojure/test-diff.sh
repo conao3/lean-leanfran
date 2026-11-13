@@ -2,6 +2,7 @@
 # Diff-test: run LeanCljTest.Vectors.report on the native C backend and on the
 # generated Clojure, and compare the output.
 set -euo pipefail
+cd "$(dirname "$0")/../../Clojure"
 ulimit -s 65536
 lake build leanfran oracle LeanCljTest
 mkdir -p test-out/leanfran_test

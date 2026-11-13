@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(dirname "$0")/../../TypeScript"
 lake build leanfran-typescript LeanTsTest oracle-json
 mkdir -p test-out
 gen=(.lake/build/bin/leanfran-typescript module generate --module-name LeanTsTest.Public

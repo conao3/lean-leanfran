@@ -1,4 +1,4 @@
-import * as runtime from "../src/runtime/index.ts"
+import * as runtime from "../../TypeScript/src/runtime/index.ts"
 
 const names = Object.keys(runtime)
   .filter((n) => n.startsWith("lean_"))

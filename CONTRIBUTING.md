@@ -9,7 +9,9 @@ make format
 make check BACKENDS="Python TypeScript"
 ```
 
-The root Makefile runs each selected backend in its own pinned Nix environment. `BACKENDS` defaults to `Rust Python TypeScript Clojure`. To use backend-specific commands, enter that directory and run `nix develop`.
+The root `flake.nix` and `flake.lock` define all development environments and compiler packages. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure`. To use backend-specific commands, run `nix develop .#python` (or `rust`, `typescript`, `clojure`) at the root, then enter the backend directory. `nix develop` provides all four toolsets.
+
+Build compiler packages with `nix build .#python`, `.#typescript`, `.#clojure` or `.#rust`. The Rust package includes the compiler, Cargo CLI and Aeneas. `nix fmt` formats Nix, Rust and Python across the repository; `make format` also formats TypeScript and Clojure. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
 
 ## Backend development
 
@@ -30,4 +32,4 @@ Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -
 
 ## Releases
 
-The GitHub Actions Release workflow selects one next version for all backends, updates it through `scripts/set-version.sh`, verifies all backends and creates `vX.Y.Z`. Publish distributes that tag to all four registries. A retry skips versions already published. Generator versions track emitted-code compatibility separately from package versions.
+The GitHub Actions Release workflow selects one next version for all backends, updates it through `maint/set-version.sh`, verifies all backends and creates `vX.Y.Z`. Publish distributes that tag to all four registries. A retry skips versions already published. Generator versions track emitted-code compatibility separately from package versions.

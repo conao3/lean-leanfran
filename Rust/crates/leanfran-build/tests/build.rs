@@ -27,7 +27,7 @@ fn file_hash_is_16_hex_digits_of_sha256() {
 
 #[test]
 fn toolchain_matches_the_repository() {
-    let repo = include_str!("../../../lean-toolchain");
+    let repo = include_str!("../../../../lean-toolchain");
     assert_eq!(repo.trim(), LEAN_TOOLCHAIN);
 }
 

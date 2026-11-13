@@ -1,4 +1,4 @@
-# Run the targets inside the dev shell: `nix develop -c make check`.
+# Run the targets inside the dev shell: `nix develop ..#python -c make check`.
 
 .PHONY: build gen-externs test samples format format-check bench check
 
@@ -7,11 +7,11 @@ build:
 	uv sync -q
 
 gen-externs:
-	uv run python scripts/gen_externs.py > LeanPython/RuntimeExterns.lean.tmp
+	uv run python ../maint/Python/gen_externs.py > LeanPython/RuntimeExterns.lean.tmp
 	mv LeanPython/RuntimeExterns.lean.tmp LeanPython/RuntimeExterns.lean
 
 test: build
-	./test-diff.sh
+	../maint/Python/test-diff.sh
 	uv run pytest -q
 
 # Sync, run and compare every sample; the committed generated modules must be up to date.

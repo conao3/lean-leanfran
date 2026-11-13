@@ -1,4 +1,4 @@
-# Run the targets inside the dev shell: `nix develop -c make check`.
+# Run the targets inside the dev shell: `nix develop ..#typescript -c make check`.
 
 .PHONY: install build pack gen-externs externs-check test test-public fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples bench check
 
@@ -13,7 +13,7 @@ pack: install
 	cp ../LICENSE dist/LICENSE
 
 gen-externs: install
-	node scripts/gen-externs.ts > LeanTs/RuntimeExterns.lean.tmp
+	node ../maint/TypeScript/gen-externs.ts > LeanTs/RuntimeExterns.lean.tmp
 	mv LeanTs/RuntimeExterns.lean.tmp LeanTs/RuntimeExterns.lean
 
 # The committed extern list must match the runtime.
@@ -21,13 +21,13 @@ externs-check: gen-externs
 	git diff --exit-code -- LeanTs/RuntimeExterns.lean
 
 test: build
-	./test-diff.sh
+	../maint/TypeScript/test-diff.sh
 
 fuzz: build
-	./fuzz.sh
+	../maint/TypeScript/fuzz.sh
 
 test-public: build
-	./test-public.sh
+	../maint/TypeScript/test-public.sh
 
 # Type-check and lint every module the diff-test generated (test-out/ is gitignored, so it is passed explicitly).
 typecheck-generated: test test-public fuzz
@@ -73,9 +73,11 @@ bench: build
 
 format:
 	treefmt
+	vp fmt
 
 format-check: install
 	treefmt --ci
+	vp fmt --check
 
 check: format-check externs-check test test-public fuzz typecheck-generated status build pack verify-links test-verify samples
 	vp run check

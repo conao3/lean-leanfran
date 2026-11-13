@@ -25,12 +25,9 @@ jobs:
             build: true
           - dir: Clojure
             build: true
-    defaults:
-      run:
-        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.3
-      - run: nix develop -c make check
+      - run: make check BACKENDS=${{ matrix.dir }}
       - if: matrix.build
-        run: nix build
+        run: nix build .#$(echo "${{ matrix.dir }}" | tr A-Z a-z)

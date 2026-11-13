@@ -88,7 +88,7 @@ The Python package and the Lean CLI:
 
 ```sh
 uv add leanfran                            # the runtime, lean(), leanfran sync
-nix profile install 'github:conao3/lean-leanfran?dir=Python'   # the Lean CLI `leanfran-python`
+nix profile install 'github:conao3/lean-leanfran#python'   # the Lean CLI `leanfran-python`
 ```
 
 `leanfran sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
@@ -347,8 +347,8 @@ Passing 10⁴ models to a Lean function takes 0.036 s (pydantic's `TypeAdapter(l
 ## Development
 
 ```sh
-nix develop -c make check   # treefmt, the diff tests against the C backend, pytest, the samples
-nix develop -c make bench
+nix develop ..#python -c make check   # treefmt, the diff tests against the C backend, pytest, the samples
+nix develop ..#python -c make bench
 ```
 
 - `LeanPython/EmitPy.lean`: IR → Python. `LeanPython/Marshal.lean`, `LeanPython/Generate.lean`: public
@@ -357,7 +357,7 @@ nix develop -c make bench
   externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `sync.py`, `models.py`, `cli.py`:
   `lean(...)` and `leanfran sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
   `leanfran check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
-- `LeanPythonTest/`: Lean programs of the tests; `test-diff.sh` runs `Vectors` and `Io` natively and
+- `LeanPythonTest/`: Lean programs of the tests; `../maint/Python/test-diff.sh` runs `Vectors` and `Io` natively and
   as Python.
 
 ## Limitations

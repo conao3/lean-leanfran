@@ -67,7 +67,7 @@ fn main() {
 The CLI is a Lean program. With Nix:
 
 ```
-nix profile install 'github:conao3/lean-leanfran?dir=Rust'   # or `nix profile install .` in a checkout
+nix profile install 'github:conao3/lean-leanfran#rust'   # or `nix profile install ..#rust` in a checkout
 leanfran --version
 ```
 
@@ -422,14 +422,14 @@ in Lean, the last one generic).
 
 ## Development
 
-Inside `nix develop` (elan, Rust, cargo-nextest):
+Inside `nix develop ..#rust` (elan, Rust, cargo-nextest):
 
 ```
 make check
 ```
 
-runs the format check, clippy, the diff tests against Lean's C backend (`./test-diff.sh`), the
-public API tests (`./test-public.sh`), the runtime and build tests, the `lean!` tests
+runs the format check, clippy, the diff tests against Lean's C backend (`../maint/Rust/test-diff.sh`), the
+public API tests (`../maint/Rust/test-public.sh`), the runtime and build tests, the `lean!` tests
 (`tests/embed`), the tests of `tests/verify` and the samples, and builds the runtime for
 `wasm32-unknown-unknown` and runs `tests/wasm` in node, all without Charon or Mathlib.
 

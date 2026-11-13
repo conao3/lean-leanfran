@@ -78,10 +78,10 @@ The first expansion of a `deflean` block needs Lean 4.35.0 (`lean`, `lake`)
 and the `leanfran` CLI on `PATH`:
 
 ```
-nix profile install 'github:conao3/lean-leanfran/v0.6.0?dir=Clojure'
+nix profile install 'github:conao3/lean-leanfran#clojure'
 ```
 
-Get Lean from elan (`elan default v4.35.0`) or from `nix develop` of this
+Get Lean from elan (`elan default v4.35.0`) or from `nix develop ..#clojure` of this
 repository, which also provides Clojure and a JDK. To run generated code, or to
 expand a block whose output sits in `.leanfran/cache/`, you need Clojure 1.12
 on JDK 21 or later and no Lean.
@@ -363,7 +363,7 @@ make check     # format check, lint, and all tests
 make format
 ```
 
-`./test-diff.sh` runs `LeanCljTest.Vectors.report` compiled by Lean's C backend
+`../maint/Clojure/test-diff.sh` runs `LeanCljTest.Vectors.report` compiled by Lean's C backend
 and the same function generated as Clojure, and compares the output.
 
 Releases come from the `Release` workflow of conao3/lean-leanfran, which

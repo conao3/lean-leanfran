@@ -83,7 +83,7 @@ The npm package and the Lean CLI:
 
 ```sh
 pnpm add leanfran                              # the runtime, lean(), leanfran sync and check
-nix profile install 'github:conao3/lean-leanfran?dir=TypeScript'   # the Lean CLI `leanfran-typescript`
+nix profile install 'github:conao3/lean-leanfran#typescript'   # the Lean CLI `leanfran-typescript`
 ```
 
 `leanfran sync` also needs `lake` and the Lean toolchain of `lean-toolchain` (v4.35.0) on `PATH`.
@@ -463,7 +463,7 @@ export function double(n: bigint | number): bigint {
   `src/_lean/` and `.leanfran/blocks.json`) and `test/project/`.
 - `samples/` — the samples (pnpm workspace packages that link `leanfran`), `samples/run.sh` and
   `samples/Makefile` (`test`, `verify`).
-- `scripts/bump-version.sh` — sets the version of `package.json`, `Main.lean` and `flake.nix`;
+- `../maint/TypeScript/bump-version.sh` — sets the version of `package.json` and `Main.lean`;
   the `Release` workflow runs it, tags `vX.Y.Z` and starts the `Publish` workflow, which packs and
   publishes the tag to npm with trusted publishing.
 
@@ -544,14 +544,14 @@ Passing 10⁴ structures to a Lean function takes 0.024 s (zod's
 ## Checks
 
 ```
-nix develop -c make check
+nix develop ..#typescript -c make check
 ```
 
-`make check` runs `treefmt --ci`, `./test-diff.sh` (generates the `LeanTsTest`
-modules into `test-out/` and diffs them against the native oracles), `./test-public.sh`
+`make check` runs `treefmt --ci`, `../maint/TypeScript/test-diff.sh` (generates the `LeanTsTest`
+modules into `test-out/` and diffs them against the native oracles), `../maint/TypeScript/test-public.sh`
 (generates `test-out/public.ts` with the default settings, `test-out/public-alt.ts`
 with `--tag-key _tag --option undefined` and `test-out/json.ts`, and runs
-`test/public.test.ts` and `test/json.test.ts` against `oracle-json`), `./fuzz.sh`,
+`test/public.test.ts` and `test/json.test.ts` against `oracle-json`), `../maint/TypeScript/fuzz.sh`,
 the type check of every generated module (`vp lint test-out/**/*.ts`), `leanfran
 status` of the embedding and verification fixtures, `test/verify/test.sh` (copies
 `test/verify/app/` to `test-out/verify/<scene>/` and checks the states proved, sorry,
@@ -560,7 +560,7 @@ called through their specifications, an untranslatable function and a wrong
 implementation that `checkModel` rejects with a counterexample), `make samples` (`leanfran check
 --require proved` on the verified samples, `samples/run.sh` on every sample, and no difference in
 the committed generated modules), and `vp run check` (`vp check && vp test`, which
-includes `test/embed.test.ts`). `test-diff.sh` covers: 136 function-level
+includes `test/embed.test.ts`). `../maint/TypeScript/test-diff.sh` covers: 136 function-level
 value assertions (numeric tower, UTF-8 `String` and its order, `Array`/`List`, packed ctors, a
 `TodoList` sequence, closures); deep TCO (incl. closure-boundary tail `.ap`) at
 N=1e6; a 32-bit `USize` profile; the fail-loud extern link check; runnable IO /
@@ -576,7 +576,7 @@ stderr and exit code.
 The oracle for every diff-test is the **native C-compiled Lean binary** (each test
 program built through `lake build` → `leanc`), not `lean --run` (the interpreter
 shares the same naive stack behaviour as JS and would mask divergences). Every claim
-below is enforced by `test-diff.sh` diffing node output against that native binary.
+below is enforced by `../maint/TypeScript/test-diff.sh` diffing node output against that native binary.
 
 ### Covered and native-verified
 
@@ -623,7 +623,7 @@ Any extern the runtime does not provide is a **hard generation error** (exit 254
 no output written) — never a silent wrong answer or a dangling runtime call. The
 error names the exact missing C symbols so they can be implemented and retried. The
 CLI checks the symbols against `LeanTs/RuntimeExterns.lean`, which `make gen-externs`
-generates from the runtime's exports. `test-diff.sh` asserts an unmapped extern
+generates from the runtime's exports. `../maint/TypeScript/test-diff.sh` asserts an unmapped extern
 (`lean_io_get_random_bytes`) is rejected while a mapped root generates.
 
 ### Out of scope (intentionally left fail-loud) and why

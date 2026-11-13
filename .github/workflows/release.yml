@@ -28,10 +28,10 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.3
       - id: next
-        run: echo "version=$(scripts/next-version.sh "$BUMP")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(maint/next-version.sh "$BUMP")" >> "$GITHUB_OUTPUT"
         env:
           BUMP: ${{ inputs.version_bump }}
-      - run: scripts/set-version.sh "$VERSION"
+      - run: maint/set-version.sh "$VERSION"
         env:
           VERSION: ${{ steps.next.outputs.version }}
       - run: git diff --binary > version.patch
@@ -55,8 +55,7 @@ jobs:
         with:
           name: version-patch
       - run: git apply version.patch && rm version.patch
-      - run: nix develop -c make check
-        working-directory: ${{ matrix.dir }}
+      - run: make check BACKENDS=${{ matrix.dir }}
 
   tag:
     name: Commit, tag and start the publish

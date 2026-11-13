@@ -1,4 +1,4 @@
-# Run the targets inside the dev shell: `nix develop -c make check`.
+# Run the targets inside the dev shell: `nix develop ..#rust -c make check`.
 
 .PHONY: build gen-externs test format format-check lint wasm check aeneas-packages check-verify
 
@@ -12,8 +12,8 @@ gen-externs:
 
 test:
 	lake build
-	./test-diff.sh
-	./test-public.sh
+	../maint/Rust/test-diff.sh
+	../maint/Rust/test-public.sh
 	LEANFRAN_CLI=$(CURDIR)/.lake/build/bin/leanfran cargo nextest run -p leanfran-runtime -p leanfran-build -p leanfran-embed-test -p leanfran-verify-test -p leanfran-wasm-test
 	tests/embed/test.sh
 	$(MAKE) -C samples test
