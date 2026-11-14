@@ -81,7 +81,7 @@ Use `#rust`, `#typescript` or `#clojure` for the other targets. The Rust package
 
 New language support is welcome! Use the latest [Claude Opus](https://www.anthropic.com/claude/opus),
 [OpenAI Sol](https://developers.openai.com/api/docs/models), or a model with a comparable
-score on the [Artificial Analysis Intelligence Index](https://artificialanalysis.ai/leaderboards/models),
+score on the [Artificial Analysis Intelligence Index](https://artificialanalysis.ai/models#intelligence),
 and ask your coding agent to follow [this guide](docs/add-language.md):
 
 ```text
