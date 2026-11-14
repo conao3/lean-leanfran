@@ -24,7 +24,7 @@
   <a href="#lean-at-the-core">Languages</a> ·
   <a href="#what-you-can-build">Features</a> ·
   <a href="#documentation">Documentation &amp; examples</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="#contribution">Contribution</a>
 </p>
 
 # leanfran
@@ -77,7 +77,29 @@ Use `#rust`, `#typescript` or `#clojure` for the other targets. The Rust package
 | TypeScript | [Setup and first block](langs/TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](langs/TypeScript/samples/README.md) |
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
 
-## Development
+## Contribution
+
+Contributions supporting new languages are welcome! To get started, replace
+`<LANGUAGE>` below with your target language and paste this prompt into your coding
+agent. Use the latest [Claude Opus](https://www.anthropic.com/claude/opus) or
+[OpenAI Sol](https://developers.openai.com/api/docs/models), or a model with
+comparable capabilities.
+
+```text
+Add support for <LANGUAGE> to leanfran.
+
+Read AGENTS.md, CONTRIBUTING.md and the existing backend development guides first.
+Follow the existing backends to implement a Lean IR emitter, a host-language
+runtime and an idiomatic package under langs/<LANGUAGE>/. Match Lean's runtime
+semantics and extern conventions, and compare generated programs against Lean's
+native C backend with differential tests. Add host-language tests, runnable
+examples and documentation covering setup, usage and supported features.
+Integrate the backend into the shared Nix environment, root Makefile and CI.
+Run the relevant build, test and formatting checks, and report their results
+along with any remaining limitations for review.
+```
+
+### Development
 
 The repository has one Nix environment and Lean toolchain, with language-specific source and packages in `langs/Rust/`, `langs/Python/`, `langs/TypeScript/` and `langs/Clojure/`.
 
