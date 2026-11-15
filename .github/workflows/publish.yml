@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag }}
-      - uses: cachix/install-nix-action@v31.11.3
+      - uses: cachix/install-nix-action@v31.11.5
       - run: nix develop ../..#rust -c cargo publish --workspace --dry-run
       - uses: rust-lang/crates-io-auth-action@v1.0.6
         id: auth
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag }}
-      - uses: cachix/install-nix-action@v31.11.3
+      - uses: cachix/install-nix-action@v31.11.5
       - run: test "v$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" = "$TAG"
         env:
           TAG: ${{ inputs.tag }}
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag }}
-      - uses: cachix/install-nix-action@v31.11.3
+      - uses: cachix/install-nix-action@v31.11.5
       - run: test "v$(jq -r .version package.json)" = "$TAG"
         env:
           TAG: ${{ inputs.tag }}
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag }}
-      - uses: cachix/install-nix-action@v31.11.3
+      - uses: cachix/install-nix-action@v31.11.5
       - run: test "v$(sed -n 's/.*:version "\([0-9.]*\)".*/\1/p' deps.edn)" = "$TAG"
         env:
           TAG: ${{ inputs.tag }}
