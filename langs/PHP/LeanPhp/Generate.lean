@@ -270,6 +270,7 @@ def valueMethods (c : RenderCfg) (ident : String) : String :=
   s!"    public static function fromJson(string $json): static\n    \{\n        return {marshalClass}::fromData(self::desc(), self::class, $json, true);\n    }\n\n" ++
   s!"    /** @return array<mixed> */\n    public function toArray(): array\n    \{\n        return {marshalClass}::toArray(self::desc(), $this);\n    }\n\n" ++
   s!"    public function toJson(): string\n    \{\n        return {runtime "Json"}::encode({marshalClass}::jsonValue(self::desc(), $this));\n    }\n\n" ++
+  s!"    /** @return array<string, mixed> */\n    public static function jsonSchema(string $target = 'draft-2020-12'): array\n    \{\n        return {runtime "Schema\\JsonSchema"}::of(self::desc(), $target);\n    }\n\n" ++
   s!"    public function jsonSerialize(): mixed\n    \{\n        return {runtime "Json"}::native({marshalClass}::jsonValue(self::desc(), $this));\n    }\n"
 
 def classBody (c : RenderCfg) (ident : String) (fields : Array FieldInfo) : String := Id.run do
@@ -321,7 +322,7 @@ def emitType (c : RenderCfg) (t : TypeDef) : Except String (Array (String × Str
     return #[(t.ident ++ ".php", doc ++ s!"enum {t.ident}: string implements \\JsonSerializable\n\{\n{body}}\n")]
   | .sum vs _ =>
     let base := doc ++ s!"interface {t.ident} extends \\JsonSerializable\n\{\n" ++ descConstant c t.ident ++
-      s!"\n    public static function desc(): {descClass};\n\n    public static function fromArray(mixed $data): static;\n\n    public static function fromJson(string $json): static;\n\n    public function toArray(): array;\n\n    public function toJson(): string;\n}\n"
+      s!"\n    public static function desc(): {descClass};\n\n    public static function fromArray(mixed $data): static;\n\n    public static function fromJson(string $json): static;\n\n    /** @return array<mixed> */\n    public function toArray(): array;\n\n    public function toJson(): string;\n\n    /** @return array<string, mixed> */\n    public static function jsonSchema(string $target = 'draft-2020-12'): array;\n}\n"
     return #[(t.ident ++ ".php", base)] ++ vs.map (fun v => mkCls v.ident t.ident (classBody c t.ident v.fields))
 
 def emitPublicFn (c : RenderCfg) (f : PublicFn) : String := Id.run do

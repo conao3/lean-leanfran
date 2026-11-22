@@ -23,7 +23,7 @@ def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Ar
   return out
 
 def version : String := "0.6.0"
-def generatorVersion : String := "3"
+def generatorVersion : String := "4"
 
 def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
 
