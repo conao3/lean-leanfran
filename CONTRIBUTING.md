@@ -29,8 +29,12 @@ Keep native-oracle differential tests, host-language tests, and sample verificat
 
 [LICENSE](LICENSE) applies to all backends. Cargo inherits its path from the Rust workspace. Hatch includes it in Python wheels and source distributions. The TypeScript `make pack` target copies it into `dist/LICENSE`, and the Clojure JAR builder includes it as `META-INF/LICENSE`. The PHP runtime declares the repository's Apache-2.0 license in its Composer manifest.
 
-Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -T:build jar` in Clojure to build its JAR. Build Python distributions with `uv build` and Rust crates with `cargo package` inside their backend environments. PHP applications install the runtime from a checkout via a Composer path repository and build the compiler with `nix build .#php`.
+Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -T:build jar` in Clojure to build its JAR. Build Python distributions with `uv build` and Rust crates with `cargo package` inside their backend environments.
+
+PHP applications install `conao3/leanfran` from Packagist or use a Composer path repository for a local checkout. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
 
 ## Releases
 
-The GitHub Actions Release workflow selects a shared version, updates it through `maint/set-version.sh`, verifies all backends including PHP, and creates `vX.Y.Z`. Publish distributes that tag to crates.io, PyPI, npm, and Clojars. A retry skips versions already published. The PHP compiler carries the shared release version in `Main.lean`. Generator versions track emitted-code compatibility separately from release versions.
+The GitHub Actions Release workflow selects a shared version, updates it through `maint/set-version.sh`, verifies all backends including PHP, and creates `vX.Y.Z`. Publish distributes that tag to crates.io, PyPI, npm, Clojars, and Packagist. A retry skips versions already published. The PHP compiler carries the shared release version in `Main.lean`. Generator versions track emitted-code compatibility separately from release versions.
+
+The PHP Publish job checks the shared tag against `Main.lean`, pushes the snapshot and the same tag to the mirror, then requests and verifies the Packagist update. For initial registration and the required environment secrets, see the [PHP publishing guide](docs/php-development.md#publishing).
