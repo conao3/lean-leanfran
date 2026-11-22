@@ -12,6 +12,7 @@ final readonly class Block
 
     /**
      * @param list<string> $imports
+     * @param list<string> $models
      * @param list<string> $uses
      */
     public function __construct(
@@ -22,6 +23,7 @@ final readonly class Block
         public Source $source,
         public array $imports,
         public array $uses,
+        public array $models,
     ) {
         $this->module = 'LeanPhpEmbed.B' . bin2hex($name);
         $this->output = dirname($file) . '/' . substr($name, (int) strrpos('\\' . $name, '\\'));

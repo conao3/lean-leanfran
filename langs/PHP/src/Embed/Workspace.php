@@ -72,6 +72,19 @@ final readonly class Workspace
                 $imports[] = $dep->module;
                 $open .= "open $dep->module\n";
             }
+            $models = $this->project->models[strtolower($block->name)];
+            if ($models !== []) {
+                $imports[] = 'LeanPhpModels';
+                foreach (array_keys($models) as $class) {
+                    $name = Models::name($class);
+                    $dot = (int) strrpos($name, '.');
+                    $open .= 'open ' . substr($name, 0, $dot) . ' (' . substr($name, $dot + 1) . ")\n";
+                }
+            }
+            $types = $this->project->typeDependencies($block);
+            foreach ($types as $key => $dep) {
+                $models += $this->project->models[$key];
+            }
             $header = '';
             foreach (array_unique($imports) as $module) {
                 $header .= "import $module\n";
@@ -90,7 +103,8 @@ final readonly class Workspace
                 'type_modules' => array_values(array_map(static fn(Block $dep): array => [
                     'namespace' => $dep->module,
                     'php_namespace' => $dep->name,
-                ], $this->project->typeDependencies($block))),
+                ], $types)),
+                'models' => array_keys($models),
             ];
         }
         foreach (Files::entries("$this->dir/LeanPhpEmbed") as $file) {
@@ -128,7 +142,11 @@ final readonly class Workspace
             }
         }
         Files::write("$this->dir/lakefile.toml", $lakefile);
-        Files::write("$this->dir/LeanPhpModels.lean", "\n");
+        $models = [];
+        foreach ($this->project->models as $definitions) {
+            $models += $definitions;
+        }
+        Files::write("$this->dir/LeanPhpModels.lean", implode("\n\n", $models) . "\n");
         $configured = "$this->dir/lakefile.sha256";
         $hash = hash('sha256', $lakefile) . "\n";
         if (!is_file("$this->dir/lake-manifest.json") || !is_file($configured) || Files::read($configured) !== $hash) {

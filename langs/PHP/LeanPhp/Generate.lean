@@ -100,9 +100,9 @@ def descMethod (ident : String) : String := s!"desc_{ident}"
 def refDesc (expr : String) : String :=
   descNew "ref" #[s!"get: static fn (): {descClass} => {expr}"]
 
-partial def Desc.code (c : RenderCfg) : Desc → String
-  | .nat => descNew "nat"
-  | .int => descNew "int"
+partial def Desc.code (c : RenderCfg) (modelField := false) : Desc → String
+  | .nat => descNew "nat" (if modelField then #["phpInt: true"] else #[])
+  | .int => descNew "int" (if modelField then #["phpInt: true"] else #[])
   | .bool => descNew "bool"
   | .char => descNew "char"
   | .string => descNew "string"
@@ -114,11 +114,11 @@ partial def Desc.code (c : RenderCfg) : Desc → String
   | .usize => descNew "usize" #["bits: 64"]
   | .isize => descNew "isize" #["bits: 64"]
   | .fin n => descNew "fin" #[s!"bound: {quoteBytes (toString n)}"]
-  | .list d => descNew "list" #[s!"a: {d.code c}"]
-  | .array d => descNew "array" #[s!"a: {d.code c}"]
-  | .option d => descNew "option" #[s!"a: {d.code c}"]
-  | .prod a b => descNew "prod" #[s!"a: {a.code c}", s!"b: {b.code c}"]
-  | .except a b => descNew "except" #[s!"a: {a.code c}", s!"b: {b.code c}"]
+  | .list d => descNew "list" #[s!"a: {d.code c modelField}"]
+  | .array d => descNew "array" #[s!"a: {d.code c modelField}"]
+  | .option d => descNew "option" #[s!"a: {d.code c modelField}"]
+  | .prod a b => descNew "prod" #[s!"a: {a.code c modelField}", s!"b: {b.code c modelField}"]
+  | .except a b => descNew "except" #[s!"a: {a.code c modelField}", s!"b: {b.code c modelField}"]
   | .named ident => refDesc s!"{c.internal}::{descMethod ident}()"
   | .foreign ns ident => refDesc s!"(\\{ns}\\{ident}::DESC)()"
 
@@ -142,9 +142,11 @@ partial def Desc.phpType (c : RenderCfg) (ctor : Bool := false) : Desc → Strin
   | .except .. => runtime "Except"
   | .option d => d.phpType c ctor ++ "|null"
   | .named ident =>
-    match (c.findType ident).base? with
-    | some d => d.phpType c ctor
-    | none => c.qualified ident
+    let t := c.findType ident
+    match t.model, t.base? with
+    | some cls, _ => "\\" ++ cls
+    | none, some d => d.phpType c ctor
+    | none, none => c.qualified ident
   | .foreign ns ident => s!"\\{ns}\\{ident}"
 
 def boundValue (bounds : Array (String × Int)) (keys : List (String × Int)) (combine : Int → Int → Int)
@@ -189,7 +191,7 @@ partial def Desc.phpDoc (c : RenderCfg) (ctor : Bool := false) (bs : Array (Stri
   | .named ident =>
     match c.findType ident with
     | { anonymous := true, kind := .subtype base _ bounds, .. } => base.phpDoc c ctor (bs ++ bounds)
-    | _ => c.qualified ident
+    | _ => (Desc.named ident).phpType c ctor
   | d => d.phpType c ctor
 
 def docLines (lines : Array String) : String :=
@@ -212,8 +214,8 @@ def boundsCode (bs : Array (String × Int)) : String :=
     | none => out.push (k, v)) #[]
   assoc (bounds.map fun (k, v) => (k, quoteBytes (toString v)))
 
-def fieldCode (c : RenderCfg) (f : FieldInfo) : String :=
-  assoc #[("key", quoteBytes f.key), ("prop", quoteBytes f.property), ("desc", f.desc.code c),
+def fieldCode (c : RenderCfg) (modelField : Bool) (f : FieldInfo) : String :=
+  assoc #[("key", quoteBytes f.key), ("prop", quoteBytes f.property), ("desc", f.desc.code c modelField),
     ("slot", quoteBytes f.slot), ("at", toString f.pos), ("omitNone", toString f.omitNone),
     ("flat", toString f.flat), ("bounds", boundsCode f.bounds)]
 
@@ -233,10 +235,10 @@ def invariantCode (c : RenderCfg) (inv : InvInfo) : String := Id.run do
   return assoc #[("field", quoteBytes inv.field), ("prop", quoteBytes inv.prop),
     ("args", phpArray (inv.args.map toString)), ("decide", dec)]
 
-def variantCode (c : RenderCfg) (v : VariantInfo) (cls : String) : String :=
+def variantCode (c : RenderCfg) (v : VariantInfo) (cls : String) (model : Bool := false) : String :=
   assoc #[("name", quoteBytes v.name), ("cls", cls), ("tag", toString v.cidx),
     ("size", toString v.size), ("usize", toString v.usize), ("ssize", toString v.ssize),
-    ("positional", toString v.positional), ("fields", phpArray (v.fields.map (fieldCode c))),
+    ("positional", toString v.positional), ("fields", phpArray (v.fields.map (fieldCode c model))),
     ("invariants", phpArray (v.invariants.map (invariantCode c)))]
 
 def subtypeVariant (base : Desc) (inv : InvInfo) (bounds : Array (String × Int)) : VariantInfo :=
@@ -245,14 +247,16 @@ def subtypeVariant (base : Desc) (inv : InvInfo) (bounds : Array (String × Int)
     invariants := #[inv] }
 
 def descriptorCode (c : RenderCfg) (t : TypeDef) : String :=
-  let cls := c.qualified t.ident ++ "::class"
-  let name := if t.anonymous then "Subtype" else t.ident
+  let cls := (t.model.map ("\\" ++ ·) |>.getD (c.qualified t.ident)) ++ "::class"
+  let name := if t.anonymous then "Subtype" else t.model.getD t.ident
   let args := #[s!"name: {quoteBytes name}"]
   match t.kind with
   | .enum tags =>
-    descNew "enum" (args ++ #[s!"cls: {cls}", s!"cases: {phpArray (tags.map quoteBytes)}"])
+    let args := args ++ #[s!"cls: {cls}", s!"cases: {phpArray (tags.map quoteBytes)}"]
+    descNew "enum" (if t.model.isSome then args.push "enumByName: true" else args)
   | .struct v trivial =>
-    descNew "struct" (args ++ #[s!"cls: {cls}", s!"variants: [{variantCode c v cls}]",
+    descNew (if t.model.isSome then "model" else "struct")
+      (args ++ #[s!"cls: {cls}", s!"variants: [{variantCode c v cls t.model.isSome}]",
       s!"trivial: {(trivial.map toString).getD "null"}"])
   | .sum vs trivial =>
     let variants := vs.map fun v => variantCode c v (c.qualified v.ident ++ "::class")
@@ -321,6 +325,7 @@ def descConstant (c : RenderCfg) (ident : String) : String :=
   s!"    public const DESC = [{c.internal}::class, {quoteBytes (descMethod ident)}];\n"
 
 def emitType (c : RenderCfg) (t : TypeDef) : Except String (Array (String × String) × String) := do
+  if t.model.isSome then return (#[], "")
   let doc := s!"/** Lean `{docText t.pretty}`. */\n"
   let mkCls (name implement body : String) := (name ++ ".php",
     doc ++ s!"final readonly class {name} implements {implement}\n\{\n{body}}\n")

@@ -6,7 +6,10 @@ namespace App;
 
 use Conao3\Leanfran\Lean;
 
-#[Lean('def receiptWidth := twiceWidth', uses: [Basket::class])]
+#[Lean(<<<'LEAN'
+    def receiptWidth := twiceWidth
+    def receiptOrder := order
+    LEAN, uses: [Basket::class, Catalog::class])]
 final class Receipt
 {
     use Receipt\Functions;

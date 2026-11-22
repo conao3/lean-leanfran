@@ -27,6 +27,8 @@ final readonly class Desc
         public ?int $trivial = null,
         public array $bounds = [],
         public ?\Closure $get = null,
+        public bool $phpInt = false,
+        public bool $enumByName = false,
     ) {}
 
     /** Resolve a reference to its descriptor. */

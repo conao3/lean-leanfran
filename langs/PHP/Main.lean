@@ -23,7 +23,7 @@ def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Ar
   return out
 
 def version : String := "0.6.0"
-def generatorVersion : String := "6"
+def generatorVersion : String := "7"
 
 def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
 
@@ -39,7 +39,7 @@ leanfran-php module generate
   --class <NS\\Name>           Generated class (default: Leanfran\\Generated\\Lean<Module>)
   --main <Name>               Generate a CLI entry point
   --batch <file>              JSON array of jobs with module and output_file or output_dir
-                              Public jobs accept php_namespace, facade, facade_kind and type_modules
+                              Public jobs accept php_namespace, facade, facade_kind, type_modules and models
   --import <Name> ...         More modules to import
   --search-path <dir> ...     Extra .olean search directories
   --output-file <path>        Output path (default: stdout)
@@ -60,6 +60,7 @@ structure JobOpts where
   facade : Option String := none
   facadeKind : Option FacadeKind := none
   typeModules : Array (Name × String) := #[]
+  models : Array String := #[]
   internalOnly : Bool := false
 
 structure Opts extends JobOpts where
@@ -209,7 +210,12 @@ def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : A
   let cls : PhpClass := { ns := ns ++ "\\Internal", name := internalName }
   let internal := "\\" ++ cls.ns ++ "\\" ++ cls.name
   let typeModules := job.typeModules.qsort (fun a b => a.1.components.length > b.1.components.length)
-  let cfg : MarshalCfg := { strip := job.namespace?.getD job.module, typeModules }
+  unless job.models.all validNamespace do
+    return .error (252, "invalid PHP model class name")
+  let models := job.models.foldl (fun out cls =>
+    let name := (cls.splitOn "\\").foldl Name.str `LeanPhpModels
+    out.insert name cls) ({} : Std.HashMap Name String)
+  let cfg : MarshalCfg := { strip := job.namespace?.getD job.module, typeModules, models }
   let types := if job.roots.isEmpty then moduleTypes env job.module else #[]
   let (pub, env) ← inspectPublic env cfg types roots facade
   if let some clash := pub.skipped.find? (·.reason.startsWith collisionLabel) then
@@ -308,7 +314,9 @@ def parseJobs (j : Json) : Except String (Array Job) := do
       let ns := (← item.getObjValAs? String "namespace").toName
       let phpNs ← item.getObjValAs? String "php_namespace"
       pure (ns, phpNs)
-    return { module, roots, namespace?, class?, main?, outputFile, outputDir, phpNamespace, facade, facadeKind, typeModules }
+    let models := (← optionalField (α := Array String) e "models").getD #[]
+    unless models.isEmpty || outputDir.isSome do throw s!"{module}: models require output_dir"
+    return { module, roots, namespace?, class?, main?, outputFile, outputDir, phpNamespace, facade, facadeKind, typeModules, models }
 
 def importAll (o : Opts) (mods : Array Name) (publicOutput : Bool) : IO (Except Name Environment) := do
   initSearchPath (← findSysroot) o.searchPath.toList
