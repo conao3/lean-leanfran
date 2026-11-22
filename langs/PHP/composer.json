@@ -22,7 +22,14 @@
             "src/Runtime/int.php",
             "src/Runtime/uint.php",
             "src/Runtime/sint.php",
-            "src/Runtime/float.php"
+            "src/Runtime/float.php",
+            "src/Runtime/ioerror.php",
+            "src/Runtime/fs.php",
+            "src/Runtime/process.php",
+            "src/Runtime/time.php",
+            "src/Runtime/bytearray.php",
+            "src/Runtime/misc.php",
+            "src/Runtime/task.php"
         ]
     }
 }
