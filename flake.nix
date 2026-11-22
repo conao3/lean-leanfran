@@ -125,12 +125,12 @@
             pkgs.clj-kondo
             pkgs.cljstyle
           ];
-          phpTools = [
-            pkgs.php84
-            pkgs.php84Packages.composer
+          phpTools = php: [
+            php
+            php.packages.composer
+            (pkgs.phpstan.override { inherit php; })
+            (pkgs.phpunit.override { inherit php; })
             pkgs.mago
-            pkgs.phpstan
-            pkgs.phpunit
             pkgs.gcc
           ];
           pythonEnv = {
@@ -181,7 +181,7 @@
           devShells = {
             default = pkgs.mkShell {
               packages = pkgs.lib.unique (
-                common ++ rustTools ++ pythonTools ++ typescriptTools ++ clojureTools ++ phpTools
+                common ++ rustTools ++ pythonTools ++ typescriptTools ++ clojureTools ++ phpTools pkgs.php84
               );
               env = pythonEnv;
             };
@@ -192,7 +192,8 @@
             };
             typescript = pkgs.mkShell { packages = common ++ typescriptTools; };
             clojure = pkgs.mkShell { packages = common ++ clojureTools; };
-            php = pkgs.mkShell { packages = common ++ phpTools; };
+            php = pkgs.mkShell { packages = common ++ phpTools pkgs.php84; };
+            php85 = pkgs.mkShell { packages = common ++ phpTools pkgs.php85; };
           };
           treefmt = {
             projectRootFile = "flake.nix";
