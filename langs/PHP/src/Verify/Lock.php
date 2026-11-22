@@ -37,6 +37,7 @@ final class Lock
         ];
         foreach ([
             Translate::class,
+            Signature::class,
             Objects::class,
             Type::class,
             Declaration::class,

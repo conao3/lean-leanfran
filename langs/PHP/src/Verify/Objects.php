@@ -15,6 +15,12 @@ final class Objects
     /** @var array<string, Type> */
     private array $types = [];
 
+    /** @var array<string, class-string> */
+    private array $classes = [];
+
+    /** @var array<string, Desc> */
+    private array $descriptors = [];
+
     /** @var array<string, array<string, Type>> */
     private array $fields = [];
 
@@ -65,7 +71,9 @@ final class Objects
             ) {
                 $desc = $class::desc();
                 if ($desc instanceof Desc) {
-                    return $this->generated($key, $block->module . '.' . $tail, $desc);
+                    $lean = $block->module . '.' . $tail;
+                    $this->classes[$lean] = $class;
+                    return $this->generated($key, $lean, $desc);
                 }
             }
         }
@@ -90,6 +98,18 @@ final class Objects
     public function standalone(): array
     {
         return $this->extra;
+    }
+
+    /** @return class-string */
+    public function phpClass(Type $type): string
+    {
+        return $this->classes[$type->name] ?? throw new \LogicException("No PHP class for $type->name");
+    }
+
+    /** Returns a generated public descriptor for a resolved value type. */
+    public function publicDescriptor(Type $type): ?Desc
+    {
+        return $this->descriptors[$type->name] ?? null;
     }
 
     /** @return array<string, Type> */
@@ -118,6 +138,10 @@ final class Objects
 
     private function imported(string $key, string $lean, string $source, string $class): Type
     {
+        if (!class_exists($class)) {
+            throw new RuntimeException("unknown embedded PHP class $class");
+        }
+        $this->classes[$lean] = $class;
         if (str_starts_with($source, 'inductive ')) {
             preg_match_all('/^  \| «([^»]+)»/m', $source, $cases);
             $this->cases[$lean] = $cases[1];
@@ -131,9 +155,6 @@ final class Objects
             $fields[$parts[1]] = $this->leanType($parts[2]);
         }
         $this->fields[$lean] = $fields;
-        if (!class_exists($class)) {
-            throw new RuntimeException("unknown embedded PHP class $class");
-        }
         $constructor = new \ReflectionClass($class)->getConstructor();
         if ($constructor === null || self::emptyConstructor($constructor)) {
             $this->constructible[$lean] = true;
@@ -193,6 +214,7 @@ final class Objects
 
     private function generated(string $key, string $lean, Desc $desc): Type
     {
+        $this->descriptors[$lean] = $desc;
         if ($desc->kind === 'enum') {
             $this->cases[$lean] = $desc->cases;
             return $this->types[$key] = new Type('enum', name: $lean);
@@ -224,7 +246,7 @@ final class Objects
         return match ($desc->kind) {
             'int', 'nat', 'bool', 'float', 'string' => new Type($desc->kind),
             'list', 'option' => new Type($desc->kind, [$this->descriptor($desc->first())]),
-            'pair' => new Type('pair', [$this->descriptor($desc->first()), $this->descriptor($desc->second())]),
+            'prod' => new Type('pair', [$this->descriptor($desc->first()), $this->descriptor($desc->second())]),
             default => $desc->cls === null
                 ? throw new RuntimeException("unsupported generated field type $desc->kind")
                 : $this->type($desc->cls),
