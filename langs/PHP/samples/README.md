@@ -8,7 +8,7 @@
 - [verified-clamp](verified-clamp) proves that a PHP clamp implements its Lean specification and returns a value within the supplied bounds. It tests both properties with seeded inputs.
 - [verified-cart](verified-cart) proves that a PHP `foreach` sum equals the Lean list sum. A `requires` predicate bounds the number and price of items so every intermediate sum fits in a PHP integer.
 
-All projects install `conao3/leanfran` from the PHP backend directory via a Composer path repository. From the repository root, verify the samples against their `expected.txt` files.
+The repository samples install `conao3/leanfran` from the PHP backend directory via a Composer path repository so they test the checked-out runtime. Applications can install the published runtime with `composer require conao3/leanfran`. From the repository root, verify the samples against their `expected.txt` files.
 
 ```sh
 nix develop .#php -c make -C langs/PHP samples

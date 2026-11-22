@@ -4,7 +4,7 @@
 
 ## Installation
 
-Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick start](../langs/PHP/README.md) to build the compiler with Nix and install the runtime from a Composer path repository. Running the generated code requires 64-bit PHP 8.4 or later, `ext-gmp`, and `ext-tokenizer`.
+Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick start](../langs/PHP/README.md) to build the compiler with Nix and install the runtime with `composer require conao3/leanfran`. Running the generated code requires 64-bit PHP 8.4 or later, `ext-gmp`, and `ext-tokenizer`.
 
 ## Embedded Lean
 
@@ -72,7 +72,7 @@ Attach `#[Conao3\Leanfran\Model(...)]` to a typed static method or a named funct
 | `ensures` | Literal map from obligation labels to Lean functions taking the arguments followed by the result and returning `Bool`. Use distinct labels other than the reserved `refines`. |
 | `spec` | Class containing the `#[Lean]` block, written as a fully qualified string or a `ClassName::class` literal. Defaults to the declaring class for a method. Specify it on a namespace function. |
 
-Use names relative to the selected block. A dotted name can select a Lean declaration in a namespace within the block. Each option is optional when the block can be inferred. A property test needs at least one `refines` or `ensures` oracle. Install `nikic/php-parser` as a development dependency in the application that declares the models. With Packagist enabled, run the following from its Composer directory.
+Use names relative to the selected block. A dotted name can select a Lean declaration in a namespace within the block. Each option is optional when the block can be inferred. A property test needs at least one `refines` or `ensures` oracle. Install `nikic/php-parser` as a development dependency in the application that declares the models. Run the following from its Composer directory.
 
 ```sh
 composer require --dev --no-interaction 'nikic/php-parser:^5.9'
@@ -249,7 +249,7 @@ The `openapi-3.0` target preserves the TypeScript converter’s tuple and recurs
 
 ### Valinor
 
-Enable Packagist in your application and run `composer require cuyz/valinor:^2.8` to map data directly into the generated constructor signatures. The configured mapper turns a `ValidationError` into a `MappingError` message. Iterate `$error->messages()` to read the mapper's input path and the text of the Lean issue.
+In your application, run `composer require cuyz/valinor:^2.8` to map data directly into the generated constructor signatures. The configured mapper turns a `ValidationError` into a `MappingError` message. Iterate `$error->messages()` to read the mapper's input path and the text of the Lean issue.
 
 ```php
 $mapper = \Conao3\Leanfran\Valinor::configure(new \CuyZ\Valinor\MapperBuilder())->mapper();
@@ -311,5 +311,4 @@ The numeric test covers 427 extern declarations with 402 distinct C symbols. Its
 
 ## Planned features
 
-- Publish the Composer package on Packagist.
 - Call proved PHP functions from generated PHP code.
