@@ -4,13 +4,8 @@ export LC_ALL=C
 cd "$(dirname "$0")/../.."
 
 lean_version=$(sed 's/.*://' lean-toolchain)
-if command -v lean >/dev/null && command -v leanc >/dev/null; then
-  lean=$(command -v lean)
-  leanc=$(command -v leanc)
-else
-  lean="$HOME/.elan/toolchains/leanprover--lean4---$lean_version/bin/lean"
-  leanc="$(dirname "$lean")/leanc"
-fi
+lean=$(command -v lean) || { echo 'test-numeric.sh: lean is required on PATH' >&2; exit 1; }
+leanc=$(command -v leanc) || { echo 'test-numeric.sh: leanc is required on PATH' >&2; exit 1; }
 if [[ $("$lean" --version) != "Lean (version ${lean_version#v},"* ]]; then
   printf 'Expected %s from %s\n' "$lean_version" "$lean" >&2
   exit 1
