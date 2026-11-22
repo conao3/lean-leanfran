@@ -273,7 +273,17 @@ def valueMethods (c : RenderCfg) (ident : String) : String :=
   s!"    /** @return array<string, mixed> */\n    public static function jsonSchema(string $target = 'draft-2020-12'): array\n    \{\n        return {runtime "Schema\\JsonSchema"}::of(self::desc(), $target);\n    }\n\n" ++
   s!"    public function jsonSerialize(): mixed\n    \{\n        return {runtime "Json"}::native({marshalClass}::jsonValue(self::desc(), $this));\n    }\n"
 
-def classBody (c : RenderCfg) (ident : String) (fields : Array FieldInfo) : String := Id.run do
+def constructMethod (cls : String) : String := "construct_" ++ cls
+
+def emitConstruct (c : RenderCfg) (ident cls : String) (fields : Array FieldInfo) : String :=
+  if fields.isEmpty then ""
+  else
+    let shape := joinArgs (fields.map fun f => s!"{quoteBytes f.property}: {f.desc.phpDoc c false f.bounds}")
+    let docs := docLines #["@param array<string, mixed> $values", s!"@return array\{{shape}}"]
+    s!"\n{docs}    public static function {constructMethod cls}(array $values): array\n    \{\n" ++
+    s!"        return {marshalClass}::construct(self::{descMethod ident}(), {c.qualified cls}::class, $values);\n    }\n"
+
+def classBody (c : RenderCfg) (ident cls : String) (fields : Array FieldInfo) : String := Id.run do
   let properties := fields.map fun f =>
     let type := f.desc.phpType c
     let doc := f.desc.phpDoc c false f.bounds
@@ -286,7 +296,7 @@ def classBody (c : RenderCfg) (ident : String) (fields : Array FieldInfo) : Stri
   let valueVar := "$__leanFields"
   let body :=
     if fields.isEmpty then s!"        {marshalClass}::construct(self::desc(), self::class, []);\n"
-    else s!"        {valueVar} = {marshalClass}::construct(self::desc(), self::class, {args});\n" ++
+    else s!"        {valueVar} = {c.internal}::{constructMethod cls}({args});\n" ++
       String.join (fields.toList.map fun f => s!"        $this->{f.property} = {valueVar}[{quoteBytes f.property}];\n")
   return String.join properties.toList ++
     (if properties.isEmpty then "" else "\n") ++ docLines docs ++
@@ -296,7 +306,7 @@ def classBody (c : RenderCfg) (ident : String) (fields : Array FieldInfo) : Stri
 def descConstant (c : RenderCfg) (ident : String) : String :=
   s!"    public const DESC = [{c.internal}::class, {quoteBytes (descMethod ident)}];\n"
 
-def emitType (c : RenderCfg) (t : TypeDef) : Except String (Array (String × String)) := do
+def emitType (c : RenderCfg) (t : TypeDef) : Except String (Array (String × String) × String) := do
   let doc := s!"/** Lean `{docText t.pretty}`. */\n"
   let mkCls (name implement body : String) := (name ++ ".php",
     doc ++ s!"final readonly class {name} implements {implement}\n\{\n{body}}\n")
@@ -305,11 +315,13 @@ def emitType (c : RenderCfg) (t : TypeDef) : Except String (Array (String × Str
     let fields ← flattenFields c v.fields
     let names := fields.map (·.property)
     unless names.toList.Nodup do throw (collisionLabel ++ t.ident)
-    return #[mkCls t.ident "\\JsonSerializable" (descConstant c t.ident ++ "\n" ++ classBody c t.ident fields)]
+    let cls := mkCls t.ident "\\JsonSerializable" (descConstant c t.ident ++ "\n" ++ classBody c t.ident t.ident fields)
+    return (#[cls], emitConstruct c t.ident t.ident fields)
   | .subtype base inv bounds =>
-    if t.anonymous then return #[]
+    if t.anonymous then return (#[], "")
     let fields := (subtypeVariant base inv bounds).fields
-    return #[mkCls t.ident "\\JsonSerializable" (descConstant c t.ident ++ "\n" ++ classBody c t.ident fields)]
+    let cls := mkCls t.ident "\\JsonSerializable" (descConstant c t.ident ++ "\n" ++ classBody c t.ident t.ident fields)
+    return (#[cls], emitConstruct c t.ident t.ident fields)
   | .enum cases =>
     let (_, seed) ← NameClaims.claim {} "DESC"
     let mut used := seed
@@ -319,11 +331,23 @@ def emitType (c : RenderCfg) (t : TypeDef) : Except String (Array (String × Str
       used := claims
       items := items ++ s!"    case {name} = {quoteBytes tag};\n"
     let body := descConstant c t.ident ++ "\n" ++ items ++ "\n" ++ valueMethods c t.ident
-    return #[(t.ident ++ ".php", doc ++ s!"enum {t.ident}: string implements \\JsonSerializable\n\{\n{body}}\n")]
+    return (#[(t.ident ++ ".php", doc ++ s!"enum {t.ident}: string implements \\JsonSerializable\n\{\n{body}}\n")], "")
   | .sum vs _ =>
     let base := doc ++ s!"interface {t.ident} extends \\JsonSerializable\n\{\n" ++ descConstant c t.ident ++
       s!"\n    public static function desc(): {descClass};\n\n    public static function fromArray(mixed $data): static;\n\n    public static function fromJson(string $json): static;\n\n    /** @return array<mixed> */\n    public function toArray(): array;\n\n    public function toJson(): string;\n\n    /** @return array<string, mixed> */\n    public static function jsonSchema(string $target = 'draft-2020-12'): array;\n}\n"
-    return #[(t.ident ++ ".php", base)] ++ vs.map (fun v => mkCls v.ident t.ident (classBody c t.ident v.fields))
+    let classes := vs.map (fun v => mkCls v.ident t.ident (classBody c t.ident v.ident v.fields))
+    let constructors := String.join (vs.toList.map fun v => emitConstruct c t.ident v.ident v.fields)
+    return (#[(t.ident ++ ".php", base)] ++ classes, constructors)
+
+def resultMethod (f : PublicFn) : String := "result_" ++ f.method
+
+def emitResult (c : RenderCfg) (f : PublicFn) : String :=
+  let result := f.sig.result.phpType c
+  let retDoc := f.sig.result.phpDoc c
+  let doc := if retDoc == result then "" else docLines #[s!"@return {retDoc}"]
+  let convert := if f.sig.io then "ioResult" else "fromLean"
+  s!"\n{doc}    public static function {resultMethod f}(mixed $value): {result}\n    \{\n" ++
+  s!"        return {marshalClass}::{convert}({f.sig.result.code c}, $value);\n    }\n"
 
 def emitPublicFn (c : RenderCfg) (f : PublicFn) : String := Id.run do
   let mut docs := #[s!"Lean `{docText f.lean.toString} : {docText f.sig.type}`."]
@@ -348,8 +372,7 @@ def emitPublicFn (c : RenderCfg) (f : PublicFn) : String := Id.run do
   let call := s!"{c.target f.target.name}({joinArgs args})"
   let prologue := if inputs.isEmpty then "" else
     s!"        $__leanArgs = {marshalClass}::arguments({phpArray inputs});\n"
-  let convert := if f.sig.io then "ioResult" else "fromLean"
   return docLines docs ++
-    s!"    public static function {f.method}({joinArgs params}): {result}\n    \{\n{prologue}        return {marshalClass}::{convert}({f.sig.result.code c}, {call});\n    }\n"
+    s!"    public static function {f.method}({joinArgs params}): {result}\n    \{\n{prologue}        return {c.internal}::{resultMethod f}({call});\n    }\n"
 
 end LeanPhp

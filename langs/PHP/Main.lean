@@ -23,7 +23,7 @@ def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Ar
   return out
 
 def version : String := "0.6.0"
-def generatorVersion : String := "4"
+def generatorVersion : String := "5"
 
 def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
 
@@ -213,14 +213,17 @@ def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : A
     | .ok out => pure out
     | .error e => return .error (254, e)
   let render : RenderCfg := { ns, internal, state := pub.state, methods := out.methods, env }
-  let typeFiles ← match pub.state.types.flatMapM (emitType render) with
-    | .ok files => pure (files.map fun (path, src) => (path, publicHeader job.module ns ++ src))
+  let types ← match pub.state.types.mapM (emitType render) with
+    | .ok types => pure types
     | .error e => return .error (254, e)
+  let typeFiles := (types.flatMap (·.1)).map fun (path, src) => (path, publicHeader job.module ns ++ src)
   let descs := String.join (pub.state.types.toList.map (emitDescriptor render))
+  let constructors := String.join (types.toList.map (·.2))
+  let results := String.join (pub.functions.toList.map (emitResult render))
   let methods := "\n".intercalate (pub.functions.toList.map (emitPublicFn render))
   let facadeFile := (facade ++ ".php", publicHeader job.module ns ++
     s!"final class {facade}\n\{\n{methods}}\n")
-  let internalFile := ("Internal/" ++ cls.name ++ ".php", header job.module cls true ++ out.items ++ descs ++ "}\n")
+  let internalFile := ("Internal/" ++ cls.name ++ ".php", header job.module cls true ++ out.items ++ descs ++ constructors ++ results ++ "}\n")
   let files := typeFiles ++ #[facadeFile, internalFile]
   writePublic dir files
   let paths := files.map fun (path, _) => (dir / path).toString

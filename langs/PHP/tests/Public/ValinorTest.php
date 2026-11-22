@@ -45,7 +45,7 @@ final class ValinorTest extends TestCase
     public function testPropagatesValidationErrorWithTheOriginalBuilder(): void
     {
         $builder = new MapperBuilder();
-        Valinor::configure($builder);
+        self::assertNotSame($builder, Valinor::configure($builder));
         $this->expectException(ValidationError::class);
         $this->expectExceptionMessage('Range.ok: lo ≤ hi');
         $builder->mapper()->map(Range::class, ['lo' => 5, 'hi' => 3]);

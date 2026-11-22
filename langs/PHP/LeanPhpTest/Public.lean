@@ -58,6 +58,8 @@ structure Packed where
   unit : Unit
   deriving Inhabited
 
+def byteEcho (byte : UInt8) : UInt8 := byte
+
 def packedEcho (p : Packed) : Packed := p
 
 def packedRead (p : Packed) : UInt64 := p.u64 + p.usize.toUInt64

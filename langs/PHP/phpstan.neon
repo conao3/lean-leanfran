@@ -1,4 +1,8 @@
+includes:
+    - ../../maint/PHP/phpstan-paths.php
+
 parameters:
+    level: max
     typeAliases:
         RuntimeValue: 'int|float|\GMP|\Conao3\Leanfran\Runtime\LeanObject|\Conao3\Leanfran\Runtime\IoHandleResource|\Conao3\Leanfran\Runtime\IoProcess|\Conao3\Leanfran\Runtime\PendingPromise'
         LeanPath: 'list<string|int>'

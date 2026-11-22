@@ -15,11 +15,7 @@ final class NamesTest extends TestCase
 {
     public function testNames(): void
     {
-        $summary = json_decode(
-            file_get_contents(__DIR__ . '/../../test-out/public/names.json'),
-            true,
-            flags: JSON_THROW_ON_ERROR,
-        );
+        $summary = publicSummary('names');
         $files = array_map(basename(...), $summary['files']);
         self::assertContains('List_.php', $files);
         self::assertCount(2, array_filter(

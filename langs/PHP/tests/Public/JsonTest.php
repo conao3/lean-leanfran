@@ -75,6 +75,8 @@ final class JsonTest extends TestCase
         $n = '1234567890123456789012345';
         $json = '[{"a":"a\\"' . $n . '","b":' . $n . '},-9223372036854775808,"' . $n . '",0.123456789012345678901]';
         $data = Json::decode($json);
+        self::assertIsArray($data);
+        self::assertInstanceOf(stdClass::class, $data[0]);
         self::assertSame('a"' . $n, $data[0]->a);
         self::assertInstanceOf(GMP::class, $data[0]->b);
         self::assertSame($n, gmp_strval($data[0]->b));

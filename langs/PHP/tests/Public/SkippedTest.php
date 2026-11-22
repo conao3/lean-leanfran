@@ -8,11 +8,7 @@ final class SkippedTest extends TestCase
 {
     public function testSkippedReasons(): void
     {
-        $summary = json_decode(
-            file_get_contents(__DIR__ . '/../../test-out/public/skipped.json'),
-            true,
-            flags: JSON_THROW_ON_ERROR,
-        );
+        $summary = publicSummary('skipped');
         $reasons = array_column($summary['skipped'], 'reason', 'name');
         foreach ([
             'nested' => 'ambiguous `Option`',

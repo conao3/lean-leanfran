@@ -42,7 +42,7 @@ final class PublicTest extends TestCase
             [['message' => 'lo ≤ hi', 'path' => ['Range', 'ok']]],
         );
         self::assertIssues(
-            static fn() => new DiscountPercent(101),
+            static fn() => new DiscountPercent('101'),
             'Discount.percent.h: p ≤ 100',
             [['message' => 'p ≤ 100', 'path' => ['Discount', 'percent', 'h']]],
         );
@@ -56,12 +56,12 @@ final class PublicTest extends TestCase
         self::assertSame(9, Small::fromJson('9')->toArray()['val']);
         self::assertSame('9', json_encode(new Small(9), JSON_THROW_ON_ERROR));
         self::assertIssues(
-            static fn() => new Small(10),
+            static fn() => new Small('10'),
             'Small.property: val < 10',
             [['message' => 'val < 10', 'path' => ['Small', 'property']]],
         );
         self::assertIssues(
-            static fn() => Pricing::small(10),
+            static fn() => Pricing::small(gmp_init(10)),
             'n.Subtype.property: val < 10',
             [['message' => 'val < 10', 'path' => ['n', 'Subtype', 'property']]],
         );
@@ -71,7 +71,7 @@ final class PublicTest extends TestCase
         self::assertSame(['minLength' => '1'], $fields[0]['bounds']);
         self::assertSame(['maxItems' => '3'], $fields[1]['bounds']);
         self::assertIssues(
-            static fn() => new Sized('', [1, 2, 3, 4]),
+            static fn() => Sized::fromArray(['tag' => '', 'items' => [1, 2, 3, 4]]),
             'Sized.tagOk: 0 < tag.length',
             [
                 ['message' => '0 < tag.length', 'path' => ['Sized', 'tagOk']],
@@ -100,7 +100,7 @@ final class PublicTest extends TestCase
             ],
         );
         self::assertIssues(
-            static fn() => Pricing::total([1, -2, -3], new DiscountNone()),
+            static fn() => Pricing::total([1, gmp_init(-2), gmp_init(-3)], new DiscountNone()),
             'prices.1: Expected a non-negative integer.',
             [
                 ['message' => 'Expected a non-negative integer.', 'path' => ['prices', 1]],
@@ -108,7 +108,9 @@ final class PublicTest extends TestCase
             ],
         );
         $range = new Range(1, gmp_init('9223372036854775808', 10));
-        gmp_clrbit($range->hi, 63);
+        $hi = $range->hi;
+        self::assertInstanceOf(GMP::class, $hi);
+        gmp_clrbit($hi, 63);
         self::assertIssues(
             static fn() => Pricing::ranges([$range]),
             'xs.0.Range.ok: lo ≤ hi',
@@ -138,6 +140,7 @@ final class PublicTest extends TestCase
             'i' => '-100000000000000000000',
             'unit' => null,
         ];
+        self::assertSame(255, Pricing::byteEcho(255));
         $packed = new Packed(...$values);
         $out = Pricing::packedEcho($packed);
         self::assertEquals($packed, $out);
@@ -153,7 +156,7 @@ final class PublicTest extends TestCase
         self::assertSame(5, $bigger->extra);
 
         self::assertIssues(
-            static fn() => new Packed(...array_replace($values, ['u8' => 256, 'c' => 'ab', 's' => "\xFF"])),
+            static fn() => Packed::fromArray(array_replace($values, ['u8' => 256, 'c' => 'ab', 's' => "\xFF"])),
             'u8: Expected an unsigned 8-bit integer.',
             [
                 ['message' => 'Expected an unsigned 8-bit integer.', 'path' => ['u8']],
@@ -181,7 +184,12 @@ final class PublicTest extends TestCase
         );
         self::assertEquals($choices, Choices::fromJson($choices->toJson()));
         self::assertIssues(
-            static fn() => new Choices(10, 0, ['a', true], new Ok(0), null),
+            static fn() => Choices::fromArray([
+                'fit' => 10,
+                'large' => 0,
+                'pair' => ['a', true],
+                'result' => ['ok' => 0],
+            ]),
             'fit: Expected an integer less than 10.',
             [['message' => 'Expected an integer less than 10.', 'path' => ['fit']]],
         );
@@ -192,8 +200,9 @@ final class PublicTest extends TestCase
             'n: Expected an integer less than 1208925819614629174706176.',
             [['message' => 'Expected an integer less than 1208925819614629174706176.', 'path' => ['n']]],
         );
+        $containers = new ReflectionMethod(Pricing::class, 'containers');
         self::assertIssues(
-            static fn() => Pricing::containers(-1, [1 => 0], ['a', true], new Ok(-3)),
+            static fn() => $containers->invoke(null, -1, [1 => 0], ['a', true], new Ok(-3)),
             'o: Expected a non-negative integer.',
             [
                 ['message' => 'Expected a non-negative integer.', 'path' => ['o']],
@@ -202,7 +211,7 @@ final class PublicTest extends TestCase
             ],
         );
         self::assertEquals(new PairNatBool(5, true), Pricing::pairEcho(new PairNatBool(5, true)));
-        self::assertNull(Pricing::unitEcho(null));
+        self::assertSame(null, Pricing::unitEcho(null));
         self::assertSame('hello!', Pricing::ioEcho('hello'));
         $this->expectException(LeanIOError::class);
         $this->expectExceptionMessage('nope');
