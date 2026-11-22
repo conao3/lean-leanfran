@@ -19,3 +19,7 @@ root = "LeanPhpTest.OracleMain"
 [[lean_exe]]
 name = "oracle-control-depth"
 root = "LeanPhpTest.ControlDepthMain"
+
+[[lean_exe]]
+name = "oracle-fuzz"
+root = "LeanPhpTest.FuzzMain"

@@ -1,4 +1,4 @@
-CONTROL_CHECK_TARGETS := test-complexity test-depth test-ir-coverage
+CONTROL_CHECK_TARGETS := test-complexity test-depth test-ir-coverage fuzz
 
 CHECK_TARGETS += $(CONTROL_CHECK_TARGETS)
 
@@ -14,3 +14,6 @@ test-depth: vendor/autoload.php
 
 test-ir-coverage:
 	bash ../../maint/PHP/test-ir-coverage.sh
+
+fuzz: vendor/autoload.php
+	bash ../../maint/PHP/fuzz.sh
