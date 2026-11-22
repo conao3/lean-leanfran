@@ -1,3 +1,12 @@
+includes:
+    - ../../maint/PHP/phpstan-paths.php
+
 parameters:
+    level: max
     typeAliases:
         RuntimeValue: 'int|float|\GMP|\Conao3\Leanfran\Runtime\LeanObject|\Conao3\Leanfran\Runtime\IoHandleResource|\Conao3\Leanfran\Runtime\IoProcess|\Conao3\Leanfran\Runtime\PendingPromise'
+        LeanPath: 'list<string|int>'
+        LeanIssue: 'array{message: string, path: LeanPath}'
+        LeanField: 'array{key: string, prop: string, desc: \Conao3\Leanfran\Schema\Desc, slot: string, at: int, omitNone: bool, flat: bool, bounds: array<string, string>}'
+        LeanInvariant: 'array{field: string, prop: string, args: list<int>, decide: \Closure(mixed ...): bool}'
+        LeanVariant: 'array{name: string, cls: class-string|null, tag: int, size: int, usize: int, ssize: int, positional: bool, fields: list<LeanField>, invariants: list<LeanInvariant>}'

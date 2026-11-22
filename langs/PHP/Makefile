@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := check
-.PHONY: build check format format-check test test-numeric test-runtime test-static gen-externs externs-check samples
+.PHONY: build check format format-check test test-numeric test-runtime gen-externs externs-check samples
 
 show-php-version = @php -r 'printf("%s: PHP %s\n", $$argv[1], PHP_VERSION);' '$@'
 CHECK_TARGETS :=
@@ -9,14 +9,14 @@ CHECK_TARGETS :=
 build:
 	lake build leanfran-php
 
-check: format-check externs-check test test-numeric test-runtime $(CHECK_TARGETS) samples test-static
+check: format-check externs-check test test-numeric test-runtime $(CHECK_TARGETS) samples
 
 format:
-	mago format src tests samples/sum-to/main.php ../../maint/PHP
+	mago format src tests samples/sum-to/main.php samples/pricing/main.php ../../maint/PHP
 
 format-check:
 	$(show-php-version)
-	mago format --check src tests samples/sum-to/main.php ../../maint/PHP
+	mago format --check src tests samples/sum-to/main.php samples/pricing/main.php ../../maint/PHP
 
 vendor/autoload.php: composer.json composer.lock
 	composer install --no-interaction
@@ -48,11 +48,7 @@ test-numeric:
 
 test-runtime: vendor/autoload.php
 	$(show-php-version)
-	phpunit --cache-directory test-out/phpunit --bootstrap vendor/autoload.php tests
-
-test-static: vendor/autoload.php
-	$(show-php-version)
-	phpstan analyse --level=max --no-progress src
+	phpunit --cache-directory test-out/phpunit --bootstrap vendor/autoload.php tests/Runtime
 
 samples: build
 	$(show-php-version)

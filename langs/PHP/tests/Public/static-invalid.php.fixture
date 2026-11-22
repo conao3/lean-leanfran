@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Lean\Pricing\Pricing;
+use App\Lean\Pricing\Range;
+use App\Lean\Pricing\Sized;
+use Conao3\Leanfran\Err;
+use Conao3\Leanfran\Ok;
+
+Pricing::byteEcho(256);
+Pricing::ranges([1 => new Range(1, 3)]);
+new Sized('', []);
+Pricing::containers(null, [], ['label', 1], new Ok(0));
+Pricing::containers(null, [], ['label', true], new Err(42));

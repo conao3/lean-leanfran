@@ -1,0 +1,5 @@
+1800
+{"percent":{"p":10}}
+{"lo":1,"hi":3}
+Range.ok: lo ≤ hi
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"lo":{"type":"integer","minimum":0},"hi":{"type":"integer","minimum":0}},"required":["lo","hi"],"additionalProperties":false}

@@ -27,3 +27,7 @@ root = "LeanPhpTest.FuzzMain"
 [[lean_exe]]
 name = "oracle-io"
 root = "LeanPhpTest.IoMain"
+
+[[lean_exe]]
+name = "oracle-public"
+root = "LeanPhpTest.PublicMain"

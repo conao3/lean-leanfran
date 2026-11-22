@@ -31,5 +31,11 @@
             "src/Runtime/misc.php",
             "src/Runtime/task.php"
         ]
+    },
+    "require-dev": {
+        "cuyz/valinor": "^2.8"
+    },
+    "suggest": {
+        "cuyz/valinor": "Map data to generated public types and collect Lean validation errors."
     }
 }
