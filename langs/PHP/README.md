@@ -17,15 +17,15 @@ Create an application next to the clone. The Composer path repository points to 
 
 ```sh
 cd ..
-mkdir arith-php
-cd arith-php
+mkdir pricing-php
+cd pricing-php
 ```
 
 Save this as `composer.json`.
 
 ```json
 {
-    "name": "example/arith-php",
+    "name": "example/pricing-php",
     "require": {
         "conao3/leanfran": "dev-main"
     },
@@ -46,7 +46,7 @@ Save this as `composer.json`.
     ],
     "autoload": {
         "psr-4": {
-            "Leanfran\\Generated\\": "generated/"
+            "App\\Lean\\Pricing\\": "generated/"
         }
     }
 }
@@ -54,37 +54,71 @@ Save this as `composer.json`.
 
 ## First Lean module
 
-Save this as `Arith.lean`.
+Save this as `Pricing.lean`.
 
 ```lean
-def sumTo (n acc : Nat) : Nat :=
-  if n = 0 then acc else sumTo (n - 1) (acc + n)
+namespace Pricing
+
+structure Range where
+  lo : Nat
+  hi : Nat
+  ok : lo ≤ hi
+
+inductive Discount where
+  | none
+  | percent (p : Nat) (h : p ≤ 100)
+  | fixed (amount : Nat)
+
+def total (prices : List Nat) (discount : Discount) : Nat :=
+  let subtotal := prices.foldl (· + ·) 0
+  match discount with
+  | .none => subtotal
+  | .percent p _ => subtotal - subtotal * p / 100
+  | .fixed amount => subtotal - amount
+
+end Pricing
 ```
 
-Save this as `main.php`. Composer loads both the generated class and its runtime.
+Save this as `main.php`. Composer loads the generated types, function facade, and runtime.
 
 ```php
 <?php
 
 declare(strict_types=1);
 
+use App\Lean\Pricing\DiscountPercent;
+use App\Lean\Pricing\Pricing;
+use App\Lean\Pricing\Range;
+use Conao3\Leanfran\ValidationError;
+
 require __DIR__ . '/vendor/autoload.php';
 
-echo Leanfran\Generated\LeanArith::l_sumTo(1000000, 0), "\n";
+echo Pricing::total([1200, 800], new DiscountPercent(10)), PHP_EOL;
+echo Range::fromJson('{"lo":1,"hi":3}')->toJson(), PHP_EOL;
+
+try {
+    new Range(lo: 5, hi: 3);
+} catch (ValidationError $error) {
+    echo $error->getMessage(), PHP_EOL;
+}
 ```
 
 Install the runtime, compile the Lean module, and run the application.
 
 ```sh
 composer install --no-interaction
-lean -o Arith.olean Arith.lean
-../lean-leanfran/result/bin/leanfran-php module generate --module-name Arith \
-  --roots sumTo --search-path . --internal-only --output-file generated/LeanArith.php
+lean -o Pricing.olean Pricing.lean
+../lean-leanfran/result/bin/leanfran-php module generate --module-name Pricing \
+  --search-path . --output-dir generated --php-namespace 'App\Lean\Pricing' --facade Pricing
 php main.php
 ```
 
+The final command prints the total, the JSON value, and the validation message.
+
 ```text
-500000500000
+1800
+{"lo":1,"hi":3}
+Range.ok: lo ≤ hi
 ```
 
-See the [PHP guide](https://github.com/conao3/lean-leanfran/blob/master/docs/php-guide.md) for CLI options, runtime values, and IO.
+The PHP guide covers the CLI, public types, JSON Schema, Valinor, and IO. [PHP guide](https://github.com/conao3/lean-leanfran/blob/master/docs/php-guide.md)
