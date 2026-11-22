@@ -59,6 +59,32 @@ final class LClosure extends LeanObject
     ) {}
 }
 
+final readonly class TailCall
+{
+    public function __construct(
+        public \Closure $fn,
+        public array $args,
+    ) {}
+}
+
+final readonly class TailApply
+{
+    public function __construct(
+        public LClosure $closure,
+        public array $args,
+    ) {}
+}
+
+function lean_trampoline(mixed $result): mixed
+{
+    while ($result instanceof TailCall || $result instanceof TailApply) {
+        $result = $result instanceof TailCall
+            ? ($result->fn)(...$result->args)
+            : applyStep($result->closure, $result->args);
+    }
+    return $result;
+}
+
 final class LThunk extends LeanObject
 {
     public function __construct(

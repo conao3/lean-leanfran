@@ -20,7 +20,7 @@ def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
   return out
 
 def version : String := "0.6.0"
-def generatorVersion : String := "1"
+def generatorVersion : String := "2"
 
 def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
 
