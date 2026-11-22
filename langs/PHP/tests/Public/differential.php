@@ -11,7 +11,8 @@ use App\Lean\Pricing\Pricing;
 use App\Lean\Pricing\Range;
 use Conao3\Leanfran\ValidationError;
 
-if ($argv[1] === 'demo') {
+$mode = $argv[1] ?? throw new InvalidArgumentException('Expected the demo or facade mode.');
+if ($mode === 'demo') {
     echo Pricing::total([1200, 800], new DiscountPercent(10)), PHP_EOL;
     try {
         new Range(lo: 5, hi: 3);
@@ -21,6 +22,9 @@ if ($argv[1] === 'demo') {
     $range = Range::fromJson('{"lo": 1, "hi": 3}');
     echo $range->toJson(), PHP_EOL;
     exit();
+}
+if ($mode !== 'facade') {
+    throw new InvalidArgumentException('Unknown public differential test mode: ' . $mode);
 }
 
 echo Pricing::total([1200, 800], new DiscountPercent(10)), PHP_EOL;
