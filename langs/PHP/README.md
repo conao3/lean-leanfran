@@ -1,6 +1,6 @@
 # PHP
 
-[leanfran](https://github.com/conao3/lean-leanfran/blob/master/README.md) compiles embedded Lean 4 blocks and standalone Lean modules to PHP. The generated code runs with Composer and 64-bit PHP 8.4 or later with GMP.
+[leanfran](https://github.com/conao3/lean-leanfran/blob/master/README.md) compiles embedded Lean 4 blocks and standalone Lean modules to PHP. It also translates modeled PHP functions to Lean so you can prove that they satisfy a specification. The Composer runtime requires 64-bit PHP 8.4 or later with GMP and Tokenizer.
 
 ## Install
 
@@ -113,6 +113,70 @@ The application prints the width.
 3
 ```
 
+## Verify a PHP function
+
+Continue from the application directory. Save this as `src/Calc.php`. The `#[Model]` attribute links the PHP implementation to an executable Lean specification, an input condition, and a property of the result.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App;
+
+use Conao3\Leanfran\Lean;
+use Conao3\Leanfran\Model;
+
+#[Lean(<<<'LEAN'
+    def clampSpec (x lo hi : Int) : Int := max lo (min hi x)
+    def ordered (_x lo hi : Int) : Bool := lo ≤ hi
+    def inRange (_x lo hi : Int) (r : Int) : Bool := lo ≤ r && r ≤ hi
+    LEAN)]
+final class Calc
+{
+    use Calc\Functions;
+
+    #[Model(refines: 'clampSpec', requires: 'ordered', ensures: ['in_range' => 'inRange'])]
+    public static function clamp(int $x, int $lo, int $hi): int
+    {
+        if ($x < $lo) {
+            return $lo;
+        }
+        if ($x > $hi) {
+            return $hi;
+        }
+        return $x;
+    }
+}
+```
+
+Copy the proofs into `lean/Proofs/` next to `composer.json`. Enable Packagist to install the PHP parser as a development dependency. Composer still installs the leanfran runtime from the path repository above.
+
+```sh
+mkdir -p lean/Proofs
+cp ../lean-leanfran/langs/PHP/samples/verified-clamp/lean/Proofs/Calc.lean lean/Proofs/
+composer config --unset repositories.packagist.org
+composer require --dev --no-interaction 'nikic/php-parser:^5.9'
+vendor/bin/leanfran check --leanfran-php ../lean-leanfran/result/bin/leanfran-php --require proved
+```
+
+The proof check reports both obligations as proved.
+
+```text
+App\Calc\clamp refines: proved
+App\Calc\clamp in_range: proved
+```
+
+Run the property test and call the implementation.
+
+```sh
+php -r 'require "vendor/autoload.php"; Conao3\Leanfran\Verify::checkClass(App\Calc::class); echo App\Calc::clamp(12, 0, 10), PHP_EOL;'
+```
+
+```text
+10
+```
+
 ## Generate from a Lake project
 
 You can also generate PHP directly from a compiled Lean module. From the application directory, build the standalone pricing sample and generate its PHP API.
@@ -124,4 +188,4 @@ You can also generate PHP directly from a compiled Lean module. From the applica
   --output-dir generated --php-namespace 'App\Lean\Pricing'
 ```
 
-The PHP guide covers embedded blocks, the compiler CLI, public types, JSON Schema, Valinor, and IO. [PHP guide](https://github.com/conao3/lean-leanfran/blob/master/docs/php-guide.md)
+The PHP guide covers embedded blocks, the compiler CLI, public types, JSON Schema, Valinor, IO, and PHP function verification. [PHP guide](https://github.com/conao3/lean-leanfran/blob/master/docs/php-guide.md)

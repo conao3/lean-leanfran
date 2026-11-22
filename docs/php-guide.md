@@ -4,7 +4,7 @@
 
 ## Installation
 
-Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick start](../langs/PHP/README.md) to build the compiler with Nix and install the runtime from a Composer path repository. Running the generated code requires 64-bit PHP 8.4 or later and `ext-gmp`.
+Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick start](../langs/PHP/README.md) to build the compiler with Nix and install the runtime from a Composer path repository. Running the generated code requires 64-bit PHP 8.4 or later, `ext-gmp`, and `ext-tokenizer`.
 
 ## Embedded Lean
 
@@ -28,16 +28,16 @@ Run the Composer binary from the application directory. Pass `--package dir` to 
 | Command | Effect |
 | --- | --- |
 | `vendor/bin/leanfran sync` | Scans the package, builds the blocks in `.leanfran/workspace`, and replaces their generated PHP and manifests after every block succeeds. |
-| `vendor/bin/leanfran status` | Reports stale or removed blocks and missing generated files, with exit status 1 if any need attention. It runs with PHP and Composer alone. |
-| `vendor/bin/leanfran check` | Runs `sync` followed by `status`. |
+| `vendor/bin/leanfran status` | Reports stale or removed blocks, missing generated files, and saved proof states. It runs without Lean and exits 1 if outputs or proof results are stale. |
+| `vendor/bin/leanfran check` | Runs `sync`, translates PHP models, and checks their Lean proofs. Accepts `--require proved` to enforce a proof policy. |
 
 Commit the generated PHP and manifests. In CI, install Composer dependencies and run `vendor/bin/leanfran status` to verify that the checkout is up to date. Run `check` in jobs that also verify Lean proofs and regenerate the PHP. The CLI keeps its Lake workspace under the ignored `.leanfran/` directory.
 
 In `composer.json`, set `extra.leanfran.paths` to a list of package directories to scan. By default, the CLI scans the directories listed in `autoload.psr-4`. Set `extra.leanfran.require` to a list of Lake requirements using the keys from `[[require]]` in a Lake TOML file. Relative dependency paths resolve from the Composer package directory. Composer scripts can run the binary, for example `"lean:sync": "leanfran sync"`.
 
-The compiler is selected by `--leanfran-php`, then `LEANFRAN_PHP_CLI`, then `leanfran-php` on PATH. Its `--generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
+For `sync` and `check`, the compiler is selected by `--leanfran-php`, then `LEANFRAN_PHP_CLI`, then `leanfran-php` on PATH. Its `--generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
 
-A Lean error in a block starts with the PHP file, line, and column. The message also gives the block's fully qualified PHP class name and the Lean line and column within its source string. On a failed proof or syntax error, the previous generated PHP remains available.
+A Lean error in a block starts with the PHP file, line, and column. The message also gives the block's fully qualified PHP class name and the Lean line and column within its source string. When a block fails to build, the previous generated PHP remains available. Proofs of PHP models run after sync has installed the generated files.
 
 ### Importing PHP models
 
@@ -61,9 +61,112 @@ Reflection supplies native types. The CLI resolves PHPDoc class names in the nam
 
 Bounds and minimum lengths become Lean proof fields such as `percent_le`, `quantity_ge`, and `items_min_items`. The generated PHP accepts the original class and validates its properties before constructing the Lean value. For example, passing 101 in a field annotated `int<0, 100>` raises `Conao3\Leanfran\ValidationError` with the argument and property in the issue path. The generated code reconstructs returned models by calling the original constructor with named arguments. A change to a model's Lean representation makes its block and dependent blocks stale.
 
+## Verifying PHP functions
+
+Attach `#[Conao3\Leanfran\Model(...)]` to a typed static method or a named function. The attribute binds the function to executable Lean specifications in a `#[Lean]` block. The [quick start](../langs/PHP/README.md#verify-a-php-function) walks through `clamp`. The [cart sample](../langs/PHP/samples/verified-cart) proves a summation loop correct when every price and the list length are bounded.
+
+| Argument | Purpose |
+| --- | --- |
+| `refines` | Lean function that takes the PHP arguments in the same order and returns the specification's result. The proof establishes equality with that result. |
+| `requires` | Lean function that takes the arguments and returns `Bool`. Every obligation assumes it returns `true`. |
+| `ensures` | Literal map from obligation labels to Lean functions taking the arguments followed by the result and returning `Bool`. Use distinct labels other than the reserved `refines`. |
+| `spec` | Class containing the `#[Lean]` block, written as a fully qualified string or a `ClassName::class` literal. Defaults to the declaring class for a method. Specify it on a namespace function. |
+
+Use names relative to the selected block. A dotted name can select a Lean declaration in a namespace within the block. Each option is optional when the block can be inferred. A property test needs at least one `refines` or `ensures` oracle. Install `nikic/php-parser` as a development dependency in the application that declares the models. With Packagist enabled, run the following from its Composer directory.
+
+```sh
+composer require --dev --no-interaction 'nikic/php-parser:^5.9'
+```
+
+### PHP subset
+
+The translator expects by-value parameters and return values, locals with consistent types, and a return or throw on every path. A call to another modeled function must resolve statically within the same project, pass all arguments positionally, and avoid recursive cycles.
+
+| Area | Supported forms |
+| --- | --- |
+| Parameters and results | `int` → `Int`, `bool` → `Bool`, `string` → `String`, `float` → `Float`, and native `?T` → `Option`. Use PHPDoc `list<T>` or `array{0: A, 1: B}` on native `array` for a Lean list or pair. |
+| Value types | Backed enums and final classes with promoted public readonly properties. Supported generated public value types are enums and structures with representable fields. Construction in the translated body requires a structural constructor. A generated constructor's supported invariant checks translate to failure branches. |
+| Statements | Local assignment and reassignment, two-element tuple destructuring, `+=`, `-=`, `*=`, `.=`, and integer increment and decrement as statements. Also `if`/`elseif`/`else`, early `return`, `foreach` over lists with or without the index, `for`, `while`, single-level `break`/`continue`, `throw new X(...)`, and append to a list created in the function. |
+| Expressions | Integer `+`, `-`, `*`, `%`, unary minus, and `intdiv`. Float `+`, `-`, `*`, `/`, and unary minus. Same-type `<`, `<=`, `>`, and `>=` for numbers and booleans. Strict equality and inequality on same-type scalars and enum cases, or when comparing a nullable value with `null`. Boolean `&&`, `\|\|`, and `!`, ternaries, `match`, list indices, constant tuple indices, property reads, enum cases, list and pair literals, and structural `new`. |
+| Built-ins | `count` for a list or pair, `abs` for a number, two-argument `min` and `max` on same-type numbers, `strlen` for the byte length of a string, and `.` for string concatenation. |
+
+Outside this subset are missing parameter or return types, `mixed`, general unions, unannotated arrays, associative arrays, integer `/`, loose comparisons (`==`, `!=`, `<=>`), and object, list, or tuple operands to `===` or `!==`. PHP object comparisons use identity. The subset also excludes invalid UTF-8 strings, interpolation, string indexing, `??`, references, variadic parameters, PHP globals and static locals, property writes, dynamic calls, generators, I/O, and exception handlers. Unsupported syntax produces a source location and an `unextracted` state.
+
+### Translation and proof scope
+
+Lean models the body using `do` notation. An infallible body uses `Id.run`. A body with a modeled failure or a call to a fallible function uses `Php.M α`, an alias for `Except Php.Exc α`. The rules are implemented in [LeanPhpLib.Php](../langs/PHP/src/lean/LeanPhpLib/Php.lean).
+
+| PHP operation | Lean behavior |
+| --- | --- |
+| Integer addition, subtraction, multiplication, negation and `abs` | Arithmetic on `Int`, checked against the signed 64-bit range. When PHP promotes the result to a float, the model returns `overflow`. |
+| `intdiv` | Division truncating toward zero. A zero divisor gives `divisionByZero`. Dividing `PHP_INT_MIN` by −1 gives `arithmeticError`. |
+| `%` | Remainder with the dividend's sign. A zero divisor gives `divisionByZero`. |
+| Float division | A zero divisor gives `divisionByZero`. |
+| List indexing | Negative or out-of-range indices give `undefinedIndex`, corresponding to PHP's warning and null result. |
+| `match` | A match with no matching arm or default gives `unhandledMatch`. |
+| `throw new X(...)` | A failure carrying the exception class name. |
+
+The proof describes the translated function under its input contract. PHP strings must contain valid UTF-8, arrays must have the list or pair shape in their PHPDoc, and numbers must follow the PHP types at the boundary. String equality compares byte sequences and `strlen` counts UTF-8 bytes. Proofs establish partial correctness for executions represented by the model, including integer arithmetic within its checked bounds. They rely on the translator and its model of PHP operations. A proved refinement of a fallible translation also establishes that it returns `Except.ok` on inputs satisfying the precondition. A postcondition alone constrains successful results.
+
+The logical assumptions are the `requires` predicate and the invariants of supported generated public types that their constructors validate. PHPDoc supplies the shape of a list or pair. PHPDoc bounds such as `int<0, 100>` and length refinements supply no assumptions. Put those conditions in `requires` if the proof needs them. A verified function cannot use an imported PHP value type whose Lean representation assumes stronger PHPDoc constraints. A standalone PHP value type is translated using just its shape.
+
+### Obligations and proof status
+
+The translated name is `LeanPhpModel.<namespace>.<class>.<method>` for a method, with the class component omitted for a namespace function. The translator writes an `abbrev <function>.obligation.<label> : Prop` for each refinement and postcondition. Each obligation universally quantifies the arguments and includes the precondition when present. A refinement equates the result with the spec, wrapped in `Except.ok` for a fallible body. A postcondition says the predicate on the arguments and result is true. For a fallible body it says so for every result returned via `Except.ok`.
+
+Place Lean modules under `lean/Proofs/` beside `composer.json`. Import the generated model module and prove `<function>.proof.<label>` with the corresponding obligation as its type. Open the block's `LeanPhpEmbed.<namespace>.<class>` aliases to refer to the specifications. The following theorem appears in the [clamp proof file](../langs/PHP/samples/verified-clamp/lean/Proofs/Calc.lean).
+
+```lean
+import LeanPhpModel.App.Calc
+
+open LeanPhpEmbed.App.Calc
+namespace LeanPhpModel.App.Calc
+
+theorem clamp.proof.refines : clamp.obligation.refines := by
+  intro x lo hi h
+  simp only [ordered, decide_eq_true_eq] at h
+  simp only [clamp, clampSpec]
+  split <;> (try split) <;> simp_all <;> omega
+
+end LeanPhpModel.App.Calc
+```
+
+`vendor/bin/leanfran check` syncs the blocks, translates the modeled functions, builds their Lean definitions and proofs, and writes proof results and input hashes to `leanfran.lock`. It prints a state per obligation.
+
+| State | Meaning |
+| --- | --- |
+| `proved` | The theorem's type is definitionally equal to the obligation and its axioms are limited to `propext`, `Quot.sound`, and `Classical.choice`. |
+| `sorry` | The proof depends on `sorryAx`. |
+| `axioms` | The proof depends on an axiom outside the allowed set. |
+| `failed` | A proof file declares the expected proof but fails to build. |
+| `missing` | The expected theorem is absent from the built proof modules. |
+| `mismatch` | The theorem's type differs from the obligation. |
+| `unextracted` | The translator or Lean could not produce the obligation. |
+
+With `--require proved`, `check` exits 1 if any obligation has a state other than `proved`. Without the flag, `check` still exits 1 for an unextracted obligation, stale or missing block outputs, or a command or build error that aborts the check. `status` runs without Lean, parses the model source using the same PHP parser, and reads the lock and block manifests. It reports a model as `stale` when its saved result is missing or its model body, dependencies, selected Lean block, or translation inputs have changed. Stale or missing outputs, stale proof results, and command errors produce exit 1. A fresh saved non-proved state can still give a successful `status`.
+
+### Property tests and CI
+
+`Conao3\Leanfran\Verify::checkModel(callable $f, int $runs = 200, int $seed = 1): void` runs one model. `Verify::checkClass(string $class): void` runs the annotated methods declared by that class with the defaults. Pass `[Calc::class, 'clamp']` to test just that method. Call either entry point from PHPUnit or a standalone PHP script. The [clamp sample](../langs/PHP/samples/verified-clamp/main.php) calls `checkClass` before printing its result.
+
+The tester uses the configured Composer scan paths and runs the selected block's generated PHP wrappers. Run `sync` or `check` first and keep the generated files and PHP parser available. Preserve the generated methods’ PHPDoc when using OPcache. The tests themselves run without Lean. Boundary cases include 0, ±1, the integer limits, empty lists and strings, and single ASCII and non-ASCII characters. The tester then uses a local seeded `Mt19937` engine. Random strings have up to eight Unicode scalars, lists have up to eight elements, and nested list and nullable values are depth-limited. Float inputs are finite.
+
+Inputs that fail a generated value check or whose `requires` predicate returns false are discarded. Repeated cases count as accepted inputs. The tester tries up to 100 candidates per requested run and reports how many accepted inputs it found if the budget runs out. It compares results with `refines` and evaluates each `ensures` on the PHP result. `refines` compares arrays and public object fields structurally, with exact integer comparison for `GMP` results. Scalars of different PHP types compare unequal.
+
+A counterexample throws `Conao3\Leanfran\Verify\PropertyFailure` with the function, label, seed, input, implementation result and expected value. A failed postcondition records its false predicate result. If the PHP function throws on an accepted input, the test fails and preserves the throwable, including a `TypeError` from returning an overflowed float through an `int` signature. With only postconditions, this uses the first label and expects a successful return. A float returned to an integer specification also fails the result comparison. Reuse the seed and run count to reproduce the sequence.
+
+For a Lean-enabled CI job, install Composer development dependencies, put `leanfran-php` and the selected Lean toolchain on PATH, and run the proof and property checks. For the clamp sample, run the following from its Composer directory.
+
+```sh
+vendor/bin/leanfran check --require proved
+php main.php
+```
+
+You can run `vendor/bin/leanfran status` in a PHP-only job to check freshness of committed outputs and proof results. Run `check` after editing proof files to refresh their results and enforce the `proved` policy.
+
 ## The CLI
 
-`leanfran-php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran-php help` to see the full usage. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
+`leanfran-php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran-php --help` to see the full usage, including the `obligations check` command used by the Composer CLI. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
 
 | Option | Effect |
 | --- | --- |
@@ -76,20 +179,22 @@ Bounds and minimum lengths become Lean proof fields such as `percent_le`, `quant
 | `--facade <Name>` | Names the public facade. Defaults to the last component of the module name. |
 | `--facade-kind class\|trait` | Emits a facade class or trait. The default is `class`. |
 | `--type-module <N=NS>` | Reuses types from Lean namespace `N` that were generated into PHP namespace `NS`. Repeat for multiple namespaces. |
-| `--class <NS\Name>` | Sets the fully qualified PHP class name. |
-| `--main <Name>` | Generates a CLI entry point for a Lean IO definition. |
+| `--class <NS\Name>` | Sets the PHP class name for single-file output. |
+| `--main <Name>` | Generates a CLI entry point for a Lean IO definition in single-file output. |
 | `--output-file <path>` | Writes the PHP source to the given file. Defaults to stdout. |
 | `--output json\|text` | Sets the summary format. Defaults to JSON. The summary goes to stderr when source goes to stdout. |
-| `--internal-only` | Requests the runtime-facing class. |
+| `--internal-only` | Selects the runtime-facing class, also the default without `--output-dir`. |
 | `--namespace <Name>` | Removes a Lean namespace prefix from public names. Defaults to the module name. |
 | `--batch <file>` | Reads a JSON array of jobs. Each job has `module` and either `output_file` or `output_dir`. Embedding uses public jobs with `php_namespace`, `facade`, `facade_kind`, `type_modules`, and `models`. |
 
 | Exit code | Meaning |
 | --- | --- |
 | 0 | Success |
-| 252 | Invalid arguments, including a missing module or invalid class name |
+| 252 | Invalid arguments, including a missing or unresolved module or an invalid class name |
 | 254 | Input that cannot be converted, such as a call to an extern outside the runtime's inventory |
 | 255 | Other errors, such as failure to write the output file |
+
+Use `--output-dir` together with `--php-namespace`. Options for single-file output (`--output-file`, `--internal-only`, `--class`, and `--main`) are incompatible with `--output-dir`. The facade and shared-type options apply to directory output. `leanfran-php obligations check --modules … --obligations file` returns JSON states for the supplied obligations. Its exit status indicates whether the command ran successfully. Use the Composer binary's `--require proved` to enforce their states.
 
 ## Public types
 
@@ -108,7 +213,7 @@ Generate the public API with `--output-dir` and `--php-namespace`, and map that 
 | `Float`, `Float32` | `float` | Number or a nonfinite value's string |
 | `Bool` | `bool` | Boolean |
 | `String`, `Char` | UTF-8 `string`. A `Char` has one Unicode scalar. | String |
-| `Unit` | `null` | `{}` |
+| `Unit`, `PUnit` | `null` | `{}` |
 | `Option α` | The type for `α` or `null` | A value or `null`. A field named `x?` uses key `x` and omits it for `none`. |
 | `List α`, `Array α` | `list<T>` | Array |
 | `α × β` | `array{0: A, 1: B}` | Two-element array |
@@ -198,7 +303,7 @@ OPcache and JIT are optional runtime settings. If Zend OPcache is loaded, set `o
 php -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M main.php
 ```
 
-## Verification
+## Backend testing
 
 The [development checks](php-development.md#verification) run on PHP 8.4 and 8.5. They compare stdout, stderr, and exit status against Lean's C backend and also compare filesystem changes for 11 IO fixtures. The default fuzz run compares 2,026 inputs with the C backend, including 2,000 seeded random rows.
 
@@ -206,4 +311,5 @@ The numeric test covers 427 extern declarations with 402 distinct C symbols. Its
 
 ## Planned features
 
-Verification of PHP functions against Lean specifications is planned for a later stage.
+- Publish the Composer package on Packagist.
+- Call proved PHP functions from generated PHP code.

@@ -78,7 +78,7 @@ where
 leanfran: lake build failed
 ```
 
-Every supported language embeds Lean the same way (see the table below). The output above is from leanfran 0.6.0 (PyPI and the Nix compiler) in `/tmp/myapp`.
+Each language provides its own integration for embedded Lean blocks. The output above is from leanfran 0.6.0 (PyPI and the Nix compiler) in `/tmp/myapp`.
 
 ## Lean at the core
 
@@ -90,13 +90,13 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | Python     | [Python quick start](langs/Python/README.md)         | [leanfran on PyPI](https://pypi.org/project/leanfran/)                                | `lean(...)`, pydantic models, Python modules   |
 | TypeScript | [TypeScript quick start](langs/TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
-| PHP        | [PHP quick start](langs/PHP/README.md)               | Not yet published                                                                     | `#[Lean(...)]`, PHP classes, Composer CLI       |
+| PHP        | [PHP quick start](langs/PHP/README.md)               | Composer path repository (Packagist pending) | `#[Lean]`, `#[Model]`, Composer CLI |
 
 ## What you can build
 
 - **Proved functions in your application.** Keep an algorithm and its correctness proof together, then call the generated function from your application.
 - **Validated data at the boundary.** Lean structures and inductive types map to host-language values. Supported proof fields become runtime checks for the invariants your proofs assume.
-- **Specifications for host-language code.** Bind supported Rust, Python, TypeScript or Clojure functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
+- **Specifications for host-language code.** Bind supported Rust, Python, TypeScript, Clojure, or PHP functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
 
 The backends share Lean's semantics and are tested against Lean's native C backend. Their supported types, externs and host-language integrations are documented in the [language guides](#documentation).
 
@@ -118,7 +118,18 @@ The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`
 | Python     | [Setup and first block](langs/Python/README.md)     | [Models, verification and CLI](docs/python-guide.md)      | [Python samples](langs/Python/samples/README.md)         |
 | TypeScript | [Setup and first block](langs/TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](langs/TypeScript/samples/README.md) |
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
-| PHP        | [Setup and first block](langs/PHP/README.md)       | [Embedding, public types and CLI](docs/php-guide.md)     | [PHP samples](langs/PHP/samples/README.md)               |
+| PHP        | [Setup and first block](langs/PHP/README.md)       | [Embedding, types, verification and CLI](docs/php-guide.md)     | [PHP samples](langs/PHP/samples/README.md)               |
+
+## Samples
+
+| Use | Examples |
+| --- | --- |
+| Call a function compiled from a Lean project | [Rust roman-numerals](langs/Rust/samples/roman-numerals), [PHP sum-to](langs/PHP/samples/sum-to) |
+| Embed Lean in an application | [Python word-count](langs/Python/samples/word-count), [Clojure todo-cli](langs/Clojure/samples/todo-cli), [PHP embed-range](langs/PHP/samples/embed-range) |
+| Validate data across the language boundary | [TypeScript pricing-api](langs/TypeScript/samples/pricing-api), [PHP pricing](langs/PHP/samples/pricing), [PHP embed-orders](langs/PHP/samples/embed-orders) |
+| Generate a command-line program | [PHP greet-cli](langs/PHP/samples/greet-cli) |
+| Check a host function against a Lean specification | [TypeScript verified-typescript](langs/TypeScript/samples/verified-typescript), [PHP verified-clamp](langs/PHP/samples/verified-clamp) |
+| Prove a host implementation under a precondition | [Rust sorted-search](langs/Rust/samples/sorted-search), [PHP verified-cart](langs/PHP/samples/verified-cart) |
 
 ## Contribution
 
