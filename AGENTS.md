@@ -26,4 +26,4 @@ For PHP models, maintain proof and translation fixtures alongside the native-ora
 
 Run `make check` from the repository root, or `make check BACKENDS=Python` for selected backends. Run `make format` before committing.
 
-The Release and Publish workflows manage the package versions and the `vX.Y.Z` tag together. Start them only in the session where the user requested a release.
+The Release and Publish workflows manage the package versions and the `vX.Y.Z` tag together. Run one release at a time. Queue each release as a dedicated task. Start the Release and Publish workflows only from that task, including any restart of Publish with the same tag.
