@@ -2,11 +2,14 @@
 .PHONY: build check format format-check test test-numeric test-runtime test-static gen-externs externs-check
 
 show-php-version = @php -r 'printf("%s: PHP %s\n", $$argv[1], PHP_VERSION);' '$@'
+CHECK_TARGETS :=
+
+-include make/*.mk
 
 build:
 	lake build leanfran-php
 
-check: format-check externs-check test test-numeric test-runtime test-static
+check: format-check externs-check test test-numeric test-runtime $(CHECK_TARGETS) test-static
 
 format:
 	mago format src tests ../../maint/PHP
