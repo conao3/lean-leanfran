@@ -12,4 +12,4 @@ done
 .lake/build/bin/leanfran-php module generate --module-name "$module" --roots "${roots[@]}" \
     --class 'Leanfran\Generated\Complexity' --search-path .lake/build/lib/lean \
     --internal-only --output text --output-file test-out/Complexity.php
-php -d memory_limit=128M ../../maint/PHP/test-complexity.php
+php -d memory_limit=128M tests/Differential/Complexity.php

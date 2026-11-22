@@ -41,11 +41,11 @@ compare() {
 compare probe 0 test-out/Vectors.php
 compare fail 1 test-out/Vectors.php
 compare status 23 test-out/Vectors.php
-compare twice 0 ../../maint/PHP/test-control.php
+compare twice 0 tests/Differential/Control.php
 
 for mode in invalid-tag unreachable; do
     status=0
-    run_php ../../maint/PHP/test-control.php "$mode" > "test-out/$mode.out" 2> "test-out/$mode.err" || status=$?
+    run_php tests/Differential/Control.php "$mode" > "test-out/$mode.out" 2> "test-out/$mode.err" || status=$?
     test "$status" = 1
     test ! -s "test-out/$mode.out"
     printf 'INTERNAL PANIC: unreachable code has been reached\n' | diff -u - "test-out/$mode.err"
