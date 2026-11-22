@@ -5,8 +5,10 @@
     "require": {
         "php": ">=8.4",
         "php-64bit": "*",
-        "ext-gmp": "*"
+        "ext-gmp": "*",
+        "ext-tokenizer": "*"
     },
+    "bin": ["bin/leanfran"],
     "autoload": {
         "psr-4": {
             "Conao3\\Leanfran\\": "src/"
