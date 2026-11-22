@@ -17,6 +17,7 @@ mirror_git() {
 }
 
 bash "$maint/mirror-snapshot.sh" "$first_tag" "$snapshot"
+test -x "$snapshot/bin/leanfran"
 bash "$maint/mirror-push.sh" "$first_tag" "$snapshot" "$mirror"
 first_commit=$(mirror_git rev-parse refs/heads/main)
 test "$first_commit" = "$(mirror_git rev-parse "refs/tags/$first_tag")"
@@ -68,6 +69,7 @@ cat > composer.json <<EOF
 }
 EOF
 composer install --no-interaction
+vendor/bin/leanfran --help | grep -F 'leanfran sync'
 result=$(php -r 'require "vendor/autoload.php"; echo Conao3\Leanfran\Runtime\lean_nat_add(19, 23);')
 test "$result" = 42
 printf '(e) Composer path install: lean_nat_add(19, 23) = %s\n' "$result"

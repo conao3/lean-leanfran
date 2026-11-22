@@ -23,7 +23,7 @@ def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Ar
   return out
 
 def version : String := "0.6.0"
-def generatorVersion : String := "5"
+def generatorVersion : String := "6"
 
 def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
 
@@ -34,10 +34,12 @@ leanfran-php module generate
   --output-dir <path>         Generate public PSR-4 classes in this directory
   --php-namespace <NS>        Namespace of the public classes (required with --output-dir)
   --facade <Name>             Public facade class (default: last component of the Lean module)
+  --facade-kind class|trait   Public facade declaration (default: class)
   --type-module <N=NS>        Refer to public types generated in another PHP namespace (repeatable)
   --class <NS\\Name>           Generated class (default: Leanfran\\Generated\\Lean<Module>)
   --main <Name>               Generate a CLI entry point
-  --batch <file>              JSON array of jobs with module, output_file, roots?, namespace?, class?, main?
+  --batch <file>              JSON array of jobs with module and output_file or output_dir
+                              Public jobs accept php_namespace, facade, facade_kind and type_modules
   --import <Name> ...         More modules to import
   --search-path <dir> ...     Extra .olean search directories
   --output-file <path>        Output path (default: stdout)
@@ -56,6 +58,7 @@ structure JobOpts where
   outputDir : Option System.FilePath := none
   phpNamespace : Option String := none
   facade : Option String := none
+  facadeKind : Option FacadeKind := none
   typeModules : Array (Name × String) := #[]
   internalOnly : Bool := false
 
@@ -79,7 +82,7 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
       | _ => { o with searchPath := o.searchPath ++ vs.map System.FilePath.mk }
     return ← parseOpts (rest.drop vs.size) o
   unless #["--module-name", "--namespace", "--class", "--main", "--batch", "--output-file",
-      "--output-dir", "--php-namespace", "--facade", "--type-module", "--output"].contains flag do
+      "--output-dir", "--php-namespace", "--facade", "--facade-kind", "--type-module", "--output"].contains flag do
     throw s!"unknown parameter: {flag}"
   let v :: rest := rest | throw s!"expected a value for {flag}"
   unless isValue v do throw s!"expected a value for {flag}"
@@ -93,6 +96,7 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
   | "--output-dir" => parseOpts rest { o with outputDir := some v }
   | "--php-namespace" => parseOpts rest { o with phpNamespace := some v }
   | "--facade" => parseOpts rest { o with facade := some v }
+  | "--facade-kind" => parseOpts rest { o with facadeKind := some (← FacadeKind.parse v) }
   | "--type-module" =>
     match v.splitOn "=" with
     | [n, ns] =>
@@ -199,7 +203,9 @@ def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : A
   unless phpIdentifier facadeBase do
     return .error (252, s!"invalid PHP facade class name: {facadeBase}")
   let facade := phpIdent facadeBase
-  let internalName := "Lean" ++ "_".intercalate (job.module.components.map fun n => sanitize (componentString n))
+  let kind := job.facadeKind.getD .cls
+  let internalName := "Lean" ++ (if kind == .trait then (ns.splitOn "\\").getLast!
+    else "_".intercalate (job.module.components.map fun n => sanitize (componentString n)))
   let cls : PhpClass := { ns := ns ++ "\\Internal", name := internalName }
   let internal := "\\" ++ cls.ns ++ "\\" ++ cls.name
   let typeModules := job.typeModules.qsort (fun a b => a.1.components.length > b.1.components.length)
@@ -222,7 +228,7 @@ def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : A
   let results := String.join (pub.functions.toList.map (emitResult render))
   let methods := "\n".intercalate (pub.functions.toList.map (emitPublicFn render))
   let facadeFile := (facade ++ ".php", publicHeader job.module ns ++
-    s!"final class {facade}\n\{\n{methods}}\n")
+    s!"{kind.declaration} {facade}\n\{\n{methods}}\n")
   let internalFile := ("Internal/" ++ cls.name ++ ".php", header job.module cls true ++ out.items ++ descs ++ constructors ++ results ++ "}\n")
   let files := typeFiles ++ #[facadeFile, internalFile]
   writePublic dir files
@@ -239,8 +245,8 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
     match ← runPublic env job dir roots with
     | .ok summary => return (summary, 0)
     | .error (code, e) => return ← failed code e
-  if job.phpNamespace.isSome || job.facade.isSome || !job.typeModules.isEmpty then
-    return ← failed 252 "--php-namespace, --facade and --type-module require --output-dir"
+  if job.phpNamespace.isSome || job.facade.isSome || job.facadeKind.isSome || !job.typeModules.isEmpty then
+    return ← failed 252 "--php-namespace, --facade, --facade-kind and --type-module require --output-dir"
   let cls ← match jobClass job with
     | .ok cls => pure cls
     | .error e => return ← failed 252 e
@@ -290,24 +296,35 @@ def parseJobs (j : Json) : Except String (Array Job) := do
     let namespace? := (← optionalField (α := String) e "namespace").map String.toName
     let class? ← optionalField (α := String) e "class"
     let main? := (← optionalField (α := String) e "main").map String.toName
-    let outputFile : Option System.FilePath := some (← e.getObjValAs? String "output_file")
-    return { module, roots, namespace?, class?, main?, outputFile }
+    let outputFile := (← optionalField (α := String) e "output_file").map System.FilePath.mk
+    let outputDir := (← optionalField (α := String) e "output_dir").map System.FilePath.mk
+    unless outputFile.isSome != outputDir.isSome do
+      throw s!"{module}: expected exactly one of output_file or output_dir"
+    let phpNamespace ← optionalField (α := String) e "php_namespace"
+    let facade ← optionalField (α := String) e "facade"
+    let facadeKind ← (← optionalField (α := String) e "facade_kind").mapM FacadeKind.parse
+    let foreign := (← optionalField (α := Array Json) e "type_modules").getD #[]
+    let typeModules ← foreign.mapM fun item => do
+      let ns := (← item.getObjValAs? String "namespace").toName
+      let phpNs ← item.getObjValAs? String "php_namespace"
+      pure (ns, phpNs)
+    return { module, roots, namespace?, class?, main?, outputFile, outputDir, phpNamespace, facade, facadeKind, typeModules }
 
-def importAll (o : Opts) (mods : Array Name) : IO (Except Name Environment) := do
+def importAll (o : Opts) (mods : Array Name) (publicOutput : Bool) : IO (Except Name Environment) := do
   initSearchPath (← findSysroot) o.searchPath.toList
   let sp ← searchPathRef.get
   for m in mods do
     if (← sp.findWithExt "olean" m).isNone then return .error m
   .ok <$> importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024)
-    (loadExts := o.outputDir.isSome)
+    (loadExts := publicOutput)
 
-def moduleGenerate (o : Opts) : IO UInt32 := do
+unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
   let jobs ← match o.batch with
     | some f =>
       if o.moduleName.isSome || !o.roots.isEmpty || o.namespace?.isSome || o.class?.isSome ||
           o.main?.isSome || o.outputFile.isSome || o.outputDir.isSome || o.phpNamespace.isSome ||
-          o.facade.isSome || !o.typeModules.isEmpty then
-        return ← fail 252 "put module, roots, namespace, class, main and output_file in the batch jobs"
+          o.facade.isSome || o.facadeKind.isSome || !o.typeModules.isEmpty then
+        return ← fail 252 "put module and output options in the batch jobs"
       match Json.parse (← IO.FS.readFile f) >>= parseJobs with
       | .ok js => pure js
       | .error e => return ← fail 252 s!"--batch: {e}"
@@ -315,7 +332,9 @@ def moduleGenerate (o : Opts) : IO UInt32 := do
       let some module := o.moduleName | return ← fail 252 "--module-name is required"
       pure #[{ o.toJobOpts with module : Job }]
   let mods := (jobs.map (·.module) ++ o.imports).foldl (fun a m => if a.contains m then a else a.push m) #[]
-  let env ← match ← importAll o mods with
+  let publicOutput := jobs.any (·.outputDir.isSome)
+  if publicOutput then enableInitializersExecution
+  let env ← match ← importAll o mods publicOutput with
     | .ok env => pure env
     | .error m => return ← fail 252 s!"module not found: {m}"
   let mut code : UInt32 := 0
@@ -338,7 +357,6 @@ unsafe def main (args : List String) : IO UInt32 := do
     match parseOpts rest {} with
     | .error e => fail 252 e
     | .ok o =>
-      if o.outputDir.isSome then enableInitializersExecution
       try moduleGenerate o
       catch e => fail 255 (toString e)
   | _ => fail 252 "unknown command (see leanfran-php help)"

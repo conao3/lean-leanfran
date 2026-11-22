@@ -27,6 +27,7 @@ return [
             $backend . '/src',
             ...$publicFixtures,
             $backend . '/tests/Public',
+            $backend . '/tests/Embed',
             ...$publicSample,
             $sample . '/main.php',
         ],

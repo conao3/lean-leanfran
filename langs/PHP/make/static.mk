@@ -2,7 +2,7 @@ CHECK_TARGETS += test-static test-static-docs
 
 .PHONY: test-static test-static-docs
 
-phpstan-public = phpstan analyse --no-progress --autoload-file="$$(dirname "$$(readlink -f "$$(command -v phpunit)")")/vendor/autoload.php"
+phpstan-public = phpstan analyse --no-progress --memory-limit=512M --autoload-file="$$(dirname "$$(readlink -f "$$(command -v phpunit)")")/vendor/autoload.php"
 
 test-static: public-fixtures
 	$(show-php-version)

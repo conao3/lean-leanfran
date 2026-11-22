@@ -4,6 +4,20 @@ open Lean Meta
 
 namespace LeanPhp
 
+inductive FacadeKind where
+  | cls | trait
+  deriving BEq
+
+def FacadeKind.parse (value : String) : Except String FacadeKind :=
+  match value with
+  | "class" => .ok .cls
+  | "trait" => .ok .trait
+  | _ => .error s!"facade kind must be class or trait: {value}"
+
+def FacadeKind.declaration : FacadeKind → String
+  | .cls => "final class"
+  | .trait => "trait"
+
 structure Skipped where
   name : Name
   reason : String

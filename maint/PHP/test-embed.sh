@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_template=tests/fixtures/embed
+out=$(realpath -m test-out/embed)
+project="$out/project"
+compiler=$(realpath .lake/build/bin/leanfran-php)
+php=$(command -v php)
+temp_path="$out/php-only"
+
+rm -rf -- "$out"
+mkdir -p -- "$project" "$out/saved" "$temp_path"
+cp -R -- "$project_template/." "$project/"
+ln -s -- "$php" "$temp_path/php"
+
+cd "$project"
+export COMPOSER_DISABLE_NETWORK=1
+composer install --no-interaction
+
+assert_status() {
+    local expected=$1 name=$2 actual=0
+    shift 2
+    "$@" > "$out/$name.log" 2>&1 || actual=$?
+    cat "$out/$name.log"
+    printf '%s exit=%s\n' "$name" "$actual"
+    test "$actual" -eq "$expected"
+}
+
+php_status() {
+    PATH="$temp_path" vendor/bin/leanfran status "$@"
+}
+
+compare_generated() {
+    local block
+    for block in Pricing Basket Receipt; do
+        diff -r "$out/saved/$block" "src/$block"
+    done
+}
+
+assert_status 0 sync-first env LEANFRAN_PHP_CLI=not-the-compiler \
+    vendor/bin/leanfran sync --package "$project" --leanfran-php "$compiler"
+cp -R src/{Basket,Pricing,Receipt} "$out/saved/"
+assert_status 0 sync-second env LEANFRAN_PHP_CLI="$compiler" composer lean:sync
+compare_generated
+printf 'Repeated sync: PHP and manifests are byte-identical\n'
+
+assert_status 0 pricing php -r 'require "vendor/autoload.php"; echo App\Pricing::width(new App\Pricing\Range(lo: 2, hi: 5)), "\n";'
+grep -Fxq '3' "$out/pricing.log"
+
+php run.php > "$out/php"
+{
+    cat .leanfran/workspace/LeanPhpEmbed.lean
+    printf '\n'
+    for name in Pricing Basket Receipt; do
+        php -r 'echo "open LeanPhpEmbed.B", bin2hex("App\\" . $argv[1]), "\n";' "$name"
+    done
+    cat <<'LEAN'
+
+def main : IO Unit := do
+  let r : Range := ⟨2, 5, by decide⟩
+  IO.println (width r)
+  IO.println (twiceWidth r)
+  IO.println (sameRange r).lo
+  IO.println (receiptWidth r)
+LEAN
+} > .leanfran/workspace/Oracle.lean
+cat >> .leanfran/workspace/lakefile.toml <<'TOML'
+
+[[lean_exe]]
+name = "oracle-embed"
+root = "Oracle"
+TOML
+(
+    cd .leanfran/workspace
+    lake build oracle-embed
+    .lake/build/bin/oracle-embed
+) > "$out/oracle-build" 2>&1 || { cat "$out/oracle-build"; exit 1; }
+tail -n 4 "$out/oracle-build" > "$out/oracle"
+diff -u "$out/oracle" "$out/php"
+printf 'C oracle and PHP (width, twiceWidth, sameRange.lo, receiptWidth)\n'
+cat "$out/php"
+
+assert_status 0 fresh php_status --package "$project"
+grep -Fxq 'leanfran: all blocks up to date' "$out/fresh.log"
+runtime_toolchain=$(php -r 'require "vendor/autoload.php"; echo Conao3\Leanfran\Embed\Project::TOOLCHAIN;')
+test "$runtime_toolchain" = "$(cat "$OLDPWD/../../lean-toolchain")"
+
+cp composer.json "$out/fixture-composer.json"
+php -r '$file = "composer.json"; $config = json_decode(file_get_contents($file)); $config->extra->leanfran->paths = []; file_put_contents($file, json_encode($config));'
+assert_status 1 explicit-scan-paths php_status
+test "$(grep -c ': removed' "$out/explicit-scan-paths.log")" -eq 3
+cp "$out/fixture-composer.json" composer.json
+
+sed -i 's/width r ≤ r.hi/width r ≤ r.lo/' src/Pricing.php
+assert_status 1 bad-proof env LEANFRAN_PHP_CLI="$compiler" vendor/bin/leanfran sync
+grep -E '^src/Pricing\.php:18:21: error: \(lean block App\\Pricing, Lean 9:16\).*omega could not prove' "$out/bad-proof.log"
+compare_generated
+assert_status 0 pricing-after-failed-proof php -r 'require "vendor/autoload.php"; echo App\Pricing::width(new App\Pricing\Range(lo: 2, hi: 5)), "\n";'
+diff -u "$out/pricing.log" "$out/pricing-after-failed-proof.log"
+cp "$OLDPWD/$project_template/src/Pricing.php" src/Pricing.php
+
+sed -i 's/offset (width r + width r)/)/' src/Basket.php
+assert_status 1 bad-syntax env LEANFRAN_PHP_CLI="$compiler" vendor/bin/leanfran sync
+grep -E '^src/Basket\.php:10:40: error: \(lean block App\\Basket, Lean 1:35\).*unexpected token' "$out/bad-syntax.log"
+compare_generated
+php run.php > "$out/after-syntax"
+diff -u "$out/php" "$out/after-syntax"
+cp "$OLDPWD/$project_template/src/Basket.php" src/Basket.php
+
+sed -i 's/twiceWidth/twiceWidtH/' src/Receipt.php
+assert_status 1 source-change php_status
+grep -Fxq 'App\Receipt: stale' "$out/source-change.log"
+test "$(wc -l < "$out/source-change.log")" -eq 1
+cp "$OLDPWD/$project_template/src/Receipt.php" src/Receipt.php
+
+sed -i "s/'Support'/'Init', 'Support'/" src/Basket.php
+assert_status 1 import-change php_status
+grep -Fxq 'App\Basket: stale' "$out/import-change.log"
+grep -Fxq 'App\Receipt: stale' "$out/import-change.log"
+test "$(wc -l < "$out/import-change.log")" -eq 2
+cp "$OLDPWD/$project_template/src/Basket.php" src/Basket.php
+
+sed -i 's/r.hi - r.lo/r.hi + r.lo/' src/Pricing.php
+assert_status 1 dependency-change php_status
+for block in Basket Pricing Receipt; do
+    grep -Fxq "App\\$block: stale" "$out/dependency-change.log"
+done
+test "$(wc -l < "$out/dependency-change.log")" -eq 3
+cp "$OLDPWD/$project_template/src/Pricing.php" src/Pricing.php
+
+sed -E "s/GENERATOR_VERSION = '[^']+'/GENERATOR_VERSION = 'incompatible'/" \
+    vendor/conao3/leanfran/src/Lean.php > "$out/incompatible.php"
+assert_status 1 generator-change env PATH="$temp_path" \
+    "$php" -d auto_prepend_file="$out/incompatible.php" vendor/bin/leanfran status
+test "$(grep -c ': stale$' "$out/generator-change.log")" -eq 3
+assert_status 1 generator-mismatch "$php" -d auto_prepend_file="$out/incompatible.php" \
+    vendor/bin/leanfran sync --leanfran-php "$compiler"
+grep -Fq 'this package expects incompatible' "$out/generator-mismatch.log"
+
+printf 'leanprover/lean4:v0.0.0\n' > lean-toolchain
+assert_status 1 toolchain-change php_status
+test "$(grep -c ': stale$' "$out/toolchain-change.log")" -eq 3
+assert_status 1 toolchain-mismatch vendor/bin/leanfran sync --leanfran-php "$compiler"
+grep -Fq 'lean must match lean-toolchain (0.0.0)' "$out/toolchain-mismatch.log"
+rm lean-toolchain
+
+rm src/Pricing/Range.php
+assert_status 1 missing-file php_status
+grep -Fxq 'App\Pricing: missing generated file (src/Pricing/Range.php)' "$out/missing-file.log"
+cp "$out/saved/Pricing/Range.php" src/Pricing/Range.php
+
+mv src/Receipt.php "$out/Receipt.php"
+assert_status 1 removed-block php_status
+grep -Fxq 'App\Receipt: removed (src/Receipt)' "$out/removed-block.log"
+rm src/Receipt/leanfran.json
+assert_status 1 removed-without-manifest php_status
+grep -Fxq 'App\Receipt: removed (src/Receipt)' "$out/removed-without-manifest.log"
+cp "$out/saved/Receipt/leanfran.json" src/Receipt/leanfran.json
+printf 'owned by the project\n' > src/Receipt/keep.txt
+assert_status 1 unmanaged-output vendor/bin/leanfran sync --leanfran-php "$compiler"
+grep -Fq 'non-generated entry in output directory' "$out/unmanaged-output.log"
+test -f src/Receipt/keep.txt
+rm src/Receipt/keep.txt
+compare_generated
+assert_status 0 check env PATH="$(dirname "$compiler"):$PATH" vendor/bin/leanfran check
+test ! -e src/Receipt
+assert_status 0 after-cleanup php_status
+
+sed -i 's/Pricing::class/Unknown::class/' src/Basket.php
+assert_status 1 unknown-use php_status
+grep -Fq 'Lean block App\Basket uses unknown block App\Unknown' "$out/unknown-use.log"

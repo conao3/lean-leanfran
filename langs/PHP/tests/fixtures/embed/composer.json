@@ -1,0 +1,21 @@
+{
+    "name": "leanfran/embed-fixture",
+    "require": {
+        "conao3/leanfran": "*"
+    },
+    "repositories": [
+        {"type": "path", "url": "../../..", "options": {"symlink": true, "versions": {"conao3/leanfran": "0.6.0"}}},
+        {"packagist.org": false}
+    ],
+    "autoload": {
+        "psr-4": {"App\\": ["src/", "optional/"]}
+    },
+    "extra": {
+        "leanfran": {
+            "require": [{"name": "support", "path": "support"}]
+        }
+    },
+    "scripts": {
+        "lean:sync": "leanfran sync"
+    }
+}

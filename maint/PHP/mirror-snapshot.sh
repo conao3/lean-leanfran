@@ -13,10 +13,7 @@ mkdir -p -- "$(dirname "$output")"
 snapshot=$(mktemp -d "$(dirname "$output")/.leanfran-php.XXXXXXXX")
 trap 'rm -rf -- "$snapshot"' EXIT
 
-cp -R -- langs/PHP/composer.json langs/PHP/src LICENSE "$snapshot/"
-if [[ -d langs/PHP/bin ]]; then
-    cp -R -- langs/PHP/bin "$snapshot/"
-fi
+cp -R -- langs/PHP/composer.json langs/PHP/src langs/PHP/bin LICENSE "$snapshot/"
 cat > "$snapshot/README.md" <<'EOF'
 This repository is a read-only mirror of [`langs/PHP/`](https://github.com/conao3/lean-leanfran/tree/master/langs/PHP) in `conao3/lean-leanfran`.
 Please open issues and pull requests in the [source repository](https://github.com/conao3/lean-leanfran).
