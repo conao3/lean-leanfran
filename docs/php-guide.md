@@ -84,6 +84,8 @@ Call `Range::jsonSchema()` to get a schema array for the Lean wire format. Pass 
 
 The generator follows the TypeScript backend. Recursive definitions use `$defs` in draft 2020-12 and `definitions` in the other targets. Simple bounds become schema keywords such as `maximum` and `minLength`. The generated schema describes the wire shape and expressible bounds. Constructor validation checks relational predicates such as `lo ≤ hi`. Float schemas use `type: number`. The three nonfinite strings are supported by the JSON codec.
 
+The `openapi-3.0` target preserves the TypeScript converter’s tuple and recursion formats. It uses an array of schemas for tuple `items` and local `definitions` for recursion. OpenAPI 3.0 Schema Objects require an object for `items` and specify a fixed set of supported keywords. [OpenAPI 3.0.4 Schema Object](https://spec.openapis.org/oas/v3.0.4.html#schema-object)
+
 ### Valinor
 
 Enable Packagist in your application and run `composer require cuyz/valinor:^2.8` to map data directly into the generated constructor signatures. The configured mapper turns a `ValidationError` into a `MappingError` message. Iterate `$error->messages()` to read the mapper's input path and the text of the Lean issue.
