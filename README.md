@@ -20,6 +20,7 @@
 </p>
 
 <p align="center">
+  <a href="#in-30-seconds">In 30 seconds</a> ·
   <a href="#get-started">Get started</a> ·
   <a href="#lean-at-the-core">Languages</a> ·
   <a href="#what-you-can-build">Features</a> ·
@@ -31,15 +32,47 @@
 
 leanfran brings Lean 4 to your programming language. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
 
-## Lean at the core
+## In 30 seconds
 
-```lean
+Put a Lean function and its proof in a Python file:
+
+```python
+# src/myapp/arith.py
+from leanfran import lean
+
+arith = lean("arith", r"""
 def double (n : Nat) : Nat := n + n
 
 theorem double_eq (n : Nat) : double n = 2 * n := by
-  unfold double
-  omega
+  unfold double; omega
+""")
 ```
+
+Generate the module and call it as Python:
+
+```console
+$ uv add leanfran
+$ uv run leanfran sync --package src/myapp
+leanfran: 1 blocks of myapp checked and generated
+$ uv run python -c 'from myapp.arith import arith; print(arith.double(21))'
+42
+```
+
+Change the theorem to `double n = 3 * n` and generation stops at the proof:
+
+```console
+$ uv run leanfran sync --package src/myapp
+leanfran: /tmp/myapp/src/myapp/arith.py:7: error: (lean block arith, Lean 5:17) omega could not prove the goal:
+a possible counterexample may satisfy the constraints
+  a ≥ 1
+where
+ a := ↑n
+leanfran: lake build failed
+```
+
+Every supported language embeds Lean the same way (see the table below). The output above is from a `uv init --lib` project in `/tmp/myapp` with leanfran 0.6.0 from PyPI, the compiler from `nix profile install 'github:conao3/lean-leanfran#python'`, and Lean 4.35.0 on `PATH`.
+
+## Lean at the core
 
 leanfran compiles Lean's compiler IR into source code for the selected language. You can generate code from a Lean project or embed Lean blocks directly in host-language source files. Proofs are checked by Lean during generation and erased from the executable code.
 
