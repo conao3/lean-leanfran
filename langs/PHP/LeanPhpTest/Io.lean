@@ -215,6 +215,11 @@ def run (args : List String) : IO UInt32 := do
   | ["processes"] => processes
   | ["large-process"] => largeProcess
   | ["tasks"] => tasks
+  | ["pending-promise"] =>
+    let promise ← IO.Promise.new (α := Nat)
+    let result ← IO.wait promise.result?
+    promise.resolve 1
+    IO.println result
   | ["arrays"] => arrays 42
   | ["uncaught"] => discard (IO.FS.Handle.mk "missing.txt" .read)
   | ["exit"] => IO.Process.exit 7

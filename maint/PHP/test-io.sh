@@ -76,3 +76,16 @@ run_fixture uncaught 1
 run_fixture exit 7
 run_fixture force-exit 8
 echo "io: $fixtures_matched fixtures matched"
+
+status=0
+timeout --kill-after=2s 25s php -d error_reporting=E_ALL -d display_errors=1 \
+    -d "auto_prepend_file=$autoload" "$fixture_root/Io.php" pending-promise \
+    < "$fixture_root/stdin" > "$fixture_root/pending.out" 2> "$fixture_root/pending.err" || status=$?
+if [[ $status != 1 ]]; then
+    echo "pending-promise: PHP exited $status, expected 1" >&2
+    exit 1
+fi
+diff -u /dev/null "$fixture_root/pending.out"
+printf 'INTERNAL PANIC: Cannot wait on an unresolved promise in synchronous execution\n' |
+    diff -u - "$fixture_root/pending.err"
+echo 'io: pending-promise reports an internal panic and exits 1 (PHP only)'

@@ -68,6 +68,12 @@ structure Bounds where
   let pushed := s.push '!'
   s!"string {s} {appended} {appended.length}/{appended.utf8ByteSize} {pushed}"
 
+@[noinline] def utf8Line (s : String) (byte : Nat) : String :=
+  let start : String.Pos.Raw := ⟨byte⟩
+  let next := start.next s
+  let middle : String.Pos.Raw := ⟨byte + 1⟩
+  s!"utf8 {s.length}/{s.utf8ByteSize} {start.byteIdx}:{start.get s} {next.byteIdx} {(next.prev s).byteIdx} {repr (middle.get? s)}"
+
 @[noinline] def thunkLine (n : Nat) : Nat :=
   let t := Thunk.mk fun _ => n + 7
   t.get + t.get
@@ -75,6 +81,12 @@ structure Bounds where
 @[noinline] def natLine (big : Nat) : String :=
   let limit := big - 2
   s!"nat {big + 5} {big * 2} {limit} {big % 10} {limit + 1}"
+
+@[noinline] def integerLine (limit : Nat) (wide : UInt64) (a b : Int) (zeroDivisor : Nat) : String :=
+  let nat := s!"nat {limit - 1} {limit} {limit + 1} {limit / zeroDivisor} {limit % zeroDivisor}"
+  let uint := s!"uint64 {wide.toNat} {(wide + 1).toNat} {(wide / 3).toNat}"
+  let int := s!"int {a / b} {a % b} {a / Int.ofNat zeroDivisor} {a % Int.ofNat zeroDivisor}"
+  s!"integers {nat}; {uint}; {int}"
 
 @[noinline] def libmLine (zero large : Float) (single : Float32) : String :=
   s!"libm {zero.sin} {single.sin} {large.log2} {large.cbrt}"
@@ -88,10 +100,12 @@ structure Bounds where
   | [text] => IO.println s!"argument {text} (seed {seedValue})"
   | _ => pure ()
   IO.println (natLine 9223372036854775809)
+  IO.println (integerLine 9223372036854775807 0xffffffffffffffff (-7) 3 0)
   IO.println (libmLine 0.0 8.0 0.0)
   IO.println s!"case {shapeValue .empty} {shapeValue (retag (.point 2 5))} {shapeValue (retag (.named "猫"))} {shapeValue (retag (.pixel 9))} {boundsValue ⟨1, 2, 4, 8⟩}"
   IO.println (arrayLine #[3] 9)
   IO.println (stringLine "é" "🌱$name")
+  IO.println (utf8Line "é🌱" 2)
   let partiallyApplied := applyOne (addThree 1) 2
   let oversaturated := applyTwo (selectValue (addThree 4 5) (addThree 7 8)) false 6
   IO.println s!"closures {applyOne partiallyApplied 3} {applyTwo (chooseClosure 7) false 6} {oversaturated}"
