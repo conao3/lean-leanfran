@@ -35,6 +35,8 @@ PHP applications install `conao3/leanfran` from a Composer path repository point
 
 ## Releases
 
+Run one release at a time. Queue each release as a dedicated task. Start the Release and Publish workflows only from that task, including any restart of Publish with the same tag.
+
 The GitHub Actions Release workflow selects a shared version, updates it through `maint/set-version.sh`, verifies all backends including PHP, and creates `vX.Y.Z`. Publish distributes that tag to crates.io, PyPI, npm, Clojars, and Packagist. A retry skips versions already published. The PHP compiler carries the shared release version in `Main.lean`. Generator versions track emitted-code compatibility separately from release versions.
 
 The PHP Publish job checks the shared tag against `Main.lean`, pushes the snapshot and the same tag to the mirror, then requests and verifies the Packagist update. For initial registration and the required environment secrets, see the [PHP publishing guide](docs/php-development.md#publishing).
