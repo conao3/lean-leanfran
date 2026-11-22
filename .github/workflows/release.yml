@@ -19,7 +19,7 @@ concurrency: release
 
 jobs:
   version:
-    name: Write the next version into the four backends
+    name: Write the next version into the five backends
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        dir: [Rust, Python, TypeScript, Clojure]
+        dir: [Rust, Python, TypeScript, Clojure, PHP]
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.5

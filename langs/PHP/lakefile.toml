@@ -1,0 +1,29 @@
+name = "leanfran-php"
+defaultTargets = ["leanfran-php"]
+
+[[lean_lib]]
+name = "LeanPhp"
+
+[[lean_exe]]
+name = "leanfran-php"
+root = "Main"
+supportInterpreter = true
+
+[[lean_lib]]
+name = "LeanPhpTest"
+
+[[lean_exe]]
+name = "oracle"
+root = "LeanPhpTest.OracleMain"
+
+[[lean_exe]]
+name = "oracle-control-depth"
+root = "LeanPhpTest.ControlDepthMain"
+
+[[lean_exe]]
+name = "oracle-fuzz"
+root = "LeanPhpTest.FuzzMain"
+
+[[lean_exe]]
+name = "oracle-io"
+root = "LeanPhpTest.IoMain"

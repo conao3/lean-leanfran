@@ -8,3 +8,4 @@ cd "$(dirname "$0")/.."
 (cd langs/Python && nix develop ../..#python -c ../../maint/Python/bump-version.sh "$v")
 (cd langs/TypeScript && nix develop ../..#typescript -c ../../maint/TypeScript/bump-version.sh "$v")
 (cd langs/Clojure && nix develop ../..#clojure -c clojure -T:build set-version :version "\"$v\"")
+(cd langs/PHP && nix develop ../..#php -c ../../maint/PHP/bump-version.sh "$v")

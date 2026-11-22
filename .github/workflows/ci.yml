@@ -25,9 +25,13 @@ jobs:
             build: true
           - dir: Clojure
             build: true
+          - dir: PHP
+            build: true
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v31.11.5
       - run: make check BACKENDS=${{ matrix.dir }}
       - if: matrix.build
-        run: nix build .#$(echo "${{ matrix.dir }}" | tr A-Z a-z)
+        run: nix build ".#${BACKEND,,}"
+        env:
+          BACKEND: ${{ matrix.dir }}

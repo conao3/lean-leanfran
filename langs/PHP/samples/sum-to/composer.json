@@ -1,0 +1,26 @@
+{
+    "name": "leanfran/sample-sum-to",
+    "require": {
+        "conao3/leanfran": "dev-main"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../..",
+            "options": {
+                "versions": {
+                    "conao3/leanfran": "dev-main"
+                },
+                "reference": "config"
+            }
+        },
+        {
+            "packagist.org": false
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Leanfran\\Generated\\": "src/_lean/"
+        }
+    }
+}

@@ -1,5 +1,5 @@
 {
-  description = "leanfran: Lean 4 backends for Rust, Python, TypeScript and Clojure";
+  description = "leanfran: Lean 4 backends for Rust, Python, TypeScript, Clojure and PHP";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -125,6 +125,14 @@
             pkgs.clj-kondo
             pkgs.cljstyle
           ];
+          phpTools = php: [
+            php
+            php.packages.composer
+            (pkgs.phpstan.override { inherit php; })
+            (pkgs.phpunit.override { inherit php; })
+            pkgs.mago
+            pkgs.gcc
+          ];
           pythonEnv = {
             UV_PYTHON_DOWNLOADS = "never";
             UV_PYTHON = "${pkgs.python314}/bin/python3";
@@ -136,6 +144,7 @@
             python = mkCompiler "Python" "LeanPython" "leanfran-python";
             typescript = mkCompiler "TypeScript" "LeanTs" "leanfran-typescript";
             clojure = mkCompiler "Clojure" "LeanClj" "leanfran";
+            php = mkCompiler "PHP" "LeanPhp" "leanfran-php";
             cargo-leanfran = pkgs.rustPlatform.buildRustPackage {
               pname = "cargo-leanfran";
               inherit version;
@@ -171,7 +180,9 @@
           };
           devShells = {
             default = pkgs.mkShell {
-              packages = pkgs.lib.unique (common ++ rustTools ++ pythonTools ++ typescriptTools ++ clojureTools);
+              packages = pkgs.lib.unique (
+                common ++ rustTools ++ pythonTools ++ typescriptTools ++ clojureTools ++ phpTools pkgs.php84
+              );
               env = pythonEnv;
             };
             rust = pkgs.mkShell { packages = common ++ rustTools; };
@@ -181,6 +192,8 @@
             };
             typescript = pkgs.mkShell { packages = common ++ typescriptTools; };
             clojure = pkgs.mkShell { packages = common ++ clojureTools; };
+            php = pkgs.mkShell { packages = common ++ phpTools pkgs.php84; };
+            php85 = pkgs.mkShell { packages = common ++ phpTools pkgs.php85; };
           };
           treefmt = {
             projectRootFile = "flake.nix";

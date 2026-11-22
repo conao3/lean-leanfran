@@ -90,6 +90,7 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | Python     | [Python quick start](langs/Python/README.md)         | [leanfran on PyPI](https://pypi.org/project/leanfran/)                                | `lean(...)`, pydantic models, Python modules   |
 | TypeScript | [TypeScript quick start](langs/TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
+| PHP        | [PHP quick start](langs/PHP/README.md)               | Not yet published                                                                     | Generated classes and Composer runtime        |
 
 ## What you can build
 
@@ -107,7 +108,7 @@ Choose a language above and install its host package and compiler. Lean 4.35.0 i
 nix profile install 'github:conao3/lean-leanfran#python'
 ```
 
-Use `#rust`, `#typescript` or `#clojure` for the other targets. The Rust package also includes the Cargo CLI and Aeneas verification tools. Follow the language quick start for dependencies, project setup and generation commands.
+The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime through a Composer path repository. Follow the language quick start for dependencies, project setup, and generation commands.
 
 ## Documentation
 
@@ -117,6 +118,7 @@ Use `#rust`, `#typescript` or `#clojure` for the other targets. The Rust package
 | Python     | [Setup and first block](langs/Python/README.md)     | [Models, verification and CLI](docs/python-guide.md)      | [Python samples](langs/Python/samples/README.md)         |
 | TypeScript | [Setup and first block](langs/TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](langs/TypeScript/samples/README.md) |
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
+| PHP        | [Setup and first module](langs/PHP/README.md)      | [Runtime values, IO and CLI](docs/php-guide.md)            | [PHP samples](langs/PHP/samples/README.md)               |
 
 ## Contribution
 
@@ -131,7 +133,7 @@ Read docs/add-language.md and add support for <LANGUAGE> to leanfran.
 
 ### Development
 
-The repository has one Nix environment and Lean toolchain, with language-specific source and packages in `langs/Rust/`, `langs/Python/`, `langs/TypeScript/` and `langs/Clojure/`.
+The repository has a shared Nix environment and Lean toolchain, with language-specific source and packages under `langs/`. The PHP development shells are `.#php` for PHP 8.4 and `.#php85` for PHP 8.5.
 
 ```sh
 nix develop

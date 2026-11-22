@@ -1,0 +1,5 @@
+name = "sum-to"
+defaultTargets = ["SumTo"]
+
+[[lean_lib]]
+name = "SumTo"
