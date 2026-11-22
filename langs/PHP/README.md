@@ -4,16 +4,16 @@
 
 ## Install
 
-From an empty working directory, set `LEANFRAN_SOURCE` to a local checkout of the PHP backend or the Git URL of a repository whose default branch contains it. Clone the source, build the compiler, and enter the PHP development shell.
+Clone leanfran to build the compiler and access the sample files. Enter the Nix development shell for PHP, Composer, and Lean.
 
 ```sh
-git clone "$LEANFRAN_SOURCE" lean-leanfran
+git clone https://github.com/conao3/lean-leanfran.git
 cd lean-leanfran
 nix build .#php
 nix develop .#php -c sh
 ```
 
-Create an application next to the clone. The Composer path repository points to the runtime in that clone.
+Create an application next to the clone and install [conao3/leanfran from Packagist](https://packagist.org/packages/conao3/leanfran).
 
 ```sh
 cd ..
@@ -22,35 +22,20 @@ cd pricing-php
 mkdir src
 ```
 
-Save this as `composer.json`.
+Save this as `composer.json` so Composer can autoload the application classes.
 
 ```json
 {
-    "name": "example/pricing-php",
-    "require": {
-        "conao3/leanfran": "dev-main"
-    },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../lean-leanfran/langs/PHP",
-            "options": {
-                "versions": {
-                    "conao3/leanfran": "dev-main"
-                },
-                "reference": "config"
-            }
-        },
-        {
-            "packagist.org": false
-        }
-    ],
     "autoload": {
         "psr-4": {
             "App\\": "src/"
         }
     }
 }
+```
+
+```sh
+composer require conao3/leanfran
 ```
 
 ## First embedded block
@@ -99,10 +84,9 @@ require __DIR__ . '/vendor/autoload.php';
 echo Pricing::width(new Range(lo: 2, hi: 5)), PHP_EOL;
 ```
 
-Install the runtime, check the Lean block, generate the PHP trait and types, and run the application.
+Check the Lean block, generate the PHP trait and types, and run the application.
 
 ```sh
-composer install --no-interaction
 vendor/bin/leanfran sync --leanfran-php ../lean-leanfran/result/bin/leanfran-php
 php main.php
 ```
@@ -150,12 +134,11 @@ final class Calc
 }
 ```
 
-Copy the proofs into `lean/Proofs/` next to `composer.json`. Enable Packagist to install the PHP parser as a development dependency. Composer still installs the leanfran runtime from the path repository above.
+Copy the proofs into `lean/Proofs/` next to `composer.json`. Install the PHP parser as a development dependency.
 
 ```sh
 mkdir -p lean/Proofs
 cp ../lean-leanfran/langs/PHP/samples/verified-clamp/lean/Proofs/Calc.lean lean/Proofs/
-composer config --unset repositories.packagist.org
 composer require --dev --no-interaction 'nikic/php-parser:^5.9'
 vendor/bin/leanfran check --leanfran-php ../lean-leanfran/result/bin/leanfran-php --require proved
 ```

@@ -31,7 +31,7 @@ Keep native-oracle differential tests, host-language tests, and sample verificat
 
 Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -T:build jar` in Clojure to build its JAR. Build Python distributions with `uv build` and Rust crates with `cargo package` inside their backend environments.
 
-PHP applications install `conao3/leanfran` from a Composer path repository pointing to a local checkout. Packagist distribution requires initial package registration. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
+PHP applications install the runtime from Packagist with `composer require conao3/leanfran`. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
 
 ## Releases
 
@@ -39,4 +39,4 @@ Start the `Release` workflow once per release. It updates the shared version, ch
 
 `Publish` distributes the `vX.Y.Z` tag to crates.io, PyPI, npm, Clojars, and Packagist. The PHP compiler carries the shared release version in `Main.lean`. Generator versions track emitted-code compatibility separately from release versions.
 
-The PHP Publish job checks the shared tag against `Main.lean`, pushes the snapshot and the same tag to the mirror, then requests and verifies the Packagist update. For initial registration and the required environment secrets, see the [PHP publishing guide](docs/php-development.md#publishing).
+The PHP Publish job checks the shared tag against `Main.lean`, pushes the snapshot and the same tag to the mirror, then requests and verifies the Packagist update. For the registry and required environment secrets, see the [PHP publishing guide](docs/php-development.md#publishing).
