@@ -39,3 +39,7 @@ The check runs differential, numeric, depth, complexity, IR coverage, and fuzz t
 nix develop .#php -c make -C langs/PHP gen-externs
 nix develop .#php85 -c make -C langs/PHP test
 ```
+
+## Publishing
+
+The PHP Publish job snapshots the tagged checkout into the root of the read-only mirror `conao3/leanfran-php`, updates its `main` branch and applies the same `vX.Y.Z` tag. Packagist reads the mirror's Composer manifest and tags for `conao3/leanfran`. For the first release, set `PHP_MIRROR_DEPLOY_KEY` in the `packagist` environment so Publish can push the first snapshot. Once the mirror has the snapshot, register `https://github.com/conao3/leanfran-php` on Packagist and set `PACKAGIST_USERNAME` and `PACKAGIST_API_TOKEN` in the same environment. If the initial run stopped at the registry step, rerun Publish with the same tag. To exercise the snapshot, tag retries, and Composer installation with a local bare mirror, run `nix develop .#php -c make -C langs/PHP test-publish`.
