@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "@hono/standard-validator": "0.4.1",
-    "hono": "4.13.18",
+    "hono": "4.13.19",
     "leanfran": "link:../..",
     "zod": "4.6.7"
   }

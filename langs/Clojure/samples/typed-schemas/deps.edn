@@ -1,4 +1,4 @@
 {:paths ["src"]
- :deps {org.clojure/clojure {:mvn/version "1.12.6"}
+ :deps {org.clojure/clojure {:mvn/version "1.12.7"}
         metosin/malli {:mvn/version "0.20.3"}
         io.github.conao3/leanfran {:local/root "../.."}}}
