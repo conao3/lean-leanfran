@@ -16,6 +16,7 @@ final class Project
     /**
      * @param array<string, Block> $blocks
      * @param list<stdClass> $requirements
+     * @param array<string, array<string, string>> $models
      * @param array<string, string> $hashes
      */
     private function __construct(
@@ -23,6 +24,7 @@ final class Project
         public readonly array $blocks,
         public readonly array $requirements,
         public readonly string $toolchain,
+        public readonly array $models,
         private array $hashes = [],
     ) {}
 
@@ -101,7 +103,12 @@ final class Project
                 $outputs[$output] = $block->name;
             }
         }
-        $project = new self($root, $blocks, $requirements, $toolchain);
+        $collector = null;
+        $models = [];
+        foreach ($blocks as $key => $block) {
+            $models[$key] = $block->models === [] ? [] : ($collector ??= new Models($root))->block($block);
+        }
+        $project = new self($root, $blocks, $requirements, $toolchain, $models);
         foreach ($blocks as $block) {
             $project->hash($block, []);
         }
@@ -173,7 +180,7 @@ final class Project
             'source' => $block->source->text,
             'imports' => $block->imports,
             'uses' => $uses,
-            'models' => [],
+            'models' => $this->models[$key],
             'settings' => [
                 'module' => $block->module,
                 'php_namespace' => $block->name,

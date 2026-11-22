@@ -123,11 +123,13 @@ structure TypeDef where
   pretty : String
   kind : TypeKind
   anonymous : Bool := false
+  model : Option String := none
   deriving Inhabited
 
 structure MarshalCfg where
   strip : Name
   typeModules : Array (Name × String) := #[]
+  models : Std.HashMap Name String := {}
 
 structure MarshalState where
   types : Array TypeDef := #[]
@@ -314,7 +316,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
   if isClass env c then throwError "type class `{t}`"
   let paramArgs ← args[:ind.numParams].toArray.filterM fun a => return !(← isProof a)
   let names ← if c == ``Subtype then pure #[] else paramArgs.mapM fun a => return toString (← ppExpr a)
-  if c != ``Subtype || alias?.isSome then
+  if !cfg.models.contains c && (c != ``Subtype || alias?.isSome) then
     let source := alias?.getD c
     if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) => ns.isPrefixOf source && source != ns then
       let ident := typeIdentOf ns source names
@@ -344,6 +346,7 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
   let env ← getEnv
   let cfg ← read
   let some (.inductInfo ind) := env.find? c | throwError "unsupported type `{t}`"
+  let model := cfg.models[c]?
   let isStruct := isStructure env c
   let mut variants : Array VariantInfo := #[]
   let mut trivial := none
@@ -382,7 +385,8 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
         let d ← descOf ty
         let optKey := isStruct && raw.endsWith "?" && raw.length > 1 && (match d with | .option _ => true | _ => false)
         let key := if !named then s!"a{fields.size}" else if optKey then (raw.dropEndWhile (· == '?')).copy else raw
-        let (property, claims) ← ofExcept (props.claim (phpIdent (sanitize key)))
+        let (property, claims) ← if model.isSome then pure (key, props)
+          else ofExcept (props.claim (phpIdent (sanitize key)))
         props := claims
         let flat := isStruct && (isSubobjectField? env c names[i]!).isSome
         let (slot, pos) := slotOf (layout.fieldInfo[i]?.getD .erased)
@@ -401,7 +405,7 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
         let some inv := v.1.invariants[0]? | throwError "a subtype without a property: `{t}`"
         return { ident, pretty := ← ppType t,
                  anonymous := alias?.isNone, kind := .subtype fi.desc inv fi.bounds }
-      return { ident, pretty := ← ppType t, kind := .struct v.1 trivial }
+      return { ident, pretty := ← ppType t, kind := .struct v.1 trivial, model }
   let kind ← if variants.all (fun v => v.fields.isEmpty && v.invariants.isEmpty) then
       pure (TypeKind.enum (variants.map (·.name)))
     else do
@@ -410,7 +414,7 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
         let ctor ← if external then pure base else freshIdent base
         return { v with ident := ctor }
       pure (.sum vs trivial)
-  return { ident, pretty := ← ppType t, kind }
+  return { ident, pretty := ← ppType t, kind, model }
 
 end
 

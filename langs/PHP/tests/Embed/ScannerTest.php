@@ -25,7 +25,7 @@ final class ScannerTest extends TestCase
                 #[Other('ignored'), Proof(
                     imports: ["Std", \Std\Data\HashMap::class],
                     uses: [First::class, namespace\Third::class, Model::class, '\GlobalClass'],
-                    models: [],
+                    models: [Subject::class],
                     source: <<<'LEAN'
                         def x := 1
                           -- $x \n
@@ -51,6 +51,7 @@ final class ScannerTest extends TestCase
         self::assertSame('src/First', $first->output);
         self::assertSame(['Std', 'Std.Data.HashMap'], $first->imports);
         self::assertSame(['App\\First', 'App\\Third', 'Library\\Input', 'GlobalClass'], $first->uses);
+        self::assertSame(['App\\Subject'], $first->models);
         self::assertSame("def x := 1\n  -- \$x \\n", $first->source->text);
         self::assertSame(14, $first->source->line);
         self::assertSame(str_repeat(' ', 12), $first->source->indent);
@@ -68,7 +69,6 @@ final class ScannerTest extends TestCase
         yield 'concatenation' => ["'first' . 'second'", 'source must be a nowdoc or a single-quoted literal'];
         yield 'constant' => ['VALUE', 'source must be a nowdoc or a single-quoted literal'];
         yield 'double quotes' => ['"def x := 0"', 'source must be a nowdoc or a single-quoted literal'];
-        yield 'nonempty models' => ["'def x := 0', models: [Item::class]", 'non-empty Lean $models is not supported'];
         yield 'computed use' => [
             "'def x := 0', uses: [Item::class . 'Other']",
             'expected a string or X::class literal',

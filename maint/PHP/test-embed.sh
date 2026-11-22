@@ -32,14 +32,14 @@ php_status() {
 
 compare_generated() {
     local block
-    for block in Pricing Basket Receipt; do
+    for block in Pricing Basket Catalog Receipt; do
         diff -r "$out/saved/$block" "src/$block"
     done
 }
 
 assert_status 0 sync-first env LEANFRAN_PHP_CLI=not-the-compiler \
     vendor/bin/leanfran sync --package "$project" --leanfran-php "$compiler"
-cp -R src/{Basket,Pricing,Receipt} "$out/saved/"
+cp -R src/{Basket,Pricing,Catalog,Receipt} "$out/saved/"
 assert_status 0 sync-second env LEANFRAN_PHP_CLI="$compiler" composer lean:sync
 compare_generated
 printf 'Repeated sync: PHP and manifests are byte-identical\n'
@@ -51,10 +51,11 @@ php run.php > "$out/php"
 {
     cat .leanfran/workspace/LeanPhpEmbed.lean
     printf '\n'
-    for name in Pricing Basket Receipt; do
+    for name in Pricing Basket Catalog Receipt; do
         php -r 'echo "open LeanPhpEmbed.B", bin2hex("App\\" . $argv[1]), "\n";' "$name"
     done
     cat <<'LEAN'
+open LeanPhpModels.App LeanPhpModels.App.Input
 
 def main : IO Unit := do
   let r : Range := ⟨2, 5, by decide⟩
@@ -62,6 +63,36 @@ def main : IO Unit := do
   IO.println (twiceWidth r)
   IO.println (sameRange r).lo
   IO.println (receiptWidth r)
+  let order := receiptOrder {
+    percent := 100, percent_le := by decide
+    count := 2, count_ge := by decide
+    remaining := 0, debt := -7, debt_le := by decide
+    delta := -2, delta_le := by decide
+    label := "♥", label_min_length := by decide
+    colors := [.Blue]
+    items := [1, 2], items_min_items := by decide, items_items_ge := by decide
+    pair := (-10, .Special), pair_first_ge := by decide, pair_first_le := by decide
+    note := none, note_min_length := by decide
+    detail := some ⟨true, 2.5, [.Red]⟩
+    units := 2, units_ge := by decide
+    «class» := 4
+  }
+  IO.println order.percent
+  IO.println order.count
+  IO.println order.remaining
+  IO.println order.debt
+  IO.println order.delta
+  IO.println order.label
+  IO.println (match order.colors.head? with | some .Blue => "Blue" | _ => "other")
+  IO.println (String.intercalate "," (order.items.map toString))
+  IO.println order.pair.1
+  IO.println (match order.pair.2 with | .Special => "Special" | _ => "other")
+  IO.println (order.note.getD "(none)")
+  IO.println ((order.detail.map (·.active)).getD false)
+  IO.println ((order.detail.map (·.weight)).getD 0.0)
+  IO.println (match order.detail.bind (·.colors.head?) with | some .Red => "Red" | _ => "other")
+  IO.println order.units
+  IO.println order.«class»
 LEAN
 } > .leanfran/workspace/Oracle.lean
 cat >> .leanfran/workspace/lakefile.toml <<'TOML'
@@ -72,13 +103,14 @@ root = "Oracle"
 TOML
 (
     cd .leanfran/workspace
-    lake build oracle-embed
+    lake build oracle-embed > "$out/oracle-build" 2>&1 || { cat "$out/oracle-build"; exit 1; }
     .lake/build/bin/oracle-embed
-) > "$out/oracle-build" 2>&1 || { cat "$out/oracle-build"; exit 1; }
-tail -n 4 "$out/oracle-build" > "$out/oracle"
+) > "$out/oracle"
 diff -u "$out/oracle" "$out/php"
-printf 'C oracle and PHP (width, twiceWidth, sameRange.lo, receiptWidth)\n'
+printf 'C oracle and PHP (ranges and imported model round trip)\n'
 cat "$out/php"
+assert_status 0 model-constraints php validate.php
+grep -Fq 'o.percent: percent ≤ 100' "$out/model-constraints.log"
 
 assert_status 0 fresh php_status --package "$project"
 grep -Fxq 'leanfran: all blocks up to date' "$out/fresh.log"
@@ -88,7 +120,7 @@ test "$runtime_toolchain" = "$(cat "$OLDPWD/../../lean-toolchain")"
 cp composer.json "$out/fixture-composer.json"
 php -r '$file = "composer.json"; $config = json_decode(file_get_contents($file)); $config->extra->leanfran->paths = []; file_put_contents($file, json_encode($config));'
 assert_status 1 explicit-scan-paths php_status
-test "$(grep -c ': removed' "$out/explicit-scan-paths.log")" -eq 3
+test "$(grep -c ': removed' "$out/explicit-scan-paths.log")" -eq 4
 cp "$out/fixture-composer.json" composer.json
 
 sed -i 's/width r ≤ r.hi/width r ≤ r.lo/' src/Pricing.php
@@ -128,18 +160,41 @@ done
 test "$(wc -l < "$out/dependency-change.log")" -eq 3
 cp "$OLDPWD/$project_template/src/Pricing.php" src/Pricing.php
 
+sed -i 's/int<0, 100>/int<0, 99>/' src/OrderInput.php
+assert_status 1 model-change php_status
+grep -Fxq 'App\Catalog: stale' "$out/model-change.log"
+grep -Fxq 'App\Receipt: stale' "$out/model-change.log"
+test "$(wc -l < "$out/model-change.log")" -eq 2
+cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
+
+sed -i 's/list<Shade>/array<string, Shade>/' src/OrderInput.php
+assert_status 1 unsupported-model-type vendor/bin/leanfran sync --leanfran-php "$compiler"
+grep -Fq 'App\OrderInput.colors: unsupported PHPDoc type array<string, Shade>' "$out/unsupported-model-type.log"
+compare_generated
+cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
+
+sed -i '/^{$/a\    private int $secret;' src/Input/DetailFields.php
+assert_status 1 unsupported-model-shape php_status
+grep -Fq 'App\Input\Detail.secret: expected a promoted public readonly property' "$out/unsupported-model-shape.log"
+cp "$OLDPWD/$project_template/src/Input/DetailFields.php" src/Input/DetailFields.php
+
+sed -i 's/OrderInput::class/UnknownModel::class/' src/Catalog.php
+assert_status 1 unknown-model php_status
+grep -E '^src/Catalog\.php:[0-9]+:[0-9]+: unknown Lean model class App\\UnknownModel' "$out/unknown-model.log"
+cp "$OLDPWD/$project_template/src/Catalog.php" src/Catalog.php
+
 sed -E "s/GENERATOR_VERSION = '[^']+'/GENERATOR_VERSION = 'incompatible'/" \
     vendor/conao3/leanfran/src/Lean.php > "$out/incompatible.php"
 assert_status 1 generator-change env PATH="$temp_path" \
     "$php" -d auto_prepend_file="$out/incompatible.php" vendor/bin/leanfran status
-test "$(grep -c ': stale$' "$out/generator-change.log")" -eq 3
+test "$(grep -c ': stale$' "$out/generator-change.log")" -eq 4
 assert_status 1 generator-mismatch "$php" -d auto_prepend_file="$out/incompatible.php" \
     vendor/bin/leanfran sync --leanfran-php "$compiler"
 grep -Fq 'this package expects incompatible' "$out/generator-mismatch.log"
 
 printf 'leanprover/lean4:v0.0.0\n' > lean-toolchain
 assert_status 1 toolchain-change php_status
-test "$(grep -c ': stale$' "$out/toolchain-change.log")" -eq 3
+test "$(grep -c ': stale$' "$out/toolchain-change.log")" -eq 4
 assert_status 1 toolchain-mismatch vendor/bin/leanfran sync --leanfran-php "$compiler"
 grep -Fq 'lean must match lean-toolchain (0.0.0)' "$out/toolchain-mismatch.log"
 rm lean-toolchain
@@ -169,3 +224,8 @@ assert_status 0 after-cleanup php_status
 sed -i 's/Pricing::class/Unknown::class/' src/Basket.php
 assert_status 1 unknown-use php_status
 grep -Fq 'Lean block App\Basket uses unknown block App\Unknown' "$out/unknown-use.log"
+
+cp "$OLDPWD/$project_template/src/Basket.php" src/Basket.php
+mv "$out/Receipt.php" src/Receipt.php
+cp -R "$out/saved/Receipt" src/
+compare_generated

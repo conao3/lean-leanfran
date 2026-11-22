@@ -1,6 +1,6 @@
 # PHP
 
-[leanfran](https://github.com/conao3/lean-leanfran/blob/master/README.md) compiles Lean 4 modules into PHP classes. The generated code runs with Composer and 64-bit PHP 8.4 or later with GMP.
+[leanfran](https://github.com/conao3/lean-leanfran/blob/master/README.md) compiles embedded Lean 4 blocks and standalone Lean modules to PHP. The generated code runs with Composer and 64-bit PHP 8.4 or later with GMP.
 
 ## Install
 
@@ -19,6 +19,7 @@ Create an application next to the clone. The Composer path repository points to 
 cd ..
 mkdir pricing-php
 cd pricing-php
+mkdir src
 ```
 
 Save this as `composer.json`.
@@ -46,79 +47,81 @@ Save this as `composer.json`.
     ],
     "autoload": {
         "psr-4": {
-            "App\\Lean\\Pricing\\": "generated/"
+            "App\\": "src/"
         }
     }
 }
 ```
 
-## First Lean module
+## First embedded block
 
-Save this as `Pricing.lean`.
-
-```lean
-namespace Pricing
-
-structure Range where
-  lo : Nat
-  hi : Nat
-  ok : lo ≤ hi
-
-inductive Discount where
-  | none
-  | percent (p : Nat) (h : p ≤ 100)
-  | fixed (amount : Nat)
-
-def total (prices : List Nat) (discount : Discount) : Nat :=
-  let subtotal := prices.foldl (· + ·) 0
-  match discount with
-  | .none => subtotal
-  | .percent p _ => subtotal - subtotal * p / 100
-  | .fixed amount => subtotal - amount
-
-end Pricing
-```
-
-Save this as `main.php`. Composer loads the generated types, function facade, and runtime.
+Save this as `src/Pricing.php`. The nowdoc contains a structure with a proof field, a function, and a theorem about that function.
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-use App\Lean\Pricing\DiscountPercent;
-use App\Lean\Pricing\Pricing;
-use App\Lean\Pricing\Range;
-use Conao3\Leanfran\ValidationError;
+namespace App;
 
-require __DIR__ . '/vendor/autoload.php';
+use Conao3\Leanfran\Lean;
 
-echo Pricing::total([1200, 800], new DiscountPercent(10)), PHP_EOL;
-echo Range::fromJson('{"lo":1,"hi":3}')->toJson(), PHP_EOL;
+#[Lean(<<<'LEAN'
+    structure Range where
+      lo : Nat
+      hi : Nat
+      ok : lo ≤ hi
 
-try {
-    new Range(lo: 5, hi: 3);
-} catch (ValidationError $error) {
-    echo $error->getMessage(), PHP_EOL;
+    def width (r : Range) : Nat := r.hi - r.lo
+
+    theorem width_le (r : Range) : width r ≤ r.hi := by
+      unfold width
+      omega
+    LEAN)]
+final class Pricing
+{
+    use Pricing\Functions;
 }
 ```
 
-Install the runtime, compile the Lean module, and run the application.
+Save this as `main.php`.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Pricing;
+use App\Pricing\Range;
+
+require __DIR__ . '/vendor/autoload.php';
+
+echo Pricing::width(new Range(lo: 2, hi: 5)), PHP_EOL;
+```
+
+Install the runtime, check the Lean block, generate the PHP trait and types, and run the application.
 
 ```sh
 composer install --no-interaction
-lean -o Pricing.olean Pricing.lean
-../lean-leanfran/result/bin/leanfran-php module generate --module-name Pricing \
-  --search-path . --output-dir generated --php-namespace 'App\Lean\Pricing' --facade Pricing
+vendor/bin/leanfran sync --leanfran-php ../lean-leanfran/result/bin/leanfran-php
 php main.php
 ```
 
-The final command prints the total, the JSON value, and the validation message.
+The application prints the width.
 
 ```text
-1800
-{"lo":1,"hi":3}
-Range.ok: lo ≤ hi
+3
 ```
 
-The PHP guide covers the CLI, public types, JSON Schema, Valinor, and IO. [PHP guide](https://github.com/conao3/lean-leanfran/blob/master/docs/php-guide.md)
+## Generate from a Lake project
+
+You can also generate PHP directly from a compiled Lean module. From the application directory, build the standalone pricing sample and generate its PHP API.
+
+```sh
+(cd ../lean-leanfran/langs/PHP/samples/pricing/lean && lake build)
+../lean-leanfran/result/bin/leanfran-php module generate --module-name Pricing \
+  --search-path ../lean-leanfran/langs/PHP/samples/pricing/lean/.lake/build/lib/lean \
+  --output-dir generated --php-namespace 'App\Lean\Pricing'
+```
+
+The PHP guide covers embedded blocks, the compiler CLI, public types, JSON Schema, Valinor, and IO. [PHP guide](https://github.com/conao3/lean-leanfran/blob/master/docs/php-guide.md)

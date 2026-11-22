@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Conao3\Leanfran\Embed;
 
+use Closure;
 use Conao3\Leanfran\Lean;
+use Generator;
 use ParseError;
 use PhpToken;
 use RuntimeException;
@@ -34,24 +36,43 @@ final class Scanner
      */
     public static function scan(string $file, string $input): array
     {
-        $input = str_replace(["\r\n", "\r"], "\n", $input);
+        $scanner = new self($file, str_replace(["\r\n", "\r"], "\n", $input));
+        $blocks = [];
+        foreach ($scanner->declarations() as [$name, $attributes]) {
+            if (isset($attributes[1])) {
+                $scanner->fail($attributes[1]->peek(), 'duplicate Lean attribute on the same class');
+            }
+            if (isset($attributes[0])) {
+                $blocks[] = $scanner->block($name->text, $attributes[0]);
+            }
+        }
+        return $blocks;
+    }
+
+    /** @return Closure(string): string */
+    public static function resolver(string $file, int $line): Closure
+    {
+        $scanner = new self($file, str_replace(["\r\n", "\r"], "\n", Files::read($file)));
+        foreach ($scanner->declarations($line) as [$token]) {
+            if ($token->is(T_FUNCTION)) {
+                return $scanner->resolve(...);
+            }
+        }
+        throw new RuntimeException("$file:$line: cannot find the model constructor declaration");
+    }
+
+    /** @return Generator<int, array{PhpToken, list<Tokens>}> */
+    private function declarations(?int $functionLine = null): Generator
+    {
         try {
             $tokens = array_values(array_filter(
-                PhpToken::tokenize($input, TOKEN_PARSE),
+                PhpToken::tokenize($this->input, TOKEN_PARSE),
                 static fn(PhpToken $token): bool => !$token->isIgnorable(),
             ));
         } catch (ParseError $error) {
-            throw new RuntimeException("$file:{$error->getLine()}: {$error->getMessage()}", previous: $error);
+            throw new RuntimeException("$this->file:{$error->getLine()}: {$error->getMessage()}", previous: $error);
         }
-        return new self($file, $input)->blocks(
-            new Tokens($tokens, new PhpToken(0, '', substr_count($input, "\n") + 1, strlen($input))),
-        );
-    }
-
-    /** @return list<Block> */
-    public function blocks(Tokens $tokens): array
-    {
-        $blocks = [];
+        $tokens = new Tokens($tokens, new PhpToken(0, '', substr_count($this->input, "\n") + 1, strlen($this->input)));
         $attributes = [];
         $depth = 0;
         $namespaceDepth = 0;
@@ -68,11 +89,11 @@ final class Scanner
             if ($token->is([T_FINAL, T_ABSTRACT, T_READONLY])) {
                 continue;
             }
-            if ($token->is(T_CLASS) && $tokens->peek()->is(T_STRING) && $attributes !== []) {
-                if (isset($attributes[1])) {
-                    $this->fail($attributes[1]->peek(), 'duplicate Lean attribute on the same class');
-                }
-                $blocks[] = $this->block($tokens->take()->text, $attributes[0]);
+            if ($token->is(T_FUNCTION) && $token->line === $functionLine) {
+                yield [$token, []];
+            }
+            if ($token->is(T_CLASS) && $tokens->peek()->is(T_STRING)) {
+                yield [$tokens->take(), $attributes];
             }
             $attributes = [];
             if ($token->is(T_NAMESPACE)) {
@@ -92,7 +113,6 @@ final class Scanner
                 $depth--;
             }
         }
-        return $blocks;
     }
 
     private function readUse(Tokens $tokens): void
@@ -170,9 +190,7 @@ final class Scanner
             : $this->fail($name, 'missing Lean source');
         $imports = isset($values['imports']) ? $this->names($values['imports'], true) : [];
         $uses = isset($values['uses']) ? $this->names($values['uses'], false) : [];
-        if (isset($values['models']) && $this->names($values['models'], false) !== []) {
-            $this->fail($values['models']->peek(), 'non-empty Lean $models is not supported');
-        }
+        $models = isset($values['models']) ? $this->names($values['models'], false) : [];
         return new Block(
             $this->qualify($class),
             $this->file,
@@ -181,6 +199,7 @@ final class Scanner
             $source,
             $imports,
             $uses,
+            $models,
         );
     }
 

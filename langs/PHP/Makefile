@@ -1,6 +1,8 @@
 .DEFAULT_GOAL := check
 .PHONY: build check format format-check test test-numeric test-runtime gen-externs externs-check samples
 
+embed-sample-sources := $(wildcard samples/embed-*/main.php samples/embed-*/src/*.php)
+
 show-php-version = @php -r 'printf("%s: PHP %s\n", $$argv[1], PHP_VERSION);' '$@'
 CHECK_TARGETS :=
 
@@ -12,11 +14,11 @@ build:
 check: format-check externs-check test test-numeric test-runtime $(CHECK_TARGETS) samples
 
 format:
-	mago format src tests samples/sum-to/main.php samples/pricing/main.php ../../maint/PHP
+	mago format src tests samples/sum-to/main.php samples/pricing/main.php $(embed-sample-sources) ../../maint/PHP
 
 format-check:
 	$(show-php-version)
-	mago format --check src tests samples/sum-to/main.php samples/pricing/main.php ../../maint/PHP
+	mago format --check src tests samples/sum-to/main.php samples/pricing/main.php $(embed-sample-sources) ../../maint/PHP
 
 vendor/autoload.php: composer.json composer.lock
 	composer install --no-interaction

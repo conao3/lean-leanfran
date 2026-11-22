@@ -82,7 +82,7 @@ final class JsonSchema
                 self::tagged('error', $this->generate($d->first())),
             ]],
             'subtype' => self::withBounds($this->generate($d->first()), $d->bounds),
-            'struct', 'enum', 'inductive' => $this->named($d),
+            'struct', 'model', 'enum', 'inductive' => $this->named($d),
             default => throw new \LogicException('Unknown descriptor: ' . $d->kind),
         };
     }
@@ -102,7 +102,7 @@ final class JsonSchema
 
         $this->active[$name] = true;
         $schema = match ($d->kind) {
-            'struct' => $this->fields($d->variants[0]),
+            'struct', 'model' => $this->fields($d->variants[0]),
             'enum' => ['type' => 'string', 'enum' => $d->cases],
             'inductive' => ['oneOf' => array_map($this->variant(...), $d->variants)],
             default => throw new \LogicException('Expected a named descriptor.'),
@@ -141,7 +141,7 @@ final class JsonSchema
         foreach ($variant['fields'] as $field) {
             $desc = $field['desc']->resolve();
             if ($field['flat']) {
-                if ($desc->kind !== 'struct') {
+                if (!in_array($desc->kind, ['struct', 'model'], true)) {
                     throw new \LogicException('Expected a flattened structure descriptor.');
                 }
                 [$parent, $keys] = $this->recordFields($desc->variants[0]);

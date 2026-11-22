@@ -90,7 +90,7 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | Python     | [Python quick start](langs/Python/README.md)         | [leanfran on PyPI](https://pypi.org/project/leanfran/)                                | `lean(...)`, pydantic models, Python modules   |
 | TypeScript | [TypeScript quick start](langs/TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
-| PHP        | [PHP quick start](langs/PHP/README.md)               | Not yet published                                                                     | Public types, function facades, and Composer runtime |
+| PHP        | [PHP quick start](langs/PHP/README.md)               | Not yet published                                                                     | `#[Lean(...)]`, PHP classes, Composer CLI       |
 
 ## What you can build
 
@@ -118,7 +118,7 @@ The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`
 | Python     | [Setup and first block](langs/Python/README.md)     | [Models, verification and CLI](docs/python-guide.md)      | [Python samples](langs/Python/samples/README.md)         |
 | TypeScript | [Setup and first block](langs/TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](langs/TypeScript/samples/README.md) |
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
-| PHP        | [Setup and first module](langs/PHP/README.md)      | [Runtime values, IO and CLI](docs/php-guide.md)            | [PHP samples](langs/PHP/samples/README.md)               |
+| PHP        | [Setup and first block](langs/PHP/README.md)       | [Embedding, public types and CLI](docs/php-guide.md)     | [PHP samples](langs/PHP/samples/README.md)               |
 
 ## Contribution
 

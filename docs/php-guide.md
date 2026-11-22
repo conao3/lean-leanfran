@@ -6,6 +6,61 @@
 
 Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick start](../langs/PHP/README.md) to build the compiler with Nix and install the runtime from a Composer path repository. Running the generated code requires 64-bit PHP 8.4 or later and `ext-gmp`.
 
+## Embedded Lean
+
+Put `#[Conao3\Leanfran\Lean(...)]` on a PHP class. Its fully qualified name identifies the block. The attribute takes four arguments.
+
+| Argument | Purpose |
+| --- | --- |
+| `source` | Lean source in a nowdoc or a single-quoted PHP string literal. |
+| `imports` | Lean modules to import, such as `['Std.Data.HashMap']`. |
+| `uses` | Block classes whose Lean definitions are in scope, such as `[Orders::class]`. Their generated public PHP types are shared. |
+| `models` | PHP classes to import as Lean structures or enum types, such as `[LineItem::class]`. |
+
+The last three arguments are optional literal arrays. Class names can be written as fully qualified strings or `ClassName::class` literals. See [embed-range](../langs/PHP/samples/embed-range) for a complete block and [embed-orders](../langs/PHP/samples/embed-orders) for two blocks that share an `Order` type.
+
+For `App\Pricing` in `src/Pricing.php`, leanfran writes the `App\Pricing\Functions` trait and public types such as `App\Pricing\Range` to `src/Pricing/`. The implementation lives under `src/Pricing/Internal/`, and `src/Pricing/leanfran.json` records the block hash and generated files. In the block class, add `use Pricing\Functions;` so callers can use `App\Pricing::width()`. Map `App\` to `src/` in the Composer PSR-4 autoloader.
+
+### Commands and configuration
+
+Run the Composer binary from the application directory. Pass `--package dir` to select a package in another directory.
+
+| Command | Effect |
+| --- | --- |
+| `vendor/bin/leanfran sync` | Scans the package, builds the blocks in `.leanfran/workspace`, and replaces their generated PHP and manifests after every block succeeds. |
+| `vendor/bin/leanfran status` | Reports stale or removed blocks and missing generated files, with exit status 1 if any need attention. It runs with PHP and Composer alone. |
+| `vendor/bin/leanfran check` | Runs `sync` followed by `status`. |
+
+Commit the generated PHP and manifests. In CI, install Composer dependencies and run `vendor/bin/leanfran status` to verify that the checkout is up to date. Run `check` in jobs that also verify Lean proofs and regenerate the PHP. The CLI keeps its Lake workspace under the ignored `.leanfran/` directory.
+
+In `composer.json`, set `extra.leanfran.paths` to a list of package directories to scan. By default, the CLI scans the directories listed in `autoload.psr-4`. Set `extra.leanfran.require` to a list of Lake requirements using the keys from `[[require]]` in a Lake TOML file. Relative dependency paths resolve from the Composer package directory. Composer scripts can run the binary, for example `"lean:sync": "leanfran sync"`.
+
+The compiler is selected by `--leanfran-php`, then `LEANFRAN_PHP_CLI`, then `leanfran-php` on PATH. Its `--generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
+
+A Lean error in a block starts with the PHP file, line, and column. The message also gives the block's fully qualified PHP class name and the Lean line and column within its source string. On a failed proof or syntax error, the previous generated PHP remains available.
+
+### Importing PHP models
+
+A model is a final class whose instance data consists of promoted public readonly properties on its public constructor, or a backed enum. Composer must be able to autoload model classes and any classes used by their properties. Block discovery reads PHP tokens, and model discovery loads the model classes for Reflection, including during `status`. Referenced models are imported transitively, and their references must be acyclic.
+
+Reflection supplies native types. The CLI resolves PHPDoc class names in the namespace and imports of the constructor declaration. It reads constructor `@param` types and promoted property `@var` types, with `@var` taking precedence when both are present. A native `array` needs a list or pair annotation. An unsupported type produces a diagnostic with the class and property.
+
+| PHP or PHPDoc type | Lean representation |
+| --- | --- |
+| `int` | `Int` |
+| `int<a, b>` | `Nat` if the lower bound is nonnegative, otherwise `Int`, with inclusive bounds as applicable. Use `min` or `max` for an unbounded endpoint. |
+| `positive-int`, `non-negative-int` | `Nat`, with a lower-bound proof for `positive-int`. |
+| `negative-int` | `Int` with an upper-bound proof at −1. |
+| `float`, `bool`, `string` | `Float`, `Bool`, `String` respectively. |
+| `non-empty-string` | `String` with a minimum length of 1. |
+| `list<T>`, `non-empty-list<T>` | `List T`, with a minimum length of 1 for `non-empty-list<T>`. |
+| `array{0: A, 1: B}` | `A × B` |
+| `?T` or `T\|null` | `Option T` |
+| Model class | A structure under `LeanPhpModels` with the PHP namespace and class name. |
+| Backed enum | An inductive type with a nullary constructor for each PHP case name. |
+
+Bounds and minimum lengths become Lean proof fields such as `percent_le`, `quantity_ge`, and `items_min_items`. The generated PHP accepts the original class and validates its properties before constructing the Lean value. For example, passing 101 in a field annotated `int<0, 100>` raises `Conao3\Leanfran\ValidationError` with the argument and property in the issue path. The generated code reconstructs returned models by calling the original constructor with named arguments. A change to a model's Lean representation makes its block and dependent blocks stale.
+
 ## The CLI
 
 `leanfran-php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran-php help` to see the full usage. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
@@ -19,6 +74,7 @@ Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick s
 | `--output-dir <dir>` | Writes PSR-4 public types, a facade, and an internal class. |
 | `--php-namespace <NS>` | Sets the PHP namespace. Required with `--output-dir`. |
 | `--facade <Name>` | Names the public facade. Defaults to the last component of the module name. |
+| `--facade-kind class\|trait` | Emits a facade class or trait. The default is `class`. |
 | `--type-module <N=NS>` | Reuses types from Lean namespace `N` that were generated into PHP namespace `NS`. Repeat for multiple namespaces. |
 | `--class <NS\Name>` | Sets the fully qualified PHP class name. |
 | `--main <Name>` | Generates a CLI entry point for a Lean IO definition. |
@@ -26,7 +82,7 @@ Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick s
 | `--output json\|text` | Sets the summary format. Defaults to JSON. The summary goes to stderr when source goes to stdout. |
 | `--internal-only` | Requests the runtime-facing class. |
 | `--namespace <Name>` | Removes a Lean namespace prefix from public names. Defaults to the module name. |
-| `--batch <file>` | Reads a JSON array of jobs. Each job has `module` and `output_file` and may have `roots`, `namespace`, `class`, and `main`. Supply the per-job settings in the file. |
+| `--batch <file>` | Reads a JSON array of jobs. Each job has `module` and either `output_file` or `output_dir`. Embedding uses public jobs with `php_namespace`, `facade`, `facade_kind`, `type_modules`, and `models`. |
 
 | Exit code | Meaning |
 | --- | --- |
@@ -150,4 +206,4 @@ The numeric test covers 427 extern declarations with 402 distinct C symbols. Its
 
 ## Planned features
 
-Embedded Lean blocks in PHP and verification of PHP functions against Lean specifications are planned for later stages.
+Verification of PHP functions against Lean specifications is planned for a later stage.

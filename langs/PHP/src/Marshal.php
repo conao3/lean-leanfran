@@ -158,7 +158,9 @@ final class Marshal
                 }
                 self::fail('Expected Ok or Err.');
             case 'enum':
-                return self::enumValue($d, $value)->value;
+                $case = self::enumValue($d, $value);
+                return $d->enumByName ? $case->name : $case->value;
+            case 'model':
             case 'struct':
             case 'inductive':
             case 'subtype':
@@ -184,7 +186,7 @@ final class Marshal
                 }
                 return match (true) {
                     $d->kind === 'subtype' => $payload['val'],
-                    $d->kind === 'struct' => (object) $payload,
+                    in_array($d->kind, ['struct', 'model'], true) => (object) $payload,
                     $v['fields'] === [] => $v['name'],
                     $v['positional'] => (object) [$v['name'] => count($payload) === 1 ? $payload[0] : $payload],
                     default => (object) [$v['name'] => (object) $payload],
@@ -236,7 +238,7 @@ final class Marshal
                 ? new Err(self::fromLean($d->first(), self::get($value, 0)))
                 : new Ok(self::fromLean($d->second(), self::get($value, 0))),
             'enum' => self::enumValue($d, $d->cases[L\requireRuntimeInt($value)], true),
-            'struct', 'inductive', 'subtype' => self::fromVariant($d, $value),
+            'struct', 'model', 'inductive', 'subtype' => self::fromVariant($d, $value),
             default => throw new \LogicException('Unknown descriptor: ' . $d->kind),
         };
     }
@@ -266,6 +268,9 @@ final class Marshal
 
     private static function integer(Desc $d, mixed $value): int|\GMP
     {
+        if ($d->phpInt && !is_int($value)) {
+            self::fail('Expected a PHP integer.');
+        }
         if (is_string($value) && preg_match('/^-?[0-9]+$/D', $value) === 1) {
             $value = gmp_init($value, 10);
         }
@@ -358,9 +363,18 @@ final class Marshal
             return $value;
         }
         if ($data && is_string($value) && is_subclass_of($cls, \BackedEnum::class)) {
-            $case = $cls::tryFrom($value);
-            if ($case !== null) {
-                return $case;
+            if ($d->enumByName) {
+                if (in_array($value, $d->cases, true)) {
+                    $case = constant($cls . '::' . $value);
+                    if ($case instanceof \BackedEnum && $case instanceof $cls) {
+                        return $case;
+                    }
+                }
+            } else {
+                $case = $cls::tryFrom($value);
+                if ($case !== null) {
+                    return $case;
+                }
             }
         }
         self::fail('Expected ' . $d->name . '.');
@@ -383,7 +397,7 @@ final class Marshal
             'prod' => self::normalizeList($d, self::tuple($value, 2), $data),
             'except' => self::normalizeExcept($d, $value, $data),
             'enum' => self::enumValue($d, $value, $data),
-            'subtype', 'struct', 'inductive' => self::normalizeVariant($d, $value, $data),
+            'subtype', 'struct', 'model', 'inductive' => self::normalizeVariant($d, $value, $data),
             default => throw new \LogicException('Unknown descriptor: ' . $d->kind),
         };
     }
@@ -450,7 +464,7 @@ final class Marshal
         if ($d->kind === 'subtype') {
             $v = $d->variants[0];
             $values = [self::normalize($d->first(), $value, true)];
-        } elseif ($d->kind === 'struct') {
+        } elseif (in_array($d->kind, ['struct', 'model'], true)) {
             $v = $d->variants[0];
             $values = self::readFields($v, self::record($value), 'data');
         } else {
@@ -464,7 +478,10 @@ final class Marshal
                 $values = self::readFields($v, self::record($payload), 'data');
             }
         }
-        return self::newValue($v, $values);
+        if ($d->kind === 'model') {
+            self::check($d, $v, $values);
+        }
+        return self::newValue($v, $values, $d->kind === 'model');
     }
 
     /** @return array{LeanVariant, mixed} */
@@ -532,8 +549,13 @@ final class Marshal
             };
             if ($f['flat']) {
                 try {
-                    $parent = $f['desc']->resolve()->variants[0];
-                    $fields[] = self::newValue($parent, self::readFields($parent, $input, $mode));
+                    $desc = $f['desc']->resolve();
+                    $parent = $desc->variants[0];
+                    $fields[] = self::newValue(
+                        $parent,
+                        self::readFields($parent, $input, $mode),
+                        $desc->kind === 'model',
+                    );
                 } catch (ValidationError $e) {
                     array_push($issues, ...$e->issues);
                 }
@@ -580,10 +602,11 @@ final class Marshal
     /** @param LeanVariant $v
      * @param list<mixed> $values
      */
-    private static function newValue(array $v, array $values): object
+    private static function newValue(array $v, array $values, bool $named = false): object
     {
         $cls = $v['cls'] ?? throw new \LogicException('Missing variant class.');
-        return new $cls(...array_values(self::properties($v, $values)));
+        $properties = self::properties($v, $values);
+        return new $cls(...$named ? $properties : array_values($properties));
     }
 
     /** @param LeanVariant $v
@@ -603,6 +626,12 @@ final class Marshal
                 $path = $d->kind === 'inductive'
                     ? [$d->name, $v['name'], $invariant['field']]
                     : [$d->name, $invariant['field']];
+                if ($d->kind === 'model') {
+                    $last = array_key_last($invariant['args']) ?? throw new \LogicException(
+                        'Missing model proof argument.',
+                    );
+                    $path = [$v['fields'][$invariant['args'][$last]]['key']];
+                }
                 $issues[] = ['message' => $invariant['prop'], 'path' => $path];
             }
         }
@@ -631,7 +660,7 @@ final class Marshal
                 default => self::fail('Expected Ok or Err.'),
             },
             'enum' => self::enumTag($d, $value),
-            'struct', 'inductive', 'subtype' => self::encodeVariant($d, $value),
+            'struct', 'model', 'inductive', 'subtype' => self::encodeVariant($d, $value),
             default => throw new \LogicException('Unknown descriptor: ' . $d->kind),
         };
     }
@@ -656,7 +685,8 @@ final class Marshal
 
     private static function enumTag(Desc $d, mixed $value): int
     {
-        $tag = array_search(self::enumValue($d, $value)->value, $d->cases, true);
+        $case = self::enumValue($d, $value);
+        $tag = array_search($d->enumByName ? $case->name : $case->value, $d->cases, true);
         return $tag === false ? throw new \LogicException('Unknown enum case.') : $tag;
     }
 
@@ -722,7 +752,7 @@ final class Marshal
             };
             $fields[] = self::fromLean($f['desc'], $x);
         }
-        return self::newValue($v, $fields);
+        return self::newValue($v, $fields, $d->kind === 'model');
     }
 
     private static function tagged(mixed $value): int|Ctor

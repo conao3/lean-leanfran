@@ -1,0 +1,11 @@
+{
+    "format": "leanfran-php-embed",
+    "block": "App\\Pricing",
+    "hash": "ba2d241a718e46e755b15b93051b48d65273eb6300e6734ae7e77f2d45db44a7",
+    "generator_version": "7",
+    "files": [
+        "Functions.php",
+        "Internal/LeanPricing.php",
+        "Range.php"
+    ]
+}
