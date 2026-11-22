@@ -1,0 +1,10 @@
+{
+    "format": "leanfran-php-embed",
+    "block": "App\\Calc",
+    "hash": "70458277837e39a578503e5e1a1144ece712357595072d4ddbae3ae8854ad06e",
+    "generator_version": "7",
+    "files": [
+        "Functions.php",
+        "Internal/LeanCalc.php"
+    ]
+}
