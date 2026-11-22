@@ -1,0 +1,21 @@
+{
+    "name": "leanfran/sample-greet-cli",
+    "require": {
+        "conao3/leanfran": "dev-main"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../..",
+            "options": {
+                "versions": {
+                    "conao3/leanfran": "dev-main"
+                },
+                "reference": "none"
+            }
+        },
+        {
+            "packagist.org": false
+        }
+    ]
+}

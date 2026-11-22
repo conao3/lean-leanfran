@@ -38,6 +38,9 @@
 /langs/PHP/.lake/
 /langs/PHP/vendor/
 /langs/PHP/test-out/
+/langs/PHP/samples/*/composer.lock
+/langs/PHP/samples/*/lean/.lake/
+/langs/PHP/samples/*/vendor/
 /Rust/**/target/
 /Rust/**/.lake/
 /Rust/**/.lake-aeneas/

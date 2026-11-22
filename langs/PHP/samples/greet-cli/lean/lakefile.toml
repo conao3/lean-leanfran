@@ -1,0 +1,5 @@
+name = "greet-cli"
+defaultTargets = ["Greeting"]
+
+[[lean_lib]]
+name = "Greeting"
