@@ -43,26 +43,26 @@ final class Scanner
                 $scanner->fail($attributes[1]->peek(), 'duplicate Lean attribute on the same class');
             }
             if (isset($attributes[0])) {
-                $blocks[] = $scanner->block($name, $attributes[0]);
+                $blocks[] = $scanner->block($name->text, $attributes[0]);
             }
         }
         return $blocks;
     }
 
     /** @return Closure(string): string */
-    public static function resolver(string $file, string $class): Closure
+    public static function resolver(string $file, int $line): Closure
     {
         $scanner = new self($file, str_replace(["\r\n", "\r"], "\n", Files::read($file)));
-        foreach ($scanner->declarations() as [$name]) {
-            if ($scanner->qualify($name) === $class) {
+        foreach ($scanner->declarations($line) as [$token]) {
+            if ($token->is(T_FUNCTION)) {
                 return $scanner->resolve(...);
             }
         }
-        throw new RuntimeException("$file: cannot find model declaration for $class");
+        throw new RuntimeException("$file:$line: cannot find the model constructor declaration");
     }
 
-    /** @return Generator<int, array{string, list<Tokens>}> */
-    private function declarations(): Generator
+    /** @return Generator<int, array{PhpToken, list<Tokens>}> */
+    private function declarations(?int $functionLine = null): Generator
     {
         try {
             $tokens = array_values(array_filter(
@@ -89,8 +89,11 @@ final class Scanner
             if ($token->is([T_FINAL, T_ABSTRACT, T_READONLY])) {
                 continue;
             }
-            if ($token->is([T_CLASS, T_TRAIT, T_ENUM]) && $tokens->peek()->is(T_STRING)) {
-                yield [$tokens->take()->text, $token->is(T_CLASS) ? $attributes : []];
+            if ($token->is(T_FUNCTION) && $token->line === $functionLine) {
+                yield [$token, []];
+            }
+            if ($token->is(T_CLASS) && $tokens->peek()->is(T_STRING)) {
+                yield [$tokens->take(), $attributes];
             }
             $attributes = [];
             if ($token->is(T_NAMESPACE)) {

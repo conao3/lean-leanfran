@@ -30,7 +30,7 @@ $order = Receipt::receiptOrder(new OrderInput(
     items: [1, 2],
     pair: [-10, Code::Special],
     note: null,
-    detail: new Detail(active: true, weight: 2.5),
+    detail: new Detail(active: true, weight: 2.5, colors: [Color::Red]),
     units: 2,
     class: 4,
 ));
@@ -40,4 +40,5 @@ echo $order->pair[0], "\n", $order->pair[1]->name, "\n";
 echo $order->note ?? '(none)', "\n";
 $detail = $order->detail ?? throw new RuntimeException('Expected the returned detail.');
 echo $detail->active ? 'true' : 'false', "\n";
-echo number_format($detail->weight, 6, '.', ''), "\n", $order->units, "\n", $order->class, "\n";
+echo number_format($detail->weight, 6, '.', ''), "\n", $detail->colors[0]->name, "\n";
+echo $order->units, "\n", $order->class, "\n";

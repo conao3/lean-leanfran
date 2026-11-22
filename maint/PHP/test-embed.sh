@@ -73,7 +73,7 @@ def main : IO Unit := do
     items := [1, 2], items_min_items := by decide, items_items_ge := by decide
     pair := (-10, .Special), pair_first_ge := by decide, pair_first_le := by decide
     note := none, note_min_length := by decide
-    detail := some ⟨true, 2.5⟩
+    detail := some ⟨true, 2.5, [.Red]⟩
     units := 2, units_ge := by decide
     «class» := 4
   }
@@ -90,6 +90,7 @@ def main : IO Unit := do
   IO.println (order.note.getD "(none)")
   IO.println ((order.detail.map (·.active)).getD false)
   IO.println ((order.detail.map (·.weight)).getD 0.0)
+  IO.println (match order.detail.bind (·.colors.head?) with | some .Red => "Red" | _ => "other")
   IO.println order.units
   IO.println order.«class»
 LEAN
@@ -171,6 +172,11 @@ assert_status 1 unsupported-model-type vendor/bin/leanfran sync --leanfran-php "
 grep -Fq 'App\OrderInput.colors: unsupported PHPDoc type array<string, Shade>' "$out/unsupported-model-type.log"
 compare_generated
 cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
+
+sed -i '/^{$/a\    private int $secret;' src/Input/DetailFields.php
+assert_status 1 unsupported-model-shape php_status
+grep -Fq 'App\Input\Detail.secret: expected a promoted public readonly property' "$out/unsupported-model-shape.log"
+cp "$OLDPWD/$project_template/src/Input/DetailFields.php" src/Input/DetailFields.php
 
 sed -i 's/OrderInput::class/UnknownModel::class/' src/Catalog.php
 assert_status 1 unknown-model php_status

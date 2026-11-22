@@ -92,44 +92,55 @@ final class Models
             return $this->definitions[$name] = [$name => "inductive $lean where\n" . implode("\n", $cases)];
         }
         $constructor = $class->getConstructor();
-        if (
-            !$class->isFinal()
-            || $class->isInternal()
-            || $constructor !== null && (!$constructor->isPublic() || $constructor->getDeclaringClass()->name !== $name)
-        ) {
+        if (!$class->isFinal() || $class->isInternal() || $constructor !== null && !$constructor->isPublic()) {
             throw new RuntimeException("$name: expected a final class with a public constructor");
         }
         $properties = [];
-        foreach ($class->getProperties() as $property) {
-            if (!$property->isPublic() || !$property->isReadOnly() || !$property->isPromoted()) {
-                throw new RuntimeException("$name.{$property->name}: expected a promoted public readonly property");
+        for ($owner = $class; $owner !== false; $owner = $owner->getParentClass()) {
+            foreach ($owner->getProperties() as $property) {
+                if ($property->getDeclaringClass()->name !== $owner->name) {
+                    continue;
+                }
+                if (!$property->isPublic() || !$property->isReadOnly() || !$property->isPromoted()) {
+                    throw new RuntimeException("$name.{$property->name}: expected a promoted public readonly property");
+                }
+                $properties[$property->name] ??= $property;
             }
-            $properties[$property->name] = $property;
+        }
+        $parameters = $constructor?->getParameters() ?? [];
+        if ($parameters === [] && $properties === []) {
+            return $this->definitions[$name] = [$name => "structure $lean where"];
         }
 
         $active[$name] = true;
         $deps = [];
         $fields = [];
         $names = array_fill_keys(array_keys($properties), true);
-        $file = $class->getFileName();
-        if ($file === false) {
-            throw new RuntimeException("$name: missing model source file");
+        $file = $constructor?->getFileName();
+        $line = $constructor?->getStartLine();
+        if (!is_string($file) || !is_int($line)) {
+            throw new RuntimeException("$name: missing model constructor source");
         }
-        $scope = Scanner::resolver($file, $name);
-        $resolve = static fn(string $type): string => self::reflect($type === 'self' ? $name : $scope($type))->name;
-        $params = self::doc($constructor?->getDocComment() ?: '');
+        $scope = Scanner::resolver($file, $line);
+        $ownerName = $constructor->getDeclaringClass()->name;
+        $resolve = static fn(string $type): string => self::reflect(
+            $type === 'self' ? $ownerName : $scope($type),
+        )->name;
+        $params = self::doc($constructor->getDocComment() ?: '');
         preg_match_all('/(?:^|\s)@param\s+([^$@]*?)\$([\w\x80-\xff]+)(?=\s|$)/m', $params, $matches, PREG_SET_ORDER);
         $annotations = [];
         foreach ($matches as [, $type, $param]) {
             $annotations[$param] = trim($type);
         }
 
-        foreach ($constructor?->getParameters() ?? [] as $parameter) {
+        foreach ($parameters as $parameter) {
             $prop = $parameter->name;
             $where = "$name.$prop";
-            $property = $properties[$prop] ?? throw new RuntimeException(
-                "$where: expected a promoted public readonly property",
-            );
+            $property = $properties[$prop] ?? null;
+            if (!$parameter->isPromoted() || $property === null) {
+                throw new RuntimeException("$where: expected a promoted public readonly property");
+            }
+            unset($properties[$prop]);
             try {
                 $type = self::propertyType($property, $annotations[$prop] ?? null, $resolve);
                 foreach ($type->classes() as $dependency) {
@@ -148,6 +159,10 @@ final class Models
             } catch (RuntimeException $error) {
                 throw new RuntimeException("$where: {$error->getMessage()}", previous: $error);
             }
+        }
+        if ($properties !== []) {
+            $prop = array_key_first($properties);
+            throw new RuntimeException("$name.$prop: expected a property of the model constructor");
         }
         return $this->definitions[$name] = $deps + [$name => "structure $lean where\n" . implode("\n", $fields)];
     }
