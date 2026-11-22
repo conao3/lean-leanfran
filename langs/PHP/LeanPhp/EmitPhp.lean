@@ -158,6 +158,8 @@ structure Ctx where
   decls : Std.HashMap Name Decl
   methods : Std.HashMap Name String
   directExterns : Std.HashMap Name String
+  tailTargets : Std.HashSet Name
+  cores : Std.HashSet Name
   self : Name
   selfParams : Array Param
   inlineJps : Std.HashMap Nat (Array Param × FnBody) := {}
@@ -200,6 +202,14 @@ def bindArgs (ps : Array Param) (ys : Array Arg) : EmitM Unit := do
 def methodRef (methods : Std.HashMap Name String) (n : Name) : String :=
   "self::" ++ methods[n]!
 
+def coreName (method : String) : String := "tc_" ++ method
+
+def coreRef (methods : Std.HashMap Name String) (n : Name) : String :=
+  "self::" ++ coreName methods[n]!
+
+def callArgs (d : Decl) (ys : Array Arg) : EmitM String := do
+  return joinArgs (← ((d.params.zip ys).filter (liveParam ·.1)).mapM (argStr ·.2))
+
 def emitVDecl (x : VarId) (ty : IRType) (e : IR.Expr) : EmitM Unit := do
   let ctx ← read
   let xs := varName x
@@ -220,16 +230,15 @@ def emitVDecl (x : VarId) (ty : IRType) (e : IR.Expr) : EmitM Unit := do
       pure s!"L\\lean_ctor_get_{suffix}({varName y}, {8 * n + offset})"
     | .fap c ys =>
       let some d := ctx.decls[c]? | throw s!"function was not collected: {c}"
-      let args ← ((d.params.zip ys).filter (liveParam ·.1)).mapM (argStr ·.2)
       let fn := match ctx.directExterns[c]? with
         | some sym => "L\\" ++ sym
         | none => methodRef ctx.methods c
-      pure s!"{fn}({joinArgs args})"
+      pure s!"{fn}({← callArgs d ys})"
     | .pap c ys =>
       let some d := ctx.decls[c]? | throw s!"function was not collected: {c}"
-      let fn := methodRef ctx.methods c
       let params := d.params
       let borrowed := params.filter fun p => liveParam p && p.borrow && p.ty.isPossibleRef
+      let fn := if ctx.cores.contains c && borrowed.isEmpty then coreRef ctx.methods c else methodRef ctx.methods c
       let callable :=
         if borrowed.isEmpty && params.all liveParam then fn ++ "(...)"
         else
@@ -270,12 +279,23 @@ partial def emitBody (b : FnBody) : EmitM Unit := do
   let ctx ← read
   match b with
   | .vdecl x ty e k =>
-    if let .fap c ys := e then
-      if c == ctx.self && !ctx.selfParams.isEmpty && tailReturns x k then
+    if !ctx.constBody && tailReturns x k then
+      match e with
+      | .fap c ys =>
+        if c == ctx.self then
+          emitTrailingIncs k
+          bindArgs ctx.selfParams ys
+          emitLn "goto _start;"
+          return
+        if ctx.tailTargets.contains c then
+          emitTrailingIncs k
+          emitLn s!"return new L\\TailCall({coreRef ctx.methods c}(...), [{← callArgs ctx.decls[c]! ys}]);"
+          return
+      | .ap f ys =>
         emitTrailingIncs k
-        bindArgs ctx.selfParams ys
-        emitLn "goto _start;"
+        emitLn s!"return new L\\TailApply({varName f}, [{joinArgs (← ys.mapM argStr)}]);"
         return
+      | _ => pure ()
     emitVDecl x ty e
     emitBody k
   | .jdecl _ _ _ k => emitBody k
@@ -334,20 +354,33 @@ partial def emitBody (b : FnBody) : EmitM Unit := do
       emitLn s!"goto _jp_{j.idx};"
   | .unreachable => emitLn "L\\lean_internal_panic_unreachable();"
 
-partial def bodySelfTail (f : Name) (b : FnBody) : Bool :=
-  match b with
-  | .vdecl x _ (.fap c _) k => (c == f && tailReturns x k) || bodySelfTail f k
-  | .jdecl _ _ v k => bodySelfTail f v || bodySelfTail f k
-  | .case _ _ _ alts => alts.any fun a => bodySelfTail f a.body
-  | .ret _ | .jmp .. | .unreachable => false
-  | b => bodySelfTail f b.body
+structure TailEdges where
+  direct : Std.HashSet Name := {}
+  apply : Bool := false
 
-def declarationHeader (method : String) (ps : Array Param) (ty : IRType) : String :=
+partial def tailEdges (b : FnBody) (edges : TailEdges) : TailEdges :=
+  match b with
+  | .vdecl x _ e k =>
+    let edges := if tailReturns x k then
+      match e with
+      | .fap c _ => { edges with direct := edges.direct.insert c }
+      | .ap .. => { edges with apply := true }
+      | _ => edges
+      else edges
+    tailEdges k edges
+  | .jdecl _ _ v k => tailEdges k (tailEdges v edges)
+  | .case _ _ _ alts => alts.foldl (fun acc a => tailEdges a.body acc) edges
+  | .ret _ | .jmp .. | .unreachable => edges
+  | b => tailEdges b.body edges
+
+def declarationHeader (method : String) (ps : Array Param) (ty : IRType) (isPublic := true) : String :=
   let args := joinArgs ((ps.filter liveParam).map fun p => s!"{phpType p.ty} {varName p.x}")
-  s!"    public static function {method}({args}): {phpType ty}\n    \{\n"
+  let access := if isPublic then "public" else "private"
+  s!"    {access} static function {method}({args}): {phpType ty}\n    \{\n"
 
 def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (methods : Std.HashMap Name String)
     (exports : Std.HashMap String Name) (directExterns : Std.HashMap Name String)
+    (edges : Std.HashMap Name TailEdges) (tailTargets cores : Std.HashSet Name)
     (initGlobals : Std.HashSet Name) (d : Decl) : Except String String := do
   let header := declarationHeader methods[d.name]! d.params d.resultType
   match d with
@@ -387,7 +420,8 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (methods : Std.
         blocks := blocks.push (i, v)
     let varTypes := ps.foldl (fun m p => m.insert p.x.idx p.ty) (bodyVars body {})
     let ctx : Ctx := {
-      decls, methods, directExterns, self := f, selfParams := ps, inlineJps, labelParams, varTypes
+      decls, methods, directExterns, tailTargets, cores
+      self := f, selfParams := ps, inlineJps, labelParams, varTypes
       constBody := ps.isEmpty
     }
     let emit : EmitM Unit := do
@@ -396,12 +430,17 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl) (methods : Std.
         emitLn "if ($_value !== null) {"
         indented (emitLn "return $_value;")
         emitLn "}"
-      if !ps.isEmpty && bodySelfTail f body then emitLn "_start:"
+      if (edges.getD f {}).direct.contains f then emitLn "_start:"
       emitBody body
       for (i, v) in blocks do
         emitLn s!"_jp_{i}:"
         emitBody v
     let ((), st) ← (emit.run ctx).run {}
+    if cores.contains f then
+      let args := joinArgs ((ps.filter liveParam).map (varName ·.x))
+      let wrapper := s!"        return L\\lean_trampoline({coreRef methods f}({args}));\n    }\n\n"
+      let core := declarationHeader (coreName methods[f]!) ps .object false
+      return header ++ wrapper ++ core ++ st.out ++ "    }\n"
     return header ++ st.out ++ "    }\n"
 
 structure Initializers where
@@ -438,19 +477,22 @@ def emitMain (env : Environment) (methods : Std.HashMap Name String) (inits : In
     throw s!"expected {n} to return IO Unit or IO UInt32"
   let mut out := ""
   if !inits.globals.isEmpty then out := "    private static array $_initValues = [];\n\n"
-  out := out ++ "    public static function runMain(array $args): int\n    {\n        return L\\lean_run_main(\n"
-  out := out ++ s!"            {methodRef methods n}(...), $args, {hasArgs}, {returnsCode}, [\n"
+  out := out ++ "    public static function runMain(array $args): int\n    {\n"
+  if inits.entries.isEmpty then
+    return out ++ s!"        return L\\lean_run_main({methodRef methods n}(...), $args, {hasArgs}, {returnsCode}, []);\n    }\n"
+  out := out ++ "        static $initializers;\n        $initializers ??= [\n"
   for (n, init) in inits.entries do
-    if init.isAnonymous then
-      out := out ++ s!"                {methodRef methods n}(...),\n"
-    else
-      out := out ++ s!"                static function (): L\\Ctor \{\n"
-      out := out ++ s!"                    $result = {methodRef methods init}();\n"
-      out := out ++ "                    if (L\\lean_io_result_is_ok($result)) {\n"
-      out := out ++ s!"                        self::$_initValues[{quoteBytes methods[n]!}] = "
-        ++ "L\\lean_mark_persistent(L\\lean_io_result_get_value($result));\n"
-      out := out ++ "                    }\n                    return $result;\n                },\n"
-  return out ++ "            ],\n        );\n    }\n"
+    out := out ++ "            static function (): L\\Ctor {\n"
+    out := out ++ "                static $cached;\n                if ($cached !== null) {\n                    return $cached;\n                }\n"
+    let action := if init.isAnonymous then n else init
+    out := out ++ s!"                $result = {methodRef methods action}();\n"
+    unless init.isAnonymous do
+      out := out ++ "                if (L\\lean_io_result_is_ok($result)) {\n"
+      out := out ++ s!"                    self::$_initValues[{quoteBytes methods[n]!}] = L\\lean_io_result_get_value($result);\n"
+      out := out ++ "                }\n"
+    out := out ++ "                return $cached = L\\lean_mark_persistent($result);\n            },\n"
+  return out ++ "        ];\n"
+    ++ s!"        return L\\lean_run_main({methodRef methods n}(...), $args, {hasArgs}, {returnsCode}, $initializers);\n    }\n"
 
 structure Output where
   items : String
@@ -476,7 +518,21 @@ def generate (env : Environment) (mod : Name) (roots : Array Name) (main? : Opti
     throw s!"externs not in the runtime: {joinArgs (missing.qsort (· < ·))}"
   let methods ← methodNames decls
   let declMap := decls.foldl (fun m d => m.insert d.name d) ({} : Std.HashMap Name Decl)
-  let mut items ← decls.mapM (emitDecl env declMap methods exports directExterns inits.globals)
+  let mut edges : Std.HashMap Name TailEdges := {}
+  for d in decls do
+    if let .fdecl f ps _ body _ := d then
+      unless ps.isEmpty || inits.globals.contains f do
+        edges := edges.insert f (tailEdges body {})
+  let mut tailTargets : Std.HashSet Name := {}
+  for (f, calls) in edges.toList do
+    for c in calls.direct do
+      if c != f && edges.contains c then
+        tailTargets := tailTargets.insert c
+  let mut cores := tailTargets
+  for (f, calls) in edges.toList do
+    if calls.apply || calls.direct.toList.any (fun c => c != f && tailTargets.contains c) then
+      cores := cores.insert f
+  let mut items ← decls.mapM (emitDecl env declMap methods exports directExterns edges tailTargets cores inits.globals)
   if let some m := main? then
     items := items.push (← emitMain env methods inits declMap[m]!)
   return { items := "\n".intercalate items.toList, functions := decls.size, externs := externs.size }

@@ -1,3 +1,5 @@
+import LeanPhpTest.ControlIr
+
 namespace LeanPhpTest.Vectors
 
 initialize seedValue : Nat ← do
@@ -5,7 +7,7 @@ initialize seedValue : Nat ← do
   return 5
 
 initialize
-  IO.eprintln "initialize ready"
+  IO.eprintln s!"initialize ready {seedValue}"
 
 inductive Shape
   | empty
@@ -50,16 +52,21 @@ structure Bounds where
 
 @[noinline] def applyTwo (f : Bool → Nat → Nat) (b : Bool) (n : Nat) : Nat := f b n
 
+@[noinline] def selectValue {α : Type} (yes no : α) (test : Bool) : α :=
+  if test then yes else no
+
 @[noinline] def upper (n : Nat) : Nat := n + 2
 @[noinline] def Upper (n : Nat) : Nat := n * 3
 
 @[noinline] def arrayLine (a : Array Nat) (n : Nat) : String :=
-  let b := (a.push n).set! 0 (n + 1)
-  s!"array {a[0]!}/{a.size} {b[0]!}/{b[1]!}/{b.size}"
+  let pushed := a.push n
+  let updated := a.set! 0 (n + 1)
+  s!"array {a[0]!}/{a.size} {pushed[0]!}/{pushed[1]!}/{pushed.size} {updated[0]!}/{updated.size}"
 
 @[noinline] def stringLine (s t : String) : String :=
-  let u := (s ++ t).push '!'
-  s!"string {s} {u} {u.length}/{u.utf8ByteSize}"
+  let appended := s ++ t
+  let pushed := s.push '!'
+  s!"string {s} {appended} {appended.length}/{appended.utf8ByteSize} {pushed}"
 
 @[noinline] def thunkLine (n : Nat) : Nat :=
   let t := Thunk.mk fun _ => n + 7
@@ -75,6 +82,9 @@ structure Bounds where
 @[noinline] def run (args : List String) : IO UInt32 := do
   match args with
   | ["fail"] => throw (IO.userError "requested failure")
+  | ["status"] =>
+    IO.eprintln "explicit exit status"
+    return 23
   | [text] => IO.println s!"argument {text} (seed {seedValue})"
   | _ => pure ()
   IO.println (natLine 9223372036854775809)
@@ -83,10 +93,12 @@ structure Bounds where
   IO.println (arrayLine #[3] 9)
   IO.println (stringLine "é" "🌱$name")
   let partiallyApplied := applyOne (addThree 1) 2
-  IO.println s!"closures {applyOne partiallyApplied 3} {applyTwo (chooseClosure 7) false 6}"
+  let oversaturated := applyTwo (selectValue (addThree 4 5) (addThree 7 8)) false 6
+  IO.println s!"closures {applyOne partiallyApplied 3} {applyTwo (chooseClosure 7) false 6} {oversaturated}"
   IO.println s!"case names {upper 7} {Upper 7}"
-  IO.println s!"tail {sumTo 1000000 0} {alternate 1000001 10 20}"
+  IO.println s!"tail {sumTo 101 0} {alternate 101 10 20}"
   IO.println s!"thunk {thunkLine 5}"
+  ControlIr.run (args.head?.getD "control")
   return 0
 
 end LeanPhpTest.Vectors

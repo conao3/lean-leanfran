@@ -403,6 +403,7 @@ def runtimeExterns : Array String := #[
   "lean_thunk_get",
   "lean_thunk_get_own",
   "lean_thunk_pure",
+  "lean_trampoline",
   "lean_uint16_add",
   "lean_uint16_complement",
   "lean_uint16_dec_eq",

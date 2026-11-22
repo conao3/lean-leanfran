@@ -6,6 +6,11 @@ namespace Conao3\Leanfran\Runtime;
 
 function lean_apply(LClosure $f, array $args): mixed
 {
+    return lean_trampoline(applyStep($f, $args));
+}
+
+function applyStep(LClosure $f, array $args): LClosure|TailCall
+{
     while (true) {
         $fixed = $f->fixed;
         $need = $f->arity - count($fixed);
@@ -16,14 +21,15 @@ function lean_apply(LClosure $f, array $args): mixed
             lean_inc($arg);
         }
         $fn = $f->fn;
+        $arity = $f->arity;
         lean_dec($f);
         if (count($args) < $need) {
-            return new LClosure($fn, $f->arity, [...$fixed, ...$args]);
+            return new LClosure($fn, $arity, [...$fixed, ...$args]);
         }
         if (count($args) === $need) {
-            return $fn(...$fixed, ...$args);
+            return new TailCall($fn, [...$fixed, ...$args]);
         }
-        $f = $fn(...$fixed, ...array_slice($args, 0, $need));
+        $f = lean_trampoline($fn(...$fixed, ...array_slice($args, 0, $need)));
         if (!$f instanceof LClosure) {
             throw new \TypeError('Oversaturated Lean application did not return a closure.');
         }
