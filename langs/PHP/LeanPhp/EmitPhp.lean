@@ -477,19 +477,22 @@ def emitMain (env : Environment) (methods : Std.HashMap Name String) (inits : In
     throw s!"expected {n} to return IO Unit or IO UInt32"
   let mut out := ""
   if !inits.globals.isEmpty then out := "    private static array $_initValues = [];\n\n"
-  out := out ++ "    public static function runMain(array $args): int\n    {\n        return L\\lean_run_main(\n"
-  out := out ++ s!"            {methodRef methods n}(...), $args, {hasArgs}, {returnsCode}, [\n"
+  out := out ++ "    public static function runMain(array $args): int\n    {\n"
+  if inits.entries.isEmpty then
+    return out ++ s!"        return L\\lean_run_main({methodRef methods n}(...), $args, {hasArgs}, {returnsCode}, []);\n    }\n"
+  out := out ++ "        static $initializers;\n        $initializers ??= [\n"
   for (n, init) in inits.entries do
-    if init.isAnonymous then
-      out := out ++ s!"                {methodRef methods n}(...),\n"
-    else
-      out := out ++ s!"                static function (): L\\Ctor \{\n"
-      out := out ++ s!"                    $result = {methodRef methods init}();\n"
-      out := out ++ "                    if (L\\lean_io_result_is_ok($result)) {\n"
-      out := out ++ s!"                        self::$_initValues[{quoteBytes methods[n]!}] = "
-        ++ "L\\lean_mark_persistent(L\\lean_io_result_get_value($result));\n"
-      out := out ++ "                    }\n                    return $result;\n                },\n"
-  return out ++ "            ],\n        );\n    }\n"
+    out := out ++ "            static function (): L\\Ctor {\n"
+    out := out ++ "                static $cached;\n                if ($cached !== null) {\n                    return $cached;\n                }\n"
+    let action := if init.isAnonymous then n else init
+    out := out ++ s!"                $result = {methodRef methods action}();\n"
+    unless init.isAnonymous do
+      out := out ++ "                if (L\\lean_io_result_is_ok($result)) {\n"
+      out := out ++ s!"                    self::$_initValues[{quoteBytes methods[n]!}] = L\\lean_io_result_get_value($result);\n"
+      out := out ++ "                }\n"
+    out := out ++ "                return $cached = L\\lean_mark_persistent($result);\n            },\n"
+  return out ++ "        ];\n"
+    ++ s!"        return L\\lean_run_main({methodRef methods n}(...), $args, {hasArgs}, {returnsCode}, $initializers);\n    }\n"
 
 structure Output where
   items : String
