@@ -48,7 +48,7 @@ test-numeric:
 
 test-runtime: vendor/autoload.php
 	$(show-php-version)
-	phpunit --cache-directory test-out/phpunit --bootstrap vendor/autoload.php tests
+	phpunit --cache-directory test-out/phpunit --bootstrap vendor/autoload.php tests/Runtime
 
 test-static: vendor/autoload.php
 	$(show-php-version)

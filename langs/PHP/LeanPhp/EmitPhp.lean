@@ -498,6 +498,7 @@ structure Output where
   items : String
   functions : Nat
   externs : Nat
+  methods : Std.HashMap Name String
 
 def generate (env : Environment) (mod : Name) (roots : Array Name) (main? : Option Name) : Except String Output := do
   let targets := roots.map (csimpTarget env)
@@ -535,6 +536,6 @@ def generate (env : Environment) (mod : Name) (roots : Array Name) (main? : Opti
   let mut items ← decls.mapM (emitDecl env declMap methods exports directExterns edges tailTargets cores inits.globals)
   if let some m := main? then
     items := items.push (← emitMain env methods inits declMap[m]!)
-  return { items := "\n".intercalate items.toList, functions := decls.size, externs := externs.size }
+  return { items := "\n".intercalate items.toList, functions := decls.size, externs := externs.size, methods }
 
 end LeanPhp

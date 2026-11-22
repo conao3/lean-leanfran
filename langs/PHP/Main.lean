@@ -2,7 +2,7 @@ import LeanPhp
 
 open Lean LeanPhp
 
-def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
+def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Array Name := Id.run do
   let some idx := env.getModuleIdx? mod | return #[]
   let mut instances : Std.HashSet Name := {}
   for i in [0:env.header.moduleNames.size] do
@@ -13,21 +13,28 @@ def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
         instances := instances.insert n
   let mut out := #[]
   for c in env.header.moduleData[idx.toNat]!.constNames do
-    if isPrivateName c || c.isInternalDetail || isAuxRecursor env c then continue
+    if !includePrivate && isPrivateName c then continue
+    if (privateToUserName c).isInternalDetail || isAuxRecursor env c then continue
     if instances.contains c || instances.contains c.getPrefix then continue
-    if (declRangeExt.find? (level := .exported) env c).isNone then continue
+    let defined := (declRangeExt.find? (level := .exported) env c).isSome ||
+      (includePrivate && (declRangeExt.find? (level := .server) env c).isSome)
+    if !defined then continue
     if (IR.findEnvDecl env c).isSome then out := out.push c
   return out
 
 def version : String := "0.6.0"
-def generatorVersion : String := "2"
+def generatorVersion : String := "3"
 
 def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
 
 leanfran-php module generate
   --module-name <Name>        Lean module to import (required unless --batch)
   --roots <Name> ...          Roots (default: the module's public definitions)
-  --namespace <Name>          Namespace for public wrappers (reserved for public API generation)
+  --namespace <Name>          Lean namespace removed from public names (default: module)
+  --output-dir <path>         Generate public PSR-4 classes in this directory
+  --php-namespace <NS>        Namespace of the public classes (required with --output-dir)
+  --facade <Name>             Public facade class (default: last component of the Lean module)
+  --type-module <N=NS>        Refer to public types generated in another PHP namespace (repeatable)
   --class <NS\\Name>           Generated class (default: Leanfran\\Generated\\Lean<Module>)
   --main <Name>               Generate a CLI entry point
   --batch <file>              JSON array of jobs with module, output_file, roots?, namespace?, class?, main?
@@ -46,6 +53,11 @@ structure JobOpts where
   class? : Option String := none
   main? : Option Name := none
   outputFile : Option System.FilePath := none
+  outputDir : Option System.FilePath := none
+  phpNamespace : Option String := none
+  facade : Option String := none
+  typeModules : Array (Name × String) := #[]
+  internalOnly : Bool := false
 
 structure Opts extends JobOpts where
   moduleName : Option Name := none
@@ -57,7 +69,7 @@ structure Opts extends JobOpts where
 partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
   let some (flag, rest) := args.head?.map (·, args.tail) | return o
   let isValue := fun (s : String) => !s.isEmpty && !s.startsWith "--"
-  if flag == "--internal-only" then return ← parseOpts rest o
+  if flag == "--internal-only" then return ← parseOpts rest { o with internalOnly := true }
   if flag == "--roots" || flag == "--import" || flag == "--search-path" then
     let vs := (rest.takeWhile isValue).toArray
     if vs.isEmpty then throw s!"expected at least one value for {flag}"
@@ -66,7 +78,8 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
       | "--import" => { o with imports := o.imports ++ vs.map String.toName }
       | _ => { o with searchPath := o.searchPath ++ vs.map System.FilePath.mk }
     return ← parseOpts (rest.drop vs.size) o
-  unless #["--module-name", "--namespace", "--class", "--main", "--batch", "--output-file", "--output"].contains flag do
+  unless #["--module-name", "--namespace", "--class", "--main", "--batch", "--output-file",
+      "--output-dir", "--php-namespace", "--facade", "--type-module", "--output"].contains flag do
     throw s!"unknown parameter: {flag}"
   let v :: rest := rest | throw s!"expected a value for {flag}"
   unless isValue v do throw s!"expected a value for {flag}"
@@ -77,6 +90,17 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
   | "--main" => parseOpts rest { o with main? := v.toName }
   | "--batch" => parseOpts rest { o with batch := some v }
   | "--output-file" => parseOpts rest { o with outputFile := some v }
+  | "--output-dir" => parseOpts rest { o with outputDir := some v }
+  | "--php-namespace" => parseOpts rest { o with phpNamespace := some v }
+  | "--facade" => parseOpts rest { o with facade := some v }
+  | "--type-module" =>
+    match v.splitOn "=" with
+    | [n, ns] =>
+      if n.isEmpty || ns.isEmpty then throw "--type-module expects LeanName=PhpNamespace"
+      let n := n.toName
+      if o.typeModules.any (·.1 == n) then throw s!"duplicate --type-module for {n}"
+      parseOpts rest { o with typeModules := o.typeModules.push (n, ns) }
+    | _ => throw "--type-module expects LeanName=PhpNamespace"
   | _ =>
     if v == "json" || v == "text" then parseOpts rest { o with output := v }
     else throw s!"--output must be json or text: {v}"
@@ -87,21 +111,6 @@ def fail (code : UInt32) (msg : String) : IO UInt32 := do
 
 structure Job extends JobOpts where
   module : Name
-
-def phpIdentifier (s : String) : Bool :=
-  let start := fun (c : Char) => c.isAlpha || c == '_' || c.toNat >= 128
-  match s.toList with
-  | [] => false
-  | c :: cs => start c && cs.all (fun c => start c || c.isDigit)
-
-def reservedClasses : List String :=
-  ("__class__ __dir__ __file__ __function__ __halt_compiler __line__ __method__ __namespace__ " ++
-    "__property__ __trait__ abstract and array as bool break callable case catch class clone const continue declare " ++
-    "default die do echo else elseif empty enddeclare endfor endforeach endif endswitch endwhile eval exit " ++
-    "extends false final finally float fn for foreach function global goto if implements include include_once " ++
-    "instanceof insteadof int interface isset list match mixed namespace never new null object or parent print " ++
-    "private protected public readonly require require_once return self static string switch throw " ++
-    "trait true try unset use var void while xor yield iterable").splitOn " "
 
 structure PhpClass where
   ns : String
@@ -120,20 +129,118 @@ def jobClass (job : Job) : Except String PhpClass := do
     if name.toLower == "l" then throw s!"PHP class name conflicts with the runtime alias L: {cls}"
     return { ns := "\\".intercalate parts.dropLast, name }
 
-def header (mod : Name) (cls : PhpClass) : String :=
+def publicMarker : String := "<?php // Generated by leanfran-php "
+
+def header (mod : Name) (cls : PhpClass) (publicOutput := false) : String :=
   let moduleLabel := (toString mod).replace "\n" "\\n" |>.replace "\r" "\\r" |>.replace "?>" "? >"
   let ns := if cls.ns.isEmpty then "" else s!"namespace {cls.ns};\n\n"
-  "<?php\n" ++ s!"// Generated by leanfran-php (generator {generatorVersion}) from {moduleLabel}. Do not edit.\n\n"
+  (if publicOutput then "<?php " else "<?php\n") ++ s!"// Generated by leanfran-php (generator {generatorVersion}) from {moduleLabel}. Do not edit.\n\n"
     ++ "declare(strict_types=1);\n\n" ++ ns ++ "use Conao3\\Leanfran\\Runtime as L;\n\n"
     ++ s!"final class {cls.name}\n\{\n"
+
+def validNamespace (ns : String) : Bool :=
+  let parts := ns.splitOn "\\"
+  parts.all phpIdentifier && parts.head!.toLower != "namespace"
+
+def moduleTypes (env : Environment) (mod : Name) : Array Name := Id.run do
+  let some idx := env.getModuleIdx? mod | return #[]
+  let mut types := #[]
+  for c in env.header.moduleData[idx.toNat]!.constNames do
+    if c.isInternalDetail && !isPrivateName c then continue
+    if (declRangeExt.find? (level := .exported) env c).isNone && !isPrivateName c then continue
+    match env.find? c with
+    | some (.inductInfo info) =>
+      if info.numParams == 0 || info.numIndices != 0 || isClass env c then
+        types := types.push c
+    | some (.defnInfo info) =>
+      if info.type.isSort && info.value.getAppFn.constName? == some ``Subtype then
+        types := types.push c
+    | _ => pure ()
+  return types
+
+def publicHeader (mod : Name) (ns : String) : String :=
+  let label := (toString mod).replace "\n" "\\n" |>.replace "\r" "\\r" |>.replace "?>" "? >"
+  publicMarker ++ s!"(generator {generatorVersion}) from {label}. Do not edit.\n\ndeclare(strict_types=1);\n\nnamespace {ns};\n\n"
+
+def generatedFiles (dir : System.FilePath) : IO (Array System.FilePath) := do
+  if !(← dir.pathExists) then return #[]
+  unless (← dir.symlinkMetadata).type == .dir do
+    throw (IO.userError s!"expected an output directory: {dir}")
+  let mut paths := #[]
+  for e in ← dir.readDir do
+    if e.path.extension == some "php" && (← e.path.symlinkMetadata).type == .file then
+      let h ← IO.FS.Handle.mk e.path .read
+      if (← h.getLine).startsWith publicMarker then paths := paths.push e.path
+  return paths
+
+def writePublic (dir : System.FilePath) (files : Array (String × String)) : IO Unit := do
+  let old ← (· ++ ·) <$> generatedFiles dir <*> generatedFiles (dir / "Internal")
+  let paths := files.map fun (f, _) => dir / f
+  for path in paths do
+    let metadata ← try some <$> path.symlinkMetadata catch
+      | .noFileOrDirectory .. => pure none
+      | e => throw e
+    if metadata.isSome && !old.contains path then
+      throw (IO.userError s!"refusing to overwrite a non-generated file: {path}")
+  IO.FS.createDirAll (dir / "Internal")
+  for ((_, src), path) in files.zip paths do
+    IO.FS.writeFile path src
+  for path in old do
+    unless paths.contains path do IO.FS.removeFile path
+
+def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : Array Name) :
+    IO (Except (UInt32 × String) Json) := do
+  if job.outputFile.isSome || job.internalOnly || job.class?.isSome || job.main?.isSome then
+    return .error (252, "--output-dir cannot be combined with --output-file, --internal-only, --class or --main")
+  let some ns := job.phpNamespace | return .error (252, "--php-namespace is required with --output-dir")
+  unless validNamespace ns && job.typeModules.all (validNamespace ∘ Prod.snd) do
+    return .error (252, "invalid PHP namespace")
+  let facadeBase := job.facade.getD (phpIdent (sanitize (componentString job.module)))
+  unless phpIdentifier facadeBase do
+    return .error (252, s!"invalid PHP facade class name: {facadeBase}")
+  let facade := phpIdent facadeBase
+  let internalName := "Lean" ++ "_".intercalate (job.module.components.map fun n => sanitize (componentString n))
+  let cls : PhpClass := { ns := ns ++ "\\Internal", name := internalName }
+  let internal := "\\" ++ cls.ns ++ "\\" ++ cls.name
+  let typeModules := job.typeModules.qsort (fun a b => a.1.components.length > b.1.components.length)
+  let cfg : MarshalCfg := { strip := job.namespace?.getD job.module, typeModules }
+  let types := if job.roots.isEmpty then moduleTypes env job.module else #[]
+  let (pub, env) ← inspectPublic env cfg types roots facade
+  if let some clash := pub.skipped.find? (·.reason.startsWith collisionLabel) then
+    return .error (254, clash.reason)
+  let targets := pub.functions.map (·.target.name) ++ pub.state.deciders
+  let out ← match generate env job.module targets none with
+    | .ok out => pure out
+    | .error e => return .error (254, e)
+  let render : RenderCfg := { ns, internal, state := pub.state, methods := out.methods, env }
+  let typeFiles ← match pub.state.types.flatMapM (emitType render) with
+    | .ok files => pure (files.map fun (path, src) => (path, publicHeader job.module ns ++ src))
+    | .error e => return .error (254, e)
+  let descs := String.join (pub.state.types.toList.map (emitDescriptor render))
+  let methods := "\n".intercalate (pub.functions.toList.map (emitPublicFn render))
+  let facadeFile := (facade ++ ".php", publicHeader job.module ns ++
+    s!"final class {facade}\n\{\n{methods}}\n")
+  let internalFile := ("Internal/" ++ cls.name ++ ".php", header job.module cls true ++ out.items ++ descs ++ "}\n")
+  let files := typeFiles ++ #[facadeFile, internalFile]
+  writePublic dir files
+  let paths := files.map fun (path, _) => (dir / path).toString
+  let skipped := pub.skipped.map fun s => Json.mkObj [("name", (privateToUserName s.name).toString), ("reason", s.reason)]
+  return .ok (Json.mkObj [("module", toString job.module), ("class", ns ++ "\\" ++ facade),
+    ("functions", out.functions), ("externs", out.externs), ("files", toJson paths), ("skipped", toJson skipped)])
 
 def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
   let failed (code : UInt32) (msg : String) : IO (Json × UInt32) :=
     return (Json.mkObj [("module", toString job.module), ("error", msg), ("code", code.toNat)], code)
+  let roots := if job.roots.isEmpty then defaultRoots env job.module job.outputDir.isSome else job.roots
+  if let some dir := job.outputDir then
+    match ← runPublic env job dir roots with
+    | .ok summary => return (summary, 0)
+    | .error (code, e) => return ← failed code e
+  if job.phpNamespace.isSome || job.facade.isSome || !job.typeModules.isEmpty then
+    return ← failed 252 "--php-namespace, --facade and --type-module require --output-dir"
   let cls ← match jobClass job with
     | .ok cls => pure cls
     | .error e => return ← failed 252 e
-  let roots := if job.roots.isEmpty then defaultRoots env job.module else job.roots
   match generate env job.module roots job.main? with
   | .error e => failed 254 e
   | .ok out =>
@@ -157,7 +264,15 @@ def printSummary (o : Opts) (toStderr : Bool) (j : Json) : IO Unit := do
     let mod := (j.getObjValD "module").getStr?.toOption.getD ""
     match (j.getObjValD "error").getStr? with
     | .ok e => out s!"leanfran-php: {mod}: {e}"
-    | .error _ => out s!"{mod}: class {(j.getObjValD "class").getStr?.toOption.getD ""}, {j.getObjValD "functions"} functions, {j.getObjValD "externs"} externs"
+    | .error _ =>
+      out s!"{mod}: class {(j.getObjValD "class").getStr?.toOption.getD ""}, {j.getObjValD "functions"} functions, {j.getObjValD "externs"} externs"
+      if let .ok files := (j.getObjValD "files").getArr? then
+        for file in files do out (file.getStr?.toOption.getD "")
+      if let .ok skipped := (j.getObjValD "skipped").getArr? then
+        for item in skipped do
+          let name := (item.getObjValD "name").getStr?.toOption.getD ""
+          let reason := (item.getObjValD "reason").getStr?.toOption.getD ""
+          IO.eprintln s!"leanfran-php: skipped {name}: {reason}"
 
 def optionalField [FromJson α] (j : Json) (key : String) : Except String (Option α) :=
   match j.getObjVal? key with
@@ -181,12 +296,14 @@ def importAll (o : Opts) (mods : Array Name) : IO (Except Name Environment) := d
   for m in mods do
     if (← sp.findWithExt "olean" m).isNone then return .error m
   .ok <$> importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024)
+    (loadExts := o.outputDir.isSome)
 
 def moduleGenerate (o : Opts) : IO UInt32 := do
   let jobs ← match o.batch with
     | some f =>
       if o.moduleName.isSome || !o.roots.isEmpty || o.namespace?.isSome || o.class?.isSome ||
-          o.main?.isSome || o.outputFile.isSome then
+          o.main?.isSome || o.outputFile.isSome || o.outputDir.isSome || o.phpNamespace.isSome ||
+          o.facade.isSome || !o.typeModules.isEmpty then
         return ← fail 252 "put module, roots, namespace, class, main and output_file in the batch jobs"
       match Json.parse (← IO.FS.readFile f) >>= parseJobs with
       | .ok js => pure js
@@ -205,10 +322,10 @@ def moduleGenerate (o : Opts) : IO UInt32 := do
     summaries := summaries.push j
     if c != 0 && code == 0 then code := c
   if o.batch.isSome && o.output == "json" then IO.println (Json.arr summaries).compress
-  else for j in summaries do printSummary o (o.batch.isNone && o.outputFile.isNone) j
+  else for j in summaries do printSummary o (o.batch.isNone && o.outputFile.isNone && o.outputDir.isNone) j
   return code
 
-def main (args : List String) : IO UInt32 := do
+unsafe def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
@@ -218,6 +335,7 @@ def main (args : List String) : IO UInt32 := do
     match parseOpts rest {} with
     | .error e => fail 252 e
     | .ok o =>
+      if o.outputDir.isSome then enableInitializersExecution
       try moduleGenerate o
       catch e => fail 255 (toString e)
   | _ => fail 252 "unknown command (see leanfran-php help)"
