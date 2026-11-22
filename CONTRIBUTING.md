@@ -23,7 +23,7 @@ Build compiler packages with `nix build .#python` or select the `.#typescript`, 
 | Clojure    | [langs/Clojure/README.md](langs/Clojure/README.md)       | [Clojure development](docs/clojure-development.md)       |
 | PHP        | [langs/PHP/README.md](langs/PHP/README.md)               | [PHP development](docs/php-development.md)                |
 
-Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with both PHP 8.4 and 8.5, and builds the Python, TypeScript, Clojure, and PHP Nix packages.
+Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with both PHP 8.4 and 8.5, and builds the Python, TypeScript, Clojure, and PHP Nix packages. The PHP check also covers embedded models, PHP-to-Lean translation and proof states, and seeded tests against generated Lean specifications.
 
 ## Packaging
 
@@ -31,7 +31,7 @@ Keep native-oracle differential tests, host-language tests, and sample verificat
 
 Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -T:build jar` in Clojure to build its JAR. Build Python distributions with `uv build` and Rust crates with `cargo package` inside their backend environments.
 
-PHP applications install `conao3/leanfran` from Packagist or use a Composer path repository for a local checkout. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
+PHP applications install `conao3/leanfran` from a Composer path repository pointing to a local checkout. Packagist distribution requires initial package registration. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
 
 ## Releases
 

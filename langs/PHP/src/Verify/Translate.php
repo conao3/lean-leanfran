@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Conao3\Leanfran\Verify;
 
 use Closure;
-use Conao3\Leanfran\Embed\PhpDocType;
-use Conao3\Leanfran\Embed\Scanner;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Stmt;
@@ -62,34 +60,12 @@ final class Translate
     public function definition(): Translated
     {
         $fn = $this->model->node;
-        $stmts = $fn->getStmts();
-        if ($this->model->error !== null) {
-            $this->fail($fn, $this->model->error);
-        }
-        if ($stmts === null || $fn->byRef || $fn instanceof Stmt\ClassMethod && !$fn->isStatic()) {
-            $this->fail($fn, 'expected a static method or named function with a body and by-value return');
-        }
-        if (!Declaration::dotted($this->model->lean())) {
-            $this->fail($fn, 'unsupported function name');
-        }
-        $doc = $fn->getDocComment()?->getText() ?? '';
-        preg_match_all('/@param\s+([^$@\r\n]*?)\$([\w\x80-\xff]+)/', $doc, $matches, PREG_SET_ORDER);
-        $paramDocs = [];
-        foreach ($matches as [, $type, $name]) {
-            $paramDocs[$name] = trim($type);
-        }
-        $returnDoc = preg_match('/@return\s+([^\r\n*]+)/', $doc, $match) === 1 ? trim($match[1]) : null;
-        $this->result = $this->signatureType($fn, $fn->returnType, $returnDoc);
-        $params = [];
+        $signature = new Signature($this->root, $this->model, $this->objects);
+        [$params, $this->result] = $signature->read();
+        $stmts = $fn->getStmts() ?? $this->fail($fn, 'expected a function body');
         $binders = [];
         $args = [];
-        foreach ($fn->params as $param) {
-            if ($param->byRef || $param->variadic || !$param->var instanceof Expr\Variable) {
-                $this->fail($param, 'reference or variadic parameter');
-            }
-            $name = $this->variable($param->var);
-            $type = $this->signatureType($param, $param->type, $paramDocs[$name] ?? null);
-            $params[$name] = $type;
+        foreach ($params as $name => $type) {
             $args[] = self::ident($name);
             $binders[] = '(' . self::ident($name) . ' : ' . $type->lean() . ')';
         }
@@ -137,73 +113,11 @@ final class Translate
         );
     }
 
-    private function signatureType(Node $where, ?Node $node, ?string $doc): Type
-    {
-        if ($node instanceof Node\NullableType) {
-            $innerDoc = $doc === null ? null : preg_replace('/^\?|\|null\s*$/', '', $doc);
-            return new Type('option', [$this->signatureType($where, $node->type, $innerDoc)]);
-        }
-        if ($node instanceof Node\Name) {
-            try {
-                return $this->objects->type($this->className($node));
-            } catch (RuntimeException $error) {
-                $this->fail($where, $error->getMessage());
-            }
-        }
-        if ($node instanceof Node\Identifier) {
-            $name = $node->toLowerString();
-            if (in_array($name, ['int', 'bool', 'string', 'float'], true)) {
-                return new Type($name);
-            }
-            if ($name === 'array' && $doc !== null) {
-                try {
-                    $resolve = Scanner::resolver("$this->root/{$this->model->file}", $this->functionLine());
-                    $type = Type::doc(PhpDocType::parse($doc, $resolve, description: true), $this->objects);
-                    if ($type->native() === 'array') {
-                        return $type;
-                    }
-                } catch (RuntimeException $error) {
-                    $this->fail($where, $error->getMessage());
-                }
-            }
-        }
-        $this->fail($where, 'expected a supported native type, with a list or tuple PHPDoc type for array');
-    }
-
-    private function functionLine(): int
-    {
-        $fn = $this->model->node;
-        foreach (\PhpToken::tokenize(\Conao3\Leanfran\Embed\Files::read(
-            "$this->root/{$this->model->file}",
-        )) as $token) {
-            if ($token->id === T_FUNCTION && $token->pos >= $fn->getStartFilePos()) {
-                return $token->line;
-            }
-        }
-        $this->fail($fn, 'missing function token');
-    }
-
     private function className(Node\Name $name): string
     {
         return strtolower($name->toString()) === 'self'
             ? $this->model->class ?? $this->fail($name, 'self outside a class')
             : $name->toString();
-    }
-
-    private function variable(Expr\Variable $expr): string
-    {
-        if (
-            !is_string($expr->name)
-            || !Declaration::dotted($expr->name)
-            || in_array(
-                $expr->name,
-                ['this', 'GLOBALS', '_GET', '_POST', '_FILES', '_COOKIE', '_SESSION', '_REQUEST', '_SERVER', '_ENV'],
-                true,
-            )
-        ) {
-            $this->fail($expr, 'expected a local variable');
-        }
-        return $expr->name;
     }
 
     private function fail(Node $node, string $message): never
@@ -397,14 +311,14 @@ final class Translate
         $lists = $this->lists;
         $inner = "$pad  ";
         $item = $this->fresh();
-        $dest = $this->variable($stmt->valueVar);
+        $dest = Signature::variable($this->model, $stmt->valueVar);
         $key = $this->fresh();
         $assign = '';
         $head = "{$pad}for $item in $items->code do\n";
         if ($stmt->keyVar !== null) {
             $head = "{$pad}for ($item, $key) in ($items->code).zipIdx do\n";
             $assign .= $this->assign(
-                $this->variable($stmt->keyVar),
+                Signature::variable($this->model, $stmt->keyVar),
                 new Value("(Int.ofNat $key)", new Type('int')),
                 $stmt,
                 $inner,
@@ -433,7 +347,7 @@ final class Translate
     {
         if ($expr instanceof Expr\Assign) {
             if ($expr->var instanceof Expr\Variable) {
-                $name = $this->variable($expr->var);
+                $name = Signature::variable($this->model, $expr->var);
                 $value = $this->value($expr->expr, $this->locals[$name] ?? null);
                 $code = $this->assign($name, $value, $expr, $pad);
                 if ($expr->expr instanceof Expr\Array_ && $value->type->kind === 'list') {
@@ -446,7 +360,7 @@ final class Translate
                 && $expr->var->dim === null
                 && $expr->var->var instanceof Expr\Variable
             ) {
-                $name = $this->variable($expr->var->var);
+                $name = Signature::variable($this->model, $expr->var->var);
                 $list = $this->locals[$name] ?? null;
                 if ($list === null || $list->kind !== 'list' || !isset($this->lists[$name])) {
                     $this->fail($expr, 'append requires a list constructed locally');
@@ -476,7 +390,7 @@ final class Translate
                 Expr\AssignOp\Concat::class => '.',
                 default => $this->fail($expr, 'unsupported compound assignment'),
             };
-            $name = $this->variable($expr->var);
+            $name = Signature::variable($this->model, $expr->var);
             return $this->assign(
                 $name,
                 $this->binary($op, $this->value($expr->var), $this->value($expr->expr), $expr),
@@ -493,7 +407,7 @@ final class Translate
             )
             && $expr->var instanceof Expr\Variable
         ) {
-            $name = $this->variable($expr->var);
+            $name = Signature::variable($this->model, $expr->var);
             $value = $this->expect($expr->var, new Type('int'));
             $op = $expr instanceof Expr\PostInc || $expr instanceof Expr\PreInc ? 'add' : 'sub';
             return $this->assign($name, $this->lift("Php.$op $value->code 1", $value->type), $expr, $pad);
@@ -530,7 +444,7 @@ final class Translate
             ) {
                 $this->fail($expr, 'expected two by-value variables in tuple destructuring');
             }
-            $var = $this->variable($item->value);
+            $var = Signature::variable($this->model, $item->value);
             $out .= $this->assign($var, new Value("$temp." . ($i + 1), $value->type->at($i)), $expr, $pad);
         }
         return $out;
@@ -598,7 +512,7 @@ final class Translate
     private function value(Expr $expr, ?Type $expected = null): Value
     {
         if ($expr instanceof Expr\Variable) {
-            $name = $this->variable($expr);
+            $name = Signature::variable($this->model, $expr);
             $type = $this->locals[$name] ?? $this->fail($expr, "uninitialized or branch-local variable \$$name");
             return new Value(self::ident($name), $type);
         }

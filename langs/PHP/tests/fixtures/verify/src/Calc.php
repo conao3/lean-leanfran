@@ -23,6 +23,10 @@ use Conao3\Leanfran\Model;
       valid : lo ≤ hi
 
     def boundsLo (b : Bounds) : Int := b.lo
+    def impossible (_ : Int) : Bool := false
+    def Recording.sameBounds (_ : Int) (_ : Bool) (_ : String) (_ : Float) (_ : Option Int)
+        (_ : List Int) (_ : Int × String) (_ : LeanPhpModels.App.Color)
+        (_ : LeanPhpModels.App.Box) (bounds : Bounds) : Bounds := bounds
     LEAN, models: [Box::class, Color::class])]
 final class Calc
 {

@@ -22,6 +22,8 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 
 ## Verification and releases
 
+For PHP models, maintain proof and translation fixtures alongside the native-oracle comparisons. Run property tests against the generated specs in the shared verification fixture. `make check BACKENDS=PHP` runs the PHP checks under both PHP 8.4 and PHP 8.5.
+
 Run `make check` from the repository root, or `make check BACKENDS=Python` for selected backends. Run `make format` before committing.
 
 The Release and Publish workflows manage the package versions and the `vX.Y.Z` tag together. Start them only in the session where the user requested a release.
