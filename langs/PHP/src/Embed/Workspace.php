@@ -20,6 +20,21 @@ final readonly class Workspace
 
         [[lean_lib]]
         name = "LeanPhpModels"
+
+        [[lean_lib]]
+        name = "LeanPhpLib"
+        srcDir = "verification"
+        globs = ["LeanPhpLib.+"]
+
+        [[lean_lib]]
+        name = "LeanPhpModel"
+        srcDir = "verification"
+        globs = ["LeanPhpModel", "LeanPhpModel.+"]
+
+        [[lean_lib]]
+        name = "Proofs"
+        srcDir = "verification"
+        globs = ["Proofs.+"]
         TOML;
 
     public string $dir;

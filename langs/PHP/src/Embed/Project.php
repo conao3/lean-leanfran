@@ -15,6 +15,7 @@ final class Project
 
     /**
      * @param array<string, Block> $blocks
+     * @param list<string> $sources
      * @param list<stdClass> $requirements
      * @param array<string, array<string, string>> $models
      * @param array<string, string> $hashes
@@ -22,6 +23,7 @@ final class Project
     private function __construct(
         public readonly string $root,
         public readonly array $blocks,
+        public readonly array $sources,
         public readonly array $requirements,
         public readonly string $toolchain,
         public readonly array $models,
@@ -83,11 +85,13 @@ final class Project
         ksort($files, SORT_STRING);
         $blocks = [];
         $outputs = [];
+        $sources = [];
         foreach (array_keys($files) as $from) {
             if (Files::generated($from)) {
                 continue;
             }
             $file = substr($from, strlen($root) + 1);
+            $sources[] = $file;
             foreach (Scanner::scan($file, Files::read($from)) as $block) {
                 $key = strtolower($block->name);
                 if (isset($blocks[$key])) {
@@ -108,7 +112,7 @@ final class Project
         foreach ($blocks as $key => $block) {
             $models[$key] = $block->models === [] ? [] : ($collector ??= new Models($root))->block($block);
         }
-        $project = new self($root, $blocks, $requirements, $toolchain, $models);
+        $project = new self($root, $blocks, $sources, $requirements, $toolchain, $models);
         foreach ($blocks as $block) {
             $project->hash($block, []);
         }

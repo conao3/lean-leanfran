@@ -1,4 +1,5 @@
 import LeanPhp
+import LeanPhp.Check
 
 open Lean LeanPhp
 
@@ -45,6 +46,8 @@ leanfran-php module generate
   --output-file <path>        Output path (default: stdout)
   --internal-only             Emit only the runtime-facing class
   --output json|text          Format of the summary (default: json)
+
+leanfran-php obligations check --modules <Name> ... --obligations <file>
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 "
@@ -355,16 +358,36 @@ unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
   else for j in summaries do printSummary o (o.batch.isNone && o.outputFile.isNone && o.outputDir.isNone) j
   return code
 
+unsafe def checkObligations (args : List String) : IO UInt32 := do
+  let modules := args.takeWhile (! ·.startsWith "--")
+  if modules.isEmpty then return ← fail 252 "--modules requires at least one name"
+  let ["--obligations", file] := args.drop modules.length
+    | return ← fail 252 "expected --modules <Name> ... --obligations <file>"
+  let refs ← match Json.parse (← IO.FS.readFile file) >>= parseObligations with
+    | .ok refs => pure refs
+    | .error message => return ← fail 252 s!"{file}: {message}"
+  enableInitializersExecution
+  match ← importAll {} (modules.toArray.map String.toName) true with
+  | .error name => fail 252 s!"module not found: {name}"
+  | .ok env =>
+    let ctx : Core.Context := { fileName := file, fileMap := default, maxHeartbeats := 0 }
+    let (results, _) ← ((refs.mapM checkObligation).run').toIO ctx { env }
+    IO.println (Json.arr results).compress
+    return 0
+
 unsafe def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
   | [] | ["help"] | ["--help"] | "module" :: "help" :: _
-  | ["module", "generate", "--help"] => IO.print usage; return 0
+  | ["module", "generate", "--help"] | ["obligations", "check", "--help"] => IO.print usage; return 0
   | "module" :: "generate" :: rest =>
     match parseOpts rest {} with
     | .error e => fail 252 e
     | .ok o =>
       try moduleGenerate o
       catch e => fail 255 (toString e)
+  | "obligations" :: "check" :: "--modules" :: rest =>
+    try checkObligations rest
+    catch e => fail 255 (toString e)
   | _ => fail 252 "unknown command (see leanfran-php help)"
