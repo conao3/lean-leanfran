@@ -7,7 +7,7 @@
 Add the dependency to `deps.edn`:
 
 ```clojure
-{:deps {io.github.conao3/leanfran {:mvn/version "0.6.0"}}}
+{:deps {io.github.conao3/leanfran {:mvn/version "0.7.0"}}}
 ```
 
 Install the compiler:

@@ -16,6 +16,6 @@ default = ["check"]
 check = ["dep:proptest"]
 
 [dependencies]
-leanfran-macros = { path = "../leanfran-macros", version = "0.6.0" }
-leanfran-runtime = { path = "../leanfran-runtime", version = "0.6.0" }
+leanfran-macros = { path = "../leanfran-macros", version = "0.7.0" }
+leanfran-runtime = { path = "../leanfran-runtime", version = "0.7.0" }
 proptest = { version = "1", optional = true }
