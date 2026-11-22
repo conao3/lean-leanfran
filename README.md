@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="#in-30-seconds">In 30 seconds</a> ·
+  <a href="#quick-look">Quick look</a> ·
   <a href="#get-started">Get started</a> ·
   <a href="#lean-at-the-core">Languages</a> ·
   <a href="#what-you-can-build">Features</a> ·
@@ -32,7 +32,16 @@
 
 leanfran brings Lean 4 to your programming language. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
 
-## In 30 seconds
+## Quick look
+
+Install the Python compiler and Lean 4.35.0, and start a project:
+
+```console
+$ nix profile install 'github:conao3/lean-leanfran#python'
+$ elan default leanprover/lean4:v4.35.0
+$ uv init --lib myapp && cd myapp
+$ uv add leanfran
+```
 
 Put a Lean function and its proof in a Python file:
 
@@ -51,7 +60,6 @@ theorem double_eq (n : Nat) : double n = 2 * n := by
 Generate the module and call it as Python:
 
 ```console
-$ uv add leanfran
 $ uv run leanfran sync --package src/myapp
 leanfran: 1 blocks of myapp checked and generated
 $ uv run python -c 'from myapp.arith import arith; print(arith.double(21))'
@@ -70,7 +78,7 @@ where
 leanfran: lake build failed
 ```
 
-Every supported language embeds Lean the same way (see the table below). The output above is from a `uv init --lib` project in `/tmp/myapp` with leanfran 0.6.0 from PyPI, the compiler from `nix profile install 'github:conao3/lean-leanfran#python'`, and Lean 4.35.0 on `PATH`.
+Every supported language embeds Lean the same way (see the table below). The output above is from leanfran 0.6.0 (PyPI and the Nix compiler) in `/tmp/myapp`.
 
 ## Lean at the core
 
