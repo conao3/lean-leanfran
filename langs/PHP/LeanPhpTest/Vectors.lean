@@ -52,6 +52,9 @@ structure Bounds where
 
 @[noinline] def applyTwo (f : Bool → Nat → Nat) (b : Bool) (n : Nat) : Nat := f b n
 
+@[noinline] def selectValue {α : Type} (yes no : α) (test : Bool) : α :=
+  if test then yes else no
+
 @[noinline] def upper (n : Nat) : Nat := n + 2
 @[noinline] def Upper (n : Nat) : Nat := n * 3
 
@@ -90,7 +93,8 @@ structure Bounds where
   IO.println (arrayLine #[3] 9)
   IO.println (stringLine "é" "🌱$name")
   let partiallyApplied := applyOne (addThree 1) 2
-  IO.println s!"closures {applyOne partiallyApplied 3} {applyTwo (chooseClosure 7) false 6}"
+  let oversaturated := applyTwo (selectValue (addThree 4 5) (addThree 7 8)) false 6
+  IO.println s!"closures {applyOne partiallyApplied 3} {applyTwo (chooseClosure 7) false 6} {oversaturated}"
   IO.println s!"case names {upper 7} {Upper 7}"
   IO.println s!"tail {sumTo 101 0} {alternate 101 10 20}"
   IO.println s!"thunk {thunkLine 5}"
