@@ -11,7 +11,7 @@
                 "versions": {
                     "conao3/leanfran": "dev-main"
                 },
-                "reference": "none"
+                "reference": "config"
             }
         },
         {
