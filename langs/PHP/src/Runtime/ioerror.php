@@ -241,6 +241,7 @@ function ioNative(\Closure $fn, ?LString $filename = null, ?string $failure = 'E
     return $result;
 }
 
+/** @param \Closure(): RuntimeValue $fn */
 function ioAttempt(\Closure $fn): Ctor
 {
     try {

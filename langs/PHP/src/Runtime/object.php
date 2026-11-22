@@ -11,6 +11,10 @@ abstract class LeanObject
 
 final class Ctor extends LeanObject
 {
+    /**
+     * @param array<int, RuntimeValue> $objs
+     * @param array<int, int|float> $sc
+     */
     public function __construct(
         public int $tag,
         public array $objs,
@@ -20,6 +24,7 @@ final class Ctor extends LeanObject
 
 final class LArray extends LeanObject
 {
+    /** @param array<int, RuntimeValue> $a */
     public function __construct(
         public array $a = [],
     ) {}
@@ -34,6 +39,7 @@ final class LByteArray extends LeanObject
 
 final class LFloatArray extends LeanObject
 {
+    /** @param array<int, float> $a */
     public function __construct(
         public array $a = [],
     ) {}
@@ -52,6 +58,7 @@ final class LString extends LeanObject
 
 final class LClosure extends LeanObject
 {
+    /** @param list<RuntimeValue> $fixed */
     public function __construct(
         public \Closure $fn,
         public int $arity,
@@ -61,6 +68,7 @@ final class LClosure extends LeanObject
 
 final readonly class TailCall
 {
+    /** @param list<RuntimeValue> $args */
     public function __construct(
         public \Closure $fn,
         public array $args,
@@ -69,6 +77,7 @@ final readonly class TailCall
 
 final readonly class TailApply
 {
+    /** @param list<RuntimeValue> $args */
     public function __construct(
         public LClosure $closure,
         public array $args,
@@ -87,6 +96,7 @@ function lean_trampoline(mixed $result): mixed
 
 final class LThunk extends LeanObject
 {
+    /** @param RuntimeValue $value */
     public function __construct(
         public ?LClosure $fn,
         public mixed $value = 0,
@@ -95,6 +105,7 @@ final class LThunk extends LeanObject
 
 final class LRef extends LeanObject
 {
+    /** @param RuntimeValue|null $value */
     public function __construct(
         public mixed $value,
     ) {}
@@ -112,12 +123,18 @@ function lean_inc_n(mixed $x, int $n): void
     }
 }
 
+/**
+ * @template T
+ * @param T $x
+ * @return T
+ */
 function lean_inc_ret(mixed $x): mixed
 {
     lean_inc($x);
     return $x;
 }
 
+/** @return array<int, RuntimeValue|null> */
 function objectChildren(LeanObject $x): array
 {
     return match (true) {
@@ -126,6 +143,7 @@ function objectChildren(LeanObject $x): array
         $x instanceof LClosure => $x->fixed,
         $x instanceof LThunk => [$x->fn ?? $x->value],
         $x instanceof LRef => [$x->value],
+        $x instanceof LTask => [$x->value],
         default => [],
     };
 }
@@ -145,6 +163,7 @@ function lean_dec(mixed $x): void
             $obj instanceof LClosure => $obj->fixed = [],
             $obj instanceof LThunk => [$obj->fn, $obj->value] = [null, 0],
             $obj instanceof LRef => $obj->value = 0,
+            $obj instanceof LTask => $obj->value = null,
             default => null,
         };
         foreach ($children as $child) {
@@ -193,6 +212,7 @@ function lean_reset(mixed $x, int $n): Ctor|int
     return $x;
 }
 
+/** @param list<RuntimeValue> $objs */
 function lean_reuse(Ctor|int $x, int $tag, bool $update, array $objs): Ctor
 {
     if (is_int($x)) {
@@ -215,6 +235,7 @@ function lean_ctor_get(Ctor $x, int $i): mixed
     return $x->objs[$i];
 }
 
+/** @param RuntimeValue $v */
 function lean_ctor_set(Ctor $x, int $i, mixed $v): void
 {
     $x->objs[$i] = $v;
@@ -225,9 +246,42 @@ function lean_ctor_set_tag(Ctor $x, int $tag): void
     $x->tag = $tag;
 }
 
+/** @return RuntimeValue */
+function requireRuntimeValue(mixed $value): mixed
+{
+    if (
+        is_int($value)
+        || is_float($value)
+        || $value instanceof \GMP
+        || $value instanceof LeanObject
+        || $value instanceof IoHandleResource
+        || $value instanceof IoProcess
+        || $value instanceof PendingPromise
+    ) {
+        return $value;
+    }
+    throw new \TypeError('Expected a Lean runtime value, received ' . get_debug_type($value));
+}
+
+function requireRuntimeInt(mixed $value): int
+{
+    if (!is_int($value)) {
+        throw new \TypeError('Expected a Lean integer scalar, received ' . get_debug_type($value));
+    }
+    return $value;
+}
+
+function requireRuntimeFloat(mixed $value): float
+{
+    if (!is_float($value) && !is_int($value)) {
+        throw new \TypeError('Expected a Lean float scalar, received ' . get_debug_type($value));
+    }
+    return $value;
+}
+
 function lean_ctor_get_usize(Ctor $x, int $i): int
 {
-    return $x->sc[8 * $i];
+    return requireRuntimeInt($x->sc[8 * $i]);
 }
 
 function lean_ctor_set_usize(Ctor $x, int $i, int $v): void
@@ -237,7 +291,7 @@ function lean_ctor_set_usize(Ctor $x, int $i, int $v): void
 
 function lean_ctor_get_uint8(Ctor $x, int $offset): int
 {
-    return $x->sc[$offset];
+    return requireRuntimeInt($x->sc[$offset]);
 }
 
 function lean_ctor_set_uint8(Ctor $x, int $offset, int $v): void
@@ -247,7 +301,7 @@ function lean_ctor_set_uint8(Ctor $x, int $offset, int $v): void
 
 function lean_ctor_get_uint16(Ctor $x, int $offset): int
 {
-    return $x->sc[$offset];
+    return requireRuntimeInt($x->sc[$offset]);
 }
 
 function lean_ctor_set_uint16(Ctor $x, int $offset, int $v): void
@@ -257,7 +311,7 @@ function lean_ctor_set_uint16(Ctor $x, int $offset, int $v): void
 
 function lean_ctor_get_uint32(Ctor $x, int $offset): int
 {
-    return $x->sc[$offset];
+    return requireRuntimeInt($x->sc[$offset]);
 }
 
 function lean_ctor_set_uint32(Ctor $x, int $offset, int $v): void
@@ -267,7 +321,7 @@ function lean_ctor_set_uint32(Ctor $x, int $offset, int $v): void
 
 function lean_ctor_get_uint64(Ctor $x, int $offset): int
 {
-    return $x->sc[$offset];
+    return requireRuntimeInt($x->sc[$offset]);
 }
 
 function lean_ctor_set_uint64(Ctor $x, int $offset, int $v): void
@@ -277,7 +331,7 @@ function lean_ctor_set_uint64(Ctor $x, int $offset, int $v): void
 
 function lean_ctor_get_float(Ctor $x, int $offset): float
 {
-    return $x->sc[$offset];
+    return requireRuntimeFloat($x->sc[$offset]);
 }
 
 function lean_ctor_set_float(Ctor $x, int $offset, float $v): void
@@ -287,7 +341,7 @@ function lean_ctor_set_float(Ctor $x, int $offset, float $v): void
 
 function lean_ctor_get_float32(Ctor $x, int $offset): float
 {
-    return $x->sc[$offset];
+    return requireRuntimeFloat($x->sc[$offset]);
 }
 
 function lean_ctor_set_float32(Ctor $x, int $offset, float $v): void

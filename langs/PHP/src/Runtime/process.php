@@ -107,22 +107,23 @@ final class IoProcess
         private readonly bool $setsid,
     ) {}
 
+    /** @return ($blocking is true ? int : int|null) */
     public function wait(bool $blocking): ?int
     {
         if ($this->reaped && PHP_OS_FAMILY !== 'Windows') {
             throw new IoFailure(ioDecodeError(10));
         }
-        do {
+        while (true) {
             $status = ioNative(fn() => proc_get_status($this->process));
             if (!$status['running']) {
                 $this->reaped = true;
                 return $status['signaled'] ? 128 + $status['termsig'] : $status['exitcode'];
             }
-            if ($blocking) {
-                $this->pipes->pump(timeoutMicros: 10000);
+            if (!$blocking) {
+                return null;
             }
-        } while ($blocking);
-        return null;
+            $this->pipes->pump(timeoutMicros: 10000);
+        }
     }
 
     public function kill(): void

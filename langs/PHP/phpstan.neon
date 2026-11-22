@@ -1,0 +1,3 @@
+parameters:
+    typeAliases:
+        RuntimeValue: 'int|float|\GMP|\Conao3\Leanfran\Runtime\LeanObject|\Conao3\Leanfran\Runtime\IoHandleResource|\Conao3\Leanfran\Runtime\IoProcess|\Conao3\Leanfran\Runtime\PendingPromise'

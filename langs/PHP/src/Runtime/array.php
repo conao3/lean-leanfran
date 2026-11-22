@@ -59,14 +59,14 @@ function lean_array_sz(LArray $a): int
     return $size;
 }
 
-function indexInBounds(int|\GMP $index, int $size): bool
+function indexInBounds(int|\GMP $index, int $size): ?int
 {
-    return is_int($index) && $index >= 0 && $index < $size;
+    return is_int($index) && $index >= 0 && $index < $size ? $index : null;
 }
 
 function checkIndex(int $index, int $size): void
 {
-    if (!indexInBounds($index, $size)) {
+    if ($index < 0 || $index >= $size) {
         throw new \OutOfBoundsException("Invalid Lean index $index for size $size.");
     }
 }
@@ -99,12 +99,14 @@ function lean_array_get_panic(mixed $default): mixed
 
 function lean_array_get(mixed $default, LArray $a, int|\GMP $i): mixed
 {
-    return indexInBounds($i, count($a->a)) ? lean_array_uget($a, $i) : lean_array_get_panic(lean_inc_ret($default));
+    $index = indexInBounds($i, count($a->a));
+    return $index === null ? lean_array_get_panic(lean_inc_ret($default)) : lean_inc_ret($a->a[$index]);
 }
 
 function lean_array_get_borrowed(mixed $default, LArray $a, int|\GMP $i): mixed
 {
-    return indexInBounds($i, count($a->a)) ? $a->a[$i] : lean_array_get_panic(lean_inc_ret($default));
+    $index = indexInBounds($i, count($a->a));
+    return $index === null ? lean_array_get_panic(lean_inc_ret($default)) : $a->a[$index];
 }
 
 function lean_ensure_exclusive_array(LArray $a): LArray
@@ -120,6 +122,7 @@ function lean_ensure_exclusive_array(LArray $a): LArray
     return $copy;
 }
 
+/** @param RuntimeValue $v */
 function lean_array_push(LArray $a, mixed $v): LArray
 {
     $a = lean_ensure_exclusive_array($a);
@@ -127,6 +130,7 @@ function lean_array_push(LArray $a, mixed $v): LArray
     return $a;
 }
 
+/** @param RuntimeValue $v */
 function lean_array_uset(LArray $a, int $i, mixed $v): LArray
 {
     checkIndex($i, count($a->a));
@@ -136,6 +140,7 @@ function lean_array_uset(LArray $a, int $i, mixed $v): LArray
     return $a;
 }
 
+/** @param RuntimeValue $v */
 function lean_array_fset(LArray $a, int $i, mixed $v): LArray
 {
     return lean_array_uset($a, $i, $v);
@@ -147,9 +152,11 @@ function lean_array_set_panic(LArray $a, mixed $v): LArray
     return lean_panic_fn($a, new LString('Error: index out of bounds'));
 }
 
+/** @param RuntimeValue $v */
 function lean_array_set(LArray $a, int|\GMP $i, mixed $v): LArray
 {
-    return indexInBounds($i, count($a->a)) ? lean_array_uset($a, $i, $v) : lean_array_set_panic($a, $v);
+    $index = indexInBounds($i, count($a->a));
+    return $index === null ? lean_array_set_panic($a, $v) : lean_array_uset($a, $index, $v);
 }
 
 function lean_array_pop(LArray $a): LArray
@@ -177,10 +184,12 @@ function lean_array_fswap(LArray $a, int $i, int $j): LArray
 
 function lean_array_swap(LArray $a, int|\GMP $i, int|\GMP $j): LArray
 {
-    if (!indexInBounds($i, count($a->a)) || !indexInBounds($j, count($a->a))) {
+    $left = indexInBounds($i, count($a->a));
+    $right = indexInBounds($j, count($a->a));
+    if ($left === null || $right === null) {
         return $a;
     }
-    return lean_array_uswap($a, $i, $j);
+    return lean_array_uswap($a, $left, $right);
 }
 
 function lean_mk_empty_byte_array(int|\GMP $capacity): LByteArray
@@ -193,7 +202,7 @@ function lean_byte_array_mk(LArray $a): LByteArray
 {
     $b = new LByteArray();
     foreach ($a->a as $byte) {
-        $b->b .= chr($byte);
+        $b->b .= chr(requireRuntimeInt($byte) & 0xff);
     }
     lean_dec($a);
     return $b;
@@ -237,7 +246,8 @@ function lean_byte_array_fget(LByteArray $a, int $i): int
 
 function lean_byte_array_get(LByteArray $a, int|\GMP $i): int
 {
-    return indexInBounds($i, strlen($a->b)) ? ord($a->b[$i]) : 0;
+    $index = indexInBounds($i, strlen($a->b));
+    return $index === null ? 0 : ord($a->b[$index]);
 }
 
 function exclusiveBytes(LByteArray $a): LByteArray
@@ -253,7 +263,7 @@ function exclusiveBytes(LByteArray $a): LByteArray
 function lean_byte_array_push(LByteArray $a, int $v): LByteArray
 {
     $a = exclusiveBytes($a);
-    $a->b .= chr($v);
+    $a->b .= chr($v & 0xff);
     return $a;
 }
 
@@ -261,7 +271,7 @@ function lean_byte_array_uset(LByteArray $a, int $i, int $v): LByteArray
 {
     checkIndex($i, strlen($a->b));
     $a = exclusiveBytes($a);
-    $a->b[$i] = chr($v);
+    $a->b[$i] = chr($v & 0xff);
     return $a;
 }
 
@@ -272,7 +282,8 @@ function lean_byte_array_fset(LByteArray $a, int $i, int $v): LByteArray
 
 function lean_byte_array_set(LByteArray $a, int|\GMP $i, int $v): LByteArray
 {
-    return indexInBounds($i, strlen($a->b)) ? lean_byte_array_uset($a, $i, $v) : $a;
+    $index = indexInBounds($i, strlen($a->b));
+    return $index === null ? $a : lean_byte_array_uset($a, $index, $v);
 }
 
 function lean_mk_empty_float_array(int|\GMP $capacity): LFloatArray
@@ -283,7 +294,7 @@ function lean_mk_empty_float_array(int|\GMP $capacity): LFloatArray
 
 function lean_float_array_mk(LArray $a): LFloatArray
 {
-    $r = new LFloatArray($a->a);
+    $r = new LFloatArray(array_map(requireRuntimeFloat(...), $a->a));
     lean_dec($a);
     return $r;
 }
@@ -313,7 +324,8 @@ function lean_float_array_fget(LFloatArray $a, int $i): float
 
 function lean_float_array_get(LFloatArray $a, int|\GMP $i): float
 {
-    return indexInBounds($i, count($a->a)) ? $a->a[$i] : 0.0;
+    $index = indexInBounds($i, count($a->a));
+    return $index === null ? 0.0 : $a->a[$index];
 }
 
 function exclusiveFloats(LFloatArray $a): LFloatArray
@@ -348,5 +360,6 @@ function lean_float_array_fset(LFloatArray $a, int $i, float $v): LFloatArray
 
 function lean_float_array_set(LFloatArray $a, int|\GMP $i, float $v): LFloatArray
 {
-    return indexInBounds($i, count($a->a)) ? lean_float_array_uset($a, $i, $v) : $a;
+    $index = indexInBounds($i, count($a->a));
+    return $index === null ? $a : lean_float_array_uset($a, $index, $v);
 }

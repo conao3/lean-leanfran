@@ -92,7 +92,7 @@ function lean_string_mk(Ctor|int $cs): LString
 {
     $s = new LString('');
     for ($node = $cs; $node instanceof Ctor; $node = $node->objs[1]) {
-        $s->s .= utf8Scalar($node->objs[0]);
+        $s->s .= utf8Scalar(requireRuntimeInt($node->objs[0]));
     }
     lean_dec($cs);
     return $s;
@@ -102,7 +102,7 @@ function lean_string_data(LString $s): Ctor|int
 {
     $result = 0;
     for ($i = strlen($s->s); $i > 0;) {
-        $i = lean_string_utf8_prev($s, $i);
+        $i = previousUtf8Offset($s, $i);
         $result = new Ctor(1, [utf8Decode($s->s, $i), $result]);
     }
     lean_dec($s);
@@ -136,12 +136,19 @@ function lean_string_is_valid_pos(LString $s, int|\GMP $i): int
 
 function lean_string_utf8_at_end(LString $s, int|\GMP $i): int
 {
-    return (int) !indexInBounds($i, strlen($s->s));
+    return (int) (indexInBounds($i, strlen($s->s)) === null);
+}
+
+function utf8OffsetInBounds(LString $s, int|\GMP $i): ?int
+{
+    $index = indexInBounds($i, strlen($s->s));
+    return $index !== null && lean_string_is_valid_pos($s, $index) ? $index : null;
 }
 
 function lean_string_utf8_get(LString $s, int|\GMP $i): int
 {
-    return !lean_string_utf8_at_end($s, $i) && lean_string_is_valid_pos($s, $i) ? utf8Decode($s->s, $i) : 65;
+    $index = utf8OffsetInBounds($s, $i);
+    return $index === null ? 65 : utf8Decode($s->s, $index);
 }
 
 function lean_string_utf8_get_fast(LString $s, int $i): int
@@ -151,17 +158,17 @@ function lean_string_utf8_get_fast(LString $s, int $i): int
 
 function lean_string_utf8_get_opt(LString $s, int|\GMP $i): Ctor|int
 {
-    return (
-        !lean_string_utf8_at_end($s, $i) && lean_string_is_valid_pos($s, $i) ? new Ctor(1, [utf8Decode($s->s, $i)]) : 0
-    );
+    $index = utf8OffsetInBounds($s, $i);
+    return $index === null ? 0 : new Ctor(1, [utf8Decode($s->s, $index)]);
 }
 
 function lean_string_utf8_get_bang(LString $s, int|\GMP $i): int
 {
-    if (lean_string_utf8_at_end($s, $i) || !lean_string_is_valid_pos($s, $i)) {
+    $index = utf8OffsetInBounds($s, $i);
+    if ($index === null) {
         return lean_panic_fn(65, new LString('Error: invalid `String.Pos` at `String.get!`'));
     }
-    return utf8Decode($s->s, $i);
+    return utf8Decode($s->s, $index);
 }
 
 function lean_string_uget_byte_fast(LString $s, int $i): int
@@ -178,10 +185,11 @@ function lean_string_get_byte_fast(LString $s, int $i): int
 
 function lean_string_utf8_next(LString $s, int|\GMP $i): int|\GMP
 {
-    if (!indexInBounds($i, strlen($s->s))) {
+    $index = indexInBounds($i, strlen($s->s));
+    if ($index === null) {
         return lean_nat_add($i, 1);
     }
-    return $i + utf8Width(ord($s->s[$i]));
+    return $index + utf8Width(ord($s->s[$index]));
 }
 
 function lean_string_utf8_next_fast(LString $s, int $i): int
@@ -194,6 +202,11 @@ function lean_string_utf8_prev(LString $s, int|\GMP $i): int|\GMP
     if (!is_int($i) || $i > strlen($s->s)) {
         return lean_nat_sub($i, 1);
     }
+    return previousUtf8Offset($s, $i);
+}
+
+function previousUtf8Offset(LString $s, int $i): int
+{
     while ($i > 0 && !lean_string_is_valid_pos($s, --$i)) {
     }
     return $i;
@@ -201,17 +214,18 @@ function lean_string_utf8_prev(LString $s, int|\GMP $i): int|\GMP
 
 function lean_string_utf8_extract(LString $s, int|\GMP $begin, int|\GMP $end): LString
 {
-    if (lean_string_utf8_at_end($s, $begin) || !lean_string_is_valid_pos($s, $begin)) {
+    $start = utf8OffsetInBounds($s, $begin);
+    if ($start === null) {
         return new LString('');
     }
     $end = is_int($end) ? min($end, strlen($s->s)) : strlen($s->s);
-    if ($end <= $begin) {
+    if ($end <= $start) {
         return new LString('');
     }
     if (!lean_string_is_valid_pos($s, $end)) {
         $end = strlen($s->s);
     }
-    return new LString(substr($s->s, $begin, $end - $begin));
+    return new LString(substr($s->s, $start, $end - $start));
 }
 
 function lean_string_utf8_extract_fast(LString $s, int $begin, int $end): LString
@@ -221,16 +235,17 @@ function lean_string_utf8_extract_fast(LString $s, int $begin, int $end): LStrin
 
 function lean_string_utf8_set(LString $s, int|\GMP $i, int $c): LString
 {
-    if (lean_string_utf8_at_end($s, $i) || !lean_string_is_valid_pos($s, $i)) {
+    $index = utf8OffsetInBounds($s, $i);
+    if ($index === null) {
         return $s;
     }
     $s = exclusiveString($s);
     $value = utf8Scalar($c);
-    $width = utf8Width(ord($s->s[$i]));
+    $width = utf8Width(ord($s->s[$index]));
     if ($width === 1 && strlen($value) === 1) {
-        $s->s[$i] = $value;
+        $s->s[$index] = $value;
     } else {
-        $s->s = substr_replace($s->s, $value, $i, $width);
+        $s->s = substr_replace($s->s, $value, $index, $width);
     }
     return $s;
 }

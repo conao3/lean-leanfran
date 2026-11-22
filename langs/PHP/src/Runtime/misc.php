@@ -38,6 +38,7 @@ function lean_array_extract(LArray $array, int|\GMP $start, int|\GMP $stop): LAr
     return new LArray($items);
 }
 
+/** @param RuntimeValue $value */
 function lean_mk_array(int|\GMP $size, mixed $value): LArray
 {
     if (!is_int($size) || $size < 0) {

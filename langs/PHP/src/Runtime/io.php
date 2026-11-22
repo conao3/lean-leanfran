@@ -22,11 +22,13 @@ function lean_system_platform_nbits(int $unit): int
     return PHP_INT_SIZE * 8;
 }
 
+/** @param RuntimeValue $value */
 function lean_io_result_mk_ok(mixed $value): Ctor
 {
     return new Ctor(0, [$value]);
 }
 
+/** @param RuntimeValue $error */
 function lean_io_result_mk_error(mixed $error): Ctor
 {
     return new Ctor(1, [$error]);
@@ -70,6 +72,11 @@ function lean_mk_io_user_error(LString $message): Ctor
     return new Ctor(18, [$message]);
 }
 
+/**
+ * @template T
+ * @param T $default
+ * @return T
+ */
 function lean_panic_fn(mixed $default, LString $message): mixed
 {
     writeStderr($message->s);

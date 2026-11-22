@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Conao3\Leanfran\Runtime;
 
+/** @param list<RuntimeValue> $args */
 function lean_apply(LClosure $f, array $args): mixed
 {
     return lean_trampoline(applyStep($f, $args));
 }
 
+/** @param list<RuntimeValue> $args */
 function applyStep(LClosure $f, array $args): LClosure|TailCall
 {
     while (true) {
