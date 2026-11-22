@@ -1,0 +1,26 @@
+division	integer division /
+looseEqual	unsupported operator ==
+looseNotEqual	unsupported operator !=
+spaceship	unsupported operator <=>
+reference	reference or variadic parameter
+referenceAssign	unsupported expression Expr_AssignRef
+globalVariable	unsupported statement Stmt_Global
+staticVariable	unsupported statement Stmt_Static
+setProperty	unsupported assignment target
+dynamicCall	dynamic calls
+interpolation	unsupported expression Scalar_InterpolatedString
+stringIndex	unsupported subscript
+coalesce	unsupported operator ??
+variadic	reference or variadic parameter
+generator	unsupported PHP value type Generator
+output	unsupported statement Stmt_Echo
+input	unsupported expression Expr_Cast_String
+invalidUtf8	string literal must be valid UTF-8
+sameObject	strict comparison requires
+sameList	strict comparison requires
+sameTuple	strict comparison requires
+missingArgumentType	expected a supported native type
+missingResultType	expected a supported native type
+mixedArgument	expected a supported native type
+untypedArray	expected a supported native type
+unionArgument	expected a supported native type

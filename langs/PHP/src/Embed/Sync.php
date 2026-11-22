@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Conao3\Leanfran\Embed;
 
+use Closure;
 use RuntimeException;
 
 /** Checks the package and installs generated files when the entire batch succeeds. */
 final class Sync
 {
-    /** Synchronizes a Composer project and returns its block count. */
-    public static function run(string $dir, ?string $compiler): int
+    /** @param (Closure(Project, ?string, int): int)|null $after */
+    public static function run(string $dir, ?string $compiler, ?Closure $after = null): int
     {
         $root = realpath($dir);
         if ($root === false || !is_file("$root/composer.json")) {
@@ -33,7 +34,9 @@ final class Sync
             if (!flock($lock, LOCK_EX)) {
                 throw new RuntimeException("cannot lock $lockPath");
             }
-            return self::sync(Project::load($root), $compiler);
+            $project = Project::load($root);
+            $count = self::sync($project, $compiler);
+            return $after === null ? $count : $after($project, $compiler, $count);
         } finally {
             fclose($lock);
         }
@@ -70,7 +73,8 @@ final class Sync
         return count($project->blocks);
     }
 
-    private static function compiler(?string $given): string
+    /** Resolves the compiler used by sync and verification. */
+    public static function compiler(?string $given): string
     {
         $env = getenv('LEANFRAN_PHP_CLI');
         $tool = $given ?? ($env === false ? 'leanfran-php' : $env);

@@ -6,6 +6,7 @@ namespace Conao3\Leanfran\Embed;
 
 use Closure;
 use Conao3\Leanfran\Lean;
+use Conao3\Leanfran\Model;
 use Generator;
 use ParseError;
 use PhpToken;
@@ -21,6 +22,7 @@ final class Scanner
         REGEX;
 
     private string $namespace = '';
+    private ?int $modelLine = null;
 
     /** @param array<string, string> $aliases */
     private function __construct(
@@ -47,6 +49,21 @@ final class Scanner
             }
         }
         return $blocks;
+    }
+
+    /** Finds the first resolved Model attribute without the optional parser. */
+    public static function modelLine(string $file, string $input): ?int
+    {
+        if (stripos($input, 'model') === false) {
+            return null;
+        }
+        $scanner = new self($file, str_replace(["\r\n", "\r"], "\n", $input));
+        foreach ($scanner->declarations() as $_) {
+            if ($scanner->modelLine !== null) {
+                break;
+            }
+        }
+        return $scanner->modelLine;
     }
 
     /** @return Closure(string): string */
@@ -80,7 +97,11 @@ final class Scanner
             $token = $tokens->take();
             if ($token->is(T_ATTRIBUTE)) {
                 foreach ($tokens->items(']') as $attribute) {
-                    if (strcasecmp($this->resolve($attribute->peek()->text), Lean::class) === 0) {
+                    $resolved = $this->resolve($attribute->peek()->text);
+                    if (strcasecmp($resolved, Model::class) === 0) {
+                        $this->modelLine ??= $attribute->peek()->line;
+                    }
+                    if (strcasecmp($resolved, Lean::class) === 0) {
                         $attributes[] = $attribute;
                     }
                 }

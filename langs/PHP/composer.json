@@ -35,9 +35,11 @@
         ]
     },
     "require-dev": {
-        "cuyz/valinor": "^2.8"
+        "cuyz/valinor": "^2.8",
+        "nikic/php-parser": "^5.9"
     },
     "suggest": {
-        "cuyz/valinor": "Map data to generated public types and collect Lean validation errors."
+        "cuyz/valinor": "Map data to generated public types and collect Lean validation errors.",
+        "nikic/php-parser": "Translate PHP models and check verification freshness (composer require --dev nikic/php-parser:^5.9)."
     }
 }

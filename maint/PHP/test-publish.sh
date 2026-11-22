@@ -18,6 +18,7 @@ mirror_git() {
 
 bash "$maint/mirror-snapshot.sh" "$first_tag" "$snapshot"
 test -x "$snapshot/bin/leanfran"
+cmp "$maint/../../langs/PHP/src/lean/LeanPhpLib/Php.lean" "$snapshot/src/lean/LeanPhpLib/Php.lean"
 bash "$maint/mirror-push.sh" "$first_tag" "$snapshot" "$mirror"
 first_commit=$(mirror_git rev-parse refs/heads/main)
 test "$first_commit" = "$(mirror_git rev-parse "refs/tags/$first_tag")"

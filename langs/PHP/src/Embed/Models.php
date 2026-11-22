@@ -19,8 +19,10 @@ final class Models
     private array $definitions = [];
 
     /** Loads the model classes through the package's Composer autoloader. */
-    public function __construct(string $root)
-    {
+    public function __construct(
+        string $root,
+        private readonly bool $refine = true,
+    ) {
         $autoload = "$root/vendor/autoload.php";
         if (!is_file($autoload)) {
             throw new RuntimeException("$autoload: install the Composer dependencies to load Lean models");
@@ -40,6 +42,12 @@ final class Models
             }
         }
         return $out;
+    }
+
+    /** @return array<string, string> */
+    public function valueTypes(string $class): array
+    {
+        return $this->collect(self::reflect($class), []);
     }
 
     /** Returns the Lean name of a PHP model, with individual identifiers escaped. */
@@ -143,6 +151,9 @@ final class Models
             unset($properties[$prop]);
             try {
                 $type = self::propertyType($property, $annotations[$prop] ?? null, $resolve);
+                if (!$this->refine) {
+                    $type = $type->shape();
+                }
                 foreach ($type->classes() as $dependency) {
                     $deps += $this->collect(self::reflect($dependency), $active);
                 }

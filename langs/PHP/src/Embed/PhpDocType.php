@@ -30,6 +30,19 @@ final readonly class PhpDocType
         return $type;
     }
 
+    /** Erases PHPDoc refinements while keeping the runtime value shape. */
+    public function shape(): self
+    {
+        return new self(
+            match ($this->kind) {
+                'non-empty-list' => 'list',
+                'non-empty-string' => 'string',
+                default => $this->kind,
+            },
+            array_map(static fn(self $item): self => $item->shape(), $this->args),
+        );
+    }
+
     /** Returns the compatible native type, without nullability. */
     public function native(): string
     {
