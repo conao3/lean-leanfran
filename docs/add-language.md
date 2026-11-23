@@ -10,5 +10,7 @@ native C backend with differential tests. Add host-language tests, runnable
 examples and documentation covering setup, usage and supported features.
 
 Integrate the backend into the shared Nix environment, root Makefile and CI.
+List the language in the root README: the registry badge in the header, the
+language and documentation tables, and the install notes in Get started.
 Run the relevant build, test and formatting checks, and report their results
 along with any remaining limitations for review.

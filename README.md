@@ -79,7 +79,7 @@ where
 leanfran: lake build failed
 ```
 
-Every supported language embeds Lean the same way (see the table below). The output above is from leanfran 0.6.0 (PyPI and the Nix compiler) in `/tmp/myapp`.
+Every supported language embeds Lean the same way (see the table below). The output above is from leanfran 0.7.0 (PyPI and the Nix compiler) in `/tmp/myapp`.
 
 ## Lean at the core
 
