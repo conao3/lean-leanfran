@@ -27,6 +27,8 @@ jobs:
             build: true
           - dir: PHP
             build: true
+          - dir: Go
+            build: true
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v32.0.0

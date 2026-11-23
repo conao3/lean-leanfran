@@ -41,6 +41,8 @@
 /langs/PHP/samples/*/composer.lock
 /langs/PHP/samples/*/lean/.lake/
 /langs/PHP/samples/*/vendor/
+/langs/Go/.lake/
+/langs/Go/test-out/
 /Rust/**/target/
 /Rust/**/.lake/
 /Rust/**/.lake-aeneas/

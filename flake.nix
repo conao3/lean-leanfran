@@ -133,6 +133,14 @@
             pkgs.mago
             pkgs.gcc
           ];
+          goTools = go: [
+            go
+            pkgs.gofumpt
+            pkgs.golangci-lint
+            pkgs.gopls
+            pkgs.gcc
+            pkgs.gnumake
+          ];
           pythonEnv = {
             UV_PYTHON_DOWNLOADS = "never";
             UV_PYTHON = "${pkgs.python314}/bin/python3";
@@ -145,6 +153,7 @@
             typescript = mkCompiler "TypeScript" "LeanTs" "leanfran-typescript";
             clojure = mkCompiler "Clojure" "LeanClj" "leanfran";
             php = mkCompiler "PHP" "LeanPhp" "leanfran-php";
+            go = mkCompiler "Go" "LeanGo" "leanfran-go";
             cargo-leanfran = pkgs.rustPlatform.buildRustPackage {
               pname = "cargo-leanfran";
               inherit version;
@@ -181,7 +190,13 @@
           devShells = {
             default = pkgs.mkShell {
               packages = pkgs.lib.unique (
-                common ++ rustTools ++ pythonTools ++ typescriptTools ++ clojureTools ++ phpTools pkgs.php84
+                common
+                ++ rustTools
+                ++ pythonTools
+                ++ typescriptTools
+                ++ clojureTools
+                ++ phpTools pkgs.php84
+                ++ goTools pkgs.go
               );
               env = pythonEnv;
             };
@@ -194,6 +209,8 @@
             clojure = pkgs.mkShell { packages = common ++ clojureTools; };
             php = pkgs.mkShell { packages = common ++ phpTools pkgs.php84; };
             php85 = pkgs.mkShell { packages = common ++ phpTools pkgs.php85; };
+            go = pkgs.mkShell { packages = common ++ goTools pkgs.go; };
+            go126 = pkgs.mkShell { packages = common ++ goTools pkgs.go_1_26; };
           };
           treefmt = {
             projectRootFile = "flake.nix";
