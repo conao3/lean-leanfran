@@ -17,6 +17,7 @@
   <a href="https://pypi.org/project/leanfran/"><img src="https://img.shields.io/pypi/v/leanfran?label=Python" alt="Python on PyPI"></a>
   <a href="https://www.npmjs.com/package/leanfran"><img src="https://img.shields.io/npm/v/leanfran?label=TypeScript" alt="TypeScript on npm"></a>
   <a href="https://clojars.org/io.github.conao3/leanfran"><img src="https://img.shields.io/clojars/v/io.github.conao3/leanfran.svg?label=Clojure" alt="Clojure on Clojars"></a>
+  <a href="https://packagist.org/packages/conao3/leanfran"><img src="https://img.shields.io/packagist/v/conao3/leanfran?label=PHP" alt="PHP on Packagist"></a>
 </p>
 
 <p align="center">
@@ -108,7 +109,7 @@ Choose a language above and install its host package and compiler. Lean 4.35.0 i
 nix profile install 'github:conao3/lean-leanfran#python'
 ```
 
-The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime through a Composer path repository. Follow the language quick start for dependencies, project setup, and generation commands.
+The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime from Packagist with `composer require conao3/leanfran`. Follow the language quick start for dependencies, project setup, and generation commands.
 
 ## Documentation
 
