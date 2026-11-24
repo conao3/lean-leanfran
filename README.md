@@ -18,6 +18,7 @@
   <a href="https://www.npmjs.com/package/leanfran"><img src="https://img.shields.io/npm/v/leanfran?label=TypeScript" alt="TypeScript on npm"></a>
   <a href="https://clojars.org/io.github.conao3/leanfran"><img src="https://img.shields.io/clojars/v/io.github.conao3/leanfran.svg?label=Clojure" alt="Clojure on Clojars"></a>
   <a href="https://packagist.org/packages/conao3/leanfran"><img src="https://img.shields.io/packagist/v/conao3/leanfran?label=PHP" alt="PHP on Packagist"></a>
+  <a href="https://pkg.go.dev/github.com/conao3/leanfran-go"><img src="https://pkg.go.dev/badge/github.com/conao3/leanfran-go.svg" alt="Go on pkg.go.dev"></a>
 </p>
 
 <p align="center">
@@ -31,7 +32,7 @@
 
 # leanfran
 
-leanfran brings Lean 4 to your programming language. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
+leanfran brings Lean 4 to Rust, Python, TypeScript, Clojure, PHP, and Go. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
 
 ## Quick look
 
@@ -92,12 +93,13 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | TypeScript | [TypeScript quick start](langs/TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
 | PHP        | [PHP quick start](langs/PHP/README.md)               | [conao3/leanfran on Packagist](https://packagist.org/packages/conao3/leanfran) | `#[Lean]`, `#[Model]`, Composer CLI |
+| Go         | [Go quick start](langs/Go/README.md)                 | [leanfran-go on pkg.go.dev](https://pkg.go.dev/github.com/conao3/leanfran-go) | `go get github.com/conao3/leanfran-go`, embedded Lean, Go module tool |
 
 ## What you can build
 
 - **Proved functions in your application.** Keep an algorithm and its correctness proof together, then call the generated function from your application.
 - **Validated data at the boundary.** Lean structures and inductive types map to host-language values. Supported proof fields become runtime checks for the invariants your proofs assume.
-- **Specifications for host-language code.** Bind supported Rust, Python, TypeScript, Clojure, or PHP functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
+- **Specifications for host-language code.** Bind supported Rust, Python, TypeScript, Clojure, PHP, or Go functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
 
 The backends share Lean's semantics and are tested against Lean's native C backend. Their supported types, externs and host-language integrations are documented in the [language guides](#documentation).
 
@@ -109,7 +111,7 @@ Choose a language above and install its host package and compiler. Lean 4.35.0 i
 nix profile install 'github:conao3/lean-leanfran#python'
 ```
 
-The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime from Packagist with `composer require conao3/leanfran`. Follow the language quick start for dependencies, project setup, and generation commands.
+The compiler targets also include `#rust`, `#typescript`, `#clojure`, `#php`, and `#go`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime from Packagist with `composer require conao3/leanfran`. For Go, build the compiler with `nix build .#go` and add the runtime to your application module with `go get github.com/conao3/leanfran-go`. Follow the language quick start for dependencies, project setup, and generation commands.
 
 ## Documentation
 
@@ -120,6 +122,7 @@ The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`
 | TypeScript | [Setup and first block](langs/TypeScript/README.md) | [Schemas, verification and CLI](docs/typescript-guide.md) | [TypeScript samples](langs/TypeScript/samples/README.md) |
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
 | PHP        | [Setup and first block](langs/PHP/README.md)       | [Embedding, types, verification and CLI](docs/php-guide.md)     | [PHP samples](langs/PHP/samples/README.md)               |
+| Go         | [Setup and first block](langs/Go/README.md)         | [Embedding, types, verification and CLI](docs/go-guide.md) | [Go samples](langs/Go/samples/) |
 
 ## Contribution
 
@@ -134,7 +137,7 @@ Read docs/add-language.md and add support for <LANGUAGE> to leanfran.
 
 ### Development
 
-The repository has a shared Nix environment and Lean toolchain, with language-specific source and packages under `langs/`. The PHP development shells are `.#php` for PHP 8.4 and `.#php85` for PHP 8.5.
+The repository has a shared Nix environment and Lean toolchain, with language-specific source and packages under `langs/`. Use `.#php` and `.#php85` for PHP 8.4 and 8.5, and `.#go` and `.#go126` for Go 1.27 and 1.26.
 
 ```sh
 nix develop

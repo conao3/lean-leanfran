@@ -19,6 +19,7 @@ theorem twice_ge (n : Nat) : n ≤ twice n := by
 With Go 1.26 or later, Lean, Lake, and `leanfran-go` available, run the following from the application module.
 
 ```sh
+go get github.com/conao3/leanfran-go
 go get -tool github.com/conao3/leanfran-go/cmd/leanfran
 go tool leanfran sync
 ```
@@ -34,6 +35,6 @@ go tool leanfran check --require proved
 go test ./...
 ```
 
-The [nibble sample](samples/verified-nibble/) checks a bit mask against a remainder, and the [clamp sample](samples/verified-clamp/) checks a clamp against an independently written specification. See [Verify a Go function in Lean](../../docs/go-guide.md#verify-a-go-function-in-lean) for the directive, proof states, and supported Go syntax.
+The [nibble sample](https://github.com/conao3/lean-leanfran/tree/master/langs/Go/samples/verified-nibble) checks a bit mask against a remainder, and the [clamp sample](https://github.com/conao3/lean-leanfran/tree/master/langs/Go/samples/verified-clamp) checks a clamp against an independently written specification. See [Verify a Go function in Lean](https://github.com/conao3/lean-leanfran/blob/master/docs/go-guide.md#verify-a-go-function-in-lean) for the directive, proof states, and supported Go syntax.
 
-Build the compiler with `nix build .#go` from the repository root. The [range sample](samples/embed-range/) includes a Lean structure, a theorem, and a Go caller. The [Go guide](../../docs/go-guide.md) covers configuration, importing Go models, generated packages, and JSON Schema. See [Go development](../../docs/go-development.md) for building and testing the backend.
+Build the compiler with `nix build .#go` from the leanfran source checkout. The [range sample](https://github.com/conao3/lean-leanfran/tree/master/langs/Go/samples/embed-range) includes a Lean structure, a theorem, and a Go caller. The [Go guide](https://github.com/conao3/lean-leanfran/blob/master/docs/go-guide.md) covers configuration, importing Go models, generated packages, and JSON Schema. See [Go development](https://github.com/conao3/lean-leanfran/blob/master/docs/go-development.md) for building and testing the backend.
