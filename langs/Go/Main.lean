@@ -3,7 +3,7 @@ import LeanGo
 open Lean LeanGo
 
 def version : String := "0.7.0"
-def generatorVersion : String := "4"
+def generatorVersion : String := "5"
 
 def usage : String := "leanfran-go --version | --generator-version
 leanfran-go module generate --module-name <Name> [options]
@@ -32,6 +32,8 @@ structure JobOpts where
   outputFile : Option System.FilePath := none
   outputDir : Option System.FilePath := none
   typeModules : Array (Name × String) := #[]
+  goPath : String := ""
+  models : Array ModelSpec := #[]
   internalOnly : Bool := false
 
 structure Job extends JobOpts where
@@ -84,6 +86,18 @@ def optionalField [FromJson α] (j : Json) (key : String) : Except String (Optio
   | .ok v => some <$> fromJson? v
   | .error _ => .ok none
 
+def modelMap (j : Json) (key : String) : Except String (Std.TreeMap String String) := do
+  let some obj ← optionalField (α := Json) j key | return {}
+  (← obj.getObj?).foldlM (fun acc k v => return acc.insert k (← v.getStr?)) {}
+
+def parseModel (j : Json) : Except String ModelSpec := do
+  let lean ← j.getObjValAs? String "lean"
+  let path ← j.getObjValAs? String "path"
+  let name ← j.getObjValAs? String "name"
+  let fields ← modelMap j "fields"
+  let cases ← modelMap j "cases"
+  return { lean, path, name, fields, cases }
+
 def parseJobs (j : Json) (internalOnly : Bool) : Except String (Array Job) := do
   let jobs ← j.getArr?
   if jobs.isEmpty then throw "expected at least one job"
@@ -102,7 +116,9 @@ def parseJobs (j : Json) (internalOnly : Bool) : Except String (Array Job) := do
       if ns.isEmpty || path.isEmpty then throw s!"invalid type module: {spec}"
       pure (ns.toName, path)
     let internalOnly := (← optionalField (α := Bool) e "internal_only").getD internalOnly
-    return { module, roots, namespace?, package?, main?, outputFile, outputDir, typeModules, internalOnly }
+    let goPath := (← optionalField (α := String) e "go_path").getD ""
+    let models ← ((← optionalField (α := Array Json) e "models").getD #[]).mapM parseModel
+    return { module, roots, namespace?, package?, main?, outputFile, outputDir, typeModules, internalOnly, goPath, models }
 
 def goPackage (job : Job) : Except String String := do
   let moduleName := match job.module with
@@ -204,9 +220,9 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
     let typeModules := job.typeModules.qsort (fun a b =>
       if a.1.components.length == b.1.components.length then Name.lt a.1 b.1
       else a.1.components.length > b.1.components.length)
-    let (publicModule, env) ← try inspectPublic env { strip, typeModules } types roots
+    let (publicModule, env) ← try inspectPublic env { strip, typeModules, models := job.models } types roots
       catch e => return ← failed 254 e.toString
-    let sources ← match publicSources env job.module pkg generatorVersion publicModule with
+    let sources ← match publicSources env job.module pkg generatorVersion job.goPath publicModule with
       | .ok sources => pure sources
       | .error reason => return ← failed 254 reason
     let files ← writePublic dir sources

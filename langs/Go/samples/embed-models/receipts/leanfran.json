@@ -1,0 +1,10 @@
+{
+  "block": "example.com/embed-models/receipts",
+  "hash": "0a1fd87e2ef7b99b2d0128d5bf25a4db0737167eda5c01c6beae619e4171ea4f",
+  "generator_version": 5,
+  "files": [
+    "leanfran_types_gen.go",
+    "leanfran_funcs_gen.go",
+    "leanfran_lean_gen.go"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "block": "example.com/embed-range/pricing",
+  "hash": "a40be4507192a64e91b56e152a3e814ede43c707584d52573d24e4ca06a2c1d8",
+  "generator_version": 5,
+  "files": [
+    "leanfran_types_gen.go",
+    "leanfran_funcs_gen.go",
+    "leanfran_lean_gen.go"
+  ]
+}

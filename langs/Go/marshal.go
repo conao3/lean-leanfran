@@ -105,7 +105,7 @@ func Scalar[T any](kind string, bits int, to func(T) rt.V, from func(rt.V) T) Co
 }
 
 type fixed interface {
-	~uint8 | ~uint16 | ~uint32 | ~uint64 | ~int8 | ~int16 | ~int32 | ~int64
+	~int | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~int8 | ~int16 | ~int32 | ~int64
 }
 
 func Fixed[T fixed](kind string, bits int) Codec[T] {

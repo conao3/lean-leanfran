@@ -1,0 +1,4 @@
+{
+  "paths": ["."],
+  "require": [{"name": "Domain", "path": "lean-dependency"}]
+}

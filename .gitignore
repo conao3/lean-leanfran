@@ -43,6 +43,7 @@
 /langs/PHP/samples/*/vendor/
 /langs/Go/.lake/
 /langs/Go/test-out/
+/langs/Go/**/.leanfran/
 /Rust/**/target/
 /Rust/**/.lake/
 /Rust/**/.lake-aeneas/
