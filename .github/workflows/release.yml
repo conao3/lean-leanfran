@@ -21,7 +21,7 @@ jobs:
   version:
     name: Write the next version into all backends
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       version: ${{ steps.next.outputs.version }}
     steps:
