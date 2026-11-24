@@ -1,0 +1,40 @@
+i32 add 2147483647 1 signedOverflow signed integer overflow
+i64 add 9223372036854775807 1 signedOverflow signed integer overflow
+i32 sub -2147483648 1 signedOverflow signed integer overflow
+i64 sub -9223372036854775808 1 signedOverflow signed integer overflow
+i32 mul 2147483647 2 signedOverflow signed integer overflow
+i64 mul 9223372036854775807 2 signedOverflow signed integer overflow
+i32 neg -2147483648 0 signedOverflow negation of
+i64 neg -9223372036854775808 0 signedOverflow negation of
+i32 div -2147483648 -1 signedOverflow division of .* cannot be represented
+i64 div -9223372036854775808 -1 signedOverflow division of .* cannot be represented
+i32 mod -2147483648 -1 signedOverflow division of .* cannot be represented
+i64 mod -9223372036854775808 -1 signedOverflow division of .* cannot be represented
+i32 div 1 0 divByZero division by zero
+i64 mod 1 0 divByZero division by zero
+u32 div 1 0 divByZero division by zero
+u64 mod 1 0 divByZero division by zero
+i32 shl 1 -1 shiftOutOfRange shift exponent .* negative
+u32 shl 1 32 shiftOutOfRange shift exponent .* too large
+i64 shr -1 64 shiftOutOfRange shift exponent .* too large
+u64 shr 1 -1 shiftOutOfRange shift exponent .* negative
+i32 shl 1 31 signedOverflow left shift .* cannot be represented
+i64 shl 1 63 signedOverflow left shift .* cannot be represented
+i32 shl -1 0 signedOverflow left shift of negative value
+i64 shl -1 1 signedOverflow left shift of negative value
+bool and 1 0 divByZero division by zero
+index read 42 -1 indexOutOfRange index .* out of bounds
+index read 42 2 indexOutOfRange index .* out of bounds
+double i8 0x4060000000000000 0 floatToIntOutOfRange outside the range
+double u8 0x4070000000000000 0 floatToIntOutOfRange outside the range
+double i16 0x40e0000000000000 0 floatToIntOutOfRange outside the range
+double u16 0x40f0000000000000 0 floatToIntOutOfRange outside the range
+double i32 0x41e0000000000000 0 floatToIntOutOfRange outside the range
+double u32 0x41f0000000000000 0 floatToIntOutOfRange outside the range
+double i64 0x43e0000000000000 0 floatToIntOutOfRange outside the range
+double u64 0x43f0000000000000 0 floatToIntOutOfRange outside the range
+double u8 0xbff0000000000000 0 floatToIntOutOfRange outside the range
+double i64 0xc3e0000000000001 0 floatToIntOutOfRange outside the range
+double i32 0x7ff8000000000000 0 floatToIntOutOfRange outside the range
+double i32 0x7ff0000000000000 0 floatToIntOutOfRange outside the range
+double u64 0xfff0000000000000 0 floatToIntOutOfRange outside the range
