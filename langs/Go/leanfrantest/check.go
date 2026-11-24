@@ -1,6 +1,7 @@
 package leanfrantest
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -287,6 +288,11 @@ func equal(a, b reflect.Value) bool {
 		x, y := a.Float(), b.Float()
 		return math.Float64bits(x) == math.Float64bits(y) || math.IsNaN(x) && math.IsNaN(y)
 	case reflect.Struct:
+		if a.CanInterface() {
+			if named, ok := a.Interface().(interface{ LeanfranDesc() *schema.Desc }); ok && named.LeanfranDesc().Kind == "enum" {
+				return a.Equal(b)
+			}
+		}
 		for i := range a.NumField() {
 			if !equal(a.Field(i), b.Field(i)) {
 				return false
@@ -300,6 +306,19 @@ func equal(a, b reflect.Value) bool {
 
 func sample(typ reflect.Type, rng *rand.Rand, trial, depth int) (reflect.Value, error) {
 	val := reflect.New(typ).Elem()
+	if named, ok := val.Interface().(interface{ LeanfranDesc() *schema.Desc }); ok {
+		if cases := named.LeanfranDesc().Cases; len(cases) > 0 {
+			idx := trial
+			if idx >= len(cases) {
+				idx = rng.IntN(len(cases))
+			}
+			data, err := json.Marshal(cases[idx])
+			if err == nil {
+				err = json.Unmarshal(data, val.Addr().Interface())
+			}
+			return val, err
+		}
+	}
 	switch typ.Kind() {
 	case reflect.Bool:
 		val.SetBool(trial%2 != 0)
@@ -340,16 +359,6 @@ func sample(typ reflect.Type, rng *rand.Rand, trial, depth int) (reflect.Value, 
 		}
 		val.SetFloat(f)
 	case reflect.String:
-		if named, ok := val.Interface().(interface{ LeanfranDesc() *schema.Desc }); ok {
-			if cases := named.LeanfranDesc().Cases; len(cases) > 0 {
-				idx := trial
-				if idx >= len(cases) {
-					idx = rng.IntN(len(cases))
-				}
-				val.SetString(cases[idx])
-				return val, nil
-			}
-		}
 		edges := [...]string{"", "a", "é", "\x00", "界", "🙂"}
 		if trial < len(edges) {
 			val.SetString(edges[trial])

@@ -267,7 +267,7 @@ func (t *translation) leanType(node ast.Node, typ types.Type) string {
 		if !slices.Contains(t.def.TypeImports, named.Module) && named.Module != embedName(t.model.Spec) {
 			t.def.TypeImports = append(t.def.TypeImports, named.Module)
 		}
-		if shape, ok := typ.Underlying().(*types.Struct); ok {
+		if shape, ok := typ.Underlying().(*types.Struct); ok && named.Cases == nil {
 			for field := range shape.Fields() {
 				if _, exists := named.Fields[field.Name()]; !exists {
 					t.reject(node, "no Lean field for %s.%s", typ, field.Name())

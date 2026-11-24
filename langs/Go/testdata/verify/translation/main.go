@@ -23,6 +23,7 @@ inductive Flavor where
 def flavorSpec : Flavor → Bool
   | .plain => false
   | .robust => true
+def flavorIdentity (f : Flavor) : Flavor := f
 def arithmeticSpec (n m : Int64) := (n + m, n - m, n * m)
 def divSpec (n m : Int64) := (n / m, n % m)
 def nonzero (_n m : Int64) : Bool := m != 0
@@ -187,7 +188,23 @@ func Message(n int64) int64 {
 func ReadTagged(x Tagged) uint16 { return x.Count }
 
 //leanfran:model refines=flavorSpec
-func FlavorOk(f Flavor) bool { return f == FlavorRobust }
+func FlavorOk(f Flavor) bool {
+	switch f {
+	case FlavorRobust():
+		return true
+	default:
+		return false
+	}
+}
+
+//leanfran:model refines=flavorIdentity
+func FlavorRoundTrip(f Flavor) Flavor {
+	var zero Flavor
+	if f == zero {
+		return Flavor{}
+	}
+	return FlavorRobust()
+}
 
 func showPair(a, b int64) { fmt.Printf("%d %d\n", a, b) }
 
@@ -231,5 +248,5 @@ func main() {
 	fmt.Println(Message(1))
 	panics(func() { Message(0) })
 	fmt.Println(ReadTagged(Tagged{Count: 0}))
-	fmt.Println(FlavorOk(FlavorPlain), FlavorOk(FlavorRobust))
+	fmt.Println(FlavorOk(FlavorPlain()), FlavorOk(FlavorRobust()))
 }

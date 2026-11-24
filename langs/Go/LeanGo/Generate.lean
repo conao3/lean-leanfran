@@ -113,8 +113,9 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
           discard <| ofExcept (collect env exports #[target.name] >>= checkExterns env exports)
           pure sig
       let base := (previous.map (·.ident)).getD (publicMethod cfg.strip r)
-      let ident ← freshHandleIdent (base ++ "Value")
-      handles := handles.push { source := r, target, ident, sig }
+      let ident ← freshHandleIdent ("Handle_" ++ base)
+      let inIdent ← freshHandleIdent ("HandleIn_" ++ base)
+      handles := handles.push { source := r, target, ident, inIdent, sig }
     catch e =>
       if isNameCollision (← e.toMessageData.toString) then throw e
       setEnv savedEnv
@@ -122,16 +123,12 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
   let types := (← get).types.toList.filter (fun t => !t.anonymous && t.model.isNone)
   let inputs := types.map (fun t => Desc.named t.ident) ++ handles.toList.flatMap (·.sig.valueInputs)
   let conversions : Array ValueConversion ← inputs.eraseDups.toArray.mapM fun desc => do
-    let stem := desc.valueStem ++ "Value"
-    let newIdent ← freshHandleIdent ("New" ++ stem)
-    let readIdent ← freshHandleIdent ("Read" ++ stem)
-    return { desc, newIdent, readIdent }
-  handles ← handles.mapM fun f => do
-    return { f with inIdent := ← freshHandleIdent (f.ident ++ "In") }
-  let conversions ← conversions.mapM fun c => do
-    let newInIdent ← freshHandleIdent (c.newIdent ++ "In")
-    let readInIdent ← freshHandleIdent (c.readIdent ++ "In")
-    return { c with newInIdent, readInIdent }
+    let stem := desc.valueStem
+    let newIdent ← freshHandleIdent ("NewValue_" ++ stem)
+    let readIdent ← freshHandleIdent ("ReadValue_" ++ stem)
+    let newInIdent ← freshHandleIdent ("NewValueIn_" ++ stem)
+    let readInIdent ← freshHandleIdent ("ReadValueIn_" ++ stem)
+    return { desc, newIdent, readIdent, newInIdent, readInIdent }
   return { state := ← get, functions, skipped, handles, conversions }
 
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
@@ -258,7 +255,11 @@ def descBody (cfg : RenderCfg) (t : TypeDef) : String :=
     | .enum cases => s!"Kind: {modelKind "enum"}, Cases: []string\{{joinArgs (cases.map (quoteGo ∘ Prod.fst))}}"
     | .subtype base _ bounds => s!"Kind: \"subtype\", First: {base.codec cfg}.Desc, Bounds: {boundsCode bounds}"
     | .struct v trivial => s!"Kind: {modelKind "struct"}, Variants: []schema.Variant\{{variantCode cfg v trivial.isSome}}"
-    | .sum vs trivial => s!"Kind: \"inductive\", Variants: []schema.Variant\{{joinArgs (vs.map (variantCode cfg · trivial.isSome))}}"
+    | .sum vs trivial =>
+      let kind := if vs.size == 1 && vs[0]!.fields.isEmpty && vs[0]!.invariants.isEmpty then
+        s!"Kind: \"enum\", Cases: []string\{{quoteGo vs[0]!.name}}"
+        else "Kind: \"inductive\""
+      s!"{kind}, Variants: []schema.Variant\{{joinArgs (vs.map (variantCode cfg · trivial.isSome))}}"
   let goType := if let some m := t.model then s!"GoType: {quoteGo (m.path ++ "." ++ m.name)}, " else ""
   s!"schema.Desc\{Name: {quoteGo (t.model.map (·.name) |>.getD t.ident)}, {goType}{fields}}"
 
@@ -361,10 +362,14 @@ def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (layout 
   return (code, flat)
 
 def emitEnum (name ty label : String) (cases : Array (String × String)) (model : Bool) : String := Id.run do
-  let constants := cases.map fun (c, ident) => s!"\t{ident} {name} = {quoteGo c}\n"
-  let decl := if model then "" else s!"type {ty} string\n\nconst (\n{String.join constants.toList})\n\n"
-  return decl ++
-    s!"func to{name}(v {ty}) rt.V \{\n\tfor i, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return rt.Lean_box(uint64(i)) }\n\t}\n\trt.Lean_internal_panic(\"invalid {label}\")\n\treturn rt.V\{}\n}\n\n" ++
+  if !model then
+    let constructors := cases.zipIdx.map fun ((_, ident), i) =>
+      s!"func {ident}() {ty} \{ return {ty}\{tag: {i}} }\n\n"
+    return s!"type {ty} struct \{ tag uint64 }\n\n" ++ String.join constructors.toList ++
+      s!"func to{name}(v {ty}) rt.V \{ return rt.Lean_box(v.tag) }\n\n" ++
+      s!"func from{name}(v rt.V) {ty} \{\n\ttag := rt.Lean_unbox(v)\n\tif tag >= {cases.size} \{ rt.Lean_internal_panic(\"invalid {label}\") }\n\treturn {ty}\{tag: tag}\n}\n\n" ++
+      s!"func check{name}(e *leanfran.ValidationError, v {ty}) \{\n\tif v.tag >= {cases.size} \{ e.Add(\"expected {label}\") }\n}\n\n"
+  return s!"func to{name}(v {ty}) rt.V \{\n\tfor i, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return rt.Lean_box(uint64(i)) }\n\t}\n\trt.Lean_internal_panic(\"invalid {label}\")\n\treturn rt.V\{}\n}\n\n" ++
     s!"func from{name}(v rt.V) {ty} \{\n\treturn {ty}(desc{name}().Cases[rt.Lean_unbox(v)])\n}\n\n" ++
     s!"func check{name}(e *leanfran.ValidationError, v {ty}) \{\n\tfor _, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return }\n\t}\n\te.Add(\"expected {label}\")\n}\n\n"
 
@@ -383,7 +388,7 @@ def emitSubtype (cfg : RenderCfg) (t : TypeDef) (base : Desc) (inv : InvInfo) : 
     s!"func from{name}(v rt.V) {ty} \{ return {result} }\n\n" ++
     s!"func check{name}(e *leanfran.ValidationError, v {ty}) \{\n\tstart := len(e.Issues)\n\tleanfran.CheckAt(e, {codec}, {val}, \"val\")\n\tif len(e.Issues) != start \{ return }\n{check}}\n\n"
 
-def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (trivial : Bool) (decoder : String) :
+def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (decoder : String) :
     Except String String := do
   let mut out := s!"type {name} interface \{\n\tis{name}()\n\tValidate() error\n\tMarshalJSON() ([]byte, error)\n\tJSONSchema(string) (map[string]any, error)\n\tLeanfranDesc() *schema.Desc\n}\n\n"
   let mut toCases := ""
@@ -397,8 +402,7 @@ def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (trivial 
     toCases := toCases ++ s!"\tcase {ty}: return to{ty}(x)\n\tcase *{ty}: return to{ty}(*x)\n"
     fromCases := fromCases ++ s!"\tcase {v.cidx}: return from{ty}(v)\n"
     checks := checks ++ s!"\tcase {ty}: check{ty}(e, x); return\n\tcase *{ty}:\n\t\tif x != nil \{ check{ty}(e, *x); return }\n"
-  let fromBody := if trivial then s!"\treturn from{vs[0]!.ident}(v)\n" else
-    s!"\tswitch rt.Lean_obj_tag(v) \{\n{fromCases}\t}\n\trt.Lean_internal_panic(\"invalid {name} tag\")\n\treturn nil\n"
+  let fromBody := s!"\tswitch rt.Lean_obj_tag(v) \{\n{fromCases}\t}\n\trt.Lean_internal_panic(\"invalid {name} tag\")\n\treturn nil\n"
   return out ++
     s!"func to{name}(v {name}) rt.V \{\n\tswitch x := v.(type) \{\n{toCases}\t}\n\trt.Lean_internal_panic(\"invalid {name}\")\n\treturn rt.V\{}\n}\n\n" ++
     s!"func from{name}(v rt.V) {name} \{\n{fromBody}}\n\n" ++
@@ -414,20 +418,58 @@ def emitType (cfg : RenderCfg) (t : TypeDef) : Except String String := do
       let (code, fields) ← variantFuncs cfg name ty v s!"desc{name}().Variants[0]" ""
       pure ((if t.model.isSome then "" else variantDecl cfg name fields v.constructor) ++ code, t.model.isNone)
     | .subtype base inv _ => pure (← emitSubtype cfg t base inv, !t.anonymous)
-    | .sum vs trivial => pure (← emitSum cfg name vs trivial.isSome t.decoder.get!, false)
+    | .sum vs _ =>
+      if vs.size == 1 then
+        let v := vs[0]!
+        let (code, fields) ← variantFuncs cfg name ty v s!"desc{name}().Variants[0]" s!", {quoteGo v.name}"
+        pure (variantDecl cfg name fields v.constructor ++ code, true)
+      else
+        pure (← emitSum cfg name vs t.decoder.get!, false)
   return codecDecl name ty (!t.anonymous && t.model.isNone) ++ body ++
     if methods then valueMethods name name true else ""
 
-def Desc.needsCheck : Desc → Bool
-  | .bool | .float | .float32 | .uint _ | .sint _ | .hostInt _ | .unit | .usize | .isize | .bytes => false
-  | _ => true
+partial def Desc.needsCheck (st : MarshalState) (d : Desc) (seen : List Desc := []) : Bool :=
+  let check := fun child => child.needsCheck st (d :: seen)
+  let variant := fun (v : VariantInfo) => !v.invariants.isEmpty || v.fields.any (check ∘ FieldInfo.desc)
+  if seen.contains d then false else
+    match d with
+    | .bool | .float | .float32 | .uint _ | .sint _ | .hostInt _ | .unit | .usize | .isize | .bytes => false
+    | .list a | .array a | .option a => check a
+    | .prod a b | .except a b => check a || check b
+    | .named _ | .foreign .. =>
+      let ty : Option TypeDef := match d with
+        | .named name => st.types.find? (fun t => t.ident == name)
+        | .foreign ns name => st.foreignTypes[(ns, name)]?
+        | _ => none
+      match ty with
+      | some t =>
+        match t.kind with
+        | .enum cases => t.model.isSome || cases.isEmpty
+        | .struct v _ => variant v
+        | .sum vs _ => vs.size != 1 || variant vs[0]!
+        | .subtype .. => true
+      | none => true
+    | _ => true
+
+def PublicSig.canFail (sig : PublicSig) : Bool :=
+  sig.io || (match sig.result with | .except .. => true | _ => false)
+
+def returnSignature (types : Array String) (canFail : Bool) : String :=
+  let types := if canFail then types.push "error" else types
+  match types.size with
+  | 0 => ""
+  | 1 => types[0]! ++ " "
+  | _ => "(" ++ joinArgs types ++ ") "
+
+def returnValues (values : Array String) (canFail : Bool) : String :=
+  let values := if canFail then values.push "nil" else values
+  if values.isEmpty then "" else "\treturn " ++ joinArgs values ++ "\n"
 
 def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let ret := f.sig.result
   let result := match ret with | .except _ a => a | _ => ret
   let unit := result == .unit
   let resultType := result.go cfg
-  let signature := if unit then "error" else s!"({resultType}, error)"
   let fail := if unit then "err" else s!"leanfran.Zero[{resultType}](), err"
   let params := f.target.params
   let mut ownership := ""
@@ -444,7 +486,7 @@ def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
       let codec := d.codec cfg
       if d == .nat || d == .int then
         checks := checks ++ s!"\tif issue := leanfran.IntegerIssue({x}, {d == .nat}); issue != \"\" \{ _lfValidation.Add(issue, {quoteGo name}) }\n"
-      else if d.needsCheck then
+      else if d.needsCheck cfg.state then
         checks := checks ++ s!"\tleanfran.CheckAt(&_lfValidation, {codec}, {x}, {quoteGo name})\n"
       if !liveParam p then continue
       let value := s!"v{i}"
@@ -453,6 +495,8 @@ def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
         ownership := ownership ++ s!"\tdefer rt.Lean_dec({value})\n"
       args := args.push (unbox p.ty value)
   unless args.size == (params.filter liveParam).size do throw s!"incompatible IR parameters for {f.target.name}"
+  let canFail := f.sig.canFail || !checks.isEmpty
+  let signature := returnSignature (if unit then #[] else #[resultType]) canFail
   let checkBody := if checks.isEmpty then "" else
     "\tvar _lfValidation leanfran.ValidationError\n" ++ checks ++
       s!"\tif len(_lfValidation.Issues) != 0 \{\n\t\terr := &leanfran.ValidationError\{Issues: _lfValidation.Issues}\n\t\treturn {fail}\n\t}\n"
@@ -468,12 +512,12 @@ def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
       let fail := if unit then "err" else s!"leanfran.Zero[{resultType}](), err"
       s!"\tif rt.Lean_obj_tag(_lfResult) == 0 \{\n\t\terr := &leanfran.ExceptError[{e.go cfg}]\{Value: {e.codec cfg}.FromLean(rt.Lean_ctor_get(_lfResult, 0))}\n\t\treturn {fail}\n\t}\n"
     | _ => ""
-  let output := if ret == .unit || unit then "nil" else
+  let output := if unit then #[] else
     let value := if branch.isEmpty then "_lfResult" else "rt.Lean_ctor_get(_lfResult, 0)"
-    s!"{result.codec cfg}.FromLean({value}), nil"
+    #[s!"{result.codec cfg}.FromLean({value})"]
   let ready := if cfg.codecs.isEmpty && cfg.state.types.isEmpty then "" else
     "\t_lfCodecsOnce.Do(_lfBuildCodecs)\n"
-  return s!"func {f.ident}({joinArgs binders}) {signature} \{\n{ready}{checkBody}{ownership}{run}{cleanup}{branch}\treturn {output}\n}\n\n"
+  return s!"func {f.ident}({joinArgs binders}) {signature}\{\n{ready}{checkBody}{ownership}{run}{cleanup}{branch}{returnValues output canFail}}\n\n"
 
 def emitValueConversion (cfg : RenderCfg) (c : ValueConversion) : String :=
   let ty := c.desc.go cfg
@@ -481,8 +525,13 @@ def emitValueConversion (cfg : RenderCfg) (c : ValueConversion) : String :=
   let wrapped := c.desc.value cfg
   let codec := c.desc.codec cfg
   let ready := "_lfCodecsOnce.Do(_lfBuildCodecs)"
-  s!"func {c.newIdent}(v {ty}) ({wrapped}, error) \{\n\treturn {c.newInIdent}(nil, v)\n}\n\n" ++
-  s!"func {c.newInIdent}(scope *leanfran.ValueScope, v {ty}) ({wrapped}, error) \{\n\t{ready}\n\treturn leanfran.NewValueIn[{marker}](scope, {codec}, v, {quoteGo c.desc.valueStem})\n}\n\n" ++
+  let checked := c.desc.needsCheck cfg.state
+  let signature := returnSignature #[wrapped] checked
+  let newCall := if checked then
+    s!"leanfran.NewValueIn[{marker}](scope, {codec}, v, {quoteGo c.desc.valueStem})"
+    else s!"leanfran.NewUncheckedValueIn[{marker}](scope, {codec}, v)"
+  s!"func {c.newIdent}(v {ty}) {signature}\{\n\treturn {c.newInIdent}(nil, v)\n}\n\n" ++
+  s!"func {c.newInIdent}(scope *leanfran.ValueScope, v {ty}) {signature}\{\n\t{ready}\n\treturn {newCall}\n}\n\n" ++
   s!"func {c.readIdent}(v {wrapped}) {ty} \{\n\treturn {c.readInIdent}(nil, v)\n}\n\n" ++
   s!"func {c.readInIdent}(scope *leanfran.ValueScope, v {wrapped}) {ty} \{\n\t{ready}\n\treturn leanfran.ReadValueIn(scope, {codec}, v)\n}\n\n"
 
@@ -491,7 +540,8 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let result := match ret with | .except _ a => a | _ => ret
   let results := match result with | .unit => #[] | .prod a b => #[a, b] | d => #[d]
   let types := results.map (·.value cfg)
-  let signature := if types.isEmpty then "error" else s!"({joinArgs (types.push "error")})"
+  let canFail := f.sig.canFail
+  let signature := returnSignature types canFail
   let zeroes := types.map (· ++ "{}")
   let fail := joinArgs (zeroes.push "err")
   let mut args := #[]
@@ -538,17 +588,19 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
     raw := "rt.Lean_ctor_get(raw, 0)"
   | _ => pure ()
   let output := match result with
-    | .unit => "nil"
+    | .unit => #[]
     | .prod a b =>
-      s!"leanfran.WrapValueIn[{a.valueType cfg}](scope, leanfran.OwnValueField({raw}, 0)), leanfran.WrapValueIn[{b.valueType cfg}](scope, leanfran.OwnValueField({raw}, 1)), nil"
+      #[s!"leanfran.WrapValueIn[{a.valueType cfg}](scope, leanfran.OwnValueField({raw}, 0))",
+        s!"leanfran.WrapValueIn[{b.valueType cfg}](scope, leanfran.OwnValueField({raw}, 1))"]
     | d =>
       let owned := if raw == "raw" then raw else "leanfran.OwnValueField(raw, 0)"
-      s!"leanfran.WrapValueIn[{d.valueType cfg}](scope, {owned}), nil"
+      #[s!"leanfran.WrapValueIn[{d.valueType cfg}](scope, {owned})"]
   if raw == "raw" && (match result with | .prod .. => true | .unit => ty.isPossibleRef | _ => false) then
     body := body ++ "\tdefer rt.Lean_dec(raw)\n"
-  let wrapper := s!"func {f.ident}({joinArgs binders}) {signature} \{\n\treturn {f.inIdent}({joinArgs forwarded})\n}\n\n"
+  let forward := if signature.isEmpty then "" else "return "
+  let wrapper := s!"func {f.ident}({joinArgs binders}) {signature}\{\n\t{forward}{f.inIdent}({joinArgs forwarded})\n}\n\n"
   let scopedBinders := #["scope *leanfran.ValueScope"] ++ binders
-  return wrapper ++ s!"func {f.inIdent}({joinArgs scopedBinders}) {signature} \{\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}\treturn {output}\n}\n\n"
+  return wrapper ++ s!"func {f.inIdent}({joinArgs scopedBinders}) {signature}\{\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}{returnValues output canFail}}\n\n"
 
 def usesQualifier (source qualifier : String) : Bool := Id.run do
   let mut plain := ""
@@ -600,7 +652,9 @@ def verificationTypes (st : MarshalState) (goPath : String) : Json := Json.arr <
     | .enum cases =>
       if t.model.isNone then
         entries := entries.push (Json.mkObj (base ++ [("cases",
-          Json.mkObj (cases.toList.map fun (name, _) => (name, toJson name)))]))
+          Json.mkObj (cases.toList.map fun (name, _) => (name, toJson name))),
+          ("constructors", Json.mkObj (cases.toList.map fun (name, ident) => (ident, toJson name))),
+          ("zeroCase", toJson ((cases[0]?.map Prod.fst).getD ""))]))
     | _ => pure ()
   return entries
 
@@ -619,12 +673,12 @@ def TypeDef.codecInputs (t : TypeDef) : List Desc :=
   | .sum vs _ => vs.toList.flatMap fields
   | .subtype base .. => [base]
 
-def PublicFn.codecInputs (f : PublicFn) : List Desc :=
+def PublicFn.codecInputs (st : MarshalState) (f : PublicFn) : List Desc :=
   let inputs := f.sig.params.zipIdx.toList.filterMap fun (param, i) =>
     match param with
     | .world => none
     | .value _ d =>
-      if (f.target.params[i]?.any liveParam) || (d.needsCheck && d != .nat && d != .int) then
+      if (f.target.params[i]?.any liveParam) || (d.needsCheck st && d != .nat && d != .int) then
         some d
       else none
   let outputs := match f.sig.result with
@@ -656,7 +710,7 @@ def publicSources (env : Environment) (mod : Name) (pkg version goPath : String)
   let funcs := collected.functions.qsort (fun a b => a.ident < b.ident)
   let conversions := collected.conversions.qsort (fun a b => a.newIdent < b.newIdent)
   let handles := collected.handles.qsort (fun a b => a.ident < b.ident)
-  let inputs := types.toList.flatMap TypeDef.codecInputs ++ funcs.toList.flatMap PublicFn.codecInputs ++
+  let inputs := types.toList.flatMap TypeDef.codecInputs ++ funcs.toList.flatMap (PublicFn.codecInputs collected.state) ++
     conversions.toList.map (·.desc)
   let codecs := (inputs.flatMap Desc.codecDependencies).eraseDups.toArray
   let cfg := { env, state := collected.state, imports, goPath, codecs : RenderCfg }

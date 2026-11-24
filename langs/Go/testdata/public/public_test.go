@@ -13,6 +13,7 @@ import (
 	"github.com/conao3/leanfran-go"
 	"github.com/conao3/leanfran-go/rt"
 	"github.com/conao3/leanfran-go/test-out/_generated/public/client"
+	values "github.com/conao3/leanfran-go/test-out/_generated/public/json"
 	"github.com/conao3/leanfran-go/test-out/_generated/public/public"
 )
 
@@ -44,14 +45,12 @@ func TestScalarAndContainerRoundTrip(t *testing.T) {
 	if got.N.BitLen() != 116 {
 		t.Fatal("returned Nat shares storage with the input")
 	}
-	if err := public.UnitEcho(struct{}{}); err != nil {
-		t.Fatal(err)
-	}
+	public.UnitEcho(struct{}{})
 	data := []byte{0, 12, 255}
-	bytes, err := public.ByteEcho(data)
+	bytes := public.ByteEcho(data)
 	data[2] = 0
-	if err != nil || len(bytes) != 3 || bytes[2] != 255 {
-		t.Fatalf("ByteArray: %v, %v", bytes, err)
+	if len(bytes) != 3 || bytes[2] != 255 {
+		t.Fatalf("ByteArray: %v", bytes)
 	}
 	x := big.NewInt(42)
 	some := &x
@@ -190,15 +189,76 @@ func TestListAndAllocations(t *testing.T) {
 	for i := range items {
 		items[i] = uint32(i)
 	}
-	got, err := public.ListEcho(items)
-	if err != nil || !reflect.DeepEqual(got, items) {
-		t.Fatal("million-element round trip failed", err)
+	got := public.ListEcho(items)
+	if !reflect.DeepEqual(got, items) {
+		t.Fatal("million-element round trip failed")
 	}
 	if allocs := testing.AllocsPerRun(100, func() {
-		if got, err := public.UintEcho(math.MaxUint64); err != nil || got != math.MaxUint64 {
-			t.Fatal(got, err)
+		if got := public.UintEcho(math.MaxUint64); got != math.MaxUint64 {
+			t.Fatal(got)
 		}
 	}); allocs != 0 {
 		t.Fatalf("UInt64 call allocated %v times", allocs)
+	}
+}
+
+func TestPublicSignatures(t *testing.T) {
+	reply := public.ReplyFor(math.MaxUint64)
+	if reply.V != math.MaxUint64 {
+		t.Fatal(reply)
+	}
+	checkJSON := func(value any, expected string) {
+		t.Helper()
+		payload, err := json.Marshal(value)
+		if err != nil || string(payload) != expected {
+			t.Fatalf("JSON = %s, %v, want %s", payload, err, expected)
+		}
+		dst := reflect.New(reflect.TypeOf(value))
+		if err := json.Unmarshal(payload, dst.Interface()); err != nil || dst.Elem().Interface() != value {
+			t.Fatalf("round trip: %v, %v", dst.Elem(), err)
+		}
+	}
+	checkJSON(reply, `{"value":{"v":"18446744073709551615"}}`)
+	checkJSON(public.GivenFor(9), `{"only":"9"}`)
+	marker := public.MarkerFor()
+	checkJSON(marker, `"only"`)
+	markerSchema, err := marker.JSONSchema("draft-2020-12")
+	if err != nil || markerSchema["type"] != "string" || !reflect.DeepEqual(markerSchema["enum"], []string{"only"}) {
+		t.Fatalf("marker schema = %v, %v", markerSchema, err)
+	}
+	checkJSON(values.ColorBlue(), `"blue"`)
+
+	switch values.ColorRed() {
+	case values.ColorRed():
+	default:
+		t.Fatal("red constructor did not match")
+	}
+	if (values.Color{}) != values.ColorRed() {
+		t.Fatal("zero color did not select the first constructor")
+	}
+	color := values.ColorBlue()
+	if err := json.Unmarshal([]byte(`"pow"`), &color); err == nil || color != values.ColorBlue() {
+		t.Fatalf("invalid color: %v, %v", color, err)
+	}
+
+	raw := public.NewValue_UInt64(9)
+	public.Handle_UnitEcho(public.NewValue_Unit(struct{}{}).Take())
+	leanReply := public.Handle_ReplyFor(raw.Take())
+	defer leanReply.Close()
+	if got := public.ReadValue_Reply(leanReply); got.V != 9 {
+		t.Fatal(got)
+	}
+	record, err := public.NewRecordValue(9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := public.NewValue_Record(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := public.Handle_RecordValue_2(input.Take())
+	defer output.Close()
+	if got := public.ReadValue_Record(output); got != record {
+		t.Fatal(got)
 	}
 }

@@ -19,22 +19,19 @@ type Server struct {
 }
 
 func (s *Server) Reserve(amount uint64) (uint64, error) {
-	command, err := inventory.NewUInt64Value(amount)
-	if err != nil {
-		return 0, err
-	}
+	command := inventory.NewValue_UInt64(amount)
 	defer command.Close()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next, reply, err := inventory.TransitionValue(s.snapshot.Borrow(), command.Take())
+	next, reply, err := inventory.Handle_Transition(s.snapshot.Borrow(), command.Take())
 	if err != nil {
 		return 0, err
 	}
 	defer reply.Close()
 	s.snapshot.Close()
 	s.snapshot = next
-	return inventory.ReadUInt64Value(reply), nil
+	return inventory.ReadValue_UInt64(reply), nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +44,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var rejection *leanfran.ExceptError[inventory.Rejection]
 	switch {
 	case errors.As(err, &rejection):
-		http.Error(w, string(rejection.Value), http.StatusConflict)
+		http.Error(w, "outOfStock", http.StatusConflict)
 	case err != nil:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	default:
@@ -56,14 +53,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	remaining, err := inventory.NewUInt64Value(5)
-	if err != nil {
-		panic(err)
-	}
-	snapshot, err := inventory.InitialValue(remaining.Take())
-	if err != nil {
-		panic(err)
-	}
+	remaining := inventory.NewValue_UInt64(5)
+	snapshot := inventory.Handle_Initial(remaining.Take())
 	server := &Server{snapshot: snapshot}
 	defer func() { server.snapshot.Close() }()
 	for _, amount := range []string{"2", "4", "1"} {

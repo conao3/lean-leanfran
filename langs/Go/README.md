@@ -30,7 +30,7 @@ go get -tool github.com/conao3/leanfran-go/cmd/leanfran
 go tool leanfran sync
 ```
 
-Go callers can now use `arithmetic.Twice(big.NewInt(21))`. Commit the generated Go and manifest so the application can build with Go alone.
+Go callers can use `value, err := arithmetic.Twice(big.NewInt(21))`. The error reports an invalid `Nat` input. Pure functions whose inputs need no validation return their result directly. Commit the generated Go and manifest so the application can build with Go alone.
 
 ## Verify a Go function
 

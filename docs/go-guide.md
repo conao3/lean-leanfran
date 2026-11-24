@@ -188,7 +188,7 @@ The trusted pieces outside each proof are the Go translator, [the operation mode
 
 ### Property tests
 
-`sync` generates `leanfran_model_test.go` in each modeled Go package. Commit it alongside the embedded Go outputs and the lock. The generated `TestLeanfranModels` calls `leanfrantest.Check(t, model)`. It uses boundary values and seeded random values, discards inputs rejected by the precondition, and reports the seed and input when the implementation and spec disagree. Errors and panics from the implementation also fail the test on an accepted input. The defaults are 200 accepted inputs and seed 1. For manual tests, supply options `leanfrantest.Runs(n)` and `leanfrantest.Seed(seed)`. These tests use the generated Go specifications and run with Go alone.
+`sync` generates `leanfran_model_test.go` in each modeled Go package. Commit it alongside the embedded Go outputs and the lock. The generated `TestLeanfranModels` calls `leanfrantest.Check(t, model)`. It uses boundary values and seeded random values, discards inputs rejected by the precondition, and reports the seed and input when the implementation and spec disagree. Errors and panics from the implementation also fail the test on an accepted input. The defaults are 200 accepted inputs and seed 1. For manual tests, supply options `leanfrantest.Runs(n)` and `leanfrantest.Seed(seed)`. The sampler uses the generated enum constructors as inputs by decoding their JSON names. These tests use the generated Go specifications and run with Go alone. They accept specification wrappers with either a direct result or a trailing error, depending on the Lean signature.
 
 ## Generating from a compiled Lean module
 
@@ -206,7 +206,9 @@ The JSON summary reports the files and the qualified Lean name and reason for ea
 
 ## Public types and functions
 
-Structures have exported fields, including fields inherited from a parent. Enums have a named `string` type and one constant per constructor. Other inductive types have a sealed interface and one struct type per constructor. Proof fields become validation checks. Named subtypes have a `Val` field and anonymous subtypes use their base Go type.
+Structures and inductive types with a single constructor are Go structs with exported fields. Structure fields inherited from a parent appear directly on the child. Inductive types with multiple constructors and payloads have a sealed interface and one struct per constructor. Proof fields become validation checks. Named subtypes have a `Val` field and anonymous subtypes use their base Go type.
+
+Generated enums have a comparable struct type with a private field. Create a value with a constructor function such as `ColorRed()`. The Go zero value selects the first Lean constructor. Use constructor calls in a `switch`, and use `json.Unmarshal` to parse constructor names from JSON. An enum imported through `Models` uses the original Go type and its values.
 
 | Lean | Go |
 | --- | --- |
@@ -221,7 +223,7 @@ Structures have exported fields, including fields inherited from a parent. Enums
 | `α × β` | `leanfran.Pair[A, B]` |
 | `Except ε α` as a field or argument | `leanfran.Except[E, A]` with `Error *E` and `Ok A` |
 
-Use Go literals or `New<Type>` for types with invariants. Constructors, `Validate`, JSON decoding, and generated functions check Lean invariants and constraints such as nonnegative naturals, valid UTF-8, and Unicode scalar values. Generated functions return `(T, error)` or `error` for `Unit`. Use `errors.As` to inspect `*leanfran.ValidationError`, `*leanfran.ExceptError[E]`, and `*leanfran.IOError`. A validation error contains issues with a message and path for each failing field or parameter. Lean runtime failures such as unreachable IR propagate as `*rt.InternalPanic`.
+Use Go literals or `New<Type>` for types with invariants. Constructors, `Validate`, JSON decoding, and generated functions check Lean invariants and constraints such as nonnegative naturals, valid UTF-8, and Unicode scalar values. A generated function returns an `error` if it takes a Go input that requires validation or if its Lean result is `IO` or a top-level `Except`. Inputs that require validation include `Nat`, `Int`, `Fin`, `String`, `Char`, subtypes, types with proof fields, and sealed interfaces. Containers and records require validation when their members do. Fixed-width numbers, booleans, byte arrays, unit values, and generated enums can be passed directly. A function with no possible error returns just its result. A `Unit` result contributes no Go return value. Use `errors.As` to inspect `*leanfran.ValidationError`, `*leanfran.ExceptError[E]`, and `*leanfran.IOError`. A validation error contains issues with a message and path for each failing field or parameter. Lean runtime failures such as unreachable IR propagate as `*rt.InternalPanic`.
 
 ```go
 d, err := pricing.NewDiscountPercent(big.NewInt(10))
@@ -237,44 +239,44 @@ To reuse public types from a generated library, use `--type-module Library.Names
 
 ## Keep Lean values with `Value[T]`
 
-Use the ordinary wrappers for Go data such as input from JSON. Use handles when Go keeps a Lean value across calls, such as a server's snapshot. A `leanfran.Value[T]` owns one Lean reference. The generated `New<T>Value` validates and converts Go data once. `Read<T>Value` copies it back when Go needs the contents.
+Use the ordinary wrappers for Go data such as input from JSON. Use handles when Go keeps a Lean value across calls, such as a server's snapshot. A `leanfran.Value[T]` owns one Lean reference. The generated `NewValue_T` converts Go data once and returns an `error` only when T requires input validation. `ReadValue_T` copies the contents back to Go.
 
-For a generated function `F`, `FValue` accepts `leanfran.ValueInput[T]` for each argument. Pass `v.Borrow()` to keep using `v` or `v.Take()` to transfer its reference at the start of the call. If the Lean function can update an exclusively owned object in place, `Take` lets it do so. Copies of a Go handle refer to the same owner. Taking it empties every copy. `v.Close()` releases the reference and can be called on an empty handle. Reading or passing an empty handle panics. Unreachable handles also release their references through Go's garbage collector.
+For a generated function `F`, `Handle_F` accepts `leanfran.ValueInput[T]` for each argument. Pass `v.Borrow()` to keep using `v` or `v.Take()` to transfer its reference at the start of the call. If the Lean function can update an exclusively owned object in place, `Take` lets it do so. Copies of a Go handle refer to the same owner. Taking it empties every copy. `v.Close()` releases the reference and can be called on an empty handle. Reading or passing an empty handle panics. Unreachable handles also release their references through Go's garbage collector.
 
-Handle functions return `(leanfran.Value[T], error)`, or just `error` for `Unit`. A top-level product returns two handles and an error. For an `Except E (A × B)`, the two handles hold the successful product fields. Use `errors.As` for `*leanfran.ExceptError[E]` when the error has a Go representation, or `*leanfran.ExceptError[leanfran.Value[E]]` for an opaque Lean error. Use `leanfran.SplitValue` on a product already held in a handle. The JSON summary's `valueFunctions` map gives the generated names, including collision suffixes.
+Handle functions return an `error` only for `IO` or a top-level `Except`. A `Unit` result contributes no handle. A top-level product returns two handles. For an `Except E (A × B)`, the two handles hold the successful product fields. Use `errors.As` for `*leanfran.ExceptError[E]` when the error has a Go representation, or `*leanfran.ExceptError[leanfran.Value[E]]` for an opaque Lean error. Use `leanfran.SplitValue` on a product already held in a handle. The JSON summary's `valueFunctions` map gives the generated handle function names. Each `valueConversions` entry lists the type stem and its `new`, `read`, `newIn`, and `readIn` names. The underscore before the Lean-derived name distinguishes these functions from types and constructors. The summary includes any numeric collision suffixes.
 
 Named Lean data types use their generated Go type as the handle parameter. Built-in type markers distinguish types with a shared Go representation, such as `leanfran.NatType` and `leanfran.IntType`, or `leanfran.ListType[T]` and `leanfran.ArrayType[T]`. Types with decidable proof fields use the existing validated Go conversion. Types with proofs that Go cannot validate and types containing `Std.HashMap` get opaque type markers. Construct and inspect those values through Lean functions that take and return handles.
 
-Use one server mutex around a sequence that reads, updates, and replaces its snapshot. The runtime serializes individual handle operations and reference releases, including releases by the garbage collector, because separate handles can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `TransitionValue` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
+Use one server mutex around a sequence that reads, updates, and replaces its snapshot. The runtime serializes individual handle operations and reference releases, including releases by the garbage collector, because separate handles can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `Handle_Transition` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
 
 ```go
 s.mu.Lock()
 defer s.mu.Unlock()
-next, reply, err := inventory.TransitionValue(s.snapshot.Borrow(), command.Take())
+next, reply, err := inventory.Handle_Transition(s.snapshot.Borrow(), command.Take())
 if err != nil {
     return 0, err
 }
 defer reply.Close()
 s.snapshot.Close()
 s.snapshot = next
-return inventory.ReadUInt64Value(reply), nil
+return inventory.ReadValue_UInt64(reply), nil
 ```
 
 Call `v.IsExclusive()` to check whether the Lean heap object has one reference at that moment. Scalars and persistent objects return false. Go copies of the same handle share one owner, and child objects have their own reference counts. To check a handle and consume it under the same lock, use `v.IsExclusiveIn(scope)` inside `leanfran.WithValues`.
 
-`WithValues` holds the runtime mutex across a callback. Pass its `*leanfran.ValueScope` to the generated `FValueIn`, `New<T>ValueIn`, and `Read<T>ValueIn` functions and to `Value.CloseIn` or `leanfran.SplitValueIn`. Use the scoped calls throughout the callback and call `WithValues` from outside any active callback. The scope expires on return. Handles can outlive it and use ordinary calls again. The JSON summary's `scopedValueFunctions` map gives the generated names.
+`WithValues` holds the runtime mutex across a callback. Pass its `*leanfran.ValueScope` to the generated `HandleIn_F`, `NewValueIn_T`, and `ReadValueIn_T` functions and to `Value.CloseIn` or `leanfran.SplitValueIn`. Use the scoped calls throughout the callback and call `WithValues` from outside any active callback. The scope expires on return. Handles can outlive it and use ordinary calls again. The JSON summary's `scopedValueFunctions` map gives the generated names.
 
 ```go
 var result uint64
 var err error
 leanfran.WithValues(func(scope *leanfran.ValueScope) {
-    next, reply, callErr := inventory.TransitionValueIn(scope, s.snapshot.Borrow(), command.Take())
+    next, reply, callErr := inventory.HandleIn_Transition(scope, s.snapshot.Borrow(), command.Take())
     if callErr != nil {
         err = callErr
         return
     }
     defer reply.CloseIn(scope)
-    result = inventory.ReadUInt64ValueIn(scope, reply)
+    result = inventory.ReadValueIn_UInt64(scope, reply)
     s.snapshot.CloseIn(scope)
     s.snapshot = next
 })

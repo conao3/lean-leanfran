@@ -40,6 +40,10 @@ directory = Path(sys.argv[1])
 summary = json.loads((directory / "public.summary.json").read_text())
 assert summary["package"] == "public"
 assert len(summary["files"]) == 3
+assert summary["valueFunctions"]["recordValue"] == "Handle_RecordValue_2"
+assert summary["scopedValueFunctions"]["recordValue"] == "HandleIn_RecordValue_2"
+assert {"type": "Reply", "new": "NewValue_Reply", "read": "ReadValue_Reply",
+        "newIn": "NewValueIn_Reply", "readIn": "ReadValueIn_Reply"} in summary["valueConversions"]
 skipped = {row["name"].rsplit(".", 1)[-1]: row["reason"] for row in summary["skipped"]}
 for name, reason in {
     "AClass": "type class",
@@ -64,6 +68,21 @@ cp testdata/public/allocation_inputs.go testdata/public/allocations_test.go "$ou
 cp testdata/public/oracle.go "$out"
 go vet "./$out/public" "./$out/json" "./$out/client" "./$out/allocations" "./$out"
 go test -race "./$out/public"
+mkdir -p "$out/typecheck"
+cat > "$out/typecheck/invalid-enum.go" <<'GO'
+package typecheck
+
+import values "github.com/conao3/leanfran-go/test-out/_generated/public/json"
+
+var _ = values.Color("pow")
+var _ = values.Color{tag: 100}
+GO
+if go test "$out/typecheck/invalid-enum.go" > "$out/invalid-enum.txt" 2>&1; then
+    printf 'Color accepted values outside its constructors\n' >&2
+    exit 1
+fi
+grep -F 'cannot convert "pow"' "$out/invalid-enum.txt"
+grep -F 'cannot refer to unexported field tag' "$out/invalid-enum.txt"
 go test "./$out/allocations"
 CGO_ENABLED=0 go build -o "$out/oracle" "./$out"
 .lake/build/bin/oracle-public > "$out/native.jsonl"

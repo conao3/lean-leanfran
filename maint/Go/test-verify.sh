@@ -37,8 +37,8 @@ done
 (
     cd "$out/translation"
     "$out/leanfran" check > "$out/translation.txt"
-    test "$(grep -c ': missing$' "$out/translation.txt")" = 22
-    go test -count=1 -run '^TestLeanfranModels/(ReadTagged|FlavorOk)$' .
+    test "$(grep -c ': missing$' "$out/translation.txt")" = 23
+    go test -count=1 -run '^TestLeanfranModels/(ReadTagged|FlavorOk|FlavorRoundTrip)$' .
     go test -count=1 ./helper
     go run . > "$out/go.txt"
     workspace=.leanfran/workspace

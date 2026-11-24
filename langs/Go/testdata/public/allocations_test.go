@@ -52,8 +52,8 @@ func allocationCases() []allocationCase {
 			}
 		}},
 		{"Add64", 0, func(tb testing.TB) {
-			if got, err := Add64(12, 24); err != nil || got != 36 {
-				tb.Fatal(got, err)
+			if got := Add64(12, 24); got != 36 {
+				tb.Fatal(got)
 			}
 		}},
 	}

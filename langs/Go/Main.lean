@@ -4,7 +4,7 @@ import LeanGo.Check
 open Lean LeanGo
 
 def version : String := "0.10.0"
-def generatorVersion : String := "9"
+def generatorVersion : String := "10"
 
 def usage : String := "leanfran-go --version | --generator-version | --lean-version
 leanfran-go module generate --module-name <Name> [options]
@@ -237,9 +237,12 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
       ((stripName strip f.source).toString, toJson f.ident))
     let scopedValueFunctions := Json.mkObj (publicModule.handles.toList.map fun f =>
       ((stripName strip f.source).toString, toJson f.inIdent))
+    let valueConversions := Json.arr <| (publicModule.conversions.qsort (fun a b => a.newIdent < b.newIdent)).map fun c =>
+      Json.mkObj [("type", toJson c.desc.valueStem), ("new", toJson c.newIdent), ("read", toJson c.readIdent),
+        ("newIn", toJson c.newInIdent), ("readIn", toJson c.readInIdent)]
     return (Json.mkObj [("module", mod), ("package", pkg), ("files", toJson files),
       ("skipped", toJson skipped), ("functions", functions), ("valueFunctions", valueFunctions),
-      ("scopedValueFunctions", scopedValueFunctions),
+      ("scopedValueFunctions", scopedValueFunctions), ("valueConversions", valueConversions),
       ("types", verificationTypes publicModule.state job.goPath)], 0)
   let roots := if job.roots.isEmpty then defaultRoots env job else job.roots.map (csimpTarget env)
   let source ← match generate env job.module roots pkg job.main? generatorVersion job.internalOnly with

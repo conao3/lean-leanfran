@@ -141,11 +141,11 @@ func (t *translation) statement(stmt ast.Stmt) {
 }
 
 func (t *translation) zero(node ast.Node, typ types.Type) string {
+	if desc, ok := t.namedType(typ); ok && desc.ZeroCase != "" {
+		return leanName(desc.Lean) + "." + leanName(desc.ZeroCase)
+	}
 	if _, ok := typ.Underlying().(*types.Struct); ok {
 		return t.structure(node, typ, nil)
-	}
-	if desc, ok := t.namedType(typ); ok && desc.Cases != nil {
-		t.reject(node, "the Go zero value is not a valid generated enum constructor")
 	}
 	name := t.leanType(node, typ)
 	switch name {

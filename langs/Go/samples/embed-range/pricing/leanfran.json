@@ -1,7 +1,7 @@
 {
   "block": "example.com/embed-range/pricing",
-  "hash": "4667a27546650fed77596d7520031259779183035a85faca94fb47efc80a0009",
-  "generator_version": 9,
+  "hash": "033beb8effbe89b18095eb00085041f3723591998a290adc92b2a8eedff87ba6",
+  "generator_version": 10,
   "files": [
     "leanfran_types_gen.go",
     "leanfran_funcs_gen.go",
