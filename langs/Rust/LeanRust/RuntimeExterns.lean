@@ -490,6 +490,7 @@ def runtimeExterns : Array String := #[
   "lean_is_exclusive_obj",
   "lean_is_external",
   "lean_is_mpz",
+  "lean_is_mt",
   "lean_is_persistent",
   "lean_is_ref",
   "lean_is_sarray",

@@ -94,6 +94,38 @@ namespace (`Point.add` → `point_add`, `find?` → `find_q`, `get!` → `get_ba
 and `#[leanfran::exported("<Lean name>")]`. A `@[csimp]` replacement in the definition's module
 is what the function runs.
 
+### Handles
+
+A public function converts its arguments to Lean values and its result back on every call, which
+costs time in proportion to their size. `leanfran::Lean<L>` keeps a value as the Lean object
+instead. The module `lean` of a generated module has every public function again, taking Rust
+values or handles and returning a handle:
+
+```rust
+use leanfran::Lean;
+
+let mut snapshot: Lean<kernel::Snapshot> = kernel::lean::init();
+let result = kernel::lean::transition(actor, &snapshot, command).get();
+snapshot = kernel::lean::apply(snapshot, write);
+```
+
+- `L` names the Lean type by the Rust type of the table above, with `leanfran::List<T>` for
+  `List α`, `leanfran::Array<T>` for `Array α` (both are `Vec<T>` as values) and
+  `leanfran::Fin<N>` for `Fin n`: `Lean<List<Memory>>`, `Lean<Result<(Option<Memory>, Reply), Error>>`.
+- `Lean::new(value)` converts a Rust value once and `get()` converts the handle back.
+- An argument is `impl IntoLean<L>`: the Rust value, `&Lean<L>` or `Lean<L>`.
+- `Lean<L>` is `Clone`, `Send` and `Sync`. A clone refers to the same object. A handle can be
+  kept behind a `Mutex` and used from several threads. The objects of a handle have atomic
+  reference counts, and Lean functions that receive them build new objects instead of updating
+  in place.
+
+`IO` actions, polymorphic functions, functions implemented by Rust and types with proof fields
+have no handle version.
+
+With a snapshot of 100 two-number structures in a `List`, a call that scans the list takes 0.29 µs
+with a handle, and a scan followed by an update takes 3.0 µs, against 15 µs with the snapshot as
+a Rust value (`cargo run --release -p leanfran-public-test --bin handle-bench` in `langs/Rust`).
+
 ### Polymorphic functions
 
 `rust_instances` (from `LeanRust.Instances`, which `lean!` blocks that use it import) compiles

@@ -1,15 +1,17 @@
 //! Object model of `lean.h`: object layouts, allocation, reference counting, boxing and
 //! constructor objects.
 //!
-//! The layouts are the ones of `lean.h` on a 64-bit machine. Reference counting is
-//! single-threaded: `m_rc > 0` is the count, `m_rc == 0` marks a persistent object (inc/dec are
-//! no-ops), and negative counts are never created. With `debug_assertions` a freed object has
-//! its count set to [`FREED_RC`] and its memory is kept for a while, so that a later
+//! The layouts are the ones of `lean.h` on a 64-bit machine. Reference counting follows
+//! `lean.h`: `m_rc > 0` is the count of an object owned by one thread, `m_rc < 0` is the negated
+//! count of an object shared between threads (updated atomically, see [`lean_mark_mt`]), and
+//! `m_rc == 0` marks a persistent object (inc/dec are no-ops). With `debug_assertions` a freed
+//! object has its count set to [`FREED_RC`] and its memory is kept for a while, so that a later
 //! increment, decrement or field access of it panics.
 
 use core::ffi::c_void;
 use core::mem::{offset_of, size_of};
 use core::ptr;
+use core::sync::atomic::{AtomicI32, Ordering};
 use num_bigint::BigInt;
 use std::alloc::{self, Layout};
 use std::cell::Cell;
@@ -162,7 +164,7 @@ pub unsafe fn lean_alloc_small_object(sz: usize) -> Obj {
 /// `lean_set_st_header`: single-threaded header with RC 1.
 #[inline]
 pub unsafe fn lean_set_st_header(o: Obj, tag: u32, other: u32) {
-    (*o).m_rc = 1;
+    rc_set(o, 1);
     (*o).m_tag = tag as u8;
     (*o).m_other = other as u8;
     (*o).m_cs_sz = 0;
@@ -171,7 +173,7 @@ pub unsafe fn lean_set_st_header(o: Obj, tag: u32, other: u32) {
 /// `lean_set_non_heap_header`: persistent header (RC 0).
 #[inline]
 pub unsafe fn lean_set_non_heap_header(o: Obj, sz: usize, tag: u32, other: u32) {
-    (*o).m_rc = 0;
+    rc_set(o, 0);
     (*o).m_tag = tag as u8;
     (*o).m_other = other as u8;
     (*o).m_cs_sz = sz as u16;
@@ -221,7 +223,7 @@ pub unsafe fn lean_dealloc(o: Obj, sz: usize) {
     let layout = layout_of(sz);
     #[cfg(debug_assertions)]
     {
-        (*o).m_rc = FREED_RC;
+        rc_set(o, FREED_RC);
     }
     #[cfg(all(debug_assertions, not(miri)))]
     {
@@ -275,6 +277,23 @@ pub fn lean_unbox(o: Obj) -> usize {
 
 /* Reference counting */
 
+/// The count of `o` as an atomic: every read and write of `m_rc` goes through it, since an
+/// object shared between threads has its count updated by all of them.
+#[inline(always)]
+unsafe fn rc_cell<'a>(o: Obj) -> &'a AtomicI32 {
+    AtomicI32::from_ptr(ptr::addr_of_mut!((*o).m_rc))
+}
+
+#[inline(always)]
+unsafe fn rc_get(o: Obj) -> i32 {
+    rc_cell(o).load(Ordering::Relaxed)
+}
+
+#[inline(always)]
+unsafe fn rc_set(o: Obj, rc: i32) {
+    rc_cell(o).store(rc, Ordering::Relaxed)
+}
+
 #[cold]
 #[inline(never)]
 fn rc_error(o: Obj, rc: i32, op: &str) -> ! {
@@ -288,52 +307,81 @@ fn rc_error(o: Obj, rc: i32, op: &str) -> ! {
 #[inline(always)]
 pub unsafe fn debug_check_live(o: Obj, op: &str) {
     #[cfg(debug_assertions)]
-    if !lean_is_scalar(o) && (*o).m_rc < 0 {
-        rc_error(o, (*o).m_rc, op);
+    if !lean_is_scalar(o) && rc_get(o) == FREED_RC {
+        rc_error(o, FREED_RC, op);
     }
     let _ = (o, op);
 }
 
 #[inline]
 pub unsafe fn lean_is_st(o: Obj) -> bool {
-    (*o).m_rc > 0
+    rc_get(o) > 0
+}
+
+#[inline]
+pub unsafe fn lean_is_mt(o: Obj) -> bool {
+    rc_get(o) < 0
 }
 
 #[inline]
 pub unsafe fn lean_is_persistent(o: Obj) -> bool {
-    (*o).m_rc == 0
+    rc_get(o) == 0
 }
 
 #[inline]
 pub unsafe fn lean_has_rc(o: Obj) -> bool {
-    (*o).m_rc != 0
+    rc_get(o) != 0
 }
 
 #[inline]
 pub unsafe fn lean_inc_ref_n(o: Obj, n: usize) {
-    let rc = (*o).m_rc;
+    let rc = rc_get(o);
     if rc > 0 {
         match rc.checked_add(n as i32) {
-            Some(r) if n <= i32::MAX as usize => (*o).m_rc = r,
+            Some(r) if n <= i32::MAX as usize => rc_set(o, r),
             _ => lean_internal_panic_rc_overflow(),
         }
     } else if rc != 0 {
-        rc_error(o, rc, "increment");
+        lean_inc_ref_n_mt(o, rc, n);
     }
 }
 
 #[inline]
 pub unsafe fn lean_inc_ref(o: Obj) {
-    let rc = (*o).m_rc;
+    let rc = rc_get(o);
     if rc > 0 {
         #[cfg(debug_assertions)]
         if rc == i32::MAX {
             lean_internal_panic_rc_overflow();
         }
-        (*o).m_rc = rc + 1;
+        rc_set(o, rc + 1);
     } else if rc != 0 {
+        lean_inc_ref_n_mt(o, rc, 1);
+    }
+}
+
+/// Adds `n` references to the object `o` shared between threads, whose count was read as `rc`.
+#[cold]
+unsafe fn lean_inc_ref_n_mt(o: Obj, rc: i32, n: usize) {
+    if cfg!(debug_assertions) && rc == FREED_RC {
         rc_error(o, rc, "increment");
     }
+    if n > (i32::MAX / 2) as usize {
+        lean_internal_panic_rc_overflow();
+    }
+    if rc_cell(o).fetch_sub(n as i32, Ordering::Relaxed) < i32::MIN / 2 {
+        lean_internal_panic_rc_overflow();
+    }
+}
+
+/// Removes one reference from the object `o` shared between threads, whose count was read as
+/// `rc`; true when it was the last one.
+#[inline]
+unsafe fn lean_dec_ref_mt(o: Obj, rc: i32) -> bool {
+    if cfg!(debug_assertions) && rc == FREED_RC {
+        rc_error(o, rc, "decrement");
+    }
+    rc_cell(o).fetch_add(1, Ordering::AcqRel) == -1
 }
 
 #[inline]
@@ -352,13 +400,11 @@ pub unsafe fn lean_inc_n(o: Obj, n: usize) {
 
 #[inline]
 pub unsafe fn lean_dec_ref(o: Obj) {
-    let rc = (*o).m_rc;
+    let rc = rc_get(o);
     if rc > 1 {
-        (*o).m_rc = rc - 1;
-    } else if rc == 1 {
-        lean_dec_ref_cold(o);
+        rc_set(o, rc - 1);
     } else if rc != 0 {
-        rc_error(o, rc, "decrement");
+        lean_dec_ref_cold(o);
     }
 }
 
@@ -422,11 +468,16 @@ unsafe fn for_each_child(o: Obj, f: &mut impl FnMut(Obj)) {
     }
 }
 
-/// Frees `o` (whose count dropped to zero) and every object only reachable from it, with an
-/// explicit work list instead of recursion (`lean_del`).
+/// Removes one reference from `o`, whose count is 1 or the count of an object shared between
+/// threads. When it was the last reference, frees `o` and every object only reachable from it,
+/// with an explicit work list instead of recursion (`lean_del`).
 #[cold]
 #[inline(never)]
 pub unsafe fn lean_dec_ref_cold(o: Obj) {
+    let rc = rc_get(o);
+    if rc < 0 && !lean_dec_ref_mt(o, rc) {
+        return;
+    }
     let mut todo = DEL_TODO.take();
     todo.push(o);
     while let Some(o) = todo.pop() {
@@ -434,14 +485,14 @@ pub unsafe fn lean_dec_ref_cold(o: Obj) {
             if lean_is_scalar(c) {
                 return;
             }
-            let rc = (*c).m_rc;
+            let rc = rc_get(c);
             if rc > 1 {
-                (*c).m_rc = rc - 1;
+                rc_set(c, rc - 1);
             } else if rc == 1 {
-                (*c).m_rc = 0;
+                rc_set(c, 0);
                 todo.push(c);
-            } else if rc != 0 {
-                rc_error(c, rc, "decrement");
+            } else if rc < 0 && lean_dec_ref_mt(c, rc) {
+                todo.push(c);
             }
         };
         for_each_child(o, &mut child);
@@ -469,7 +520,7 @@ pub unsafe fn lean_mark_persistent(o: Obj) {
             continue;
         }
         debug_check_live(o, "mark_persistent");
-        (*o).m_rc = 0;
+        rc_set(o, 0);
         if (*o).m_tag == LEAN_EXTERNAL {
             let e = o as *mut ExternalObject;
             let f = crate::closure::lean_alloc_closure(mark_persistent_fn as *const (), 1, 0);
@@ -486,8 +537,40 @@ unsafe fn mark_persistent_fn(o: Obj) -> Obj {
     lean_box(0)
 }
 
-#[inline]
-pub unsafe fn lean_mark_mt(_o: Obj) {}
+/// Marks `o` and every object reachable from it as shared between threads (`lean_mark_mt`):
+/// their counts are negated and updated atomically from then on. Objects that are already
+/// shared or persistent, and what they reach, are left alone. The caller must be the only
+/// thread that can reach the objects still owned by one thread.
+pub unsafe fn lean_mark_mt(o: Obj) {
+    if lean_is_scalar(o) || !lean_is_st(o) {
+        return;
+    }
+    let mut todo = vec![o];
+    while let Some(o) = todo.pop() {
+        if lean_is_scalar(o) {
+            continue;
+        }
+        let rc = rc_get(o);
+        if rc <= 0 {
+            debug_check_live(o, "mark_mt");
+            continue;
+        }
+        rc_set(o, -rc);
+        if (*o).m_tag == LEAN_EXTERNAL {
+            let e = o as *mut ExternalObject;
+            let f = crate::closure::lean_alloc_closure(mark_mt_fn as *const (), 1, 0);
+            ((*(*e).m_class).m_foreach)((*e).m_data, f);
+            lean_dec(f);
+        } else {
+            for_each_child(o, &mut |c| todo.push(c));
+        }
+    }
+}
+
+unsafe fn mark_mt_fn(o: Obj) -> Obj {
+    lean_mark_mt(o);
+    lean_box(0)
+}
 
 /* Tags */
 
@@ -517,7 +600,7 @@ pub unsafe fn lean_is_exclusive(o: Obj) -> bool {
         return false;
     }
     debug_check_live(o, "exclusivity check");
-    (*o).m_rc == 1
+    rc_get(o) == 1
 }
 
 #[inline]
@@ -527,12 +610,12 @@ pub unsafe fn lean_is_exclusive_obj(o: Obj) -> u8 {
 
 #[inline]
 pub unsafe fn lean_is_shared(o: Obj) -> bool {
-    !lean_is_scalar(o) && (*o).m_rc > 1
+    !lean_is_scalar(o) && rc_get(o) > 1
 }
 
 #[inline]
 pub unsafe fn lean_nonzero_rc(o: Obj) -> bool {
-    (*o).m_rc != 0
+    rc_get(o) != 0
 }
 
 #[inline]

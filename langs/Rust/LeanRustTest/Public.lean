@@ -168,4 +168,76 @@ def sameNat (x : Nat) : Nat := x + 0
   funext x
   simp [same.inst_Nat, same, sameNat]
 
+/-! A kernel in the shape of a web service: one number per user, a snapshot of all of them. The
+tests and `handle-bench` call it with Rust values and with handles. -/
+
+namespace Calc
+
+structure Principal where
+  org : UInt64
+  user : UInt64
+
+structure Memory where
+  user : UInt64
+  value : UInt64
+
+structure Snapshot where
+  memories : List Memory
+
+inductive Op where
+  | add | sub | mul | div
+
+inductive Command where
+  | set (value : UInt64)
+  | apply (op : Op) (arg : UInt64)
+  | get
+
+inductive Reply where
+  | value (v : UInt64)
+
+inductive Error where
+  | overflow | underflow | divByZero
+
+def memoryOf : List Memory → UInt64 → UInt64
+  | [], _ => 0
+  | m :: ms, u => if m.user = u then m.value else memoryOf ms u
+
+def upsert (m : Memory) : List Memory → List Memory
+  | [] => [m]
+  | x :: xs => if x.user = m.user then m :: xs else x :: upsert m xs
+
+def compute (op : Op) (a b : UInt64) : Except Error UInt64 :=
+  match op with
+  | .add => if a > 18446744073709551615 - b then .error .overflow else .ok (a + b)
+  | .sub => if a < b then .error .underflow else .ok (a - b)
+  | .mul => if b ≠ 0 ∧ a > 18446744073709551615 / b then .error .overflow else .ok (a * b)
+  | .div => if b = 0 then .error .divByZero else .ok (a / b)
+
+def transition (actor : Principal) (snap : Snapshot) (cmd : Command) :
+    Except Error (Option Memory × Reply) :=
+  match cmd with
+  | .set value => .ok (some { user := actor.user, value }, .value value)
+  | .apply op arg =>
+    match compute op (memoryOf snap.memories actor.user) arg with
+    | .ok v => .ok (some { user := actor.user, value := v }, .value v)
+    | .error e => .error e
+  | .get => .ok (none, .value (memoryOf snap.memories actor.user))
+
+def apply (snap : Snapshot) (w : Option Memory) : Snapshot :=
+  match w with
+  | none => snap
+  | some m => { memories := upsert m snap.memories }
+
+def init : Snapshot := { memories := [] }
+
+def readOnly : Command → Bool
+  | .get => true
+  | _ => false
+
+def users (snap : Snapshot) : Array UInt64 := (snap.memories.map (·.user)).toArray
+
+def describe (snap : Snapshot) (label : String) : String := s!"{label}: {snap.memories.length}"
+
+end Calc
+
 end LeanRustTest.Public

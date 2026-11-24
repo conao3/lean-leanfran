@@ -157,6 +157,19 @@ partial def Desc.rustType : Desc → String
   | .arrayN d n => s!"[{d.rustType}; {n}]"
   | .tyVar i => s!"T{i}"
 
+/-- The Rust type naming the Lean type of `d` in a handle (`rt::Lean<L>`); `none` for the
+    types of Aeneas's model and type parameters. -/
+partial def Desc.leanType? : Desc → Option String
+  | .prim r | .named r => some r
+  | .list d => d.leanType?.map (s!"rt::List<{·}>")
+  | .array d => d.leanType?.map (s!"rt::Array<{·}>")
+  | .option d => d.leanType?.map (s!"Option<{·}>")
+  | .except e a => do return s!"Result<{← a.leanType?}, {← e.leanType?}>"
+  | .prod a b => do return s!"({← a.leanType?}, {← b.leanType?})"
+  | .fin n => some s!"rt::Fin<{n}>"
+  | .boxed d => d.leanType?
+  | _ => none
+
 partial def Desc.named? : Desc → Array String
   | .named r => #[r]
   | .list d | .array d | .option d | .boxed d | .slice d | .result d | .arrayN d _ => d.named?
@@ -703,6 +716,86 @@ def emitPublic (types : Std.HashMap String TypeDef) (decls : Std.HashMap Name De
   let stmtStr := String.join (stmts.toList.map (s!"        " ++ · ++ "\n"))
   return s!"#[doc = {quoteString f.doc}]\n#[{facade}::exported({quoteString (toString f.lean)})]\npub fn {f.rust}({", ".intercalate sigParams.toList}) -> {retTy} \{\n    unsafe \{\n{stmtStr}        {body}\n    }\n}\n"
 
+/-! ## Functions on handles -/
+
+def typeUsesProof (types : Std.HashMap String TypeDef) (d : Desc) : Option String := Id.run do
+  let mut seen : Std.HashSet String := {}
+  let mut stack := d.named?
+  while !stack.isEmpty do
+    let r := stack.back!
+    stack := stack.pop
+    if seen.contains r then continue
+    seen := seen.insert r
+    let some td := types[r]? | continue
+    if td.hasProof then return some td.lean
+    match td.kind with
+    | .struct v => for f in v.fields do stack := stack ++ f.desc.named?
+    | .newtype _ inner => stack := stack ++ inner.named?
+    | .sum vs => for v in vs do for f in v.fields do stack := stack ++ f.desc.named?
+    | .enum _ => pure ()
+  return none
+
+/-- The trait implementations that let a handle (`rt::Lean`) hold the generated type `td`. -/
+def emitReprImpl (td : TypeDef) : String :=
+  let r := td.rust
+  s!"unsafe impl rt::LeanRepr for {r} \{\n    type Value = {r};\n    unsafe fn to_obj(value: {r}) -> Obj \{\n        rt::ToLean::to_lean(value)\n    }\n    unsafe fn from_obj(o: Obj) -> {r} \{\n        <{r} as rt::FromLean>::from_lean(o)\n    }\n}\n" ++
+  s!"unsafe impl rt::IntoLean<{r}> for {r} \{\n    unsafe fn into_obj(self) -> Obj \{\n        rt::ToLean::to_lean(self)\n    }\n}\n"
+
+/-- Rust expression of IR type `ty` (a scalar) for the borrowed boxed object `o`. -/
+def unboxExpr (ty : IRType) (o : String) : String :=
+  match ty with
+  | .usize => s!"rt::lean_unbox_usize({o})"
+  | .uint32 => s!"rt::lean_unbox_uint32({o})"
+  | .uint64 => s!"rt::lean_unbox_uint64({o})"
+  | .float => s!"rt::lean_unbox_float({o})"
+  | .float32 => s!"rt::lean_unbox_float32({o})"
+  | t => s!"rt::lean_unbox({o}) as {rsType t}"
+
+/-- The public function `f` on handles: arguments are Rust values or handles, the result is a
+    handle. `none` when `f` is an `IO` action or uses a type a handle cannot hold. -/
+def emitHandle (types : Std.HashMap String TypeDef) (decls : Std.HashMap Name Decl) (f : PublicFn) :
+    Except String (Option String) := do
+  let some d := decls[f.target]? | throw s!"function was not collected: {f.target}"
+  if f.sig.est || (typeUsesProof types f.sig.result).isSome then return none
+  let some resTy := f.sig.result.leanType? | return none
+  let ps := d.params
+  let mut sigParams := #[]
+  let mut stmts := #[]
+  let mut args := #[]
+  let mut decs := #[]
+  for h : i in [0:f.sig.params.size] do
+    let p := ps[i]!
+    match f.sig.params[i] with
+    | .world => pure ()
+    | .erased => args := args.push "rt::lean_box(0)"
+    | .inst code =>
+      stmts := stmts.push s!"let __a{i}: Obj = {instExpr decls code};"
+      args := args.push s!"__a{i}"
+      if p.borrow then decs := decs.push s!"rt::lean_dec(__a{i});"
+    | .value nm desc =>
+      let some ty := desc.leanType? | return none
+      sigParams := sigParams.push s!"{nm}: impl rt::IntoLean<{ty}>"
+      let obj := s!"rt::IntoLean::<{ty}>::into_obj({nm})"
+      if p.ty.isScalar then
+        stmts := stmts.push s!"let __a{i}: {rsType p.ty} = \{ let o = {obj}; let v = {unboxExpr p.ty "o"}; rt::lean_dec(o); v };"
+      else
+        stmts := stmts.push s!"let __a{i}: Obj = {obj};"
+        if p.borrow then decs := decs.push s!"rt::lean_dec(__a{i});"
+      args := args.push s!"__a{i}"
+  let call := if isConst d then s!"{fnName f.target}()" else s!"{fnName f.target}({", ".intercalate args.toList})"
+  let decStr := String.join (decs.toList.map (· ++ " "))
+  let body :=
+    if d.resultType.isScalar then
+      let boxed := if boxFn d.resultType == "lean_box" then "rt::lean_box(__r as usize)" else s!"rt::{boxFn d.resultType}(__r)"
+      s!"let __r: {rsType d.resultType} = {call};\n            {decStr}rt::Lean::from_owned({boxed})"
+    else if isConst d then
+      s!"let __r: Obj = {call};\n            rt::lean_inc(__r);\n            rt::Lean::from_owned(__r)"
+    else
+      s!"let __r: Obj = {call};\n            {decStr}rt::Lean::from_owned(__r)"
+  let stmtStr := String.join (stmts.toList.map (s!"            " ++ · ++ "\n"))
+  let doc := s!"`{f.rust}` on handles. {f.doc}"
+  return some s!"    #[doc = {quoteString doc}]\n    pub fn {f.rust}({", ".intercalate sigParams.toList}) -> rt::Lean<{resTy}> \{\n        unsafe \{\n{stmtStr}            {body}\n        }\n    }\n"
+
 /-! ## Rust functions -/
 
 /-- A Rust function of the crate named by `@[extern "rs:<path>(<modes>)"]`, with `->()` after the
@@ -935,23 +1028,6 @@ structure GenResult where
   publics : Array (Name × String)
   skipped : Array Skipped
 
-def typeUsesProof (types : Std.HashMap String TypeDef) (d : Desc) : Option String := Id.run do
-  let mut seen : Std.HashSet String := {}
-  let mut stack := d.named?
-  while !stack.isEmpty do
-    let r := stack.back!
-    stack := stack.pop
-    if seen.contains r then continue
-    seen := seen.insert r
-    let some td := types[r]? | continue
-    if td.hasProof then return some td.lean
-    match td.kind with
-    | .struct v => for f in v.fields do stack := stack ++ f.desc.named?
-    | .newtype _ inner => stack := stack ++ inner.named?
-    | .sum vs => for v in vs do for f in v.fields do stack := stack ++ f.desc.named?
-    | .enum _ => pure ()
-  return none
-
 /-- Generates the module for `roots`: the internal functions they need, the generated types
     and a public function per root that can be marshalled (the others are `skipped`). A root
     replaced by a `@[csimp]` lemma also has its own definition as a public function of the
@@ -1082,7 +1158,11 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
       | .ok s => items := items ++ s ++ "\n"
       | .error e => return .error e
     for td in st.types do
-      unless td.external do items := items ++ emitTypeDef types td ++ "\n"
+      unless td.external do
+        items := items ++ emitTypeDef types td
+        if (typeUsesProof types (.named td.rust)).isNone then items := items ++ emitReprImpl td
+        items := items ++ "\n"
+    let mut handles := ""
     for f in publics do
       let res := match callees[f.target]? with
         | some c => emitPublicRust facade f c
@@ -1090,6 +1170,13 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
       match res with
       | .ok s => items := items ++ s ++ "\n"
       | .error e => return .error e
+      if callees[f.target]?.isNone then
+        match emitHandle types declMap f with
+        | .ok (some s) => handles := handles ++ s
+        | .ok none => pure ()
+        | .error e => return .error e
+    unless handles.isEmpty do
+      items := items ++ "#[doc = \"The public functions on handles: an argument is a Rust value, a `&Lean<L>` or a `Lean<L>`, and the result is a `Lean<L>` that keeps the Lean value without converting it.\"]\n#[allow(unused_imports, clippy::all)]\npub mod lean {\n    use super::*;\n" ++ handles ++ "}\n\n"
     let genericItems := if generics.isEmpty then "" else
       String.join (generics.toList.map fun g => emitGenericFn facade g ++ "\n") ++ emitInstModule generics ++ "\n"
     items := items ++ genericItems
