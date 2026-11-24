@@ -15,7 +15,9 @@ go vet "./$generated"
 LEANFRAN_KERNEL_ORACLE="$out/oracle" go test "./$generated"
 LEANFRAN_KERNEL_ORACLE="$out/oracle" CGO_ENABLED=1 go test -race "./$generated" -run 'TestConcurrentValues|TestSharedValues'
 
-cat >"$out/wrong-type.go" <<'GO'
+typecheck="$out/_typecheck"
+mkdir -p "$typecheck"
+cat >"$typecheck/wrong-type.go" <<'GO'
 package typecheck
 
 import (
@@ -27,7 +29,7 @@ func wrongType(v leanfran.Value[kernel.Actor], command leanfran.Value[kernel.Com
     kernel.TransitionValue(v.Borrow(), v.Borrow(), command.Borrow())
 }
 GO
-if go test "$out/wrong-type.go" >"$out/wrong-type.txt" 2>&1; then
+if go test "$typecheck/wrong-type.go" >"$out/wrong-type.txt" 2>&1; then
     printf 'TransitionValue accepted an Actor in place of a Snapshot\n' >&2
     exit 1
 fi
