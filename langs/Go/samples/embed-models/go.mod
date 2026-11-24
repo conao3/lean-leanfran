@@ -2,7 +2,7 @@ module example.com/embed-models
 
 go 1.26
 
-require github.com/conao3/leanfran-go v0.10.0
+require github.com/conao3/leanfran-go v0.11.0
 
 replace github.com/conao3/leanfran-go => ../..
 
