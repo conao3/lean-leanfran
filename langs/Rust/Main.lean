@@ -2,7 +2,7 @@ import LeanRust
 
 open Lean LeanRust
 
-def version : String := "0.9.0"
+def version : String := "0.10.0"
 
 /-- Version of the generated code. Raise it when the emitted code changes; the build script of
     leanfran-build checks it and puts it into its cache keys. -/
