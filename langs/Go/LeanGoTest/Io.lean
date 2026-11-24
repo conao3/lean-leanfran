@@ -140,6 +140,11 @@ private def environment : IO Unit := do
   IO.println s!"platform: {System.Platform.numBits} {System.Platform.isLinux} {System.Platform.isOSX} {System.Platform.isWindows} {System.Platform.isEmscripten}"
   IO.println s!"hardware concurrency: {decide (System.Platform.Internal.getHardwareConcurrency () > 0)}"
 
+private def processPath (inheritEnv : Bool) : IO Unit := do
+  let env := #[("PATH", some "."), ("LEANFRAN_GO_IO_CHILD", some "path-only")]
+  let out ← IO.Process.run { cmd := "look-up", cwd := some "existing-dir", env, inheritEnv }
+  IO.println s!"child path: {out}"
+
 private def processes : IO Unit := do
   let out ← IO.Process.output { cmd := "sh", args := #["-c", "printf out; printf err >&2; exit 3"] }
   IO.println s!"output: {out.exitCode} {out.stdout} {out.stderr}"
@@ -149,9 +154,7 @@ private def processes : IO Unit := do
   let args := #["-c", "printf '%s:%s:%s' \"$LEANFRAN_GO_IO_CHILD\" \"$LEANFRAN_GO_IO_VALUE\" \"${PWD##*/}\""]
   let out ← IO.Process.run { cmd := "sh", args, env, cwd := some "existing-dir" }
   IO.println s!"child env and cwd: {out}"
-  let pathEnv := #[("PATH", some "."), ("LEANFRAN_GO_IO_CHILD", some "path-only")]
-  let out ← IO.Process.run { cmd := "look-up", cwd := some "existing-dir", env := pathEnv, inheritEnv := false }
-  IO.println s!"child path: {out}"
+  processPath true
   let child ← IO.Process.spawn { cmd := "cat", stdin := .piped, stdout := .piped }
   let (stdin, child) ← child.takeStdin
   stdin.putStr "piped\n"
@@ -222,6 +225,7 @@ def run (args : List String) : IO UInt32 := do
   | ["file-errors"] => fileErrors
   | ["environment"] => environment
   | ["processes"] => processes
+  | ["process-clean-env"] => processPath false
   | ["large-process"] => largeProcess
   | ["tasks"] => tasks
   | ["pending-promise"] =>

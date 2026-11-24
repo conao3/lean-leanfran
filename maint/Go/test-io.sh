@@ -69,6 +69,17 @@ run_fixture() {
 for fixture in streams files file-errors environment processes large-process tasks arrays; do
     run_fixture "$fixture" 0
 done
+if [[ $(uname -s) == Darwin ]]; then
+    (
+        cd "$fixture_root/initial"
+        timeout --kill-after=2s 25s "$fixture_root/io-go" process-clean-env
+    ) < /dev/null > "$fixture_root/go.out" 2> "$fixture_root/go.err"
+    printf 'child path: path-only:\n' | diff -u - "$fixture_root/go.out"
+    diff -u /dev/null "$fixture_root/go.err"
+    printf '%s\n' 'io: process-clean-env matches expected output (Go only)'
+else
+    run_fixture process-clean-env 0
+fi
 run_fixture uncaught 1
 run_fixture exit 7
 run_fixture force-exit 8

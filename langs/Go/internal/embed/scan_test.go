@@ -11,8 +11,12 @@ import (
 
 func scannerProject(t *testing.T, files map[string]string) *project {
 	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	p := &project{
-		root: t.TempDir(), module: "example.com/test", toolchain: defaultToolchain,
+		root: root, module: "example.com/test", toolchain: defaultToolchain,
 		blocks: make(map[string]*block), packages: make(map[string]*goPackage),
 	}
 	for name, data := range files {
