@@ -15,6 +15,7 @@ test:
 	../../maint/Rust/test-diff.sh
 	../../maint/Rust/test-public.sh
 	LEANFRAN_CLI=$(CURDIR)/.lake/build/bin/leanfran cargo nextest run -p leanfran-runtime -p leanfran-build -p leanfran-embed-test -p leanfran-verify-test -p leanfran-wasm-test
+	cargo test -q --doc -p leanfran-runtime
 	tests/embed/test.sh
 	$(MAKE) -C samples test
 

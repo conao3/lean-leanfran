@@ -9,3 +9,5 @@ mkdir -p test-out
   --search-path .lake/build/lib/lean \
   --output-file test-out/public.rs --output text
 cargo nextest run -p leanfran-public-test
+# The release build uses the small object pool of the runtime.
+cargo nextest run --release -p leanfran-public-test

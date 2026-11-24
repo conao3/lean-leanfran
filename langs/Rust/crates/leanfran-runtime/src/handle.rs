@@ -9,6 +9,10 @@
 //! The object of a handle is shared between threads: creating the handle marks every object
 //! reachable from it with [`lean_mark_mt`], so that its reference counts are updated atomically.
 //! Lean functions that receive such an object build new objects instead of updating it in place.
+//!
+//! [`Local<L>`] is the handle that stays on the thread that made it: its objects keep the
+//! reference counts of one thread, so a Lean function that receives the only reference to an
+//! object updates it in place.
 
 use crate::marshal::*;
 use crate::object::*;
@@ -101,6 +105,19 @@ impl<L: LeanRepr> Lean<L> {
     }
 }
 
+impl<L: LeanRepr> Lean<L> {
+    /// A handle of the same object for this thread. The object stays shared between threads,
+    /// so Lean functions do not update it in place.
+    pub fn to_local(&self) -> Local<L> {
+        unsafe { lean_inc(self.obj) };
+        Local {
+            obj: self.obj,
+            ty: PhantomData,
+            thread: PhantomData,
+        }
+    }
+}
+
 impl<L: LeanRepr> Clone for Lean<L> {
     fn clone(&self) -> Self {
         unsafe { lean_inc(self.obj) };
@@ -126,8 +143,100 @@ where
     }
 }
 
-/// An argument of a function of the `lean` module of a generated module: the Rust value of
-/// `L` (converted for the call), a `&Lean<L>` or a `Lean<L>`.
+/// A Lean value of the type named by `L`, kept as the Lean object on the thread that made it.
+///
+/// The functions of the `local` module of a generated module return this handle. Its objects
+/// keep the reference counts of one thread: passing the only handle of a value by value lets
+/// the Lean function update the value in place, where a [`Lean`] handle makes it build new
+/// objects. A `Local` cannot be sent to or shared with another thread; [`Local::share`] turns
+/// it into a [`Lean`] that can.
+///
+/// ```compile_fail,E0277
+/// let local = leanfran_runtime::Local::<u8>::new(1);
+/// std::thread::spawn(move || drop(local));
+/// ```
+///
+/// ```compile_fail,E0277
+/// let local = leanfran_runtime::Local::<u8>::new(1);
+/// std::thread::scope(|s| {
+///     s.spawn(|| local.get());
+/// });
+/// ```
+pub struct Local<L: LeanRepr> {
+    obj: Obj,
+    ty: PhantomData<fn() -> L>,
+    thread: PhantomData<*mut ()>,
+}
+
+impl<L: LeanRepr> Local<L> {
+    /// The handle of the Lean value of `value`.
+    pub fn new(value: L::Value) -> Self {
+        unsafe { Self::from_owned(L::to_obj(value)) }
+    }
+
+    /// The Rust value of the handle.
+    pub fn get(&self) -> L::Value {
+        unsafe { L::from_obj(self.obj) }
+    }
+
+    /// The handle that can be sent to and shared with other threads. It marks the objects of
+    /// the value as shared, at a cost in proportion to the objects not yet shared.
+    pub fn share(self) -> Lean<L> {
+        let obj = self.obj;
+        core::mem::forget(self);
+        unsafe { Lean::from_owned(obj) }
+    }
+
+    /// The handle that owns `obj`.
+    ///
+    /// # Safety
+    ///
+    /// `obj` must be an owned Lean value of the type `L` names, made on this thread.
+    #[doc(hidden)]
+    pub unsafe fn from_owned(obj: Obj) -> Self {
+        Local {
+            obj,
+            ty: PhantomData,
+            thread: PhantomData,
+        }
+    }
+
+    /// The object of the handle, borrowed.
+    #[doc(hidden)]
+    pub fn as_obj(&self) -> Obj {
+        self.obj
+    }
+}
+
+impl<L: LeanRepr> Clone for Local<L> {
+    fn clone(&self) -> Self {
+        unsafe { lean_inc(self.obj) };
+        Local {
+            obj: self.obj,
+            ty: PhantomData,
+            thread: PhantomData,
+        }
+    }
+}
+
+impl<L: LeanRepr> Drop for Local<L> {
+    fn drop(&mut self) {
+        unsafe { lean_dec(self.obj) };
+    }
+}
+
+impl<L: LeanRepr> fmt::Debug for Local<L>
+where
+    L::Value: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Local").field(&self.get()).finish()
+    }
+}
+
+/// An argument of a function of the `lean` or `local` module of a generated module: the Rust
+/// value of `L` (converted for the call), a `&Lean<L>`, a `Lean<L>`, a `&Local<L>` or a
+/// `Local<L>`.
 ///
 /// # Safety
 ///
@@ -151,6 +260,21 @@ unsafe impl<L: LeanRepr> IntoLean<L> for Lean<L> {
 }
 
 unsafe impl<L: LeanRepr> IntoLean<L> for &Lean<L> {
+    unsafe fn into_obj(self) -> Obj {
+        lean_inc(self.obj);
+        self.obj
+    }
+}
+
+unsafe impl<L: LeanRepr> IntoLean<L> for Local<L> {
+    unsafe fn into_obj(self) -> Obj {
+        let obj = self.obj;
+        core::mem::forget(self);
+        obj
+    }
+}
+
+unsafe impl<L: LeanRepr> IntoLean<L> for &Local<L> {
     unsafe fn into_obj(self) -> Obj {
         lean_inc(self.obj);
         self.obj

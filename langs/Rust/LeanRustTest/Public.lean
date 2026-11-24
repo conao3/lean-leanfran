@@ -238,6 +238,24 @@ def users (snap : Snapshot) : Array UInt64 := (snap.memories.map (·.user)).toAr
 
 def describe (snap : Snapshot) (label : String) : String := s!"{label}: {snap.memories.length}"
 
+/-- The same snapshot in an `Array`: the search reads a contiguous block and the write updates one
+slot in place. `handle-bench` compares it with the `List`. -/
+structure ArraySnapshot where
+  memories : Array Memory
+
+def memoryOfArray (ms : Array Memory) (u : UInt64) : UInt64 :=
+  match ms.find? (·.user = u) with
+  | some m => m.value
+  | none => 0
+
+def applyArray (snap : ArraySnapshot) (w : Option Memory) : ArraySnapshot :=
+  match w with
+  | none => snap
+  | some m =>
+    match snap.memories.findIdx? (·.user = m.user) with
+    | some i => { memories := snap.memories.setIfInBounds i m }
+    | none => { memories := snap.memories.push m }
+
 end Calc
 
 end LeanRustTest.Public

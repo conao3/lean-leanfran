@@ -39,7 +39,7 @@ use syntax::{file_hash, normalize_path, LeanBlock};
 
 /// Version of the generated code: the `leanfran --generator-version` this crate works with, and part of every
 /// cache key.
-pub const GENERATOR_VERSION: &str = "5";
+pub const GENERATOR_VERSION: &str = "6";
 
 /// The Lean toolchain of the crate's Lean package (`lean/lean-toolchain`).
 pub const LEAN_TOOLCHAIN: &str = "leanprover/lean4:v4.35.0";

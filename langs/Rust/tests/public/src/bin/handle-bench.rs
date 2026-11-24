@@ -4,7 +4,7 @@
 //!
 //! `cargo run --release -p leanfran-public-test --bin handle-bench`
 
-use leanfran::Lean;
+use leanfran::{Lean, List, Local};
 use leanfran_public_test as p;
 use std::hint::black_box;
 use std::time::Instant;
@@ -79,6 +79,121 @@ fn main() {
         }
         per_op("handle: transition + apply", users, count, start);
         assert_eq!(handle.get(), snap);
+
+        let mut local = Local::<p::CalcSnapshot>::new(seeded.clone());
+        let start = Instant::now();
+        for (actor, cmd) in &cmds {
+            if let Ok((write, reply)) =
+                p::local::calc_transition(actor.clone(), &local, cmd.clone()).get()
+            {
+                black_box(reply);
+                local = p::local::calc_apply(local, write);
+            }
+        }
+        per_op("local: transition + apply", users, count, start);
+        assert_eq!(local.get(), snap);
+
+        let start = Instant::now();
+        for (actor, cmd) in &cmds {
+            black_box(
+                p::local::calc_transition(actor.clone(), &local, cmd.clone())
+                    .get()
+                    .is_ok(),
+            );
+        }
+        per_op("  local: transition", users, count, start);
+
+        let start = Instant::now();
+        for (actor, cmd) in &cmds {
+            black_box(p::local::calc_transition(
+                actor.clone(),
+                &local,
+                cmd.clone(),
+            ));
+        }
+        per_op(
+            "  local: transition, result not converted",
+            users,
+            count,
+            start,
+        );
+
+        let actor_handle = Local::<p::CalcPrincipal>::new(p::CalcPrincipal {
+            org: 1,
+            user: users / 2,
+        });
+        let cmd_handle = Local::<p::CalcCommand>::new(p::CalcCommand::Get);
+        let start = Instant::now();
+        for _ in 0..count {
+            black_box(p::local::calc_transition(
+                &actor_handle,
+                &local,
+                &cmd_handle,
+            ));
+        }
+        per_op(
+            "  local: transition (get), no conversion",
+            users,
+            count,
+            start,
+        );
+
+        let list = Local::<List<p::CalcMemory>>::new(local.get().memories);
+        let start = Instant::now();
+        for _ in 0..count {
+            black_box(p::local::calc_memory_of(&list, users / 2));
+        }
+        per_op(
+            "  local: memory_of (scan to the middle)",
+            users,
+            count,
+            start,
+        );
+
+        let mid = Some(p::CalcMemory {
+            user: users / 2,
+            value: 7,
+        });
+        let start = Instant::now();
+        for _ in 0..count {
+            local = p::local::calc_apply(local, mid.clone());
+        }
+        per_op("  local: apply (write in the middle)", users, count, start);
+
+        let first = Some(p::CalcMemory { user: 0, value: 7 });
+        let start = Instant::now();
+        for _ in 0..count {
+            local = p::local::calc_apply(local, first.clone());
+        }
+        per_op("  local: apply (write at the front)", users, count, start);
+
+        let start = Instant::now();
+        for _ in 0..count {
+            black_box(local.clone());
+        }
+        per_op("  local: clone", users, count, start);
+
+        let mut array = Local::<p::CalcArraySnapshot>::new(p::CalcArraySnapshot {
+            memories: seeded.memories.clone(),
+        });
+        let rows = Local::<leanfran::Array<p::CalcMemory>>::new(seeded.memories.clone());
+        let start = Instant::now();
+        for _ in 0..count {
+            black_box(p::local::calc_memory_of_array(&rows, users / 2));
+        }
+        per_op("  local, Array: scan to the middle", users, count, start);
+
+        let start = Instant::now();
+        for _ in 0..count {
+            array = p::local::calc_apply_array(array, mid.clone());
+        }
+        per_op(
+            "  local, Array: apply (write in the middle)",
+            users,
+            count,
+            start,
+        );
+        assert_eq!(array.get().memories[(users / 2) as usize].value, 7);
 
         let start = Instant::now();
         for (actor, cmd) in &cmds {

@@ -119,12 +119,38 @@ snapshot = kernel::lean::apply(snapshot, write);
   reference counts, and Lean functions that receive them build new objects instead of updating
   in place.
 
+`leanfran::Local<L>` is the handle for one thread, returned by the functions of the module
+`local`. It is neither `Send` nor `Sync`, and its objects keep the reference counts of one
+thread, so a Lean function that receives the only handle of a value by value updates the value
+in place:
+
+```rust
+use leanfran::Local;
+
+let mut snapshot: Local<kernel::Snapshot> = kernel::local::init();
+let result = kernel::local::transition(actor, &snapshot, command).get();
+snapshot = kernel::local::apply(snapshot, write); // moved: the list is updated in place
+```
+
+- Passing `&snapshot`, or holding a clone, keeps the old value: the function then builds new
+  objects for what it changes.
+- `local.share()` gives the `Lean<L>` of the value and `lean.to_local()` a `Local<L>` of a
+  shared value. The functions of both modules take both kinds of handle.
+
 `IO` actions, polymorphic functions, functions implemented by Rust and types with proof fields
 have no handle version.
 
-With a snapshot of 100 two-number structures in a `List`, a call that scans the list takes 0.29 µs
-with a handle, and a scan followed by an update takes 3.0 µs, against 15 µs with the snapshot as
-a Rust value (`cargo run --release -p leanfran-public-test --bin handle-bench` in `langs/Rust`).
+One command (a scan and an update) on a snapshot of two-number structures in a `List`
+(`cargo run --release -p leanfran-public-test --bin handle-bench` in `langs/Rust`):
+
+| rows | Rust values | `Lean` | `Local` |
+| ---- | ----------- | ------ | ------- |
+| 1    | 0.21 µs     | 0.28 µs | 0.12 µs |
+| 100  | 4.8 µs      | 2.4 µs  | 0.39 µs |
+| 10,000 | 880 µs    | 265 µs  | 43 µs   |
+
+What remains with `Local` is the Lean code itself: a `List` is searched and rebuilt cell by cell.
+A snapshot in an `Array` is written in one slot (`Array.setIfInBounds` on the only reference).
 
 ### Polymorphic functions
 

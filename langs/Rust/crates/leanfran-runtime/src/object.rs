@@ -145,10 +145,96 @@ fn layout_of(sz: usize) -> Layout {
     }
 }
 
+/// Free memory blocks of small objects, kept per thread and reused by the next allocation of
+/// the same size (the small object allocator of Lean's runtime). A block freed on another
+/// thread than the one that allocated it joins the list of the freeing thread.
+#[cfg(not(any(debug_assertions, miri)))]
+mod pool {
+    use super::layout_of;
+    use std::alloc;
+    use std::cell::UnsafeCell;
+
+    /// Blocks of up to this many bytes are pooled.
+    pub const MAX_SIZE: usize = 128;
+    const CLASSES: usize = MAX_SIZE / 8 + 1;
+    /// Blocks kept per size; more are returned to the allocator.
+    const MAX_BLOCKS: u32 = 1 << 14;
+
+    struct Pool {
+        heads: UnsafeCell<[*mut u8; CLASSES]>,
+        counts: UnsafeCell<[u32; CLASSES]>,
+    }
+
+    impl Drop for Pool {
+        fn drop(&mut self) {
+            for (class, head) in self.heads.get_mut().iter_mut().enumerate() {
+                let mut p = core::mem::replace(head, core::ptr::null_mut());
+                while !p.is_null() {
+                    unsafe {
+                        let next = *(p as *mut *mut u8);
+                        alloc::dealloc(p, layout_of(class * 8));
+                        p = next;
+                    }
+                }
+            }
+        }
+    }
+
+    thread_local! {
+        static POOL: Pool = const {
+            Pool {
+                heads: UnsafeCell::new([core::ptr::null_mut(); CLASSES]),
+                counts: UnsafeCell::new([0; CLASSES]),
+            }
+        };
+    }
+
+    /// A free block of `size` bytes (a multiple of 8, at least 8, at most `MAX_SIZE`).
+    #[inline]
+    pub unsafe fn take(size: usize) -> *mut u8 {
+        let class = size / 8;
+        POOL.try_with(|pool| {
+            let head = (pool.heads.get() as *mut *mut u8).add(class);
+            let p = *head;
+            if !p.is_null() {
+                *head = *(p as *mut *mut u8);
+                *(pool.counts.get() as *mut u32).add(class) -= 1;
+            }
+            p
+        })
+        .unwrap_or(core::ptr::null_mut())
+    }
+
+    /// Keeps the block `p` of `size` bytes; false when the list of that size is full.
+    #[inline]
+    pub unsafe fn give(p: *mut u8, size: usize) -> bool {
+        let class = size / 8;
+        POOL.try_with(|pool| {
+            let count = (pool.counts.get() as *mut u32).add(class);
+            if *count >= MAX_BLOCKS {
+                return false;
+            }
+            *count += 1;
+            let head = (pool.heads.get() as *mut *mut u8).add(class);
+            *(p as *mut *mut u8) = *head;
+            *head = p;
+            true
+        })
+        .unwrap_or(false)
+    }
+}
+
 /// Allocates `sz` bytes for an object (`lean_alloc_object`). The header is not initialized.
 #[inline]
 pub unsafe fn lean_alloc_object(sz: usize) -> Obj {
     let layout = layout_of(sz);
+    #[cfg(not(any(debug_assertions, miri)))]
+    if layout.size() <= pool::MAX_SIZE && layout.size() >= 8 {
+        let p = pool::take(layout.size());
+        if !p.is_null() {
+            return p as Obj;
+        }
+    }
     let p = alloc::alloc(layout);
     if p.is_null() {
         alloc::handle_alloc_error(layout);
@@ -239,6 +325,13 @@ pub unsafe fn lean_dealloc(o: Obj, sz: usize) {
         if let Some((p, l)) = evicted {
             alloc::dealloc(p, l);
         }
+    }
+    #[cfg(not(any(debug_assertions, miri)))]
+    if layout.size() <= pool::MAX_SIZE
+        && layout.size() >= 8
+        && pool::give(o as *mut u8, layout.size())
+    {
+        return;
     }
     #[cfg(not(all(debug_assertions, not(miri))))]
     alloc::dealloc(o as *mut u8, layout);
