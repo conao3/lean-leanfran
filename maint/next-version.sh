@@ -10,6 +10,7 @@ current=$(
     sed -n 's/.*:version "\([0-9.]*\)".*/\1/p' langs/Clojure/deps.edn
     sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/PHP/Main.lean
     sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/Go/Main.lean
+    sed -n 's/^version = "\([0-9.]*\)"$/\1/p' langs/C/lakefile.toml
   } | sort -V | tail -n 1
 )
 IFS='.' read -r major minor patch <<< "$current"
