@@ -27,3 +27,7 @@ root = "LeanGoTest.ControlDepthMain"
 [[lean_exe]]
 name = "oracle-fuzz"
 root = "LeanGoTest.FuzzMain"
+
+[[lean_exe]]
+name = "oracle-public"
+root = "LeanGoTest.PublicMain"
