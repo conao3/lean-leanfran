@@ -34,6 +34,9 @@ def update (values : Array Int64) (i v : Int64) : Except String (Array Int64) :=
 def text (a b : String) : String × Int64 × Bool × Bool :=
   (a ++ b, Go.strLen a, decide (a < b), a == b)
 
+def stringBounds (a b : String) : String × String :=
+  (Go.stringMin id a b, Go.stringMax id a b)
+
 def length (values : Array Int64) : Int64 := Go.arrayLen values
 
 def convert (x : Int64) : UInt8 × UInt64 × Int8 :=

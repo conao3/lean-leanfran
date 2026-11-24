@@ -38,9 +38,6 @@ type modelImporter struct {
 }
 
 func (i *modelImporter) Import(path string) (*types.Package, error) {
-	if pkg := i.cache[path]; pkg != nil {
-		return pkg, nil
-	}
 	if pkg := i.p.packages[path]; pkg != nil {
 		out, _, err := i.check(pkg)
 		if out != nil && (!i.strict || err == nil) {

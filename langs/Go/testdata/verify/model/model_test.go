@@ -104,6 +104,10 @@ func TestGoOperations(t *testing.T) {
 				got.Snd.Snd.Fst != (a < b) || got.Snd.Snd.Snd != (a == b) {
 				t.Fatalf("text(%q, %q) = %v, %v", a, b, got, err)
 			}
+			bounds, err := models.StringBounds(a, b)
+			if err != nil || bounds.Fst != min(a, b) || bounds.Snd != max(a, b) {
+				t.Fatalf("stringBounds(%q, %q) = %v, %v", a, b, bounds, err)
+			}
 		}
 	}
 

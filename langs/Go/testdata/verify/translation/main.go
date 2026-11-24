@@ -97,7 +97,7 @@ func Choose(n int64) int64 {
 }
 
 //leanfran:model refines=asciiSpec
-func Bytes(s, t string) int64 { return int64(len(s + t)) }
+func Bytes(s, t string) int64 { return int64(len(max(s, t) + min(s, t))) }
 
 //leanfran:model refines=compareSpec
 func Compare(a Entry, s string, v uint16) bool { return a == (Entry{Key: s, Count: v}) }

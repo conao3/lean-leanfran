@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "hash": "09911db3d9f89b2736ca9b030f5ddc7341a8e6d577422f1b1b0bd7da206de177",
+  "hash": "c0fdf40e296f72326b982d76adb3b4dc59e03f457891762e75b29d793a8e80bf",
   "obligations": [
     {
       "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d6e6962626c65.Nibble",

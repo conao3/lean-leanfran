@@ -2,6 +2,7 @@ package embed
 
 import (
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,5 +106,26 @@ func TestUses(t *testing.T) {
 	order, err := p.order()
 	if err != nil || len(order) != 3 || len(order[2].deps) != 2 || order[2].pkg.path != "a" {
 		t.Fatalf("order returned %v, %v", order, err)
+	}
+}
+
+func TestVerificationRejectsInvalidImportedPackage(t *testing.T) {
+	p := scannerProject(t, map[string]string{
+		"broken/broken.go": "package broken\nvar Err int = absent\n",
+		"caller/caller.go": "package caller\nimport \"example.com/test/broken\"\nfunc F() int { return broken.Err }\n",
+	})
+	if err := p.scan(); err != nil {
+		t.Fatal(err)
+	}
+	i := &modelImporter{
+		p: p, strict: true,
+		cache: make(map[string]*types.Package), errors: make(map[string]error),
+		active: make(map[string]bool), info: make(map[string]*types.Info),
+	}
+	if _, _, err := i.check(p.packages["example.com/test/broken"]); err == nil {
+		t.Fatal("expected the dependency to be invalid")
+	}
+	if _, _, err := i.check(p.packages["example.com/test/caller"]); err == nil {
+		t.Fatal("a partially checked dependency must still report its error")
 	}
 }

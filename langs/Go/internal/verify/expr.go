@@ -315,8 +315,18 @@ func (t *translation) call(x *ast.CallExpr, passError bool) string {
 			return apply(name, val)
 		case "min", "max":
 			name := builtin.Name()
-			if b := basic(info.TypeOf(x)); b != nil && b.Info()&types.IsFloat != 0 {
-				name = "Go.float" + strings.ToUpper(name[:1]) + name[1:]
+			if b := basic(info.TypeOf(x)); b != nil {
+				suffix := strings.ToUpper(name[:1]) + name[1:]
+				if b.Info()&types.IsFloat != 0 {
+					name = "Go.float" + suffix
+				} else if b.Info()&types.IsString != 0 {
+					key := "id"
+					if desc, ok := t.namedType(info.TypeOf(x)); ok && desc.Cases != nil {
+						arg := t.next()
+						key = "(fun " + arg + " => " + enumString(desc, arg) + ")"
+					}
+					name = apply("Go.string"+suffix, key)
+				}
 			}
 			val := t.value(x.Args[0], info.TypeOf(x))
 			for _, a := range x.Args[1:] {

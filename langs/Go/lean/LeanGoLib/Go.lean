@@ -70,4 +70,10 @@ def floatMax (a b : Float) : Float :=
   if a.isNaN then a else if b.isNaN then b
   else if a > b || (a == b && a.toBits < b.toBits) then a else b
 
+def stringMin (key : α → String) (a b : α) : α :=
+  if key a < key b then a else b
+
+def stringMax (key : α → String) (a b : α) : α :=
+  if key a > key b then a else b
+
 end Go
