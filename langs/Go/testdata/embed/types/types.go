@@ -48,5 +48,7 @@ structure Envelope where
 
 def pack (value : Record) : Envelope := ⟨value⟩
 
+def units (n : Nat) : Nat := n + 2
+
 def echoColor (value : Color) : Color := value
 `, leanfran.Imports("Std.Data.HashMap"), leanfran.Models(Record{}, Color("")))

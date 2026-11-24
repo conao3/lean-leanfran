@@ -17,6 +17,18 @@ go tool leanfran check --dir consumer
 go vet ./...
 go test ./...
 test -z "$(gofmt -l .)"
+go run ./oracle > go.out
+workspace=.leanfran/workspace
+types_module="LeanGoEmbed.B$(printf %s example.com/embed-fixture/types | od -An -tx1 | tr -d ' \n')"
+consumer_module="LeanGoEmbed.B$(printf %s example.com/embed-fixture/consumer | od -An -tx1 | tr -d ' \n')"
+{
+    cat lean-dependency/Domain.lean "$workspace/LeanGoModels.lean"
+    sed '/^import /d' "$workspace/${types_module/.//}.lean" "$workspace/${consumer_module/.//}.lean"
+    printf '\ndef main : IO Unit := IO.println (%s.countTwice 7)\n' "$consumer_module"
+} > Oracle.lean
+lean -c oracle.c Oracle.lean
+leanc -o native oracle.c
+./native | diff -u - go.out
 mkdir .leanfran/previous
 snapshot() {
     for pkg in types consumer; do
@@ -48,7 +60,7 @@ list_stale() {
     expect_failure go tool leanfran status
     local expected
     for expected in "$@"; do
-        rg -q "^example.com/embed-fixture/$expected:" result.out
+        grep -Eq "^example.com/embed-fixture/$expected:" result.out
     done
     test "$(wc -l < result.out)" -eq "$#"
 }
@@ -64,6 +76,7 @@ check_edit consumer/consumer.go 'alternate := domainEnabled' 'alternate := false
 check_edit types/types.go 'Std.Data.HashMap' 'Std' types consumer
 check_edit types/types.go ':= ⟨value⟩' ':= { value := value }' types consumer
 check_edit types/types.go 'min_len=2' 'min_len=3' types consumer
+check_edit leanfran.config.json '"\."' '"types", "consumer"' types consumer
 version=$("$LEANFRAN_GO_CLI" --generator-version)
 check_edit types/leanfran.json "\"generator_version\": $version" '"generator_version": 0' types
 
@@ -72,21 +85,23 @@ list_stale consumer
 mv missing consumer/leanfran_funcs_gen.go
 
 cp consumer/consumer.go original
-sed -i 's/def alternate := domainEnabled/theorem impossible : False := by omega/' consumer/consumer.go
+sed -i 's/def alternate := domainEnabled/theorem alternateImpossible : False := by omega/' consumer/consumer.go
 expect_failure go tool leanfran sync
-rg -q 'consumer/consumer.go:8:[0-9]+: error: \(lean block example.com/embed-fixture/consumer, Lean 3:.*omega could not prove' result.err
+omega_col=$(awk '/theorem alternateImpossible/ { print index($0, "omega") }' consumer/consumer.go)
+grep -Eq "consumer/consumer.go:8:${omega_col}: error: \\(lean block example.com/embed-fixture/consumer, Lean 3:.*omega could not prove" result.err
 unchanged
 go test ./...
-sed -i 's/theorem impossible : False := by omega/def alternate := )/' consumer/consumer.go
+sed -i 's/theorem alternateImpossible : False := by omega/def alternate :=)/' consumer/consumer.go
 expect_failure go tool leanfran sync
-rg -q 'consumer/consumer.go:8:[0-9]+: error: \(lean block example.com/embed-fixture/consumer, Lean 3:.*unexpected token' result.err
+syntax_col=$(awk '/def alternate :=\)/ { print index($0, "def alternate :=)") + length("def alternate :=") }' consumer/consumer.go)
+grep -Eq "consumer/consumer.go:8:${syntax_col}: error: \\(lean block example.com/embed-fixture/consumer, Lean 3:.*unexpected token" result.err
 unchanged
 mv original consumer/consumer.go
 
 cp types/types.go original
 sed -i 's/List \[\]int/List map[string]int/' types/types.go
 expect_failure go tool leanfran status
-rg -q 'Record.List: unsupported field type map\[string\]int' result.err
+grep -Eq 'Record.List: unsupported field type map\[string\]int' result.err
 mv original types/types.go
 unchanged
 
@@ -96,16 +111,16 @@ printf '0\n'
 COMPILER
 chmod +x wrong-compiler
 expect_failure go tool leanfran sync --leanfran-go ./wrong-compiler
-rg -q 'compiler generator version 0, expected' result.err
+grep -Eq 'compiler generator version 0, expected' result.err
 unchanged
 
 mv consumer/consumer.go consumer/consumer.go.saved
 mv consumer/consumer_test.go consumer/consumer_test.go.saved
 expect_failure go tool leanfran status
-rg -q '^example.com/embed-fixture/consumer: removed block' result.out
+grep -Eq '^example.com/embed-fixture/consumer: removed block' result.out
 go tool leanfran sync
 for file in .leanfran/previous/consumer/*; do
     test ! -e "consumer/${file##*/}"
 done
 go tool leanfran status
-printf 'embed integration passes: 2 blocks, 7 freshness changes, 2 mapped Lean errors, 1 model error and removal\n'
+printf 'embed integration passes: 2 blocks, 8 freshness changes, 2 mapped Lean errors, 1 model error and removal\n'
