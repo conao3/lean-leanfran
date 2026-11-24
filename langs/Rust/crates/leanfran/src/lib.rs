@@ -12,7 +12,9 @@
 
 pub use leanfran_macros::{exported, lean, model, opaque, Model};
 pub use leanfran_runtime as runtime;
-pub use leanfran_runtime::{FromLean, Int, Model, Nat, ToLean};
+pub use leanfran_runtime::{
+    Array, Fin, FromLean, Int, IntoLean, Lean, LeanRepr, List, Model, Nat, ToLean,
+};
 
 pub mod spec;
 

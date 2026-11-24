@@ -6,7 +6,7 @@ def version : String := "0.7.0"
 
 /-- Version of the generated code. Raise it when the emitted code changes; the build script of
     leanfran-build checks it and puts it into its cache keys. -/
-def generatorVersion : String := "4"
+def generatorVersion : String := "5"
 
 def usage : String := "usage: leanfran [--version] [--generator-version] <command> <subcommand> [parameters]
 
