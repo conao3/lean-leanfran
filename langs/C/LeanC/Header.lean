@@ -93,7 +93,7 @@ def emitWrapper (entry : Export) : String := Id.run do
     else if ty == .char then
       code := code ++ s!"if ({invalidChar s!"a{i}"}) return lf_set_error(err, LF_INVALID, \"Invalid Unicode scalar value\");\n"
     if ty.byPointer || ty == .string then
-      code := code ++ s!"lean_object *arg{i} = lean_box(0);\n"
+      code := code ++ s!"lean_object *arg{i} = NULL;\n"
       owned := owned.push (ty, i)
       args := args.push s!"arg{i}"
     else
@@ -127,7 +127,7 @@ def emitWrapper (entry : Export) : String := Id.run do
   code := code ++ "return status;\n"
   unless owned.isEmpty do
     code := code ++ "bad_arg:\n" ++
-      String.join (owned.toList.map fun (_, i) => s!"lean_dec(arg{i});\n") ++ "return status;\n"
+      String.join (owned.toList.map fun (_, i) => s!"if (arg{i} != NULL) lean_dec(arg{i});\n") ++ "return status;\n"
   return code ++ "}\n"
 
 def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc) : String :=
