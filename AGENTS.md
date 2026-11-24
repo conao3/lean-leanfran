@@ -4,7 +4,7 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 
 ## Repository layout
 
-- `langs/Rust/`, `langs/Python/`, `langs/TypeScript/`, `langs/Clojure/`, `langs/PHP/`, and `langs/Go/` contain emitters, host runtimes, language packages, tests, and samples. Each has a Lake project.
+- The backends in `langs/` each have a Lake project. Rust, Python, TypeScript, Clojure, PHP, and Go provide emitters, host runtimes, language packages, tests, and samples. `langs/C/` uses Lean's C emitter and runtime and provides C API generation, link configuration, and tests.
 - `docs/`: development documentation. Read `CONTRIBUTING.md` and the relevant backend guide before editing a backend.
 - `maint/`: repository maintenance, version management, differential tests and extern-list generators.
 - `.github/`: CI and release automation.
@@ -23,6 +23,8 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 ## Verification and releases
 
 For PHP models, maintain proof and translation fixtures alongside the native-oracle comparisons. Run property tests against the generated specs in the shared verification fixture. `make check BACKENDS=PHP` runs the PHP checks under PHP 8.4 and 8.5. `make check BACKENDS=Go` runs the Go checks under Go 1.27 and 1.26, including a local mirror publish and consumer install.
+
+`make check BACKENDS=C` tests the C API, initialization, ownership, and static and shared linking.
 
 Run `make check` from the repository root, or `make check BACKENDS=Python` for selected backends. Run `make format` before committing.
 
