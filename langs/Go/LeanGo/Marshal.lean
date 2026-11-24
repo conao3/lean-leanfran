@@ -46,12 +46,13 @@ structure NameClaims where
   counts : Std.HashMap String Nat := {}
   used : Std.HashSet String := {}
 
-def NameClaims.claim (claims : NameClaims) (base : String) : Except String (String × NameClaims) := do
-  let key := base
-  let count := claims.counts.getD key (if goReserved.contains base then 1 else 0) + 1
-  let name := if count == 1 then base else s!"{base}_{count}"
-  if claims.used.contains name then throw (collisionLabel ++ name)
-  return (name, { counts := claims.counts.insert key count, used := claims.used.insert name })
+def NameClaims.claim (claims : NameClaims) (base : String) : String × NameClaims := Id.run do
+  let mut count := claims.counts.getD base (if goReserved.contains base then 1 else 0) + 1
+  let mut name := if count == 1 then base else s!"{base}{count}"
+  while claims.used.contains name do
+    count := count + 1
+    name := s!"{base}{count}"
+  return (name, { counts := claims.counts.insert base count, used := claims.used.insert name })
 
 inductive Desc where
   | nat | int | bool | char | string | float | float32 | unit | bytes
@@ -162,20 +163,22 @@ def typeIdentOf (strip c : Name) (args : Array String) : String :=
   let base := base ++ String.join (args.toList.map capitalizeIdent)
   goIdent base.capitalize
 
+partial def reservedWithLeanPrefix (reserved : List String) (name : String) : Bool :=
+  reserved.contains name ||
+    (name.startsWith "Lean" && reservedWithLeanPrefix reserved (name.drop 4).toString)
+
+def reserveNames (reserved : List String) (name : String) : String :=
+  if reservedWithLeanPrefix reserved name then "Lean" ++ name else name
+
+def packagePublicName (base : String) : String :=
+  reserveNames ["Handle", "Value"] base
+
 def freshIdent (base : String) : MarshalM String := do
+  let base := packagePublicName base
   let st ← get
-  let (nm, claims) ← ofExcept (st.idents.claim base)
+  let (nm, claims) := st.idents.claim base
   modify fun s => { s with idents := claims }
   return nm
-
-def freshHandleIdent (base : String) : MarshalM String := do
-  let used := (← get).idents.used
-  let mut name := base
-  let mut index := 1
-  while used.contains name do
-    index := index + 1
-    name := s!"{base}_{index}"
-  freshIdent name
 
 def deciderName (ident ctor field : String) : MetaM Name := do
   let n := Name.str (.str (.str (.str .anonymous "LeanGoGen") ident) ctor) (field ++ "_decide")
@@ -341,7 +344,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
   if c != ``Subtype || alias?.isSome then
     let source := alias?.getD c
     if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) => ns.isPrefixOf source && source != ns then
-      let ident := typeIdentOf ns source names
+      let ident := packagePublicName (typeIdentOf ns source names)
       let d := Desc.foreign spec ident
       modify fun s => { s with byType := s.byType.insert key d }
       let td ← typeDef c t args ident alias? true
@@ -408,7 +411,7 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
         let d := if let some m := model then d.modelField (m.fields.getD raw "") else d
         let optKey := isStruct && raw.endsWith "?" && raw.length > 1 && (match d with | .option _ => true | _ => false)
         let key := if !named then s!"a{fields.size}" else if optKey then (raw.dropEndWhile (· == '?')).copy else raw
-        let (property, claims) ← ofExcept (props.claim (goIdent (capitalizeIdent key)))
+        let (property, claims) := props.claim (goIdent (capitalizeIdent key))
         props := claims
         let property := if model.isSome then raw else property
         let flat := isStruct && (isSubobjectField? env c names[i]!).isSome
@@ -485,7 +488,7 @@ partial def handleDescOf (type : Lean.Expr) : MarshalM Desc := do
       unless ind.numIndices == 0 && ind.numParams == args.size && !isClass env c do
         throwError "unsupported handle type `{t}`"
     let names ← (if hashMap then args[:2].toArray else args).mapM fun arg => return toString (← ppExpr arg)
-    let ident ← freshHandleIdent (typeIdentOf (← read).strip c names)
+    let ident ← freshIdent (typeIdentOf (← read).strip c names)
     let desc := Desc.opaque ident
     modify fun s => { s with opaqueByType := s.opaqueByType.insert t desc, opaqueTypes := s.opaqueTypes.push ident }
     return desc

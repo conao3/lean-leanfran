@@ -11,8 +11,8 @@ import (
 
 func TestCommandAllocations(t *testing.T) {
 	snapshot := initialValue(100)
-	actor := NewValue_Actor(Actor{CanWrite: true})
-	command := checked(NewValue_Command(CommandAdd{Amount: 1}))
+	actor := Value.NewActor(Actor{CanWrite: true})
+	command := checked(Value.NewCommand(CommandAdd{Amount: 1}))
 	defer func() { snapshot.Close() }()
 	defer actor.Close()
 	defer command.Close()
@@ -42,8 +42,8 @@ func BenchmarkCommand(b *testing.B) {
 		})
 		b.Run(fmt.Sprintf("handle/%d", rows), func(b *testing.B) {
 			snapshot := initialValue(rows)
-			valueActor := NewValue_Actor(actor)
-			valueCommand := checked(NewValue_Command(command))
+			valueActor := Value.NewActor(actor)
+			valueCommand := checked(Value.NewCommand(command))
 			defer func() { snapshot.Close() }()
 			defer valueActor.Close()
 			defer valueCommand.Close()
@@ -57,8 +57,8 @@ func BenchmarkCommand(b *testing.B) {
 	}
 	b.Run("server-mutex/100", func(b *testing.B) {
 		snapshot := initialValue(100)
-		valueActor := NewValue_Actor(actor)
-		valueCommand := checked(NewValue_Command(command))
+		valueActor := Value.NewActor(actor)
+		valueCommand := checked(Value.NewCommand(command))
 		defer func() { snapshot.Close() }()
 		defer valueActor.Close()
 		defer valueCommand.Close()
@@ -75,12 +75,12 @@ func BenchmarkCommand(b *testing.B) {
 	})
 	b.Run("convert-command/100", func(b *testing.B) {
 		snapshot := initialValue(100)
-		valueActor := NewValue_Actor(actor)
+		valueActor := Value.NewActor(actor)
 		defer func() { snapshot.Close() }()
 		defer valueActor.Close()
 		b.ReportAllocs()
 		for b.Loop() {
-			valueCommand := checked(NewValue_Command(command))
+			valueCommand := checked(Value.NewCommand(command))
 			_, err := handleStep(&snapshot, valueActor, valueCommand)
 			valueCommand.Close()
 			if err != nil {
@@ -94,8 +94,8 @@ func BenchmarkLastRowCommand(b *testing.B) {
 	for _, rows := range []int64{1, 100, 1_000, 10_000} {
 		b.Run(fmt.Sprint(rows), func(b *testing.B) {
 			snapshot := initialValue(rows)
-			actor := NewValue_Actor(Actor{Tenant: uint64(rows - 1), CanWrite: true})
-			command := checked(NewValue_Command(CommandSet{Amount: 1}))
+			actor := Value.NewActor(Actor{Tenant: uint64(rows - 1), CanWrite: true})
+			command := checked(Value.NewCommand(CommandSet{Amount: 1}))
 			defer func() { snapshot.Close() }()
 			defer actor.Close()
 			defer command.Close()
@@ -113,8 +113,8 @@ func TestLastRowCommandAllocations(t *testing.T) {
 	for _, rows := range []int64{1, 100, 1_000, 10_000} {
 		t.Run(fmt.Sprint(rows), func(t *testing.T) {
 			snapshot := initialValue(rows)
-			actor := NewValue_Actor(Actor{Tenant: uint64(rows - 1), CanWrite: true})
-			command := checked(NewValue_Command(CommandSet{Amount: 7}))
+			actor := Value.NewActor(Actor{Tenant: uint64(rows - 1), CanWrite: true})
+			command := checked(Value.NewCommand(CommandSet{Amount: 7}))
 			defer func() { snapshot.Close() }()
 			defer actor.Close()
 			defer command.Close()
@@ -126,7 +126,7 @@ func TestLastRowCommandAllocations(t *testing.T) {
 			if allocations > 10 {
 				t.Fatalf("%d rows: %g allocations per command, want at most 10", rows, allocations)
 			}
-			result := ReadValue_Snapshot(snapshot)
+			result := Value.ReadSnapshot(snapshot)
 			if result.Rows[rows-1].Amount != 7 || result.Revision != 101 {
 				t.Fatalf("amount = %d, revision = %d", result.Rows[rows-1].Amount, result.Revision)
 			}
@@ -139,21 +139,21 @@ func BenchmarkScopedLastRowCommand(b *testing.B) {
 	for _, rows := range []int64{1, 100, 1_000, 10_000} {
 		b.Run(fmt.Sprint(rows), func(b *testing.B) {
 			snapshot := initialValue(rows)
-			actor := NewValue_Actor(Actor{Tenant: uint64(rows - 1), CanWrite: true})
-			command := checked(NewValue_Command(CommandSet{Amount: 1}))
+			actor := Value.NewActor(Actor{Tenant: uint64(rows - 1), CanWrite: true})
+			command := checked(Value.NewCommand(CommandSet{Amount: 1}))
 			defer func() { snapshot.Close() }()
 			defer actor.Close()
 			defer command.Close()
 			b.ReportAllocs()
 			for b.Loop() {
 				leanfran.WithValues(func(scope *leanfran.ValueScope) {
-					writes, reply, err := HandleIn_Transition(scope, actor.Borrow(), snapshot.Borrow(), command.Borrow())
+					writes, reply, err := Handle.In(scope).Transition(actor.Borrow(), snapshot.Borrow(), command.Borrow())
 					if err != nil {
 						b.Fatal(err)
 					}
-					_ = ReadValueIn_UInt64(scope, reply)
+					_ = Value.In(scope).ReadUInt64(reply)
 					reply.CloseIn(scope)
-					snapshot = HandleIn_Apply(scope, snapshot.Take(), writes.Take())
+					snapshot = Handle.In(scope).Apply(snapshot.Take(), writes.Take())
 				})
 			}
 		})

@@ -138,4 +138,13 @@ inductive Record where
 
 def recordValue (record : Record) : Record := record
 
+structure Value where
+  amount : UInt64
+
+def handle (value : Value) : UInt64 := value.amount
+
+def leanHandle : UInt64 := 7
+
+def «in» (n : UInt64) : UInt64 := n + 1
+
 end LeanGoTest.Public

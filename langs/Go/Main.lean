@@ -4,7 +4,7 @@ import LeanGo.Check
 open Lean LeanGo
 
 def version : String := "0.10.0"
-def generatorVersion : String := "10"
+def generatorVersion : String := "11"
 
 def usage : String := "leanfran-go --version | --generator-version | --lean-version
 leanfran-go module generate --module-name <Name> [options]
@@ -234,12 +234,12 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
     let functions := Json.mkObj (publicModule.functions.toList.map fun f =>
       ((stripName strip f.source).toString, toJson f.ident))
     let valueFunctions := Json.mkObj (publicModule.handles.toList.map fun f =>
-      ((stripName strip f.source).toString, toJson f.ident))
+      ((stripName strip f.source).toString, toJson ("Handle." ++ f.ident)))
     let scopedValueFunctions := Json.mkObj (publicModule.handles.toList.map fun f =>
-      ((stripName strip f.source).toString, toJson f.inIdent))
+      ((stripName strip f.source).toString, toJson ("Handle.In(scope)." ++ f.ident)))
     let valueConversions := Json.arr <| (publicModule.conversions.qsort (fun a b => a.newIdent < b.newIdent)).map fun c =>
-      Json.mkObj [("type", toJson c.desc.valueStem), ("new", toJson c.newIdent), ("read", toJson c.readIdent),
-        ("newIn", toJson c.newInIdent), ("readIn", toJson c.readInIdent)]
+      Json.mkObj [("type", toJson c.desc.valueStem), ("new", toJson ("Value." ++ c.newIdent)), ("read", toJson ("Value." ++ c.readIdent)),
+        ("newIn", toJson ("Value.In(scope)." ++ c.newIdent)), ("readIn", toJson ("Value.In(scope)." ++ c.readIdent))]
     return (Json.mkObj [("module", mod), ("package", pkg), ("files", toJson files),
       ("skipped", toJson skipped), ("functions", functions), ("valueFunctions", valueFunctions),
       ("scopedValueFunctions", scopedValueFunctions), ("valueConversions", valueConversions),

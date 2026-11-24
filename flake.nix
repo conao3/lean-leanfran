@@ -151,6 +151,7 @@
               go
               pkgs.gofumpt
               pkgs.golangci-lint
+              pkgs.go-tools
               pkgs.gopls
               pkgs.python3
               pkgs.gnumake

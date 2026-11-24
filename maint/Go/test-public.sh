@@ -40,10 +40,15 @@ directory = Path(sys.argv[1])
 summary = json.loads((directory / "public.summary.json").read_text())
 assert summary["package"] == "public"
 assert len(summary["files"]) == 3
-assert summary["valueFunctions"]["recordValue"] == "Handle_RecordValue_2"
-assert summary["scopedValueFunctions"]["recordValue"] == "HandleIn_RecordValue_2"
-assert {"type": "Reply", "new": "NewValue_Reply", "read": "ReadValue_Reply",
-        "newIn": "NewValueIn_Reply", "readIn": "ReadValueIn_Reply"} in summary["valueConversions"]
+assert summary["valueFunctions"]["recordValue"] == "Handle.RecordValue"
+assert summary["scopedValueFunctions"]["recordValue"] == "Handle.In(scope).RecordValue"
+assert summary["functions"]["recordValue"] == "RecordValue2"
+assert summary["functions"]["handle"] == "LeanHandle"
+assert summary["functions"]["leanHandle"] == "LeanLeanHandle"
+assert summary["valueFunctions"]["handle"] == "Handle.Handle"
+assert summary["scopedValueFunctions"]["in"] == "Handle.In(scope).LeanIn"
+assert {"type": "Reply", "new": "Value.NewReply", "read": "Value.ReadReply",
+        "newIn": "Value.In(scope).NewReply", "readIn": "Value.In(scope).ReadReply"} in summary["valueConversions"]
 skipped = {row["name"].rsplit(".", 1)[-1]: row["reason"] for row in summary["skipped"]}
 for name, reason in {
     "AClass": "type class",
@@ -68,6 +73,16 @@ cp testdata/public/allocation_inputs.go testdata/public/allocations_test.go "$ou
 cp testdata/public/oracle.go "$out"
 go vet "./$out/public" "./$out/json" "./$out/client" "./$out/allocations" "./$out"
 go test -race "./$out/public"
+
+lint="$out/lint"
+for package in public json allocations client; do
+    mkdir -p "$lint/$package"
+    cp "$out/$package/leanfran_lean_gen.go" "$lint/$package/"
+    for wrapper in leanfran_funcs_gen.go leanfran_types_gen.go; do
+        tail -n +2 "$out/$package/$wrapper" > "$lint/$package/$wrapper"
+    done
+done
+staticcheck -checks ST1003 "./$out/public" "./$lint/..."
 mkdir -p "$out/typecheck"
 cat > "$out/typecheck/invalid-enum.go" <<'GO'
 package typecheck
