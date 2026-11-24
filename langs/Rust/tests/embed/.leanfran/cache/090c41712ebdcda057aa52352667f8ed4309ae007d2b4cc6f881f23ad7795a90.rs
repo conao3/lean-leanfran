@@ -49,7 +49,7 @@ impl rt::FromLean for Point {
         }
     }
 }
-impl rt::LeanRepr for Point {
+unsafe impl rt::LeanRepr for Point {
     type Value = Point;
     unsafe fn to_obj(value: Point) -> Obj {
         rt::ToLean::to_lean(value)
@@ -58,7 +58,7 @@ impl rt::LeanRepr for Point {
         <Point as rt::FromLean>::from_lean(o)
     }
 }
-impl rt::IntoLean<Point> for Point {
+unsafe impl rt::IntoLean<Point> for Point {
     unsafe fn into_obj(self) -> Obj {
         rt::ToLean::to_lean(self)
     }

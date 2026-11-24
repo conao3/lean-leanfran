@@ -16,7 +16,13 @@ use core::fmt;
 use core::marker::PhantomData;
 
 /// A Rust type that names a Lean type whose values a [`Lean`] handle can hold.
-pub trait LeanRepr {
+///
+/// # Safety
+///
+/// `to_obj` must return an owned object of the Lean type and `from_obj` must read one without
+/// taking ownership; the type must be data (no closures, thunks, tasks or references), since
+/// handles of it are shared between threads. Generated modules implement it for their types.
+pub unsafe trait LeanRepr {
     /// The Rust value of the Lean type.
     type Value;
 
@@ -122,7 +128,11 @@ where
 
 /// An argument of a function of the `lean` module of a generated module: the Rust value of
 /// `L` (converted for the call), a `&Lean<L>` or a `Lean<L>`.
-pub trait IntoLean<L: LeanRepr> {
+///
+/// # Safety
+///
+/// `into_obj` must return an owned object of the Lean type `L` names.
+pub unsafe trait IntoLean<L: LeanRepr> {
     /// The owned boxed object of the argument.
     ///
     /// # Safety
@@ -132,7 +142,7 @@ pub trait IntoLean<L: LeanRepr> {
     unsafe fn into_obj(self) -> Obj;
 }
 
-impl<L: LeanRepr> IntoLean<L> for Lean<L> {
+unsafe impl<L: LeanRepr> IntoLean<L> for Lean<L> {
     unsafe fn into_obj(self) -> Obj {
         let obj = self.obj;
         core::mem::forget(self);
@@ -140,7 +150,7 @@ impl<L: LeanRepr> IntoLean<L> for Lean<L> {
     }
 }
 
-impl<L: LeanRepr> IntoLean<L> for &Lean<L> {
+unsafe impl<L: LeanRepr> IntoLean<L> for &Lean<L> {
     unsafe fn into_obj(self) -> Obj {
         lean_inc(self.obj);
         self.obj
@@ -149,7 +159,7 @@ impl<L: LeanRepr> IntoLean<L> for &Lean<L> {
 
 macro_rules! prim_repr {
     ($($t:ty),*) => {$(
-        impl LeanRepr for $t {
+        unsafe impl LeanRepr for $t {
             type Value = $t;
             unsafe fn to_obj(value: $t) -> Obj {
                 ToLean::to_lean(value)
@@ -158,7 +168,7 @@ macro_rules! prim_repr {
                 <$t as FromLean>::from_lean(o)
             }
         }
-        impl IntoLean<$t> for $t {
+        unsafe impl IntoLean<$t> for $t {
             unsafe fn into_obj(self) -> Obj {
                 ToLean::to_lean(self)
             }
@@ -187,19 +197,19 @@ prim_repr!(
     ()
 );
 
-impl IntoLean<String> for &str {
+unsafe impl IntoLean<String> for &str {
     unsafe fn into_obj(self) -> Obj {
         ToLean::to_lean(self)
     }
 }
 
-impl IntoLean<String> for &String {
+unsafe impl IntoLean<String> for &String {
     unsafe fn into_obj(self) -> Obj {
         ToLean::to_lean(self.as_str())
     }
 }
 
-impl<T: LeanRepr> LeanRepr for List<T> {
+unsafe impl<T: LeanRepr> LeanRepr for List<T> {
     type Value = Vec<T::Value>;
     unsafe fn to_obj(value: Self::Value) -> Obj {
         list_to_lean(value, |v| T::to_obj(v))
@@ -209,13 +219,13 @@ impl<T: LeanRepr> LeanRepr for List<T> {
     }
 }
 
-impl<T: LeanRepr> IntoLean<List<T>> for Vec<T::Value> {
+unsafe impl<T: LeanRepr> IntoLean<List<T>> for Vec<T::Value> {
     unsafe fn into_obj(self) -> Obj {
         List::<T>::to_obj(self)
     }
 }
 
-impl<T: LeanRepr> LeanRepr for Array<T> {
+unsafe impl<T: LeanRepr> LeanRepr for Array<T> {
     type Value = Vec<T::Value>;
     unsafe fn to_obj(value: Self::Value) -> Obj {
         array_to_lean(value, |v| T::to_obj(v))
@@ -225,13 +235,13 @@ impl<T: LeanRepr> LeanRepr for Array<T> {
     }
 }
 
-impl<T: LeanRepr> IntoLean<Array<T>> for Vec<T::Value> {
+unsafe impl<T: LeanRepr> IntoLean<Array<T>> for Vec<T::Value> {
     unsafe fn into_obj(self) -> Obj {
         Array::<T>::to_obj(self)
     }
 }
 
-impl<T: LeanRepr> LeanRepr for Option<T> {
+unsafe impl<T: LeanRepr> LeanRepr for Option<T> {
     type Value = Option<T::Value>;
     unsafe fn to_obj(value: Self::Value) -> Obj {
         option_to_lean(value, |v| T::to_obj(v))
@@ -241,13 +251,13 @@ impl<T: LeanRepr> LeanRepr for Option<T> {
     }
 }
 
-impl<T: LeanRepr> IntoLean<Option<T>> for Option<T::Value> {
+unsafe impl<T: LeanRepr> IntoLean<Option<T>> for Option<T::Value> {
     unsafe fn into_obj(self) -> Obj {
         Option::<T>::to_obj(self)
     }
 }
 
-impl<T: LeanRepr, E: LeanRepr> LeanRepr for Result<T, E> {
+unsafe impl<T: LeanRepr, E: LeanRepr> LeanRepr for Result<T, E> {
     type Value = Result<T::Value, E::Value>;
     unsafe fn to_obj(value: Self::Value) -> Obj {
         except_to_lean(value, |v| E::to_obj(v), |v| T::to_obj(v))
@@ -257,13 +267,13 @@ impl<T: LeanRepr, E: LeanRepr> LeanRepr for Result<T, E> {
     }
 }
 
-impl<T: LeanRepr, E: LeanRepr> IntoLean<Result<T, E>> for Result<T::Value, E::Value> {
+unsafe impl<T: LeanRepr, E: LeanRepr> IntoLean<Result<T, E>> for Result<T::Value, E::Value> {
     unsafe fn into_obj(self) -> Obj {
         Result::<T, E>::to_obj(self)
     }
 }
 
-impl<A: LeanRepr, B: LeanRepr> LeanRepr for (A, B) {
+unsafe impl<A: LeanRepr, B: LeanRepr> LeanRepr for (A, B) {
     type Value = (A::Value, B::Value);
     unsafe fn to_obj(value: Self::Value) -> Obj {
         prod_to_lean(value, |v| A::to_obj(v), |v| B::to_obj(v))
@@ -273,13 +283,13 @@ impl<A: LeanRepr, B: LeanRepr> LeanRepr for (A, B) {
     }
 }
 
-impl<A: LeanRepr, B: LeanRepr> IntoLean<(A, B)> for (A::Value, B::Value) {
+unsafe impl<A: LeanRepr, B: LeanRepr> IntoLean<(A, B)> for (A::Value, B::Value) {
     unsafe fn into_obj(self) -> Obj {
         <(A, B)>::to_obj(self)
     }
 }
 
-impl<const N: u64> LeanRepr for Fin<N> {
+unsafe impl<const N: u64> LeanRepr for Fin<N> {
     type Value = usize;
     unsafe fn to_obj(value: usize) -> Obj {
         fin_to_lean(value, N as usize)
@@ -289,7 +299,7 @@ impl<const N: u64> LeanRepr for Fin<N> {
     }
 }
 
-impl<const N: u64> IntoLean<Fin<N>> for usize {
+unsafe impl<const N: u64> IntoLean<Fin<N>> for usize {
     unsafe fn into_obj(self) -> Obj {
         Fin::<N>::to_obj(self)
     }

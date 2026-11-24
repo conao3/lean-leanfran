@@ -738,8 +738,8 @@ def typeUsesProof (types : Std.HashMap String TypeDef) (d : Desc) : Option Strin
 /-- The trait implementations that let a handle (`rt::Lean`) hold the generated type `td`. -/
 def emitReprImpl (td : TypeDef) : String :=
   let r := td.rust
-  s!"impl rt::LeanRepr for {r} \{\n    type Value = {r};\n    unsafe fn to_obj(value: {r}) -> Obj \{\n        rt::ToLean::to_lean(value)\n    }\n    unsafe fn from_obj(o: Obj) -> {r} \{\n        <{r} as rt::FromLean>::from_lean(o)\n    }\n}\n" ++
-  s!"impl rt::IntoLean<{r}> for {r} \{\n    unsafe fn into_obj(self) -> Obj \{\n        rt::ToLean::to_lean(self)\n    }\n}\n"
+  s!"unsafe impl rt::LeanRepr for {r} \{\n    type Value = {r};\n    unsafe fn to_obj(value: {r}) -> Obj \{\n        rt::ToLean::to_lean(value)\n    }\n    unsafe fn from_obj(o: Obj) -> {r} \{\n        <{r} as rt::FromLean>::from_lean(o)\n    }\n}\n" ++
+  s!"unsafe impl rt::IntoLean<{r}> for {r} \{\n    unsafe fn into_obj(self) -> Obj \{\n        rt::ToLean::to_lean(self)\n    }\n}\n"
 
 /-- Rust expression of IR type `ty` (a scalar) for the borrowed boxed object `o`. -/
 def unboxExpr (ty : IRType) (o : String) : String :=

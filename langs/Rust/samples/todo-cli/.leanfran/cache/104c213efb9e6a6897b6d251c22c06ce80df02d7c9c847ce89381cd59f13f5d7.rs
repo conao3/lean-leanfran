@@ -1065,7 +1065,7 @@ impl rt::FromLean for Task {
         }
     }
 }
-impl rt::LeanRepr for Task {
+unsafe impl rt::LeanRepr for Task {
     type Value = Task;
     unsafe fn to_obj(value: Task) -> Obj {
         rt::ToLean::to_lean(value)
@@ -1074,7 +1074,7 @@ impl rt::LeanRepr for Task {
         <Task as rt::FromLean>::from_lean(o)
     }
 }
-impl rt::IntoLean<Task> for Task {
+unsafe impl rt::IntoLean<Task> for Task {
     unsafe fn into_obj(self) -> Obj {
         rt::ToLean::to_lean(self)
     }
@@ -1110,7 +1110,7 @@ impl rt::FromLean for Todo {
         }
     }
 }
-impl rt::LeanRepr for Todo {
+unsafe impl rt::LeanRepr for Todo {
     type Value = Todo;
     unsafe fn to_obj(value: Todo) -> Obj {
         rt::ToLean::to_lean(value)
@@ -1119,7 +1119,7 @@ impl rt::LeanRepr for Todo {
         <Todo as rt::FromLean>::from_lean(o)
     }
 }
-impl rt::IntoLean<Todo> for Todo {
+unsafe impl rt::IntoLean<Todo> for Todo {
     unsafe fn into_obj(self) -> Obj {
         rt::ToLean::to_lean(self)
     }
