@@ -14,7 +14,6 @@ use core::ptr;
 use core::sync::atomic::{AtomicI32, Ordering};
 use num_bigint::BigInt;
 use std::alloc::{self, Layout};
-use std::cell::Cell;
 
 /// Header of every heap object (`lean_object`).
 #[repr(C)]
@@ -508,10 +507,6 @@ pub unsafe fn lean_dec(o: Obj) {
     }
 }
 
-thread_local! {
-    static DEL_TODO: Cell<Vec<Obj>> = const { Cell::new(Vec::new()) };
-}
-
 /// Pushes the children of `o` with a single-threaded count to `todo`.
 unsafe fn for_each_child(o: Obj, f: &mut impl FnMut(Obj)) {
     let tag = (*o).m_tag;
@@ -571,7 +566,17 @@ pub unsafe fn lean_dec_ref_cold(o: Obj) {
     if rc < 0 && !lean_dec_ref_mt(o, rc) {
         return;
     }
-    let mut todo = DEL_TODO.take();
+    if (*o).m_tag <= LEAN_MAX_CTOR_TAG && (*o).m_other == 0 {
+        lean_dealloc(o, (*o).m_cs_sz as usize);
+        return;
+    }
+    lean_del(o);
+}
+
+/// Frees `o` and every object only reachable from it.
+#[inline(never)]
+unsafe fn lean_del(o: Obj) {
+    let mut todo = DelTodo::new();
     todo.push(o);
     while let Some(o) = todo.pop() {
         let mut child = |c: Obj| {
@@ -588,6 +593,14 @@ pub unsafe fn lean_dec_ref_cold(o: Obj) {
                 todo.push(c);
             }
         };
+        if (*o).m_tag <= LEAN_MAX_CTOR_TAG {
+            let objs = lean_ctor_obj_cptr(o);
+            for i in 0..(*o).m_other as usize {
+                child(*objs.add(i));
+            }
+            lean_dealloc(o, (*o).m_cs_sz as usize);
+            continue;
+        }
         for_each_child(o, &mut child);
         if (*o).m_tag == LEAN_EXTERNAL {
             let e = o as *mut ExternalObject;
@@ -595,7 +608,48 @@ pub unsafe fn lean_dec_ref_cold(o: Obj) {
         }
         lean_free_object_unchecked(o);
     }
-    DEL_TODO.set(todo);
+}
+
+/// The objects still to free: the first ones in the frame, the rest on the heap.
+struct DelTodo {
+    len: usize,
+    inline: [Obj; DelTodo::INLINE],
+    rest: Vec<Obj>,
+}
+
+impl DelTodo {
+    const INLINE: usize = 16;
+
+    #[inline(always)]
+    fn new() -> Self {
+        DelTodo {
+            len: 0,
+            inline: [ptr::null_mut(); DelTodo::INLINE],
+            rest: Vec::new(),
+        }
+    }
+
+    #[inline(always)]
+    fn push(&mut self, o: Obj) {
+        if self.len < DelTodo::INLINE {
+            self.inline[self.len] = o;
+            self.len += 1;
+        } else {
+            self.rest.push(o);
+        }
+    }
+
+    #[inline(always)]
+    fn pop(&mut self) -> Option<Obj> {
+        if let Some(o) = self.rest.pop() {
+            return Some(o);
+        }
+        if self.len == 0 {
+            return None;
+        }
+        self.len -= 1;
+        Some(self.inline[self.len])
+    }
 }
 
 unsafe fn lean_free_object_unchecked(o: Obj) {

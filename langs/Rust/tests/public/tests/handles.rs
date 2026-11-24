@@ -1,6 +1,6 @@
 //! Handles (`leanfran::Lean`) and the functions of the generated `lean` module.
 
-use leanfran::{Array, Fin, Lean, List, Local, Nat};
+use leanfran::{Array, Fin, Lean, List, Local, Nat, Owned};
 use leanfran_public_test as p;
 use p::lean as h;
 use std::sync::{Arc, Mutex};
@@ -324,4 +324,203 @@ fn an_array_snapshot_is_written_in_place_or_copied() {
     assert_eq!(moved.get().memories[3].value, 30);
     let shared = h::calc_apply_array(kept.share(), write);
     assert_eq!(shared.get().memories[3].value, 30);
+}
+
+/// True when the first object of the owned value still has the count of one thread.
+fn owned_by_one_thread(owned: &mut Owned<p::CalcSnapshot>) -> bool {
+    owned.with(|snap| {
+        let single = unsafe { leanfran::runtime::lean_is_st(snap.as_obj()) };
+        (snap, single)
+    })
+}
+
+fn seeded_owned(users: u64) -> Owned<p::CalcSnapshot> {
+    Owned::new(seeded(users).get())
+}
+
+/// One command on an owned snapshot; true when the list was updated in place (a structure
+/// with one field is its field, so the snapshot is the first cell of the list).
+fn add_one(owned: &mut Owned<p::CalcSnapshot>, user: u64) -> bool {
+    owned.with(|snap| {
+        let cmd = p::CalcCommand::Apply {
+            op: p::CalcOp::Add,
+            arg: 1,
+        };
+        let (write, _) = p::local::calc_transition(principal(user), &snap, cmd)
+            .get()
+            .expect("no overflow");
+        let before = snap.as_obj();
+        let next = p::local::calc_apply(snap, write);
+        let in_place = next.as_obj() == before;
+        (next, in_place)
+    })
+}
+
+#[test]
+fn an_owned_value_is_updated_in_place() {
+    let mut owned = seeded_owned(8);
+    assert!(add_one(&mut owned, 0));
+    assert!(add_one(&mut owned, 5));
+    assert_eq!(owned.get().memories[0].value, 1);
+    assert_eq!(owned.get().memories[5].value, 6);
+    assert_eq!(format!("{:?}", Owned::<u8>::new(3)), "Owned(3)");
+    let length = owned.with(|snap| {
+        let length = snap.get().memories.len();
+        (snap, length)
+    });
+    assert_eq!(length, 8);
+}
+
+#[test]
+fn an_owned_value_moves_between_threads() {
+    let (threads, rounds, users) = THREADS;
+    let engine = Arc::new(Mutex::new(seeded_owned(users)));
+    let workers: Vec<_> = (0..threads)
+        .map(|t| {
+            let engine = Arc::clone(&engine);
+            thread::spawn(move || {
+                let mut in_place = 0;
+                for i in 0..rounds {
+                    let mut owned = engine.lock().unwrap();
+                    if add_one(&mut owned, (t + i) % users) {
+                        in_place += 1;
+                    }
+                }
+                in_place
+            })
+        })
+        .collect();
+    let in_place: u64 = workers.into_iter().map(|w| w.join().unwrap()).sum();
+    assert_eq!(in_place, threads * rounds);
+    let owned = Arc::try_unwrap(engine).ok().unwrap().into_inner().unwrap();
+    let total: u64 = owned.get().memories.iter().map(|m| m.value).sum();
+    assert_eq!(total, users * (users - 1) / 2 + threads * rounds);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let mut owned = owned;
+        assert!(add_one(&mut owned, 0));
+        sender.send(owned).unwrap();
+    });
+    let mut owned = receiver.recv().unwrap();
+    assert!(add_one(&mut owned, 0));
+    let shared: Lean<p::CalcSnapshot> = owned.share();
+    let again = Owned::from(shared.clone());
+    assert_eq!(again.get(), shared.get());
+}
+
+#[test]
+fn a_local_that_outlives_the_closure_is_safe() {
+    let (_, rounds, users) = THREADS;
+    let mut owned = seeded_owned(users);
+    let mut kept = None;
+    owned.with(|snap| {
+        kept = Some(snap.clone());
+        (snap, ())
+    });
+    let kept = kept.unwrap();
+    let expected = kept.get();
+    assert!(!owned_by_one_thread(&mut owned));
+    assert!(!add_one(&mut owned, 0));
+    let mut fresh = seeded_owned(users);
+    assert!(owned_by_one_thread(&mut fresh));
+    let worker = thread::spawn(move || {
+        let mut updated = 0;
+        for i in 0..rounds {
+            if add_one(&mut owned, i % users) {
+                updated += 1;
+            }
+        }
+        (owned, updated)
+    });
+    for _ in 0..rounds {
+        let copy = kept.clone();
+        assert_eq!(p::local::calc_users(&copy).get().len(), users as usize);
+    }
+    let (owned, _) = worker.join().unwrap();
+    assert_eq!(kept.get(), expected);
+    let total: u64 = owned.get().memories.iter().map(|m| m.value).sum();
+    assert_eq!(total, users * (users - 1) / 2 + rounds + 1);
+}
+
+#[test]
+fn locals_from_elsewhere_are_safe_in_a_closure() {
+    let (_, rounds, users) = THREADS;
+    let outside = Local::<p::CalcSnapshot>::new(seeded(users).get());
+    let mut owned = Owned::<p::CalcSnapshot>::new(p::CalcSnapshot { memories: vec![] });
+    let in_place = owned.with(|snap| {
+        drop(snap);
+        let next = p::local::calc_apply(&outside, None);
+        (next, ())
+    });
+    let _ = in_place;
+    assert!(!owned_by_one_thread(&mut owned));
+    let mut second = seeded_owned(users);
+    let in_result: Local<p::CalcSnapshot> = second.with(|snap| {
+        let copy = snap.clone();
+        (snap, copy)
+    });
+    assert!(!owned_by_one_thread(&mut second));
+    let mut third = seeded_owned(users);
+    let stray = Local::<p::CalcSnapshot>::new(seeded(users).get());
+    third.with(|snap| {
+        drop(snap);
+        (stray, ())
+    });
+    assert!(!owned_by_one_thread(&mut third));
+    let worker = thread::spawn(move || {
+        for i in 0..rounds {
+            add_one(&mut owned, i % users);
+        }
+        owned
+    });
+    for _ in 0..rounds {
+        assert_eq!(outside.clone().get().memories.len(), users as usize);
+        assert_eq!(in_result.clone().get().memories.len(), users as usize);
+    }
+    let owned = worker.join().unwrap();
+    assert_eq!(outside.get().memories[0].value, 0);
+    assert_eq!(owned.get().memories.len(), users as usize);
+    drop(second);
+    let mut nested_outer = seeded_owned(2);
+    let mut nested_inner = seeded_owned(2);
+    nested_outer.with(|outer| {
+        let inner_users = nested_inner.with(|inner| {
+            let merged = p::local::calc_apply(&outer, None);
+            drop(merged);
+            let count = p::local::calc_users(&inner).get().len();
+            (inner, count)
+        });
+        assert_eq!(inner_users, 2);
+        (outer, ())
+    });
+    assert!(add_one(&mut nested_inner, 0));
+    assert_eq!(nested_outer.get().memories.len(), 2);
+}
+
+#[test]
+fn a_panic_in_the_closure_loses_the_value() {
+    let mut owned = seeded_owned(2);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        owned.with(|snap| -> (Local<p::CalcSnapshot>, ()) {
+            let _keep = snap;
+            panic!("in the closure")
+        })
+    }));
+    assert!(result.is_err());
+    let lost = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| owned.get()));
+    assert!(lost.is_err());
+    assert_eq!(Local::<u8>::new(1).clone().get(), 1);
+}
+
+/// `Owned` is `Send` and not `Sync`.
+#[test]
+fn an_owned_value_is_send_and_not_sync() {
+    fn send<T: Send>() {}
+    send::<Owned<p::CalcSnapshot>>();
+    trait AmbiguousIfSync<A> {
+        fn check() {}
+    }
+    impl<T: ?Sized> AmbiguousIfSync<()> for T {}
+    impl<T: ?Sized + Sync> AmbiguousIfSync<u8> for T {}
+    <Owned<p::CalcSnapshot> as AmbiguousIfSync<_>>::check();
 }
