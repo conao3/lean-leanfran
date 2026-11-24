@@ -47,9 +47,9 @@ def Error.render : Error → String
 
 inductive Writes where
   | unchanged
-  | amount (value : UInt64)
-  | limit (value : Option UInt64)
-  | pause
+  | amount (value : UInt64) (id : UInt64)
+  | limit (value : Option UInt64) (id : UInt64)
+  | pause (id : UInt64)
 
 def initial (size : Nat) : Snapshot :=
   ⟨(List.range size).map fun n =>
@@ -58,9 +58,9 @@ def initial (size : Nat) : Snapshot :=
 
 def transition (actor : Actor) (snapshot : Snapshot) (command : Command) :
     Except Error (Writes × UInt64) := do
-  let row ← match snapshot.rows with
-    | [] => .error .missing
-    | row :: _ => if row.id == actor.tenant then .ok row else .error .missing
+  let row ← match snapshot.rows.find? (·.id == actor.tenant) with
+    | none => .error .missing
+    | some row => .ok row
   match command with
   | .read => return (.unchanged, row.amount)
   | _ =>
@@ -70,23 +70,31 @@ def transition (actor : Actor) (snapshot : Snapshot) (command : Command) :
       let value := match command with | .add _ => row.amount + delta | _ => delta
       if let .paused := row.mode then throw .paused
       if (row.limit?.any (· < value)) then throw .limit
-      return (.amount value, value)
-    | .limit limit => return (.limit limit, row.amount)
-    | .pause => return (.pause, row.amount)
+      return (.amount value row.id, value)
+    | .limit limit => return (.limit limit row.id, row.amount)
+    | .pause => return (.pause row.id, row.amount)
     | .read => return (.unchanged, row.amount)
+
+private def updateRow (writes : Writes) (id : UInt64) : List Row → List Row
+  | [] => []
+  | row :: rest =>
+    if row.id == id then
+      let updated := match writes with
+        | .amount value _ => { row with amount := value }
+        | .limit value _ => { row with limit? := value }
+        | .pause _ => { row with mode := if let .active := row.mode then .paused else .active }
+        | .unchanged => row
+      updated :: rest
+    else row :: updateRow writes id rest
+
+@[noinline] private def writeRows (writes : Writes) (id : UInt64) (rows : List Row) : List Row :=
+  updateRow writes id rows
 
 def apply (snapshot : Snapshot) (writes : Writes) : Snapshot :=
   match writes with
   | .unchanged => snapshot
-  | _ => match snapshot.rows with
-    | [] => snapshot
-    | first :: rest =>
-      let updated := match writes with
-        | .amount value => { first with amount := value }
-        | .limit value => { first with limit? := value }
-        | .pause => { first with mode := if let .active := first.mode then .paused else .active }
-        | .unchanged => first
-      { rows := updated :: rest, revision := snapshot.revision + 1 }
+  | .amount _ id | .limit _ id | .pause id =>
+    { rows := writeRows writes id snapshot.rows, revision := snapshot.revision + 1 }
 
 def renderSnapshot (snapshot : Snapshot) : String :=
   let rows := snapshot.rows.map fun r =>

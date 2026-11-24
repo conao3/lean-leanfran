@@ -48,11 +48,11 @@ nix develop .#go -c make -C langs/Go samples
 
 `test-embed-scan` checks literal scanning, source positions, and block dependencies. `test-embed` installs the CLI as a module tool in a fixture, checks round-trip models and tags, and verifies that failed proofs and syntax errors preserve the installed Go. It checks manifests with a PATH that contains Go alone. `test-embed-samples` rebuilds the two embedded modules, compares their generated files with the checkout, and compares the range sample with a native Lean C oracle.
 
-Run `make test-kernel` in `langs/Go/` to compare 5,000 seeded commands through the ordinary Go functions, the handle functions, and Lean's native C backend. It also checks distinct handle types at compile time, tests shared handles with eight goroutines under the race detector, and checks allocation limits. After generation, run the kernel benchmark in the backend shell:
+Run `make test-kernel` in `langs/Go/` to compare 5,000 seeded commands through the ordinary Go functions, the handle functions, and Lean's native C backend. It also checks distinct handle types at compile time, tests shared handles and scoped calls with eight goroutines under the race detector, and checks allocation limits for updates to the first and final rows. After generation, run the kernel benchmark in the backend shell:
 
 ```sh
 cd langs/Go
-go test ./test-out/_generated/kernel -run '^$' -bench '^BenchmarkCommand$' \
+go test ./test-out/_generated/kernel -run '^$' -bench '^Benchmark(Command|LastRowCommand|ScopedLastRowCommand)$' \
   -benchmem -benchtime=300ms -cpu=1 -count=5
 ```
 

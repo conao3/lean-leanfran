@@ -88,7 +88,8 @@ func seededCommands(run func(Actor, Command, string, uint64)) {
 	run(actor, CommandSet{Amount: math.MaxUint64}, "set", math.MaxUint64)
 	run(actor, CommandLimit{}, "unlimit", 0)
 	run(Actor{}, CommandAdd{Amount: 1}, "add", 1)
-	for range 4995 {
+	run(Actor{CanWrite: true, Tenant: 99}, CommandSet{Amount: 7}, "set", 7)
+	for range 4994 {
 		actor := Actor{CanWrite: random.IntN(5) != 0}
 		if random.IntN(17) == 0 {
 			actor.Tenant = math.MaxUint64
