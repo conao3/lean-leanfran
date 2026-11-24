@@ -158,18 +158,18 @@ def descBody (cfg : RenderCfg) (t : TypeDef) : String :=
 def codecDecl (name ty : String) (external : Bool) : String :=
   s!"func desc{name}() *schema.Desc \{ return &_lfDesc{name} }\n\n" ++
     if external then
-      s!"func LeanfranCodec{name}() leanfran.Codec[{ty}] \{ _ = _lfCodecsReady; return _lfCodec{name} }\n\n"
+      s!"func LeanfranCodec{name}() leanfran.Codec[{ty}] \{ _lfCodecsOnce.Do(_lfBuildCodecs); return _lfCodec{name} }\n\n"
     else ""
 
 def valueMethods (ty root : String) (unmarshal : Bool) : String :=
-  let methods := s!"func (v {ty}) LeanfranDesc() *schema.Desc \{ _ = _lfCodecsReady; return desc{root}() }\n\n" ++
-    s!"func (v {ty}) Validate() error \{ _ = _lfCodecsReady; return leanfran.Validate(_lfCodec{root}, {if ty == root then "v" else s!"{root}(v)"}, {quoteGo root}) }\n\n" ++
-    s!"func (v {ty}) MarshalJSON() ([]byte, error) \{ _ = _lfCodecsReady; return leanfran.MarshalJSON(_lfCodec{root}, {if ty == root then "v" else s!"{root}(v)"}, {quoteGo root}) }\n\n" ++
-    s!"func (v {ty}) JSONSchema(target string) (map[string]any, error) \{ _ = _lfCodecsReady; return schema.JSONSchema(desc{root}(), target) }\n\n"
+  let methods := s!"func (v {ty}) LeanfranDesc() *schema.Desc \{ _lfCodecsOnce.Do(_lfBuildCodecs); return desc{root}() }\n\n" ++
+    s!"func (v {ty}) Validate() error \{ _lfCodecsOnce.Do(_lfBuildCodecs); return leanfran.Validate(_lfCodec{root}, {if ty == root then "v" else s!"{root}(v)"}, {quoteGo root}) }\n\n" ++
+    s!"func (v {ty}) MarshalJSON() ([]byte, error) \{ _lfCodecsOnce.Do(_lfBuildCodecs); return leanfran.MarshalJSON(_lfCodec{root}, {if ty == root then "v" else s!"{root}(v)"}, {quoteGo root}) }\n\n" ++
+    s!"func (v {ty}) JSONSchema(target string) (map[string]any, error) \{ _lfCodecsOnce.Do(_lfBuildCodecs); return schema.JSONSchema(desc{root}(), target) }\n\n"
   methods ++ if unmarshal then
     let body := if ty == root then "*v = out" else
       s!"typed, ok := out.({ty})\n\tif !ok \{ return &leanfran.ValidationError\{Issues: []leanfran.Issue\{\{Message: \"unexpected constructor\"}}} }\n\t*v = typed"
-    s!"func (v *{ty}) UnmarshalJSON(data []byte) error \{\n\t_ = _lfCodecsReady\n\tout, err := leanfran.UnmarshalJSON(_lfCodec{root}, data, {quoteGo root})\n\tif err != nil \{ return err }\n\t{body}\n\treturn nil\n}\n\n"
+    s!"func (v *{ty}) UnmarshalJSON(data []byte) error \{\n\t_lfCodecsOnce.Do(_lfBuildCodecs)\n\tout, err := leanfran.UnmarshalJSON(_lfCodec{root}, data, {quoteGo root})\n\tif err != nil \{ return err }\n\t{body}\n\treturn nil\n}\n\n"
     else ""
 
 def callDecider (cfg : RenderCfg) (inv : InvInfo) (fields : Array (Desc × String)) : Except String String := do
@@ -296,7 +296,7 @@ def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (trivial 
     s!"func to{name}(v {name}) rt.V \{\n\tswitch x := v.(type) \{\n{toCases}\t}\n\trt.Lean_internal_panic(\"invalid {name}\")\n\treturn rt.V\{}\n}\n\n" ++
     s!"func from{name}(v rt.V) {name} \{\n{fromBody}}\n\n" ++
     s!"func check{name}(e *leanfran.ValidationError, v {name}) \{\n\tswitch x := v.(type) \{\n{checks}\t}\n\te.Add(\"expected {name}\")\n}\n\n" ++
-    s!"func {decoder}(data []byte) ({name}, error) \{\n\t_ = _lfCodecsReady\n\treturn leanfran.UnmarshalJSON(_lfCodec{name}, data, {quoteGo name})\n}\n\n"
+    s!"func {decoder}(data []byte) ({name}, error) \{\n\t_lfCodecsOnce.Do(_lfBuildCodecs)\n\treturn leanfran.UnmarshalJSON(_lfCodec{name}, data, {quoteGo name})\n}\n\n"
 
 def emitType (cfg : RenderCfg) (t : TypeDef) : Except String String := do
   let name := t.ident
@@ -365,7 +365,7 @@ def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
     let value := if branch.isEmpty then "_lfResult" else "rt.Lean_ctor_get(_lfResult, 0)"
     s!"{result.codec cfg}.FromLean({value}), nil"
   let ready := if cfg.codecs.isEmpty && cfg.state.types.isEmpty then "" else
-    "\t_ = _lfCodecsReady\n"
+    "\t_lfCodecsOnce.Do(_lfBuildCodecs)\n"
   return s!"func {f.ident}({joinArgs binders}) {signature} \{\n{ready}{checkBody}{ownership}{run}{cleanup}{branch}\treturn {output}\n}\n\n"
 
 def usesQualifier (source qualifier : String) : Bool := Id.run do
@@ -384,7 +384,7 @@ def usesQualifier (source qualifier : String) : Bool := Id.run do
   return (plain.splitOn (qualifier ++ ".")).length > 1
 
 def packageSource (cfg : RenderCfg) (mod : Name) (pkg generatorVersion body : String) : String :=
-  let aliases := #[("", "math/big", "big"),
+  let aliases := #[("", "math/big", "big"), ("", "sync", "sync"),
     ("", "github.com/conao3/leanfran-go", "leanfran"),
     ("", "github.com/conao3/leanfran-go/rt", "rt"),
     ("", "github.com/conao3/leanfran-go/schema", "schema")] ++
@@ -460,8 +460,10 @@ def packageCodecs (cfg : RenderCfg) (types : Array TypeDef) : String := Id.run d
   let descriptors := types.map fun t => s!"var _lfDesc{t.ident} schema.Desc\n"
   let makeCodecs := codecs.map fun d => s!"\t{d.codec cfg} = {d.codecExpr cfg}\n"
   let makeDescriptors := types.map fun t => s!"\t_lfDesc{t.ident} = {descBody cfg t}\n"
-  return String.join ((vars ++ descriptors).toList) ++ "\nvar _lfCodecsReady = func() struct{} {\n" ++
-    String.join ((makeCodecs ++ makeDescriptors).toList) ++ "\treturn struct{}{}\n}()\n\n"
+  return String.join ((vars ++ descriptors).toList) ++
+    "\nvar _lfCodecsOnce sync.Once\n\nfunc _lfBuildCodecs() {\n" ++
+    String.join ((makeCodecs ++ makeDescriptors).toList) ++ "}\n\n" ++
+    "func init() { _lfCodecsOnce.Do(_lfBuildCodecs) }\n\n"
 
 def publicSources (env : Environment) (mod : Name) (pkg version goPath : String) (collected : PublicModule) :
     Except String (Array (String × String)) := do

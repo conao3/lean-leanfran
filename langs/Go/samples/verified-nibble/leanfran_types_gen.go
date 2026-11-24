@@ -4,13 +4,17 @@ package nibble
 
 import (
 	"github.com/conao3/leanfran-go"
+	"sync"
 )
 
 var _lfCodec0 leanfran.Codec[uint8]
 var _lfCodec1 leanfran.Codec[bool]
 
-var _lfCodecsReady = func() struct{} {
+var _lfCodecsOnce sync.Once
+
+func _lfBuildCodecs() {
 	_lfCodec0 = leanfran.Fixed[uint8]("uint", 8)
 	_lfCodec1 = leanfran.Bool()
-	return struct{}{}
-}()
+}
+
+func init() { _lfCodecsOnce.Do(_lfBuildCodecs) }

@@ -60,9 +60,9 @@ for name, reason in {
 PY
 
 cp testdata/public/public_test.go "$out/public"
-cp testdata/public/allocations_test.go "$out/allocations"
+cp testdata/public/allocation_inputs.go testdata/public/allocations_test.go "$out/allocations"
 cp testdata/public/oracle.go "$out"
-go vet "./$out/public" "./$out/json" "./$out/client" "./$out"
+go vet "./$out/public" "./$out/json" "./$out/client" "./$out/allocations" "./$out"
 go test -race "./$out/public"
 go test "./$out/allocations"
 CGO_ENABLED=0 go build -o "$out/oracle" "./$out"

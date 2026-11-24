@@ -7,22 +7,29 @@ import (
 	"github.com/conao3/leanfran-go/rt"
 	"github.com/conao3/leanfran-go/schema"
 	"math/big"
+	"sync"
 )
 
 var _lfCodecRange leanfran.Codec[Range]
 var _lfCodec0 leanfran.Codec[*big.Int]
 var _lfDescRange schema.Desc
 
-var _lfCodecsReady = func() struct{} {
+var _lfCodecsOnce sync.Once
+
+func _lfBuildCodecs() {
 	_lfCodecRange = leanfran.Ref(descRange, toRange, fromRange, checkRange)
 	_lfCodec0 = leanfran.Big("nat", "")
 	_lfDescRange = schema.Desc{Name: "Range", Kind: "struct", Variants: []schema.Variant{{Name: "mk", Tag: 0, Objects: 2, ScalarBytes: 0, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "lo", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: nil}, {Key: "hi", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 1, Flat: false, OmitNone: false, Bounds: nil}}}}}
-	return struct{}{}
-}()
+}
+
+func init() { _lfCodecsOnce.Do(_lfBuildCodecs) }
 
 func descRange() *schema.Desc { return &_lfDescRange }
 
-func LeanfranCodecRange() leanfran.Codec[Range] { _ = _lfCodecsReady; return _lfCodecRange }
+func LeanfranCodecRange() leanfran.Codec[Range] {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return _lfCodecRange
+}
 
 type Range struct {
 	Lo *big.Int
@@ -64,25 +71,25 @@ func checkRange(e *leanfran.ValidationError, v Range) {
 	}
 }
 
-func (v Range) LeanfranDesc() *schema.Desc { _ = _lfCodecsReady; return descRange() }
+func (v Range) LeanfranDesc() *schema.Desc { _lfCodecsOnce.Do(_lfBuildCodecs); return descRange() }
 
 func (v Range) Validate() error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.Validate(_lfCodecRange, v, "Range")
 }
 
 func (v Range) MarshalJSON() ([]byte, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.MarshalJSON(_lfCodecRange, v, "Range")
 }
 
 func (v Range) JSONSchema(target string) (map[string]any, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return schema.JSONSchema(descRange(), target)
 }
 
 func (v *Range) UnmarshalJSON(data []byte) error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	out, err := leanfran.UnmarshalJSON(_lfCodecRange, data, "Range")
 	if err != nil {
 		return err

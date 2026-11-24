@@ -7,7 +7,7 @@ import (
 )
 
 func InRange(a0 uint8, a1 uint8) (bool, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	v0 := _lfCodec0.ToLean(a0)
 	v1 := _lfCodec0.ToLean(a1)
 	_lfResult := rt.Lean_box(uint64(l_LeanGoEmbed_B6578616d706c652e636f6d2f76657269666965642d6e6962626c65_inRange(uint8(rt.Lean_unbox(v0)), uint8(rt.Lean_unbox(v1)))))
@@ -15,7 +15,7 @@ func InRange(a0 uint8, a1 uint8) (bool, error) {
 }
 
 func NibbleSpec(a0 uint8) (uint8, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	v0 := _lfCodec0.ToLean(a0)
 	_lfResult := rt.Lean_box(uint64(l_LeanGoEmbed_B6578616d706c652e636f6d2f76657269666965642d6e6962626c65_nibbleSpec(uint8(rt.Lean_unbox(v0)))))
 	return _lfCodec0.FromLean(_lfResult), nil

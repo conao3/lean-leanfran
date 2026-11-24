@@ -9,7 +9,7 @@ import (
 )
 
 func Count(a0 lfmod0.Order) (uint16, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	var _lfValidation leanfran.ValidationError
 	leanfran.CheckAt(&_lfValidation, _lfCodec2, a0, "order")
 	if len(_lfValidation.Issues) != 0 {

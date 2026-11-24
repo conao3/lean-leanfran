@@ -8,7 +8,7 @@ import (
 )
 
 func MakeOrder(a0 Item) (Order, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	var _lfValidation leanfran.ValidationError
 	leanfran.CheckAt(&_lfValidation, _lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, a0, "item")
 	if len(_lfValidation.Issues) != 0 {

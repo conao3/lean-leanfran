@@ -9,7 +9,7 @@ import (
 )
 
 func Width(a0 Range) (*big.Int, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	var _lfValidation leanfran.ValidationError
 	leanfran.CheckAt(&_lfValidation, _lfCodecRange, a0, "r")
 	if len(_lfValidation.Issues) != 0 {

@@ -7,7 +7,7 @@ import (
 )
 
 func ClampSpec(a0 int64, a1 int64, a2 int64) (int64, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	v0 := _lfCodec0.ToLean(a0)
 	v1 := _lfCodec0.ToLean(a1)
 	v2 := _lfCodec0.ToLean(a2)
@@ -16,7 +16,7 @@ func ClampSpec(a0 int64, a1 int64, a2 int64) (int64, error) {
 }
 
 func InRange(a0 int64, a1 int64, a2 int64, a3 int64) (bool, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	v0 := _lfCodec0.ToLean(a0)
 	v1 := _lfCodec0.ToLean(a1)
 	v2 := _lfCodec0.ToLean(a2)
@@ -26,7 +26,7 @@ func InRange(a0 int64, a1 int64, a2 int64, a3 int64) (bool, error) {
 }
 
 func Ordered(a0 int64, a1 int64, a2 int64) (bool, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	v0 := _lfCodec0.ToLean(a0)
 	v1 := _lfCodec0.ToLean(a1)
 	v2 := _lfCodec0.ToLean(a2)

@@ -6,6 +6,7 @@ import (
 	"github.com/conao3/leanfran-go"
 	"github.com/conao3/leanfran-go/rt"
 	"github.com/conao3/leanfran-go/schema"
+	"sync"
 )
 
 var _lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item leanfran.Codec[Item]
@@ -17,7 +18,9 @@ var _lfDescModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6
 var _lfDescModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item schema.Desc
 var _lfDescOrder schema.Desc
 
-var _lfCodecsReady = func() struct{} {
+var _lfCodecsOnce sync.Once
+
+func _lfBuildCodecs() {
 	_lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item = leanfran.Ref(descModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, toModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, fromModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, checkModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item)
 	_lfCodecModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item = leanfran.Ref(descModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, toModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, fromModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, checkModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item)
 	_lfCodecOrder = leanfran.Ref(descOrder, toOrder, fromOrder, checkOrder)
@@ -26,8 +29,9 @@ var _lfCodecsReady = func() struct{} {
 	_lfDescModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item = schema.Desc{Name: "Item", GoType: "example.com/embed-models/orders.Item", Kind: "model", Variants: []schema.Variant{{Name: "mk", Tag: 0, Objects: 1, ScalarBytes: 2, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "Name", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: map[string]string{"minLength": "1"}}, {Key: "Quantity", Desc: _lfCodec1.Desc, Slot: "u16", Offset: 8, Flat: false, OmitNone: false, Bounds: map[string]string{"maximum": "100", "minimum": "1"}}}}}}
 	_lfDescModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item = schema.Desc{Name: "Item", GoType: "example.com/embed-models/orders.Item", Kind: "model", Variants: []schema.Variant{{Name: "mk", Tag: 0, Objects: 1, ScalarBytes: 2, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "Name", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: nil}, {Key: "Quantity", Desc: _lfCodec1.Desc, Slot: "u16", Offset: 8, Flat: false, OmitNone: false, Bounds: nil}}}}}
 	_lfDescOrder = schema.Desc{Name: "Order", Kind: "struct", Variants: []schema.Variant{{Name: "mk", Tag: 0, Objects: 1, ScalarBytes: 0, Trivial: true, Positional: false, Fields: []schema.Field{{Key: "item", Desc: _lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: nil}}}}}
-	return struct{}{}
-}()
+}
+
+func init() { _lfCodecsOnce.Do(_lfBuildCodecs) }
 
 func descModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item() *schema.Desc {
 	return &_lfDescModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item
@@ -94,7 +98,10 @@ func checkModelLeanGoModelsV6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f
 
 func descOrder() *schema.Desc { return &_lfDescOrder }
 
-func LeanfranCodecOrder() leanfran.Codec[Order] { _ = _lfCodecsReady; return _lfCodecOrder }
+func LeanfranCodecOrder() leanfran.Codec[Order] {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return _lfCodecOrder
+}
 
 type Order struct {
 	Item Item
@@ -113,25 +120,25 @@ func checkOrder(e *leanfran.ValidationError, v Order) {
 	leanfran.CheckAt(e, _lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, v.Item, "item")
 }
 
-func (v Order) LeanfranDesc() *schema.Desc { _ = _lfCodecsReady; return descOrder() }
+func (v Order) LeanfranDesc() *schema.Desc { _lfCodecsOnce.Do(_lfBuildCodecs); return descOrder() }
 
 func (v Order) Validate() error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.Validate(_lfCodecOrder, v, "Order")
 }
 
 func (v Order) MarshalJSON() ([]byte, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.MarshalJSON(_lfCodecOrder, v, "Order")
 }
 
 func (v Order) JSONSchema(target string) (map[string]any, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return schema.JSONSchema(descOrder(), target)
 }
 
 func (v *Order) UnmarshalJSON(data []byte) error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	out, err := leanfran.UnmarshalJSON(_lfCodecOrder, data, "Order")
 	if err != nil {
 		return err

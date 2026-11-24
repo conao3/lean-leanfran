@@ -7,6 +7,7 @@ import (
 	"github.com/conao3/leanfran-go/rt"
 	"github.com/conao3/leanfran-go/schema"
 	"math/big"
+	"sync"
 )
 
 var _lfCodecDiscount leanfran.Codec[Discount]
@@ -16,19 +17,25 @@ var _lfCodec1 leanfran.Codec[[]*big.Int]
 var _lfDescDiscount schema.Desc
 var _lfDescRange schema.Desc
 
-var _lfCodecsReady = func() struct{} {
+var _lfCodecsOnce sync.Once
+
+func _lfBuildCodecs() {
 	_lfCodecDiscount = leanfran.Ref(descDiscount, toDiscount, fromDiscount, checkDiscount)
 	_lfCodecRange = leanfran.Ref(descRange, toRange, fromRange, checkRange)
 	_lfCodec0 = leanfran.Big("nat", "")
 	_lfCodec1 = leanfran.Sequence("list", _lfCodec0)
 	_lfDescDiscount = schema.Desc{Name: "Discount", Kind: "inductive", Variants: []schema.Variant{{Name: "none", Tag: 0, Objects: 0, ScalarBytes: 0, Trivial: false, Positional: false, Fields: []schema.Field{}}, {Name: "percent", Tag: 1, Objects: 1, ScalarBytes: 0, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "p", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: map[string]string{"maximum": "100"}}}}, {Name: "fixed", Tag: 2, Objects: 1, ScalarBytes: 0, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "amount", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: nil}}}}}
 	_lfDescRange = schema.Desc{Name: "Range", Kind: "struct", Variants: []schema.Variant{{Name: "mk", Tag: 0, Objects: 2, ScalarBytes: 0, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "lo", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: nil}, {Key: "hi", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 1, Flat: false, OmitNone: false, Bounds: nil}}}}}
-	return struct{}{}
-}()
+}
+
+func init() { _lfCodecsOnce.Do(_lfBuildCodecs) }
 
 func descDiscount() *schema.Desc { return &_lfDescDiscount }
 
-func LeanfranCodecDiscount() leanfran.Codec[Discount] { _ = _lfCodecsReady; return _lfCodecDiscount }
+func LeanfranCodecDiscount() leanfran.Codec[Discount] {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return _lfCodecDiscount
+}
 
 type Discount interface {
 	isDiscount()
@@ -43,25 +50,28 @@ type DiscountNone struct {
 
 func (DiscountNone) isDiscount() {}
 
-func (v DiscountNone) LeanfranDesc() *schema.Desc { _ = _lfCodecsReady; return descDiscount() }
+func (v DiscountNone) LeanfranDesc() *schema.Desc {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return descDiscount()
+}
 
 func (v DiscountNone) Validate() error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.Validate(_lfCodecDiscount, Discount(v), "Discount")
 }
 
 func (v DiscountNone) MarshalJSON() ([]byte, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.MarshalJSON(_lfCodecDiscount, Discount(v), "Discount")
 }
 
 func (v DiscountNone) JSONSchema(target string) (map[string]any, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return schema.JSONSchema(descDiscount(), target)
 }
 
 func (v *DiscountNone) UnmarshalJSON(data []byte) error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	out, err := leanfran.UnmarshalJSON(_lfCodecDiscount, data, "Discount")
 	if err != nil {
 		return err
@@ -99,25 +109,28 @@ func NewDiscountPercent(a0 *big.Int) (DiscountPercent, error) {
 
 func (DiscountPercent) isDiscount() {}
 
-func (v DiscountPercent) LeanfranDesc() *schema.Desc { _ = _lfCodecsReady; return descDiscount() }
+func (v DiscountPercent) LeanfranDesc() *schema.Desc {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return descDiscount()
+}
 
 func (v DiscountPercent) Validate() error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.Validate(_lfCodecDiscount, Discount(v), "Discount")
 }
 
 func (v DiscountPercent) MarshalJSON() ([]byte, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.MarshalJSON(_lfCodecDiscount, Discount(v), "Discount")
 }
 
 func (v DiscountPercent) JSONSchema(target string) (map[string]any, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return schema.JSONSchema(descDiscount(), target)
 }
 
 func (v *DiscountPercent) UnmarshalJSON(data []byte) error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	out, err := leanfran.UnmarshalJSON(_lfCodecDiscount, data, "Discount")
 	if err != nil {
 		return err
@@ -160,25 +173,28 @@ type DiscountFixed struct {
 
 func (DiscountFixed) isDiscount() {}
 
-func (v DiscountFixed) LeanfranDesc() *schema.Desc { _ = _lfCodecsReady; return descDiscount() }
+func (v DiscountFixed) LeanfranDesc() *schema.Desc {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return descDiscount()
+}
 
 func (v DiscountFixed) Validate() error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.Validate(_lfCodecDiscount, Discount(v), "Discount")
 }
 
 func (v DiscountFixed) MarshalJSON() ([]byte, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.MarshalJSON(_lfCodecDiscount, Discount(v), "Discount")
 }
 
 func (v DiscountFixed) JSONSchema(target string) (map[string]any, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return schema.JSONSchema(descDiscount(), target)
 }
 
 func (v *DiscountFixed) UnmarshalJSON(data []byte) error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	out, err := leanfran.UnmarshalJSON(_lfCodecDiscount, data, "Discount")
 	if err != nil {
 		return err
@@ -267,13 +283,16 @@ func checkDiscount(e *leanfran.ValidationError, v Discount) {
 }
 
 func UnmarshalDiscount(data []byte) (Discount, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.UnmarshalJSON(_lfCodecDiscount, data, "Discount")
 }
 
 func descRange() *schema.Desc { return &_lfDescRange }
 
-func LeanfranCodecRange() leanfran.Codec[Range] { _ = _lfCodecsReady; return _lfCodecRange }
+func LeanfranCodecRange() leanfran.Codec[Range] {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	return _lfCodecRange
+}
 
 type Range struct {
 	Lo *big.Int
@@ -315,25 +334,25 @@ func checkRange(e *leanfran.ValidationError, v Range) {
 	}
 }
 
-func (v Range) LeanfranDesc() *schema.Desc { _ = _lfCodecsReady; return descRange() }
+func (v Range) LeanfranDesc() *schema.Desc { _lfCodecsOnce.Do(_lfBuildCodecs); return descRange() }
 
 func (v Range) Validate() error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.Validate(_lfCodecRange, v, "Range")
 }
 
 func (v Range) MarshalJSON() ([]byte, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return leanfran.MarshalJSON(_lfCodecRange, v, "Range")
 }
 
 func (v Range) JSONSchema(target string) (map[string]any, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	return schema.JSONSchema(descRange(), target)
 }
 
 func (v *Range) UnmarshalJSON(data []byte) error {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	out, err := leanfran.UnmarshalJSON(_lfCodecRange, data, "Range")
 	if err != nil {
 		return err

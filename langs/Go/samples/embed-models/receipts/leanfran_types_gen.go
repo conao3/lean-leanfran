@@ -7,6 +7,7 @@ import (
 	"github.com/conao3/leanfran-go"
 	"github.com/conao3/leanfran-go/rt"
 	"github.com/conao3/leanfran-go/schema"
+	"sync"
 )
 
 var _lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item leanfran.Codec[lfmod0.Item]
@@ -15,14 +16,17 @@ var _lfCodec1 leanfran.Codec[uint16]
 var _lfCodec2 leanfran.Codec[lfmod0.Order]
 var _lfDescModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item schema.Desc
 
-var _lfCodecsReady = func() struct{} {
+var _lfCodecsOnce sync.Once
+
+func _lfBuildCodecs() {
 	_lfCodecModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item = leanfran.Ref(descModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, toModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, fromModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item, checkModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item)
 	_lfCodec0 = leanfran.String()
 	_lfCodec1 = leanfran.Fixed[uint16]("uint", 16)
 	_lfCodec2 = lfmod0.LeanfranCodecOrder()
 	_lfDescModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item = schema.Desc{Name: "Item", GoType: "example.com/embed-models/orders.Item", Kind: "model", Variants: []schema.Variant{{Name: "mk", Tag: 0, Objects: 1, ScalarBytes: 2, Trivial: false, Positional: false, Fields: []schema.Field{{Key: "Name", Desc: _lfCodec0.Desc, Slot: "obj", Offset: 0, Flat: false, OmitNone: false, Bounds: map[string]string{"minLength": "1"}}, {Key: "Quantity", Desc: _lfCodec1.Desc, Slot: "u16", Offset: 8, Flat: false, OmitNone: false, Bounds: map[string]string{"maximum": "100", "minimum": "1"}}}}}}
-	return struct{}{}
-}()
+}
+
+func init() { _lfCodecsOnce.Do(_lfBuildCodecs) }
 
 func descModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item() *schema.Desc {
 	return &_lfDescModelLeanGoModelsP6578616d706c652e636f6d2f656d6265642d6d6f64656c732f6f7264657273Item

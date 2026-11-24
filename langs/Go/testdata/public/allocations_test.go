@@ -1,13 +1,10 @@
 package allocations
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 )
-
-var initialTwice, initialTwiceErr = Twice(big.NewInt(7))
-
-var initialTotal, initialTotalErr = Total(Order{Qty: big.NewInt(12), Price: big.NewInt(25)})
 
 func TestPackageInitializer(t *testing.T) {
 	if initialTwiceErr != nil || initialTwice.Int64() != 14 {
@@ -15,6 +12,13 @@ func TestPackageInitializer(t *testing.T) {
 	}
 	if initialTotalErr != nil || initialTotal.Int64() != 300 {
 		t.Fatal(initialTotal, initialTotalErr)
+	}
+	var order Order
+	if initialJSONErr != nil {
+		t.Fatal(initialJSONErr)
+	}
+	if err := json.Unmarshal(initialJSON, &order); err != nil || order.Qty.Int64() != 12 || order.Price.Int64() != 25 {
+		t.Fatal(order, err)
 	}
 }
 

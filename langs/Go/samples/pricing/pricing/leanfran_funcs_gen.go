@@ -9,7 +9,7 @@ import (
 )
 
 func Total(a0 []*big.Int, a1 Discount) (*big.Int, error) {
-	_ = _lfCodecsReady
+	_lfCodecsOnce.Do(_lfBuildCodecs)
 	var _lfValidation leanfran.ValidationError
 	leanfran.CheckAt(&_lfValidation, _lfCodec1, a0, "prices")
 	leanfran.CheckAt(&_lfValidation, _lfCodecDiscount, a1, "discount")
