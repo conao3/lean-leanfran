@@ -5,7 +5,7 @@ import pydantic
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from leanfran import Err, Lean, LeanType, Ok
+from leanfran import Err, Lean, LeanType, Local, Ok
 
 
 def test_scalars(pub):
@@ -118,6 +118,57 @@ def test_handle_types(pub):
     with pytest.raises(ValidationError, match="non-negative"):
         pub.double.lean(-1)
     assert not hasattr(pub.readBack, "lean")
+
+
+def test_local_handles(pub):
+    xs = pub.squares.local.params["xs"].new_local([1, -2, 3])
+    assert isinstance(xs, Local)
+    ys = pub.squares.local(xs)
+    assert ys.get() == [1, 4, 9]
+    assert xs.get() == [1, -2, 3]
+    zs = pub.squares.local(ys.take())
+    assert zs.get() == [1, 16, 81]
+    assert repr(ys) == "Local(<taken>)"
+    with pytest.raises(ValueError, match="take"):
+        ys.get()
+    with pytest.raises(ValueError, match="take"):
+        pub.squares.local(ys)
+    assert pub.squares.local([2]).get() == [4]
+    assert pub.answer.local().get() == 42
+    assert pub.mix.local(255, 65535, 1, 2, 3).get() == 255 + 65535 + 6
+    assert repr(zs) == "Local([1, 16, 81])"
+    with pytest.raises(ValidationError, match="expected a handle of list\\[Nat\\]"):
+        pub.sumList.local(zs)
+    assert not hasattr(pub.readBack, "local")
+
+
+def test_local_handles_update_in_place_only_when_taken(pub):
+    tree = pub.Tree.ofList.local([2, 1, 3])
+    kept = pub.Tree.insert.local(tree, 0)
+    assert pub.Tree.toList.local(tree).get() == [1, 2, 3]
+    assert pub.Tree.toList.local(kept).get() == [0, 1, 2, 3]
+    moved = pub.Tree.insert.local(kept.take(), 5)
+    assert pub.Tree.toList.local(moved).get() == [0, 1, 2, 3, 5]
+    assert pub.Tree.toList.local(tree).get() == [1, 2, 3]
+    assert pub.Tree.toList.local(tree.take()).get() == [1, 2, 3]
+    sample = pub.Sample.bump.local(pub.Sample(name="s", count=1, weight=0.5, flag=False, tags=["t"]))
+    again = pub.Sample.bump.local(sample)
+    third = pub.Sample.bump.local(again.take())
+    assert (sample.get().count, third.get().count) == (2, 4)
+
+
+def test_local_and_shared_handles_mix(pub):
+    local = pub.squares.local([1, 2])
+    shared = local.share()
+    assert isinstance(shared, Lean)
+    assert pub.squares.local(shared).get() == [1, 16]
+    assert pub.squares.local(local.take()).get() == [1, 16]
+    assert shared.get() == [1, 4]
+    other = pub.squares.local([3])
+    assert pub.squares.lean(other).get() == [81]
+    assert other.get() == [9]
+    assert pub.squares.local(other.take()).get() == [81]
+    assert pub.squares.lean(pub.squares.local([2]).take()).get() == [16]
 
 
 def test_argument_errors(pub):

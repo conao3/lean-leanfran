@@ -52,6 +52,9 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   let mut args := #[]
   let mut leanParams := #[]
   let mut leanStmts := #[]
+  let mut localParams := #[]
+  let mut localStmts := #[]
+  let mut localDone := #[]
   let mut leanTypes := #[]
   for h : i in [0:f.sig.params.size] do
     match f.sig.params[i] with
@@ -65,6 +68,10 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
       stmts := stmts.push s!"    __a{i} = _m.to_lean({dn}, {nm}, {quoteString nm})"
       leanParams := leanParams.push s!"{nm}: {quoteString s!"{desc.pyType} | Lean[{desc.pyType}]"}"
       leanStmts := leanStmts.push s!"    __a{i} = _m.lean_arg({tn}, {nm}, {quoteString nm})"
+      let borrowed := d.params[i]!.borrow
+      localParams := localParams.push s!"{nm}: {quoteString s!"{desc.pyType} | Lean[{desc.pyType}] | Local[{desc.pyType}]"}"
+      localStmts := localStmts.push s!"    __a{i} = _m.local_arg({tn}, {nm}, {quoteString nm}, {if borrowed then "False" else "True"})"
+      if borrowed then localDone := localDone.push s!"    _m.local_done({nm}, __a{i})"
       leanTypes := leanTypes.push s!"{quoteString nm}: {tn}"
       args := args.push s!"__a{i}"
   let irArgs := (d.params.zip args).filter (fun (p, _) => !p.ty.isVoid) |>.map (·.2)
@@ -81,10 +88,15 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   let leanSrc := if f.sig.est then "" else
     s!"def {pyName}__lean({joinArgs leanParams}) -> {quoteString s!"Lean[{f.sig.result.pyType}]"}:\n    {quoteString s!"Lean `{f.lean}`, on handles."}\n" ++
     String.join (leanStmts.toList.map (· ++ "\n")) ++ s!"    return _m.handle({rt}, {call})\n\n\n"
+  let localSrc := if f.sig.est then "" else
+    s!"def {pyName}__local({joinArgs localParams}) -> {quoteString s!"Local[{f.sig.result.pyType}]"}:\n    {quoteString s!"Lean `{f.lean}`, on local handles."}\n" ++
+    String.join (localStmts.toList.map (· ++ "\n")) ++
+    (if localDone.isEmpty then s!"    return _m.local_handle({rt}, {call})\n\n\n"
+     else s!"    __r = {call}\n" ++ String.join (localDone.toList.map (· ++ "\n")) ++ s!"    return _m.local_handle({rt}, __r)\n\n\n")
   let leanArgs := if f.sig.est then "" else
-    s!", {pyName}__lean, \{{", ".intercalate leanTypes.toList}}, {rt}"
+    s!", {pyName}__lean, \{{", ".intercalate leanTypes.toList}}, {rt}, {pyName}__local"
   let attach := s!"_m.attach(globals(), {pyList f.path}, {pyName}, {quoteString (toString f.lean)}{leanArgs})\n"
-  return (src ++ leanSrc ++ attach, tbl)
+  return (src ++ leanSrc ++ localSrc ++ attach, tbl)
 
 def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
     (typeModules : Array (Name × String × Bool) := #[]) : CoreM (Except String GenOutput) := do
@@ -123,7 +135,7 @@ def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
       | .error e => return .error e
     let types := String.join (st.types.toList.map (emitTypeDef · ++ "\n\n"))
     let imports := String.join (st.extImports.toList.map fun (a, m) => s!"import {m} as {a}  # noqa: E402\n")
-    let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Gt, Le, Lt, MaxLen, MinLen  # noqa: E402\n\nfrom leanfran import marshal as _m  # noqa: E402\nfrom leanfran.marshal import Err, Lean, Ok  # noqa: E402\nfrom leanfran.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n" ++
+    let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Gt, Le, Lt, MaxLen, MinLen  # noqa: E402\n\nfrom leanfran import marshal as _m  # noqa: E402\nfrom leanfran.marshal import Err, Lean, Local, Ok  # noqa: E402\nfrom leanfran.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n" ++
       imports ++ "\n\n" ++ types ++ String.join (tbl.defs.toList.map (· ++ "\n")) ++ "\n\n" ++ fns ++ "_m.finish(globals())\n"
     return .ok { items := out.items, publicItems := pub, externs := out.externs, decls := out.decls,
                  publics := publics.map fun f => (f.lean, ".".intercalate f.path.toList), skipped }
