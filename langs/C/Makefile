@@ -16,3 +16,11 @@ format:
 
 format-check:
 	$(clang_format) --dry-run --Werror $(c_sources)
+
+c_sources += $(wildcard tests/verify/*.c)
+
+.PHONY: check-model
+check: check-model
+
+check-model: build
+	../../maint/C/test-model.sh

@@ -1,6 +1,6 @@
 name = "leanfran-c"
 version = "0.10.0"
-defaultTargets = ["leanfran-c"]
+defaultTargets = ["leanfran-c", "LeanCLib"]
 
 [[lean_lib]]
 name = "LeanC"
@@ -14,3 +14,12 @@ text = true
 name = "leanfran-c"
 root = "Main"
 supportInterpreter = true
+
+[[lean_lib]]
+name = "LeanCLib"
+srcDir = "lean"
+globs = ["LeanCLib.+"]
+
+[[lean_lib]]
+name = "ModelOps"
+srcDir = "tests/verify"
