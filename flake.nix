@@ -74,6 +74,7 @@
                     (./. + "/langs/${backend}/${library}")
                   ]
                   ++ pkgs.lib.optional (backend == "Go") ./langs/Go/lean/LeanGoLib
+                  ++ pkgs.lib.optional (backend == "C") ./langs/C/support
                 );
               };
               postUnpack = ''sourceRoot="$sourceRoot/langs/${backend}"'';
@@ -93,6 +94,9 @@
               ''
               + pkgs.lib.optionalString (backend == "Go") ''
                 install -Dm644 lean/LeanGoLib/Go.lean $out/share/leanfran-go/LeanGoLib/Go.lean
+              ''
+              + pkgs.lib.optionalString (backend == "C") ''
+                install -Dm644 -t $out/share/leanfran-c support/leanfran.h support/leanfran.c
               ''
               + ''
                 runHook postInstall
@@ -152,6 +156,15 @@
               pkgs.gnumake
             ]
             ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.gcc;
+          cTools = [
+            pkgs.clang-tools
+            pkgs.cmake
+            pkgs.pkg-config
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            pkgs.gcc
+            pkgs.clang
+          ];
           pythonEnv = {
             UV_PYTHON_DOWNLOADS = "never";
             UV_PYTHON = "${pkgs.python314}/bin/python3";
@@ -165,6 +178,7 @@
             clojure = mkCompiler "Clojure" "LeanClj" "leanfran";
             php = mkCompiler "PHP" "LeanPhp" "leanfran-php";
             go = mkCompiler "Go" "LeanGo" "leanfran-go";
+            c = mkCompiler "C" "LeanC" "leanfran-c";
             cargo-leanfran = pkgs.rustPlatform.buildRustPackage {
               pname = "cargo-leanfran";
               inherit version;
@@ -208,6 +222,7 @@
                 ++ clojureTools
                 ++ phpTools pkgs.php84
                 ++ goTools pkgs.go
+                ++ cTools
               );
               env = pythonEnv;
             };
@@ -222,6 +237,7 @@
             php85 = pkgs.mkShell { packages = common ++ phpTools pkgs.php85; };
             go = pkgs.mkShell { packages = common ++ goTools pkgs.go; };
             go126 = pkgs.mkShell { packages = common ++ goTools pkgs.go_1_26; };
+            c = pkgs.mkShell { packages = common ++ cTools; };
           };
           treefmt = {
             projectRootFile = "flake.nix";
