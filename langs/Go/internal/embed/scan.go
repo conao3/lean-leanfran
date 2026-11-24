@@ -102,7 +102,7 @@ func (p *project) scanPackage(dir string) error {
 		if isGenerated(data) {
 			continue
 		}
-		f, err := parser.ParseFile(pkg.fset, file, data, parser.SkipObjectResolution)
+		f, err := parser.ParseFile(pkg.fset, file, data, parser.SkipObjectResolution|parser.ParseComments)
 		if err != nil {
 			return err
 		}

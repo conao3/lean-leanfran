@@ -1,12 +1,14 @@
 import LeanGo
+import LeanGo.Check
 
 open Lean LeanGo
 
 def version : String := "0.8.0"
-def generatorVersion : String := "5"
+def generatorVersion : String := "6"
 
 def usage : String := "leanfran-go --version | --generator-version
 leanfran-go module generate --module-name <Name> [options]
+leanfran-go obligations check --modules <Name> ... --obligations <file>
 
   --roots <Name> ...          Lean definitions to compile
   --namespace <Name>          Strip this prefix from public names
@@ -96,7 +98,9 @@ def parseModel (j : Json) : Except String ModelSpec := do
   let name ← j.getObjValAs? String "name"
   let fields ← modelMap j "fields"
   let cases ← modelMap j "cases"
-  return { lean, path, name, fields, cases }
+  let plain := (← optionalField (α := Bool) j "plain").getD false
+  let restricted := (← optionalField (α := Bool) j "restricted").getD false
+  return { lean, path, name, fields, cases, plain, restricted }
 
 def parseJobs (j : Json) (internalOnly : Bool) : Except String (Array Job) := do
   let jobs ← j.getArr?
@@ -227,7 +231,11 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
       | .error reason => return ← failed 254 reason
     let files ← writePublic dir sources
     let skipped := publicModule.skipped.map fun s => Json.mkObj [("name", toString s.name), ("reason", s.reason)]
-    return (Json.mkObj [("module", mod), ("package", pkg), ("files", toJson files), ("skipped", toJson skipped)], 0)
+    let functions := Json.mkObj (publicModule.functions.toList.map fun f =>
+      ((stripName strip f.source).toString, toJson f.ident))
+    return (Json.mkObj [("module", mod), ("package", pkg), ("files", toJson files),
+      ("skipped", toJson skipped), ("functions", functions),
+      ("types", verificationTypes publicModule.state job.goPath)], 0)
   let roots := if job.roots.isEmpty then defaultRoots env job else job.roots.map (csimpTarget env)
   let source ← match generate env job.module roots pkg job.main? generatorVersion job.internalOnly with
     | .ok source => pure source
@@ -283,6 +291,27 @@ unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
     for summary in summaries do printSummary o summary (o.batch.isNone && o.outputFile.isNone && o.outputDir.isNone)
   return code
 
+unsafe def checkObligations (args : List String) : IO UInt32 := do
+  let modules := args.takeWhile (! ·.startsWith "--")
+  if modules.isEmpty then return ← fail 252 "--modules requires at least one name"
+  let ["--obligations", file] := args.drop modules.length
+    | return ← fail 252 "expected --modules <Name> ... --obligations <file>"
+  let refs ← match Json.parse (← IO.FS.readFile file) >>= parseObligations with
+    | .ok refs => pure refs
+    | .error message => return ← fail 252 s!"{file}: {message}"
+  enableInitializersExecution
+  initSearchPath (← findSysroot)
+  let names := modules.toArray.map String.toName
+  let searchPath ← searchPathRef.get
+  for m in names do
+    if (← searchPath.findWithExt "olean" m).isNone then
+      return ← fail 252 s!"module not found: {m}"
+  let env ← importModules (names.map fun m => { module := m }) {} (loadExts := true)
+  let ctx : Core.Context := { fileName := file, fileMap := default, maxHeartbeats := 0 }
+  let (results, _) ← ((refs.mapM checkObligation).run').toIO ctx { env }
+  IO.println (Json.arr results).compress
+  return 0
+
 unsafe def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] => IO.println version; return 0
@@ -294,4 +323,8 @@ unsafe def main (args : List String) : IO UInt32 := do
     | .ok o =>
       try moduleGenerate o
       catch e => fail 255 (toString e)
+  | ["obligations", "check", "--help"] => IO.print usage; return 0
+  | "obligations" :: "check" :: "--modules" :: rest =>
+    try checkObligations rest
+    catch e => fail 255 (toString e)
   | _ => fail 252 "unknown command (see leanfran-go help)"

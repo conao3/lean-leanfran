@@ -1,3 +1,3 @@
 package leanfran
 
-const GeneratorVersion = 5
+const GeneratorVersion = 6

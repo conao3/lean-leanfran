@@ -1,0 +1,10 @@
+{
+  "block": "example.com/verified-nibble",
+  "hash": "3273204fb6d06f32378ccd3baed736492606ce900648f1f2375bf49e5eefd946",
+  "generator_version": 6,
+  "files": [
+    "leanfran_types_gen.go",
+    "leanfran_funcs_gen.go",
+    "leanfran_lean_gen.go"
+  ]
+}

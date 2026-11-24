@@ -18,6 +18,17 @@ name = "LeanGoEmbed"
 
 [[lean_lib]]
 name = "LeanGoModels"
+
+[[lean_lib]]
+name = "LeanGoLib"
+
+[[lean_lib]]
+name = "LeanGoModel"
+srcDir = "verification"
+
+[[lean_lib]]
+name = "Proofs"
+srcDir = "verification"
 `)
 	for _, require := range requirements {
 		out.WriteString("\n[[require]]\n")

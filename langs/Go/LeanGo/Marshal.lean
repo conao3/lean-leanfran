@@ -113,6 +113,8 @@ structure ModelSpec where
   name : String
   fields : Std.TreeMap String String := {}
   cases : Std.TreeMap String String := {}
+  plain : Bool := false
+  restricted : Bool := false
   deriving Inhabited
 
 partial def Desc.modelField (d : Desc) (shape : String) : Desc :=

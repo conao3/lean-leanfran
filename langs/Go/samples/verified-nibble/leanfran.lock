@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "hash": "c0fdf40e296f72326b982d76adb3b4dc59e03f457891762e75b29d793a8e80bf",
+  "obligations": [
+    {
+      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d6e6962626c65.Nibble",
+      "label": "in_range",
+      "status": "proved",
+      "axioms": [
+        "Quot.sound",
+        "propext"
+      ],
+      "file": "lean/Proofs/Nibble.lean",
+      "line": 12
+    },
+    {
+      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d6e6962626c65.Nibble",
+      "label": "refines",
+      "status": "proved",
+      "axioms": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "file": "lean/Proofs/Nibble.lean",
+      "line": 6
+    }
+  ]
+}
