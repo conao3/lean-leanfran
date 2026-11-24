@@ -235,6 +235,43 @@ Generated functions can run concurrently. Each call copies input data into Lean'
 
 To reuse public types from a generated library, use `--type-module Library.Namespace=example.com/myapp/library` when generating the consumer. Generate both packages using the Lean namespace on the left as the library's naming prefix. The consumer imports the library's Go types and conversion functions.
 
+## Keep Lean values with `Value[T]`
+
+Use the ordinary wrappers for Go data such as input from JSON. Use handles when Go keeps a Lean value across calls, such as a server's snapshot. A `leanfran.Value[T]` owns one Lean reference. The generated `New<T>Value` validates and converts Go data once. `Read<T>Value` copies it back when Go needs the contents.
+
+For a generated function `F`, `FValue` accepts `leanfran.ValueInput[T]` for each argument. Pass `v.Borrow()` to keep using `v` or `v.Take()` to transfer its reference at the start of the call. If the Lean function can update an exclusively owned object in place, `Take` lets it do so. Copies of a Go handle refer to the same owner. Taking it empties every copy. `v.Close()` releases the reference and can be called on an empty handle. Reading or passing an empty handle panics. Unreachable handles also release their references through Go's garbage collector.
+
+Handle functions return `(leanfran.Value[T], error)`, or just `error` for `Unit`. A top-level product returns two handles and an error. For an `Except E (A × B)`, the two handles hold the successful product fields. Use `errors.As` for `*leanfran.ExceptError[E]` when the error has a Go representation, or `*leanfran.ExceptError[leanfran.Value[E]]` for an opaque Lean error. Use `leanfran.SplitValue` on a product already held in a handle. The JSON summary's `valueFunctions` map gives the generated names, including collision suffixes.
+
+Named Lean data types use their generated Go type as the handle parameter. Built-in type markers distinguish types with a shared Go representation, such as `leanfran.NatType` and `leanfran.IntType`, or `leanfran.ListType[T]` and `leanfran.ArrayType[T]`. Types with decidable proof fields use the existing validated Go conversion. Types with proofs that Go cannot validate and types containing `Std.HashMap` get opaque type markers. Construct and inspect those values through Lean functions that take and return handles.
+
+Use one server mutex around a sequence that reads, updates, and replaces its snapshot. The runtime serializes individual handle operations and reference releases, including releases by the garbage collector, because separate handles can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `TransitionValue` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
+
+```go
+s.mu.Lock()
+defer s.mu.Unlock()
+next, reply, err := inventory.TransitionValue(s.snapshot.Borrow(), command.Take())
+if err != nil {
+    return 0, err
+}
+defer reply.Close()
+s.snapshot.Close()
+s.snapshot = next
+return inventory.ReadUInt64Value(reply), nil
+```
+
+The kernel fixture measures one `transition` and one `apply` on the first row, including reading the reply in Go. Each run starts with a snapshot of the given size. The handle benchmark prepares the actor and command before timing.
+
+On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU was:
+
+| Snapshot rows | Ordinary Go wrappers | Handle wrappers |
+| ---: | ---: | ---: |
+| 10 | 8.64 µs, 78 allocs | 1.54 µs, 6 allocs |
+| 100 | 71.56 µs, 582 allocs | 1.74 µs, 6 allocs |
+| 1,000 | 728.79 µs, 5,541 allocs | 1.86 µs, 6 allocs |
+
+At 100 rows, enclosing the handle calls in the server mutex took 2.05 µs with 6 allocations. Converting a new Go command on every iteration took 2.72 µs with 9 allocations.
+
 ## JSON and JSON Schema
 
 Generated types implement `json.Marshaler`. Use `json.Unmarshal` for structs, enums, and a known constructor. For an interface, use `Unmarshal<Type>(data)` to select the constructor from JSON.
@@ -245,4 +282,4 @@ Call a generated value's `JSONSchema(target)` method with `draft-2020-12`, `draf
 
 ## Skipped definitions
 
-The public generator accepts concrete data types and monomorphic functions. The summary identifies indexed families, type classes, propositions, private declarations, constructors with type fields, and propositions without a synthesizable `Decidable` instance. The public layer also skips function-valued types and types from the `Std`, `Lean`, `IO`, and `System` namespaces, along with `Thunk` and `Task`. Public functions can return `IO` results.
+The public generator accepts concrete data types and monomorphic functions. The summary identifies indexed families, type classes, propositions, private declarations, constructors with type fields, and propositions without a synthesizable `Decidable` instance that it skips for Go data conversion. The public layer also skips function-valued types and types from the `Std`, `Lean`, `IO`, and `System` namespaces, along with `Thunk` and `Task`. Public functions can return `IO` results.

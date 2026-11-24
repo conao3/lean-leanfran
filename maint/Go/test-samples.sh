@@ -44,3 +44,16 @@ CGO_ENABLED=0 go build -o "$out/pricing" ./samples/pricing
 "$out/pricing" > "$out/pricing.out"
 printf '1800\n{"hi":3,"lo":1}\n' | diff -u - "$out/pricing.out"
 printf 'sample pricing passes\n'
+
+lean --root=samples/value-server -o "$out/Inventory.olean" samples/value-server/Inventory.lean
+"$compiler" module generate --module-name Inventory --search-path "$out" \
+    --output text --output-dir "$source/inventory"
+test -z "$(gofmt -l "$source/inventory" samples/value-server)"
+for file in "$source/inventory/"*_gen.go; do
+    cmp "$file" "samples/value-server/inventory/${file##*/}"
+done
+go vet ./samples/value-server/...
+CGO_ENABLED=0 go build -o "$out/value-server" ./samples/value-server
+"$out/value-server" > "$out/value-server.out"
+printf '200 3\n409 outOfStock\n200 2\n' | diff -u - "$out/value-server.out"
+printf 'sample value-server passes\n'

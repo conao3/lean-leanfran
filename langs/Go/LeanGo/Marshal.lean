@@ -67,6 +67,7 @@ inductive Desc where
   | fin (n : Nat)
   | named (ident : String)
   | foreign (ns ident : String)
+  | opaque (ident : String)
   deriving Inhabited, BEq
 
 structure FieldInfo where
@@ -146,6 +147,8 @@ structure MarshalState where
   foreignTypes : Std.HashMap (String × String) TypeDef := {}
   deciders : Array Name := #[]
   subtypes : Nat := 0
+  opaqueTypes : Array String := #[]
+  opaqueByType : Std.HashMap Lean.Expr Desc := {}
 
 abbrev MarshalM := StateRefT MarshalState (ReaderT MarshalCfg MetaM)
 
@@ -164,6 +167,15 @@ def freshIdent (base : String) : MarshalM String := do
   let (nm, claims) ← ofExcept (st.idents.claim base)
   modify fun s => { s with idents := claims }
   return nm
+
+def freshHandleIdent (base : String) : MarshalM String := do
+  let used := (← get).idents.used
+  let mut name := base
+  let mut index := 1
+  while used.contains name do
+    index := index + 1
+    name := s!"{base}_{index}"
+  freshIdent name
 
 def deciderName (ident ctor field : String) : MetaM Name := do
   let n := Name.str (.str (.str (.str .anonymous "LeanGoGen") ident) ctor) (field ++ "_decide")
@@ -439,6 +451,47 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
 
 end
 
+partial def handleDescOf (type : Lean.Expr) : MarshalM Desc := do
+  let state ← get
+  let env ← getEnv
+  try return ← descOf type
+  catch e =>
+    if (← e.toMessageData.toString).startsWith collisionLabel then throw e
+    setEnv env
+    set state
+  let t := (← whnfR (← instantiateMVars type)).consumeMData
+  if let some desc := (← get).opaqueByType[t]? then return desc
+  let .const c _ := t.getAppFn | throwError "unsupported handle type `{t}`"
+  let args := t.getAppArgs
+  match c, args with
+  | ``List, #[a] => return .list (← handleDescOf a)
+  | ``Array, #[a] => return .array (← handleDescOf a)
+  | ``Option, #[a] => return .option (← handleDescOf a)
+  | ``Prod, #[a, b] => return .prod (← handleDescOf a) (← handleDescOf b)
+  | ``Except, #[e, a] => return .except (← handleDescOf e) (← handleDescOf a)
+  | _, _ =>
+    if t.hasFVar || (← isProp t) || isPrivateName c ||
+        (type.getAppFn.constName?.any isPrivateName) then
+      throwError "unsupported handle type `{t}`"
+    let hashMap := c == `Std.HashMap || c == `Std.DHashMap
+    unless hashMap do
+      if unsupportedTypes.contains c || unsupportedRoots.contains c.getRoot then
+        throwError "unsupported handle type `{t}`"
+      let some (.inductInfo ind) := env.find? c | throwError "unsupported handle type `{t}`"
+      unless ind.numIndices == 0 && ind.numParams == args.size && !isClass env c do
+        throwError "unsupported handle type `{t}`"
+    let names ← (if hashMap then args[:2].toArray else args).mapM fun arg => return toString (← ppExpr arg)
+    let ident ← freshHandleIdent (typeIdentOf (← read).strip c names)
+    let desc := Desc.opaque ident
+    modify fun s => { s with opaqueByType := s.opaqueByType.insert t desc, opaqueTypes := s.opaqueTypes.push ident }
+    return desc
+
+partial def Desc.convertible : Desc → Bool
+  | .opaque _ => false
+  | .list d | .array d | .option d => d.convertible
+  | .prod a b | .except a b => a.convertible && b.convertible
+  | _ => true
+
 inductive ParamKind where
   | value (name : String) (d : Desc)
   | world
@@ -449,7 +502,8 @@ structure PublicSig where
   result : Desc
   io : Bool
 
-def publicSig (name : Name) (ps : Array Param) : MarshalM PublicSig := do
+def publicSig (name : Name) (ps : Array Param) (describe : Lean.Expr → MarshalM Desc := descOf) :
+    MarshalM PublicSig := do
   let some ci := (← getEnv).find? name | throwError "unknown constant {name}"
   forallBoundedTelescope ci.type ps.size fun xs body => do
     if xs.size != ps.size then
@@ -468,7 +522,7 @@ def publicSig (name : Name) (ps : Array Param) : MarshalM PublicSig := do
       if ← isProp ldecl.type then throwError "takes a proof argument `{ldecl.userName}`"
       if (← whnf ldecl.type).isSort then throwError "polymorphic (takes the type `{ldecl.userName}`)"
       if ldecl.binderInfo.isInstImplicit then throwError "takes an instance argument `{ldecl.type}`"
-      let d ← descOf ldecl.type
+      let d ← describe ldecl.type
       let base := if ldecl.userName.hasMacroScopes then s!"arg{i}"
         else camelJoin (componentString ldecl.userName.eraseMacroScopes)
       let base := if base.isEmpty then s!"arg{i}" else base
@@ -478,7 +532,7 @@ def publicSig (name : Name) (ps : Array Param) : MarshalM PublicSig := do
         nm := s!"{base}{k}"; k := k + 1
       used := used.insert nm
       params := params.push (.value nm d)
-    let result ← if io then descOf reduced.getAppArgs[2]! else descOf body
+    let result ← if io then describe reduced.getAppArgs[2]! else describe body
     return { params, result, io }
 
 end LeanGo

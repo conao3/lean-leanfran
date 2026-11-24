@@ -640,6 +640,17 @@ def emitMain (env : Environment) (d : Decl) (hasInitializers internalOnly : Bool
   let initCall := if hasInitializers then "\tinitializeLean()\n" else ""
   return s!"func main() \{\n\tdefer rt.RecoverInternalPanic()\n{initCall}\trt.Lean_run_main(func({argDecl} rt.V, _ rt.V) rt.V \{\n\t\treturn {methodName internalOnly n}({args})\n\t}, {hasArgs}, {returnsCode})\n}\n"
 
+def checkExterns (env : Environment) (exports : Std.HashMap String Name) (decls : Array Decl) :
+    Except String Unit := do
+  let mut missing : Array String := #[]
+  for d in decls do
+    if let .extern f .. := d then
+      let some sym := externSymbol env f | throw s!"extern without a C symbol: {f}"
+      unless exports.contains sym || runtimeExterns.contains sym || missing.contains sym do
+        missing := missing.push sym
+  unless missing.isEmpty do
+    throw s!"externs not in the runtime: {joinArgs (missing.qsort (· < ·))}"
+
 def generate (env : Environment) (mod : Name) (roots : Array Name) (pkg : String)
     (main? : Option Name) (generatorVersion : String) (internalOnly : Bool) : Except String String := do
   let targets := roots.map (csimpTarget env)
@@ -654,14 +665,7 @@ def generate (env : Environment) (mod : Name) (roots : Array Name) (pkg : String
     inits := next
     decls ← collect env exports (baseRoots ++ inits.roots)
   decls := decls.qsort (fun a b => Name.lt a.name b.name)
-  let mut missing : Array String := #[]
-  for d in decls do
-    if let .extern f .. := d then
-      let some sym := externSymbol env f | throw s!"extern without a C symbol: {f}"
-      unless exports.contains sym || runtimeExterns.contains sym || missing.contains sym do
-        missing := missing.push sym
-  unless missing.isEmpty do
-    throw s!"externs not in the runtime: {joinArgs (missing.qsort (· < ·))}"
+  checkExterns env exports decls
   let declMap := decls.foldl (fun m d => m.insert d.name d) ({} : Std.HashMap Name Decl)
   let mut edges : Std.HashMap Name TailEdges := {}
   let mut papTargets : Std.HashSet Name := {}

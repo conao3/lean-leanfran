@@ -14,12 +14,54 @@ structure PublicFn where
   ident : String
   sig : PublicSig
 
+structure ValueConversion where
+  desc : Desc
+  newIdent : String
+  readIdent : String
+
 structure PublicModule where
   state : MarshalState
   functions : Array PublicFn
   skipped : Array Skipped
+  handles : Array PublicFn
+  conversions : Array ValueConversion
 
 def isNameCollision (reason : String) : Bool := reason.startsWith collisionLabel
+
+partial def Desc.valueStem : Desc → String
+  | .nat => "Nat"
+  | .int => "Int"
+  | .bool => "Bool"
+  | .char => "Char"
+  | .string => "String"
+  | .float => "Float"
+  | .float32 => "Float32"
+  | .unit => "Unit"
+  | .bytes => "ByteArray"
+  | .uint b => s!"UInt{b}"
+  | .sint b => s!"Int{b}"
+  | .hostInt signed => if signed then "GoInt" else "GoUint"
+  | .usize => "USize"
+  | .isize => "ISize"
+  | .fin n => s!"Fin{n}"
+  | .list d => "List" ++ d.valueStem
+  | .array d => "Array" ++ d.valueStem
+  | .option d => "Option" ++ d.valueStem
+  | .prod a b => "Pair" ++ a.valueStem ++ b.valueStem
+  | .except e a => "Except" ++ e.valueStem ++ a.valueStem
+  | .foreign _ n | .named n | .opaque n => n
+
+partial def Desc.valueDependencies (d : Desc) : List Desc :=
+  let children := match d with
+    | .list a | .array a | .option a => a.valueDependencies
+    | .prod a b | .except a b => a.valueDependencies ++ b.valueDependencies
+    | _ => []
+  if d.convertible then children ++ [d] else children
+
+def PublicSig.valueInputs (sig : PublicSig) : List Desc :=
+  sig.result.valueDependencies ++ (sig.params.toList.flatMap fun
+    | .value _ d => d.valueDependencies
+    | .world => [])
 
 def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
   let env ← getEnv
@@ -52,7 +94,36 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
       setEnv savedEnv
       set saved
       skipped := skipped.push { name := r, reason }
-  return { state := ← get, functions, skipped }
+  let mut handles := #[]
+  for r in roots do
+    let saved ← get
+    let savedEnv ← getEnv
+    try
+      if isPrivateName r then continue
+      let some target := IR.findEnvDecl env (csimpTarget env r) | continue
+      let previous := functions.find? (·.source == r)
+      let sig ← match previous with
+        | some f => pure f.sig
+        | none =>
+          let sig ← publicSig r target.params handleDescOf
+          let exports := exportedFns env
+          discard <| ofExcept (collect env exports #[target.name] >>= checkExterns env exports)
+          pure sig
+      let base := (previous.map (·.ident)).getD (publicMethod cfg.strip r)
+      let ident ← freshHandleIdent (base ++ "Value")
+      handles := handles.push { source := r, target, ident, sig }
+    catch e =>
+      if isNameCollision (← e.toMessageData.toString) then throw e
+      setEnv savedEnv
+      set saved
+  let types := (← get).types.toList.filter (fun t => !t.anonymous && t.model.isNone)
+  let inputs := types.map (fun t => Desc.named t.ident) ++ handles.toList.flatMap (·.sig.valueInputs)
+  let conversions ← inputs.eraseDups.toArray.mapM fun desc => do
+    let stem := desc.valueStem ++ "Value"
+    let newIdent ← freshHandleIdent ("New" ++ stem)
+    let readIdent ← freshHandleIdent ("Read" ++ stem)
+    return { desc, newIdent, readIdent }
+  return { state := ← get, functions, skipped, handles, conversions }
 
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
     IO (PublicModule × Environment) := do
@@ -93,11 +164,37 @@ partial def Desc.go (cfg : RenderCfg) : Desc → String
   | .prod a b => s!"leanfran.Pair[{a.go cfg}, {b.go cfg}]"
   | .except e a => s!"leanfran.Except[{e.go cfg}, {a.go cfg}]"
   | .foreign path name => s!"{cfg.alias path}.{name}"
+  | .opaque name => name
   | .named name =>
     match cfg.findType name with
     | { model := some m, .. } => if m.path == cfg.goPath then m.name else s!"{cfg.alias m.path}.{m.name}"
     | { anonymous := true, kind := .subtype d .., .. } => d.go cfg
     | _ => name
+
+partial def Desc.valueType (cfg : RenderCfg) (d : Desc) : String :=
+  match d with
+  | .nat => "leanfran.NatType"
+  | .int => "leanfran.IntType"
+  | .char => "leanfran.CharType"
+  | .usize => "leanfran.USizeType"
+  | .isize => "leanfran.ISizeType"
+  | .bytes => "[]byte"
+  | .fin n =>
+    let digits := (toString n).toList
+    let tag := String.join (digits.map (fun c => s!"[{c}]")) ++ "struct{}"
+    s!"leanfran.FinType[{tag}]"
+  | .list a => s!"leanfran.ListType[{a.valueType cfg}]"
+  | .array a => s!"leanfran.ArrayType[{a.valueType cfg}]"
+  | .option a => s!"leanfran.OptionType[{a.valueType cfg}]"
+  | .prod a b => s!"leanfran.PairType[{a.valueType cfg}, {b.valueType cfg}]"
+  | .except a b => s!"leanfran.ExceptType[{a.valueType cfg}, {b.valueType cfg}]"
+  | .named name =>
+    let t := cfg.findType name
+    if t.anonymous || t.model.isSome then name else d.go cfg
+  | _ => d.go cfg
+
+def Desc.value (cfg : RenderCfg) (d : Desc) : String :=
+  s!"leanfran.Value[{d.valueType cfg}]"
 
 def Desc.codec (cfg : RenderCfg) (d : Desc) : String :=
   match d with
@@ -128,6 +225,7 @@ def Desc.codecExpr (cfg : RenderCfg) : Desc → String
   | .except e a => s!"leanfran.Result({e.codec cfg}, {a.codec cfg})"
   | .foreign path name => s!"{cfg.alias path}.LeanfranCodec{name}()"
   | .named name => s!"leanfran.Ref(desc{name}, to{name}, from{name}, check{name})"
+  | .opaque _ => ""
 
 def boundsCode (bs : Array (String × Int)) : String :=
   if bs.isEmpty then "nil" else
@@ -368,6 +466,75 @@ def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
     "\t_lfCodecsOnce.Do(_lfBuildCodecs)\n"
   return s!"func {f.ident}({joinArgs binders}) {signature} \{\n{ready}{checkBody}{ownership}{run}{cleanup}{branch}\treturn {output}\n}\n\n"
 
+def emitValueConversion (cfg : RenderCfg) (c : ValueConversion) : String :=
+  let ty := c.desc.go cfg
+  let marker := c.desc.valueType cfg
+  let wrapped := c.desc.value cfg
+  let codec := c.desc.codec cfg
+  let ready := "_lfCodecsOnce.Do(_lfBuildCodecs)"
+  s!"func {c.newIdent}(v {ty}) ({wrapped}, error) \{\n\t{ready}\n\treturn leanfran.NewValue[{marker}]({codec}, v, {quoteGo c.desc.valueStem})\n}\n\n" ++
+  s!"func {c.readIdent}(v {wrapped}) {ty} \{\n\t{ready}\n\treturn leanfran.ReadValue({codec}, v)\n}\n\n"
+
+def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
+  let ret := f.sig.result
+  let result := match ret with | .except _ a => a | _ => ret
+  let results := match result with | .unit => #[] | .prod a b => #[a, b] | d => #[d]
+  let types := results.map (·.value cfg)
+  let signature := if types.isEmpty then "error" else s!"({joinArgs (types.push "error")})"
+  let zeroes := types.map (· ++ "{}")
+  let fail := joinArgs (zeroes.push "err")
+  let mut args := #[]
+  let mut binders := #[]
+  let mut inputs := #[]
+  let mut ownership := ""
+  for (param, i) in f.sig.params.zipIdx do
+    match param with
+    | .world => continue
+    | .value _ d =>
+      let x := s!"a{i}"
+      let some p := f.target.params[i]? | throw s!"incompatible IR parameters for {f.target.name}"
+      binders := binders.push s!"{x} leanfran.ValueInput[{d.valueType cfg}]"
+      let input := s!"inputs[{inputs.size}].Lean()"
+      inputs := inputs.push s!"{x}.Use()"
+      if !liveParam p then
+        ownership := ownership ++ s!"\tdefer rt.Lean_dec({input})\n"
+      else
+        if p.borrow && p.ty.isPossibleRef then
+          ownership := ownership ++ s!"\tdefer rt.Lean_dec({input})\n"
+        args := args.push (unbox p.ty input)
+  unless args.size == (f.target.params.filter liveParam).size do
+    throw s!"incompatible IR parameters for {f.target.name}"
+  let prepare := if inputs.isEmpty then "" else
+    s!"\tinputs := [{inputs.size}]leanfran.ValueUse\{{joinArgs inputs}}\n\tleanfran.AcquireValueInputs(inputs[:])\n"
+  let call := s!"{methodName false f.target.name}({joinArgs args})"
+  let ty := f.target.resultType
+  let keepResult := ret != .unit || f.sig.io
+  let run := if !keepResult && !ty.isPossibleRef then s!"\t{call}\n" else
+    s!"\traw := {box ty call}\n"
+  let io := if !f.sig.io then "" else
+    s!"\tvar err error\n\traw, err = leanfran.ReadIO(raw)\n\tif err != nil \{ return {fail} }\n"
+  let mut raw := "raw"
+  let mut body := ""
+  match ret with
+  | .except e _ =>
+    let errType := if e.convertible then e.go cfg else e.value cfg
+    let errValue := if e.convertible then s!"{e.codec cfg}.FromLean(rt.Lean_ctor_get(raw, 0))" else
+      s!"leanfran.WrapValue[{e.valueType cfg}](leanfran.OwnValueField(raw, 0))"
+    let ready := if e.convertible then "\t\t_lfCodecsOnce.Do(_lfBuildCodecs)\n" else ""
+    body := body ++ s!"\tdefer rt.Lean_dec(raw)\n\tif rt.Lean_obj_tag(raw) == 0 \{\n{ready}\t\terr := &leanfran.ExceptError[{errType}]\{Value: {errValue}}\n\t\treturn {fail}\n\t}\n"
+    raw := "rt.Lean_ctor_get(raw, 0)"
+  | _ => pure ()
+  let output := match result with
+    | .unit => "nil"
+    | .prod a b =>
+      s!"leanfran.WrapValue[{a.valueType cfg}](leanfran.OwnValueField({raw}, 0)), leanfran.WrapValue[{b.valueType cfg}](leanfran.OwnValueField({raw}, 1)), nil"
+    | d =>
+      let owned := if raw == "raw" then raw else "leanfran.OwnValueField(raw, 0)"
+      s!"leanfran.WrapValue[{d.valueType cfg}]({owned}), nil"
+  if raw == "raw" && (match result with | .prod .. => true | .unit => ty.isPossibleRef | _ => false) then
+    body := body ++ "\tdefer rt.Lean_dec(raw)\n"
+  return s!"func {f.ident}({joinArgs binders}) {signature} \{\n\tleanfran.LockValues()\n\tdefer leanfran.UnlockValues()\n{prepare}{ownership}{run}{io}{body}\treturn {output}\n}\n\n"
+
 def usesQualifier (source qualifier : String) : Bool := Id.run do
   let mut plain := ""
   let mut inString := false
@@ -472,14 +639,23 @@ def publicSources (env : Environment) (mod : Name) (pkg version goPath : String)
   let imports := paths.toList.eraseDups.toArray.qsort (· < ·)
   let types := collected.state.types.qsort (fun a b => a.ident < b.ident)
   let funcs := collected.functions.qsort (fun a b => a.ident < b.ident)
-  let inputs := types.toList.flatMap TypeDef.codecInputs ++ funcs.toList.flatMap PublicFn.codecInputs
+  let conversions := collected.conversions.qsort (fun a b => a.newIdent < b.newIdent)
+  let handles := collected.handles.qsort (fun a b => a.ident < b.ident)
+  let inputs := types.toList.flatMap TypeDef.codecInputs ++ funcs.toList.flatMap PublicFn.codecInputs ++
+    conversions.toList.map (·.desc)
   let codecs := (inputs.flatMap Desc.codecDependencies).eraseDups.toArray
   let cfg := { env, state := collected.state, imports, goPath, codecs : RenderCfg }
   let typeBody ← types.mapM (emitType cfg)
   let funcBody ← funcs.mapM (emitPublicFn cfg)
-  let lean ← generate env mod (collected.functions.map (·.target.name) ++ cfg.state.deciders) pkg none version false
-  return #[("leanfran_types_gen.go", packageSource cfg mod pkg version (packageCodecs cfg types ++ String.join typeBody.toList)),
-    ("leanfran_funcs_gen.go", packageSource cfg mod pkg version (String.join funcBody.toList)),
+  let valueBody ← handles.mapM (emitValueFn cfg)
+  let conversionBody := conversions.map (emitValueConversion cfg)
+  let markers := cfg.state.opaqueTypes ++ (types.filterMap fun t =>
+    if t.anonymous || t.model.isSome then some t.ident else none)
+  let markerBody := String.join (markers.toList.map fun n => s!"type {n} struct\{}\n\n")
+  let lean ← generate env mod (collected.functions.map (·.target.name) ++ collected.handles.map (·.target.name) ++
+      cfg.state.deciders) pkg none version false
+  return #[("leanfran_types_gen.go", packageSource cfg mod pkg version (packageCodecs cfg types ++ String.join typeBody.toList ++ markerBody ++ String.join conversionBody.toList)),
+    ("leanfran_funcs_gen.go", packageSource cfg mod pkg version (String.join funcBody.toList ++ String.join valueBody.toList)),
     ("leanfran_lean_gen.go", lean)]
 
 end LeanGo
