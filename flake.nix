@@ -141,15 +141,17 @@
             pkgs.mago
             pkgs.gcc
           ];
-          goTools = go: [
-            go
-            pkgs.gofumpt
-            pkgs.golangci-lint
-            pkgs.gopls
-            pkgs.python3
-            pkgs.gcc
-            pkgs.gnumake
-          ];
+          goTools =
+            go:
+            [
+              go
+              pkgs.gofumpt
+              pkgs.golangci-lint
+              pkgs.gopls
+              pkgs.python3
+              pkgs.gnumake
+            ]
+            ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.gcc;
           pythonEnv = {
             UV_PYTHON_DOWNLOADS = "never";
             UV_PYTHON = "${pkgs.python314}/bin/python3";

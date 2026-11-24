@@ -34,6 +34,8 @@ nix shell nixpkgs#gnumake -c make check BACKENDS=Go
 nix build .#go
 ```
 
+CI runs both Go versions on Linux amd64. On macOS arm64, it runs Go 1.27 and builds the Nix compiler package. To reproduce the macOS checks, run `nix develop .#go -c make -k -C langs/Go check` from the repository root.
+
 The check compares output, errors, and exit status with Lean's C backend. It also compares two independent runs of the compiler on the same input and checks the default package name for a nested Lean module. It exercises the numeric externs, seeded fuzz cases, tail and non-tail recursion, container update complexity, IR constructor coverage, and concurrent calls to a generated package under the Go race detector. It also checks the extern inventory, handwritten and generated code, and the samples. `test-public` compares generated Go with the native C backend and compares JSON Schema with the TypeScript backend for all three targets. It also checks validation, type mapping, cross-package generation, error handling, deterministic output, a million-element list, and the race detector.
 
 ```sh
