@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# != 1 || ! ${1-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo 'usage: maint/Go/bump-version.sh X.Y.Z' >&2
+    exit 2
+fi
+
+cd "$(dirname "$0")/../../langs/Go"
+pattern='^def version : String := "[0-9]+\.[0-9]+\.[0-9]+"$'
+if ! grep -Eq "$pattern" Main.lean; then
+    echo 'bump-version.sh: version declaration missing from Main.lean' >&2
+    exit 1
+fi
+sed -Ei "s/$pattern/def version : String := \"$1\"/" Main.lean
