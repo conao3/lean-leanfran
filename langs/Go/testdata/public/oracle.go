@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/conao3/leanfran-go/test-out/_generated/public/allocations"
 	values "github.com/conao3/leanfran-go/test-out/_generated/public/json"
 	"github.com/conao3/leanfran-go/test-out/_generated/public/public"
 )
@@ -58,6 +59,14 @@ func main() {
 	roundTrip(colors, err, decode[values.Color])
 	trees, err := values.Trees()
 	roundTrip(trees, err, values.UnmarshalTree)
+	for _, n := range []string{"0", "9223372036854775807", "9223372036854775808", "18446744073709551617"} {
+		value, _ := new(big.Int).SetString(n, 10)
+		show(allocations.NatEcho(value))
+	}
+	for _, n := range []string{"-9223372036854775809", "-9223372036854775808", "-1", "0", "9223372036854775807", "9223372036854775808"} {
+		value, _ := new(big.Int).SetString(n, 10)
+		show(allocations.IntEcho(value))
+	}
 }
 
 type schemer interface {

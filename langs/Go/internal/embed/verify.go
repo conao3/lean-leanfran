@@ -241,7 +241,7 @@ func writeVerificationModule(dir, name, source string) error {
 	return writeIfChanged(path, []byte(source))
 }
 
-func (p *project) checkProofs(work, compiler string, models []*verify.Function, require bool, out, diagnostics io.Writer) error {
+func (p *project) checkProofs(work, compiler string, models []*verify.Function, require, verbose bool, out, diagnostics io.Writer) error {
 	path := filepath.Join(p.root, proofLock)
 	if len(models) == 0 {
 		if _, err := os.Lstat(path); os.IsNotExist(err) {
@@ -271,11 +271,7 @@ func (p *project) checkProofs(work, compiler string, models []*verify.Function, 
 				saved.Results = append(saved.Results, obligation{Model: m.Name(), Label: label, State: "unextracted", Detail: detail.Error()})
 			})
 		} else {
-			compiler, err = resolveCompiler(compiler)
-			if err != nil {
-				return err
-			}
-			saved.Results, err = runProofs(work, compiler, verify.Definitions(models), proofs, diagnostics)
+			saved.Results, err = runProofs(work, compiler, verify.Definitions(models), proofs, verbose, diagnostics)
 			if err != nil {
 				return err
 			}
@@ -301,7 +297,7 @@ func (p *project) checkProofs(work, compiler string, models []*verify.Function, 
 	return nil
 }
 
-func runProofs(work, compiler string, defs []*verify.Definition, proofs map[string]string, diag io.Writer) ([]obligation, error) {
+func runProofs(work, compiler string, defs []*verify.Definition, proofs map[string]string, verbose bool, diag io.Writer) ([]obligation, error) {
 	dir := filepath.Join(work, "verification")
 	for _, path := range []string{
 		dir,
@@ -338,8 +334,11 @@ func runProofs(work, compiler string, defs []*verify.Definition, proofs map[stri
 				if err := writeVerificationModule(dir, d.Module(), source.String()); err != nil {
 					return nil, err
 				}
-				if output, buildErr := command(work, "lake", "build", "+"+d.Module()).CombinedOutput(); buildErr != nil {
-					_, _ = fmt.Fprint(diag, string(output))
+				output, buildErr := lakeOutput(work, verbose, "build", "+"+d.Module())
+				if buildErr != nil || verbose {
+					_, _ = io.WriteString(diag, output)
+				}
+				if buildErr != nil {
 					err = fmt.Errorf("%s: could not elaborate translated definition or spec", model.Files.Position(model.Decl.Pos()))
 				} else {
 					built[d.Module()] = true
@@ -377,9 +376,11 @@ func runProofs(work, compiler string, defs []*verify.Definition, proofs map[stri
 		"verification/Proofs/", "lean/Proofs/",
 	)
 	for _, mod := range sortedKeys(proofs) {
-		output, err := command(work, "lake", "build", "+"+mod).CombinedOutput()
+		output, err := lakeOutput(work, verbose, "build", "+"+mod)
+		if err != nil || verbose {
+			_, _ = io.WriteString(diag, proofPaths.Replace(output))
+		}
 		if err != nil {
-			_, _ = fmt.Fprint(diag, proofPaths.Replace(string(output)))
 			failed = append(failed, proofs[mod])
 		} else {
 			built[mod] = true

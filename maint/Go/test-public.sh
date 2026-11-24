@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
-lake build leanfran-go oracle-public +LeanGoTest.PublicClient
+lake build leanfran-go oracle-public +LeanGoTest.PublicClient +LeanGoTest.Allocations
 out=test-out/_generated/public
 mkdir -p "$out"
 compiler=.lake/build/bin/leanfran-go
@@ -17,6 +17,7 @@ generate() {
 
 generate Public "$out/public" > "$out/public.summary.json"
 generate Json "$out/json" > "$out/json.summary.json"
+generate Allocations "$out/allocations" > "$out/allocations.summary.json"
 generate PublicClient "$out/client" --package client     --type-module LeanGoTest.Public=github.com/conao3/leanfran-go/test-out/_generated/public/public     > "$out/client.summary.json"
 
 mkdir -p "$out/repeat"
@@ -28,7 +29,7 @@ test -f "$out/repeat/user.go"
 for file in "$out/public/"*_gen.go; do
     cmp "$file" "$out/repeat/${file##*/}"
 done
-test -z "$(gofmt -l "$out/public" "$out/json" "$out/client")"
+test -z "$(gofmt -l "$out/public" "$out/json" "$out/client" "$out/allocations")"
 
 python3 - "$out" <<'PY'
 import json
@@ -59,9 +60,11 @@ for name, reason in {
 PY
 
 cp testdata/public/public_test.go "$out/public"
+cp testdata/public/allocations_test.go "$out/allocations"
 cp testdata/public/oracle.go "$out"
 go vet "./$out/public" "./$out/json" "./$out/client" "./$out"
 go test -race "./$out/public"
+go test "./$out/allocations"
 CGO_ENABLED=0 go build -o "$out/oracle" "./$out"
 .lake/build/bin/oracle-public > "$out/native.jsonl"
 "$out/oracle" > "$out/emitted.jsonl"

@@ -14,7 +14,7 @@ func main() {
 
 func run(args []string) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		_, err := fmt.Fprintln(os.Stdout, "usage: leanfran sync|status|check [--dir dir] [--leanfran-go path]")
+		_, err := fmt.Fprintln(os.Stdout, "usage: leanfran sync|check [--dir dir] [--leanfran-go path] [--verbose]\n       leanfran status [--dir dir]")
 		if len(args) == 0 || err != nil {
 			return 1
 		}
@@ -28,11 +28,13 @@ func run(args []string) int {
 	flags := flag.NewFlagSet("leanfran "+command, flag.ContinueOnError)
 	dir := flags.String("dir", ".", "directory within the Go module")
 	var compiler, require string
+	var verbose bool
 	if command == "check" {
 		flags.StringVar(&require, "require", "", "require every obligation to be proved")
 	}
 	if command != "status" {
 		flags.StringVar(&compiler, "leanfran-go", "", "path to the Lean-to-Go compiler")
+		flags.BoolVar(&verbose, "verbose", false, "show Lake trace diagnostics")
 	}
 	if err := flags.Parse(args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -48,7 +50,7 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "leanfran: invalid proof requirement %q\n", require)
 		return 1
 	}
-	if err := embed.Run(command, *dir, compiler, require == "proved", os.Stdout, os.Stderr); err != nil {
+	if err := embed.Run(command, *dir, compiler, require == "proved", verbose, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "leanfran: %v\n", err)
 		return 1
 	}

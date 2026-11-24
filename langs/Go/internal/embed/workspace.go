@@ -52,25 +52,35 @@ func checkVersions(dir, toolchain, compiler string) error {
 	if want == nil {
 		return fmt.Errorf("unsupported lean-toolchain %q", toolchain)
 	}
+	const selectCompiler = "set LEANFRAN_GO_CLI to the matching compiler"
+	for _, check := range []struct {
+		flag, name, version, fix string
+	}{
+		{"--version", "release version", leanfran.Version, "use a compiler from the Go module's release or update the Go module to the compiler's release"},
+		{"--generator-version", "generator version", strconv.Itoa(generatorVersion), "rebuild the compiler from the Go module's source revision"},
+		{"--lean-version", "Lean version", want[1], "use a compiler built with the Lean version in lean-toolchain"},
+	} {
+		output, err := command(dir, compiler, check.flag).Output()
+		if err != nil {
+			return fmt.Errorf("%s %s: %w; %s and %s", compiler, check.flag, processError(err), check.fix, selectCompiler)
+		}
+		if got := strings.TrimSpace(string(output)); got != check.version {
+			return fmt.Errorf("compiler %s %q, expected %s; %s and %s", check.name, got, check.version, check.fix, selectCompiler)
+		}
+	}
 	for _, tool := range []struct {
 		name    string
 		pattern *regexp.Regexp
 	}{{"lean", leanVersion}, {"lake", lakeVersion}} {
 		output, err := command(dir, tool.name, "--version").Output()
 		if err != nil {
-			return fmt.Errorf("%s --version: %w", tool.name, processError(err))
+			return fmt.Errorf("%s --version: %w; put Lean and Lake from %s on PATH", tool.name, processError(err), toolchain)
 		}
 		match := tool.pattern.FindStringSubmatch(string(output))
 		if match == nil || match[1] != want[1] {
-			return fmt.Errorf("%s must match lean-toolchain (%s): %s", tool.name, want[1], strings.TrimSpace(string(output)))
+			return fmt.Errorf("%s reports %q, expected Lean %s from lean-toolchain; put Lean and Lake from %s on PATH",
+				tool.name, strings.TrimSpace(string(output)), want[1], toolchain)
 		}
-	}
-	output, err := command(dir, compiler, "--generator-version").Output()
-	if err != nil {
-		return fmt.Errorf("%s --generator-version: %w", compiler, processError(err))
-	}
-	if got := strings.TrimSpace(string(output)); got != strconv.Itoa(generatorVersion) {
-		return fmt.Errorf("compiler generator version %s, expected %d", got, generatorVersion)
 	}
 	return nil
 }
@@ -84,16 +94,31 @@ func resolveCompiler(value string) (string, error) {
 	}
 	path, err := exec.LookPath(value)
 	if err != nil {
-		return "", fmt.Errorf("find leanfran-go: %w", err)
+		return "", fmt.Errorf("find leanfran-go: %w; install it with nix profile install 'github:conao3/lean-leanfran#go' or set LEANFRAN_GO_CLI to its path", err)
 	}
 	return filepath.Abs(path)
 }
 
-func (p *project) generate(blocks []*block, work, stage, compiler string, stderr io.Writer) ([]change, error) {
-	compiler, err := resolveCompiler(compiler)
-	if err != nil {
-		return nil, err
+func lakeOutput(dir string, verbose bool, args ...string) (string, error) {
+	flags := []string{"--no-ansi"}
+	if verbose {
+		flags = append(flags, "--verbose")
 	}
+	data, err := command(dir, "lake", append(flags, args...)...).CombinedOutput()
+	output := string(data)
+	if verbose {
+		return output, err
+	}
+	var filtered strings.Builder
+	for line := range strings.SplitAfterSeq(output, "\n") {
+		if !strings.HasPrefix(line, "trace:") {
+			filtered.WriteString(line)
+		}
+	}
+	return filtered.String(), err
+}
+
+func (p *project) generate(blocks []*block, work, stage, compiler string, verbose bool, stderr io.Writer) ([]change, error) {
 	if err := writeIfChanged(filepath.Join(work, "lean-toolchain"), []byte(p.toolchain+"\n")); err != nil {
 		return nil, err
 	}
@@ -110,9 +135,14 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, stderr
 	configured := filepath.Join(work, "configured.toml")
 	prev, _ := os.ReadFile(configured)
 	if _, err := os.Stat(filepath.Join(work, "lake-manifest.json")); err != nil || string(prev) != lakefile {
-		output, err := command(work, "lake", "update").CombinedOutput()
+		output, err := lakeOutput(work, verbose, "update")
 		if err != nil {
 			return nil, fmt.Errorf("lake update: %w\n%s", err, output)
+		}
+		if verbose {
+			if _, err := io.WriteString(stderr, output); err != nil {
+				return nil, err
+			}
 		}
 		if err := writeIfChanged(configured, []byte(lakefile)); err != nil {
 			return nil, err
@@ -125,11 +155,12 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, stderr
 	if err != nil {
 		return nil, err
 	}
-	output, err := command(work, "lake", "build").CombinedOutput()
+	output, err := lakeOutput(work, verbose, "build")
+	diagnostics := mapDiagnostics(output, origins)
 	if err != nil {
-		return nil, fmt.Errorf("lake build: %w\n%s", err, mapDiagnostics(output, origins))
+		return nil, fmt.Errorf("lake build: %w\n%s", err, diagnostics)
 	}
-	if diagnostics := mapDiagnostics(output, origins); diagnostics != string(output) {
+	if verbose || diagnostics != output {
 		if _, err := io.WriteString(stderr, diagnostics); err != nil {
 			return nil, err
 		}
@@ -142,9 +173,9 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, stderr
 	if err := os.WriteFile(batch, data, 0o600); err != nil {
 		return nil, err
 	}
-	output, err = command(work, "lake", "env", compiler, "module", "generate", "--batch", batch, "--output", "json").Output()
+	data, err = command(work, "lake", "env", compiler, "module", "generate", "--batch", batch, "--output", "json").Output()
 	if err != nil {
-		return nil, fmt.Errorf("leanfran-go: %w\n%s", processError(err), output)
+		return nil, fmt.Errorf("leanfran-go: %w\n%s", processError(err), data)
 	}
 
 	var summaries []struct {
@@ -152,8 +183,8 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, stderr
 		Functions map[string]string
 		Types     []verify.NamedType
 	}
-	if err := json.Unmarshal(output, &summaries); err != nil || len(summaries) != len(blocks) {
-		return nil, fmt.Errorf("invalid leanfran-go batch result: %s", output)
+	if err := json.Unmarshal(data, &summaries); err != nil || len(summaries) != len(blocks) {
+		return nil, fmt.Errorf("invalid leanfran-go batch result: %s", data)
 	}
 	var changes []change
 	for i, b := range blocks {
@@ -267,8 +298,8 @@ func writeModules(work, stage string, blocks []*block, p *project) (map[string]o
 	return origins, jobs, nil
 }
 
-func mapDiagnostics(data []byte, origins map[string]origin) string {
-	lines := strings.Split(string(data), "\n")
+func mapDiagnostics(output string, origins map[string]origin) string {
+	lines := strings.Split(output, "\n")
 	for i, line := range lines {
 		m := leanDiagnostic.FindStringSubmatch(line)
 		if m == nil {

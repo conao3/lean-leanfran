@@ -4,9 +4,9 @@ import LeanGo.Check
 open Lean LeanGo
 
 def version : String := "0.9.0"
-def generatorVersion : String := "6"
+def generatorVersion : String := "7"
 
-def usage : String := "leanfran-go --version | --generator-version
+def usage : String := "leanfran-go --version | --generator-version | --lean-version
 leanfran-go module generate --module-name <Name> [options]
 leanfran-go obligations check --modules <Name> ... --obligations <file>
 
@@ -316,6 +316,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
+  | ["--lean-version"] => IO.println Lean.versionString; return 0
   | [] | ["help"] | ["--help"] | ["module", "generate", "--help"] => IO.print usage; return 0
   | "module" :: "generate" :: rest =>
     match parseOpts rest {} with

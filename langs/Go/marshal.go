@@ -119,18 +119,29 @@ func Big(kind string, bound string) Codec[*big.Int] {
 	}
 	c := Scalar(kind, 0, to, from)
 	c.Desc.Bound = bound
-	limit, _ := new(big.Int).SetString(bound, 10)
+	var limit *big.Int
+	if bound != "" {
+		limit, _ = new(big.Int).SetString(bound, 10)
+	}
 	c.Check = func(e *ValidationError, x *big.Int) {
-		switch {
-		case x == nil:
-			e.Add("expected an integer")
-		case kind != "int" && x.Sign() < 0:
-			e.Add("expected a nonnegative integer")
-		case limit != nil && x.Cmp(limit) >= 0:
+		if issue := IntegerIssue(x, kind != "int"); issue != "" {
+			e.Add(issue)
+		} else if limit != nil && x.Cmp(limit) >= 0 {
 			e.Add("expected an integer less than " + bound)
 		}
 	}
 	return c
+}
+
+func IntegerIssue(x *big.Int, nonnegative bool) string {
+	switch {
+	case x == nil:
+		return "expected an integer"
+	case nonnegative && x.Sign() < 0:
+		return "expected a nonnegative integer"
+	default:
+		return ""
+	}
 }
 
 func Fin(bound string) Codec[uint64] {
