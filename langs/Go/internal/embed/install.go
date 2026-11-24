@@ -253,7 +253,7 @@ func install(changes []change) error {
 	return nil
 }
 
-func Run(mode, dir, compiler string, require bool, stdout, stderr io.Writer) error {
+func Run(mode, dir, compiler string, require, verbose bool, stdout, stderr io.Writer) error {
 	p, err := loadProject(dir)
 	if err != nil {
 		return err
@@ -289,6 +289,10 @@ func Run(mode, dir, compiler string, require bool, stdout, stderr io.Writer) err
 	}
 	work := filepath.Join(cache, "workspace")
 	if len(blocks) > 0 {
+		compiler, err = resolveCompiler(compiler)
+		if err != nil {
+			return err
+		}
 		if err := mkdir(work); err != nil {
 			return err
 		}
@@ -297,7 +301,7 @@ func Run(mode, dir, compiler string, require bool, stdout, stderr io.Writer) err
 			return err
 		}
 		defer func() { _ = os.RemoveAll(stage) }()
-		generated, err := p.generate(blocks, work, stage, compiler, stderr)
+		generated, err := p.generate(blocks, work, stage, compiler, verbose, stderr)
 		if err != nil {
 			return err
 		}
@@ -327,7 +331,7 @@ func Run(mode, dir, compiler string, require bool, stdout, stderr io.Writer) err
 		if err := status(blocks, nil, stdout); err != nil {
 			return err
 		}
-		return p.checkProofs(work, compiler, models, require, stdout, stderr)
+		return p.checkProofs(work, compiler, models, require, verbose, stdout, stderr)
 	}
 	return nil
 }

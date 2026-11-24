@@ -439,10 +439,34 @@ func decision(b bool) uint8 {
 	return 0
 }
 
-func NatFromBig(n *big.Int) V { return natValue(new(big.Int).Set(n)) }
-func IntFromBig(n *big.Int) V { return intValue(new(big.Int).Set(n)) }
-func NatBig(v V) *big.Int     { return new(big.Int).Set(natBig(v)) }
-func IntBig(v V) *big.Int     { return new(big.Int).Set(intBig(v)) }
+func NatFromBig(n *big.Int) V {
+	if n.BitLen() < 64 {
+		return V{n: n.Uint64()}
+	}
+	return bigValue(new(big.Int).Set(n))
+}
+
+func IntFromBig(n *big.Int) V {
+	if n.IsInt64() {
+		return IntFromInt64(n.Int64())
+	}
+	return bigValue(new(big.Int).Set(n))
+}
+
+func NatBig(v V) *big.Int {
+	if v.p == nil {
+		return new(big.Int).SetUint64(v.n)
+	}
+	return new(big.Int).Set(natBig(v))
+}
+
+func IntBig(v V) *big.Int {
+	if v.p == nil {
+		return big.NewInt(int64(v.n))
+	}
+	return new(big.Int).Set(intBig(v))
+}
+
 func NatUint64(v V) uint64 {
 	if v.p == nil {
 		return v.n

@@ -56,6 +56,11 @@ expect_failure() {
     test "$status" = 1
 }
 
+expect_failure env PATH="$out/tools" LEANFRAN_GO_CLI= go tool leanfran sync
+grep -Fq "nix profile install 'github:conao3/lean-leanfran#go'" result.err
+grep -Fq 'LEANFRAN_GO_CLI' result.err
+unchanged
+
 list_stale() {
     expect_failure go tool leanfran status
     local expected
@@ -89,6 +94,10 @@ sed -i 's/def alternate := domainEnabled/theorem alternateImpossible : False := 
 expect_failure go tool leanfran sync
 omega_col=$(awk '/theorem alternateImpossible/ { print index($0, "omega") }' consumer/consumer.go)
 grep -Eq "consumer/consumer.go:8:${omega_col}: error: \\(lean block example.com/embed-fixture/consumer, Lean 3:.*omega could not prove" result.err
+test "$(grep -c '^trace:' result.err)" = 0
+expect_failure go tool leanfran check --verbose
+grep -q '^trace:' result.err
+grep -Eq "consumer/consumer.go:8:${omega_col}: error: \\(lean block example.com/embed-fixture/consumer, Lean 3:.*omega could not prove" result.err
 unchanged
 go test ./...
 sed -i 's/theorem alternateImpossible : False := by omega/def alternate :=)/' consumer/consumer.go
@@ -107,11 +116,25 @@ unchanged
 
 cat > wrong-compiler <<'COMPILER'
 #!/usr/bin/env bash
-printf '0\n'
+if [[ "$1" == "$WRONG_FLAG" ]]; then
+    printf '%s\n' "$WRONG_VERSION"
+else
+    exec "$LEANFRAN_GO_CLI" "$@"
+fi
 COMPILER
 chmod +x wrong-compiler
-expect_failure go tool leanfran sync --leanfran-go ./wrong-compiler
-grep -Eq 'compiler generator version 0, expected' result.err
+release=$("$LEANFRAN_GO_CLI" --version)
+lean=$("$LEANFRAN_GO_CLI" --lean-version)
+for mode in sync check; do
+    expect_failure env WRONG_FLAG=--version WRONG_VERSION=9.9.9 go tool leanfran "$mode" --leanfran-go ./wrong-compiler
+    grep -Fq "compiler release version \"9.9.9\", expected $release" result.err
+    grep -Fq "update the Go module to the compiler's release" result.err
+    expect_failure env WRONG_FLAG=--lean-version WRONG_VERSION=9.9.9 go tool leanfran "$mode" --leanfran-go ./wrong-compiler
+    grep -Fq "compiler Lean version \"9.9.9\", expected $lean" result.err
+    grep -Fq 'set LEANFRAN_GO_CLI to the matching compiler' result.err
+done
+expect_failure env WRONG_FLAG=--generator-version WRONG_VERSION=0 go tool leanfran sync --leanfran-go ./wrong-compiler
+grep -Fq "compiler generator version \"0\", expected $version" result.err
 unchanged
 
 mv consumer/consumer.go consumer/consumer.go.saved
@@ -123,4 +146,4 @@ for file in .leanfran/previous/consumer/*; do
     test ! -e "consumer/${file##*/}"
 done
 go tool leanfran status
-printf 'embed integration passes: 2 blocks, 8 freshness changes, 2 mapped Lean errors, 1 model error and removal\n'
+printf 'embed integration passes: 2 blocks, freshness, mapped diagnostics, trace verbosity, compiler installation and version checks, model errors, and removal\n'
