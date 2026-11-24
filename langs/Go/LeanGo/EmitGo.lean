@@ -618,7 +618,7 @@ def emitInitializers (env : Environment) (decls : Array Decl) (declMap : Std.Has
     st := { st with lines := st.lines ++ s!"\t{line}\n" }
   for d in decls do
     st := scheduleValue env declMap exports inits d.name st
-  return if st.lines.isEmpty then "" else s!"func init() \{\n{st.lines}}\n"
+  return if st.lines.isEmpty then "" else s!"func init() \{\n\trt.SetInitializing(true)\n\tdefer rt.SetInitializing(false)\n{st.lines}}\n"
 
 def emitMain (env : Environment) (d : Decl) (internalOnly : Bool) : Except String String := do
   let n := d.name

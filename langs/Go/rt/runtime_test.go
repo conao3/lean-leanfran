@@ -79,3 +79,13 @@ func TestPersistentThunk(t *testing.T) {
 		t.Fatalf("thunk ran %d times", got)
 	}
 }
+
+func TestPointerAddressesDistinguishWideScalars(t *testing.T) {
+	wide := Lean_box(1 << 63)
+	narrow := Lean_box(0)
+	object := Lean_mk_string("object")
+	a := Lean_ptr_addr(wide)
+	if a == Lean_ptr_addr(narrow) || a == Lean_ptr_addr(object) || a != Lean_ptr_addr(wide) {
+		t.Fatal("pointer addresses do not preserve distinct Lean values")
+	}
+}

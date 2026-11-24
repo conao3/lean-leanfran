@@ -26,6 +26,8 @@ const (
 	kindThunk
 	kindRef
 	kindHandle
+	kindTask
+	kindPromise
 )
 
 func Lean_box(n uint64) V   { return V{n: n} }
@@ -56,10 +58,14 @@ func Lean_obj_tag(v V) uint64 {
 		return 250
 	case kindThunk:
 		return 251
+	case kindTask:
+		return 252
 	case kindRef:
 		return 253
 	case kindHandle:
 		return 254
+	case kindPromise:
+		return 244
 	default:
 		return uint64(v.p.tag)
 	}
@@ -98,6 +104,9 @@ func Lean_dec(v V) {
 		i := len(stack) - 1
 		o := stack[i]
 		stack = stack[:i]
+		if o.kind == kindPromise {
+			resolveTask(o.fs[0], V{})
+		}
 		for _, f := range o.fs {
 			if f.p != nil && f.p.rc > 0 {
 				f.p.rc--

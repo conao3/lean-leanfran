@@ -7,6 +7,11 @@ test: test-runtime test-diff
 test-runtime:
 	go vet ./...
 	go vet ../../maint/Go/gen-externs/main.go
+	go vet ../../maint/Go/fuzz-gen/main.go
+	go vet ../../maint/Go/numeric/main.go
+	golangci-lint run ../../maint/Go/gen-externs/main.go
+	golangci-lint run ../../maint/Go/fuzz-gen/main.go
+	golangci-lint run ../../maint/Go/numeric/main.go
 	golangci-lint run
 	CGO_ENABLED=0 go test ./...
 

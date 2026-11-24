@@ -3,7 +3,7 @@ import LeanGo
 open Lean LeanGo
 
 def version : String := "0.7.0"
-def generatorVersion : String := "1"
+def generatorVersion : String := "2"
 
 def usage : String := "leanfran-go --version | --generator-version
 leanfran-go module generate --module-name <Name> [options]

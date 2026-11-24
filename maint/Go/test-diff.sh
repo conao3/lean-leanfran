@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LEAN_BACKTRACE=0
 cd "$(dirname "$0")/../../langs/Go"
 
 lake build leanfran-go oracle LeanGoTest.Unsupported
@@ -10,7 +11,7 @@ generate() {
     "$compiler" module generate --search-path .lake/build/lib/lean --internal-only "$@"
 }
 
-generate --module-name LeanGoTest.OracleMain --roots main \
+generate --module-name LeanGoTest.OracleMain --roots main LeanGoTest.ControlIr.impossible \
     --main main --output text --output-file test-out/_generated/vectors/main.go
 
 package=test-out/_generated/vectors/main.go
