@@ -3,18 +3,25 @@ import LeanC
 open Lean LeanC System
 
 inductive CliCommand where
-  | generate (target : Target) (out : FilePath) (roots : Array Name)
-  | build (out : FilePath)
+  | generate (target : Target) (out : FilePath) (roots : Array Name) (checks : Checks)
+  | build (out : FilePath) (shared : Bool)
 
 def usage : String :=
-  "Usage: leanfran-c generate --module-name M [--roots name,...] [--prefix prefix] --out-dir dir\n" ++
-  "       leanfran-c build --out-dir dir"
+  "Usage: leanfran-c generate --module-name M [--roots name,...] [--prefix prefix] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
+  "       leanfran-c build [--shared] --out-dir dir"
 
 def parse (command : String) (args : List String) : Except String CliCommand := do
   unless command == "generate" || command == "build" do throw s!"unknown command '{command}'"
   let mut remaining := args
   let mut opts : Std.HashMap String String := {}
+  let mut switches : Std.HashSet String := {}
   while let key :: rest := remaining do
+    if (command == "generate" && ["--allow-sorry", "--allow-lean-import"].contains key) ||
+        (command == "build" && key == "--shared") then
+      if switches.contains key then throw s!"duplicate option '{key}'"
+      switches := switches.insert key
+      remaining := rest
+      continue
     let known := key == "--out-dir" ||
       (command == "generate" && ["--module-name", "--roots", "--prefix"].contains key)
     unless known do throw s!"unknown option '{key}'"
@@ -24,7 +31,7 @@ def parse (command : String) (args : List String) : Except String CliCommand := 
     opts := opts.insert key value
     remaining := tail
   let some out := opts["--out-dir"]? | throw "missing --out-dir"
-  if command == "build" then return .build ⟨out⟩
+  if command == "build" then return .build ⟨out⟩ (switches.contains "--shared")
   let some moduleName := opts["--module-name"]? | throw "missing --module-name"
   unless validModule moduleName do throw s!"invalid module name '{moduleName}'"
   let cPrefix := opts["--prefix"]?.getD (snakeCase (lastComponent moduleName.toName))
@@ -32,6 +39,8 @@ def parse (command : String) (args : List String) : Except String CliCommand := 
   let rootNames := opts["--roots"]?.map (·.splitOn ",") |>.getD []
   if rootNames.any String.isEmpty then throw "empty declaration name in --roots"
   return .generate {moduleName, cPrefix} ⟨out⟩ (rootNames.map String.toName).toArray
+    {allowSorry := switches.contains "--allow-sorry",
+      allowLeanImport := switches.contains "--allow-lean-import"}
 
 unsafe def main (args : List String) : IO UInt32 := do
   if args == ["--help"] then
@@ -47,9 +56,9 @@ unsafe def main (args : List String) : IO UInt32 := do
   try
     let ws ← loadWorkspace
     match cmd with
-    | .build out => build ws out
-    | .generate target out roots =>
-      if let .error message ← generate ws target out roots then
+    | .build out shared => build ws out shared
+    | .generate target out roots checks =>
+      if let .error message ← generate ws target out roots checks then
         IO.eprintln s!"leanfran-c: {message}"
         return 254
     return 0

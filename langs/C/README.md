@@ -1,18 +1,22 @@
 # leanfran-c
 
-Generate a C API for Lean 4 definitions in a Lake workspace. The C compiler links the generated static archive with Lean's runtime.
+Generate a C API for Lean 4 definitions in a Lake workspace. Link the generated library with Lean's runtime using pkg-config, Make, or CMake.
 
 Build the tool with `lake build` in this directory, or with `nix build .#c` at the repository root. Put the resulting `leanfran-c` on your PATH and run the following commands from the Lake workspace that contains your Lean code.
 
 ```sh
 leanfran-c generate --module-name Pricing.Core --roots Pricing.total --out-dir out
 leanfran-c build --out-dir out
-leanc -Iout main.c out/libcore.a -o main
+cc main.c $(pkg-config --cflags --libs out/core.pc) -o main
 ```
 
 Run the generator and build commands through `lake env` when your Lake installation supplies custom compiler or archiver settings.
 
 The module must belong to a Lake library. With no `--roots`, the generator selects supported public definitions declared by the module. Pass a comma-separated list of fully qualified names to select specific definitions. The C prefix defaults to the last component of the module name in snake case. Use `--prefix` to set it explicitly.
+
+Generation rejects exported definitions that depend on `sorryAx` and prints the import chain when the module uses the Lean compiler. Use `--allow-sorry` to turn the first check into a warning and `--allow-lean-import` to link the compiler. See `core.externs.txt` for external C symbols to supply and `core.implemented-by.txt` for Lean declarations that use a different native implementation.
+
+The build writes a static archive by default. Pass `--shared` to build a shared library linked with `libleanshared`. For Make, include `out/core.mk` and use `CORE_CFLAGS` and `CORE_LDLIBS`. For CMake, set `core_DIR` to the output directory, call `find_package(core CONFIG REQUIRED)`, and link against `core::core`. The link files refer to the output directory and the local Lean toolchain. Regenerate them after moving either directory.
 
 Include `core.h` and call `core_init` before calling any generated function. The generated C ABI supports booleans, fixed-width integers, `USize`, floating-point numbers, `Char`, `String`, and `IO` results. An `IO Unit` function takes no output pointer. String arguments are borrowed UTF-8 byte ranges. String results can contain zero bytes and include a trailing NUL after the reported length. Release the result's `ptr` with `lf_free`.
 
