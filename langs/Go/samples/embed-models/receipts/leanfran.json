@@ -1,7 +1,7 @@
 {
   "block": "example.com/embed-models/receipts",
-  "hash": "8d7c4289f94523cdc1cc0f8952d99b54f050f59194f4d0e7cd1ebb9524a2ec41",
-  "generator_version": 7,
+  "hash": "f86058e154b43c6dc71da52f12f987136d607cd2bd851f22cd981f41a4023f6d",
+  "generator_version": 8,
   "files": [
     "leanfran_types_gen.go",
     "leanfran_funcs_gen.go",

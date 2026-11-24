@@ -4,7 +4,7 @@ import LeanGo.Check
 open Lean LeanGo
 
 def version : String := "0.9.0"
-def generatorVersion : String := "7"
+def generatorVersion : String := "8"
 
 def usage : String := "leanfran-go --version | --generator-version | --lean-version
 leanfran-go module generate --module-name <Name> [options]
@@ -233,8 +233,10 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
     let skipped := publicModule.skipped.map fun s => Json.mkObj [("name", toString s.name), ("reason", s.reason)]
     let functions := Json.mkObj (publicModule.functions.toList.map fun f =>
       ((stripName strip f.source).toString, toJson f.ident))
+    let valueFunctions := Json.mkObj (publicModule.handles.toList.map fun f =>
+      ((stripName strip f.source).toString, toJson f.ident))
     return (Json.mkObj [("module", mod), ("package", pkg), ("files", toJson files),
-      ("skipped", toJson skipped), ("functions", functions),
+      ("skipped", toJson skipped), ("functions", functions), ("valueFunctions", valueFunctions),
       ("types", verificationTypes publicModule.state job.goPath)], 0)
   let roots := if job.roots.isEmpty then defaultRoots env job else job.roots.map (csimpTarget env)
   let source ← match generate env job.module roots pkg job.main? generatorVersion job.internalOnly with
