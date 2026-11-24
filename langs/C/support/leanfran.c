@@ -138,12 +138,12 @@ lf_status lf_nat_from_dec(const char *decimal, lf_nat *out, lf_error *err) {
     while (*decimal == '0') {
         ++decimal;
     }
-    lf_str copy;
-    lf_status status = copy_decimal(decimal, &copy, err);
-    if (status == LF_OK) {
-        *out = (lf_nat){.decimal = copy.ptr};
+    char *copy = copy_bytes(decimal, strlen(decimal));
+    if (copy == NULL) {
+        return lf_set_error(err, LF_IO, "Could not allocate a decimal string");
     }
-    return status;
+    *out = (lf_nat){.decimal = copy};
+    return LF_OK;
 }
 
 lf_status lf_int_from_dec(const char *decimal, lf_int *out, lf_error *err) {

@@ -67,7 +67,7 @@ private def Constructor.emitJson (ctor : Constructor) (desc : Desc) (descs : Arr
   return code ++ "return true;\n"
 
 private def Desc.jsonPrototype (desc : Desc) : String :=
-  s!"static inline bool lf_json_{desc.name}(const {desc.name} *in, lf_json_buffer *out)"
+  s!"LF_INLINE bool lf_json_{desc.name}(const {desc.name} *in, lf_json_buffer *out)"
 
 private def Desc.emitJson (desc : Desc) (descs : Array Desc) : String := Id.run do
   let mut code := ""
@@ -94,7 +94,7 @@ private def Desc.emitJson (desc : Desc) (descs : Array Desc) : String := Id.run 
 
 def emitExceptSupport (descs : Array Desc) : String :=
   (include_str "../support/except.inc") ++ "\n" ++
-  ("static inline bool lf_json_bytes(const lf_byte_array *in, lf_json_buffer *out) {\n" ++
+  ("LF_INLINE bool lf_json_bytes(const lf_byte_array *in, lf_json_buffer *out) {\n" ++
     jsonCheck (jsonLiteral "[") ++ "for (size_t i = 0; i < in->len; ++i) {\n" ++
     "if (i != 0 && !lf_json_literal(out, \",\")) return false;\n" ++
     jsonCheck (CType.uint8.emitJson "&in->items[i]") ++ "}\n" ++ s!"return {jsonLiteral "]"};\n}\n\n") ++
