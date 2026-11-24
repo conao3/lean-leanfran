@@ -110,8 +110,26 @@ snapshot = kernel.apply.lean.params["snap"].new(rows)
 - A handle is immutable: Lean functions that receive it build new values instead of updating in
   place.
 
-`IO` actions have no `lean`. With a snapshot of 100 two-number structures in a `List`, one
-`transition` and `apply` takes 0.18 ms with a handle against 1.25 ms with Python values.
+`fn.local` is the function on local handles (`leanfran.Local`). A local handle keeps the
+reference counts of its objects, so a Lean function can update the value in place when it gets
+the only reference. Passing a local handle keeps it valid; `handle.take()` gives its reference
+to the function and leaves the handle empty:
+
+```python
+snapshot = kernel.init.local()
+result = kernel.transition.local(actor, snapshot, command).get()
+snapshot = kernel.apply.local(snapshot.take(), write)  # the list is updated in place
+```
+
+- `type.new_local(value)` makes a local handle of a Python value and `local.share()` the `Lean`
+  handle of a local one. `fn.local` and `fn.lean` take both kinds.
+- Use a local handle, and the local handles made from it, from one thread at a time: the
+  reference counts are plain Python integers, also on free-threaded builds. A `Lean` handle can
+  be read from several threads, since its objects are never updated.
+
+`IO` actions have no `lean` and no `local`. One `transition` and `apply` on a snapshot of 100
+two-number structures in a `List` takes 0.84 ms with Python values, 0.09 ms with `Lean` handles
+and 0.06 ms with a local handle.
 
 ### JSON
 

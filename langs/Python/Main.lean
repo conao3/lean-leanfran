@@ -6,7 +6,7 @@ def version : String := "0.8.0"
 
 /-- Version of the generated code. Raise it when the emitted code changes; `leanfran-python sync`
     checks it and puts it into its cache keys. -/
-def generatorVersion : String := "5"
+def generatorVersion : String := "6"
 
 def usage : String := "usage: leanfran-python [--version] [--generator-version] <command> <subcommand> [parameters]
 

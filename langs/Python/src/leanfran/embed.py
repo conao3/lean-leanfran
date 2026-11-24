@@ -14,7 +14,7 @@ import sys
 import typing
 from dataclasses import dataclass, field
 
-GENERATOR_VERSION = "5"
+GENERATOR_VERSION = "6"
 
 
 class LeanBlockStale(RuntimeError):

@@ -14,7 +14,7 @@ import pydantic
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic_core import PydanticCustomError, SchemaSerializer, SchemaValidator, ValidationError, core_schema
 
-from leanfran.runtime import _RC, PERSISTENT, Ctor, LArray, _f32, _list_to_py, _py_to_list
+from leanfran.runtime import _RC, PERSISTENT, Ctor, LArray, _f32, _list_to_py, _py_to_list, lean_dec, lean_inc
 
 Field = pydantic.Field
 """Used by generated models for the field options (``alias``, ``exclude_if``)."""
@@ -368,6 +368,10 @@ class LeanType:
         """The handle of the Lean value of ``value``, checked like an argument."""
         return Lean(self, _share(to_lean(self.desc, value, "value")))
 
+    def new_local(self, value):
+        """The local handle of the Lean value of ``value``, checked like an argument."""
+        return Local(self, to_lean(self.desc, value, "value"))
+
     def __eq__(self, other):
         return isinstance(other, LeanType) and self.desc.key() == other.desc.key()
 
@@ -399,18 +403,115 @@ class Lean[T]:
         return f"Lean({self.get()!r})"
 
 
+_GONE = object()
+
+
+class Local[T]:
+    """A Lean value kept as the runtime's object, for one thread at a time.
+
+    The ``local`` attribute of a generated function returns this handle. Its objects keep their
+    reference counts, so a function that receives the only reference to an object updates it in
+    place. Passing a local handle keeps it; passing ``handle.take()`` gives the reference to the
+    function and empties the handle. ``share`` gives the ``Lean`` handle of the value.
+    """
+
+    __slots__ = ("_obj", "type")
+
+    def __init__(self, type_, obj):
+        self.type = type_
+        self._obj = obj
+
+    def _value(self):
+        if self._obj is _GONE:
+            raise ValueError("this local handle was given away with take()")
+        return self._obj
+
+    def get(self) -> T:
+        """The Python value of the handle."""
+        return self.type.desc.to_py(self._value())
+
+    def take(self):
+        """This handle as an argument that gives its reference to the function: the handle is
+        empty after the call."""
+        self._value()
+        return _Taken(self)
+
+    def share(self) -> Lean[T]:
+        """The ``Lean`` handle of the value. The value is immutable from then on."""
+        return Lean(self.type, _share(self._value()))
+
+    def __repr__(self):
+        if self._obj is _GONE:
+            return "Local(<taken>)"
+        return f"Local({self.get()!r})"
+
+
+class _Taken:
+    __slots__ = ("local",)
+
+    def __init__(self, local):
+        self.local = local
+
+
+def _check_handle(type_, v, name):
+    if v.type is not type_ and v.type != type_:
+        f = _Fail(f"expected a handle of {type_.python}, got a handle of {v.type.python}", v, (name,))
+        raise _validation_error("leanfran-python", f)
+
+
 def lean_arg(type_, v, name):
     """The runtime value of the argument ``v`` of a function on handles: a handle or a Python value."""
-    if v.__class__ is Lean:
-        if v.type is not type_ and v.type != type_:
-            f = _Fail(f"expected a handle of {type_.python}, got a handle of {v.type.python}", v, (name,))
-            raise _validation_error("leanfran-python", f)
+    c = v.__class__
+    if c is Lean:
+        _check_handle(type_, v, name)
         return v._obj
+    if c is Local or c is _Taken:
+        local = v.local if c is _Taken else v
+        _check_handle(type_, local, name)
+        return _share(local._value())
     return to_lean(type_.desc, v, name)
 
 
 def handle(type_, x):
     return Lean(type_, _share(x))
+
+
+def local_arg(type_, v, name, owned):
+    """The runtime value of the argument ``v`` of a function on local handles. ``owned`` says
+    that the function consumes a reference: a local handle that is kept gets one more."""
+    c = v.__class__
+    if c is Local:
+        _check_handle(type_, v, name)
+        obj = v._value()
+        if owned:
+            lean_inc(obj)
+        return obj
+    if c is _Taken:
+        local = v.local
+        _check_handle(type_, local, name)
+        return local._value()
+    if c is Lean:
+        _check_handle(type_, v, name)
+        return v._obj
+    return to_lean(type_.desc, v, name)
+
+
+def give(*args):
+    """Empties the handles passed with ``take()``, once every argument of the call is converted."""
+    for v in args:
+        if v.__class__ is _Taken:
+            v.local._value()
+            v.local._obj = _GONE
+
+
+def local_done(v, obj):
+    """Releases the reference of a taken handle that the function borrowed."""
+    if v.__class__ is _Taken:
+        lean_dec(obj)
+
+
+def local_handle(type_, x):
+    return Local(type_, x)
 
 
 def io_result(r, desc, error_to_string):
@@ -875,7 +976,7 @@ def register_inductive(base, pairs):
 # Module assembly
 
 
-def attach(g, path, fn, lean_name=None, lean=None, params=None, result=None):
+def attach(g, path, fn, lean_name=None, lean=None, params=None, result=None, local=None):
     fn.__name__ = path[-1]
     fn.__qualname__ = ".".join(path)
     fn.__lean_name__ = lean_name
@@ -886,6 +987,12 @@ def attach(g, path, fn, lean_name=None, lean=None, params=None, result=None):
         lean.params = params
         lean.result = result
         fn.lean = lean
+    if local is not None:
+        local.__name__ = path[-1]
+        local.__qualname__ = ".".join([*path, "local"])
+        local.params = params
+        local.result = result
+        fn.local = local
     if len(path) == 1:
         g[path[0]] = fn
         return
