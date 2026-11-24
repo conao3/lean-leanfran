@@ -16,6 +16,7 @@
 
 use crate::marshal::*;
 use crate::object::*;
+use core::cell::Cell;
 use core::fmt;
 use core::marker::PhantomData;
 
@@ -23,8 +24,8 @@ use core::marker::PhantomData;
 ///
 /// # Safety
 ///
-/// `to_obj` must return an owned object of the Lean type and `from_obj` must read one without
-/// taking ownership; the type must be data (no closures, thunks, tasks or references), since
+/// `to_obj` must return an owned object of the Lean type that nothing else refers to, and
+/// `from_obj` must read one without taking ownership; the type must be data (no closures, thunks, tasks or references), since
 /// handles of it are shared between threads. Generated modules implement it for their types.
 pub unsafe trait LeanRepr {
     /// The Rust value of the Lean type.
@@ -109,11 +110,9 @@ impl<L: LeanRepr> Lean<L> {
     /// A handle of the same object for this thread. The object stays shared between threads,
     /// so Lean functions do not update it in place.
     pub fn to_local(&self) -> Local<L> {
-        unsafe { lean_inc(self.obj) };
-        Local {
-            obj: self.obj,
-            ty: PhantomData,
-            thread: PhantomData,
+        unsafe {
+            lean_inc(self.obj);
+            Local::from_owned(self.obj)
         }
     }
 }
@@ -164,8 +163,37 @@ where
 /// ```
 pub struct Local<L: LeanRepr> {
     obj: Obj,
+    /// The scope of [`Owned::with`] that made the handle, or 0.
+    scope: u64,
     ty: PhantomData<fn() -> L>,
     thread: PhantomData<*mut ()>,
+}
+
+thread_local! {
+    /// The scope of `Owned::with` that is running on this thread (0: none), the number of its
+    /// handles that are alive, and the last scope number used.
+    static SCOPE: Cell<u64> = const { Cell::new(0) };
+    static SCOPE_LIVE: Cell<usize> = const { Cell::new(0) };
+    static SCOPE_LAST: Cell<u64> = const { Cell::new(0) };
+}
+
+/// A handle made in the running scope.
+#[inline]
+fn enter_scope() -> u64 {
+    let scope = SCOPE.get();
+    if scope != 0 {
+        SCOPE_LIVE.set(SCOPE_LIVE.get() + 1);
+    }
+    scope
+}
+
+/// A handle of `scope` goes away. Only handles of the running scope are counted, so the count
+/// of a scope is never below the number of its handles.
+#[inline]
+fn leave_scope(scope: u64) {
+    if scope != 0 && scope == SCOPE.get() {
+        SCOPE_LIVE.set(SCOPE_LIVE.get() - 1);
+    }
 }
 
 impl<L: LeanRepr> Local<L> {
@@ -182,9 +210,27 @@ impl<L: LeanRepr> Local<L> {
     /// The handle that can be sent to and shared with other threads. It marks the objects of
     /// the value as shared, at a cost in proportion to the objects not yet shared.
     pub fn share(self) -> Lean<L> {
+        unsafe { Lean::from_owned(self.release()) }
+    }
+
+    /// The object of a handle of another scope than the running one is shared with handles
+    /// that the running scope does not count: it is marked as shared between threads, which
+    /// is what keeps moving an [`Owned`] to another thread sound.
+    #[inline]
+    fn settle(&self) {
+        if self.scope != SCOPE.get() {
+            unsafe { lean_mark_mt(self.obj) };
+        }
+    }
+
+    /// The owned object of the handle, which goes away.
+    #[inline]
+    fn release(self) -> Obj {
+        self.settle();
+        leave_scope(self.scope);
         let obj = self.obj;
         core::mem::forget(self);
-        unsafe { Lean::from_owned(obj) }
+        obj
     }
 
     /// The handle that owns `obj`.
@@ -196,6 +242,7 @@ impl<L: LeanRepr> Local<L> {
     pub unsafe fn from_owned(obj: Obj) -> Self {
         Local {
             obj,
+            scope: enter_scope(),
             ty: PhantomData,
             thread: PhantomData,
         }
@@ -210,17 +257,17 @@ impl<L: LeanRepr> Local<L> {
 
 impl<L: LeanRepr> Clone for Local<L> {
     fn clone(&self) -> Self {
-        unsafe { lean_inc(self.obj) };
-        Local {
-            obj: self.obj,
-            ty: PhantomData,
-            thread: PhantomData,
+        self.settle();
+        unsafe {
+            lean_inc(self.obj);
+            Local::from_owned(self.obj)
         }
     }
 }
 
 impl<L: LeanRepr> Drop for Local<L> {
     fn drop(&mut self) {
+        leave_scope(self.scope);
         unsafe { lean_dec(self.obj) };
     }
 }
@@ -268,16 +315,155 @@ unsafe impl<L: LeanRepr> IntoLean<L> for &Lean<L> {
 
 unsafe impl<L: LeanRepr> IntoLean<L> for Local<L> {
     unsafe fn into_obj(self) -> Obj {
-        let obj = self.obj;
-        core::mem::forget(self);
-        obj
+        self.release()
     }
 }
 
 unsafe impl<L: LeanRepr> IntoLean<L> for &Local<L> {
     unsafe fn into_obj(self) -> Obj {
+        self.settle();
         lean_inc(self.obj);
         self.obj
+    }
+}
+
+/// A Lean value of the type named by `L` with one owner, which can move between threads and
+/// is still updated in place.
+///
+/// The objects of the value keep the reference counts of one thread, like those of a
+/// [`Local`]. That is sound because nothing else refers to them while the `Owned` is at rest:
+/// it is made from a Rust value or from a [`Lean`], it cannot be cloned or shared (`Send`, not
+/// `Sync`), and [`Owned::with`] lends the value as a `Local` for the time of a closure only.
+/// A `Local` that outlives the closure is detected when the closure returns, and what it
+/// shares with the value is then marked as shared between threads, which costs the in-place
+/// updates of those objects and nothing else.
+///
+/// ```
+/// use leanfran_runtime::{List, Local, Owned};
+/// use std::sync::Mutex;
+///
+/// let numbers = Mutex::new(Owned::<List<u32>>::new(vec![1, 2, 3]));
+/// std::thread::scope(|s| {
+///     s.spawn(|| {
+///         let length = numbers.lock().unwrap().with(|list: Local<List<u32>>| {
+///             let length = list.get().len();
+///             (list, length)
+///         });
+///         assert_eq!(length, 3);
+///     });
+/// });
+/// ```
+///
+/// ```compile_fail,E0277
+/// let owned = leanfran_runtime::Owned::<u8>::new(1);
+/// std::thread::scope(|s| {
+///     s.spawn(|| owned.get());
+/// });
+/// ```
+pub struct Owned<L: LeanRepr> {
+    /// Null while `with` runs and after its closure panicked.
+    obj: Obj,
+    ty: PhantomData<fn() -> L>,
+}
+
+// SAFETY: at rest, the objects of the value that are owned by one thread are reachable from
+// this handle only (see `with`), so the thread that holds the handle is the only one that
+// reads or writes them and their reference counts. Blocks freed on another thread than the
+// one that allocated them join the small object pool of the freeing thread.
+unsafe impl<L: LeanRepr> Send for Owned<L> {}
+
+impl<L: LeanRepr> Owned<L> {
+    /// The handle of the Lean value of `value`.
+    pub fn new(value: L::Value) -> Self {
+        Owned {
+            obj: unsafe { L::to_obj(value) },
+            ty: PhantomData,
+        }
+    }
+
+    fn obj(&self) -> Obj {
+        assert!(
+            !self.obj.is_null(),
+            "the Owned value was lost: a closure of `with` panicked"
+        );
+        self.obj
+    }
+
+    /// The Rust value of the handle.
+    pub fn get(&self) -> L::Value {
+        unsafe { L::from_obj(self.obj()) }
+    }
+
+    /// Lends the value to `f` as a [`Local`] and takes the `Local` that `f` returns as the new
+    /// value. Passing the `Local` by value to a function of the `local` module of a generated
+    /// module updates the value in place.
+    ///
+    /// Every other `Local` made in `f` should be gone when `f` returns. If one is still alive
+    /// (kept in a captured variable or in the result), or if `f` returns a `Local` it got from
+    /// elsewhere, the new value is marked as shared between threads.
+    pub fn with<R>(&mut self, f: impl FnOnce(Local<L>) -> (Local<L>, R)) -> R {
+        struct Restore(u64, usize);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                SCOPE.set(self.0);
+                SCOPE_LIVE.set(self.1);
+            }
+        }
+        let obj = core::mem::replace(&mut self.obj, core::ptr::null_mut());
+        assert!(
+            !obj.is_null(),
+            "the Owned value was lost: a closure of `with` panicked"
+        );
+        let scope = SCOPE_LAST.get() + 1;
+        SCOPE_LAST.set(scope);
+        let restore = Restore(SCOPE.replace(scope), SCOPE_LIVE.replace(0));
+        let (value, result) = f(unsafe { Local::from_owned(obj) });
+        let alone = value.scope == scope && SCOPE_LIVE.get() == 1;
+        let obj = value.obj;
+        core::mem::forget(value);
+        if !alone {
+            unsafe { lean_mark_mt(obj) };
+        }
+        drop(restore);
+        self.obj = obj;
+        result
+    }
+
+    /// The handle that can be shared between threads.
+    pub fn share(self) -> Lean<L> {
+        let obj = self.obj();
+        core::mem::forget(self);
+        unsafe { Lean::from_owned(obj) }
+    }
+}
+
+impl<L: LeanRepr> From<Lean<L>> for Owned<L> {
+    /// The shared value with one more owner. Its objects stay shared; the objects that
+    /// functions build from it are owned.
+    fn from(value: Lean<L>) -> Self {
+        let obj = value.obj;
+        core::mem::forget(value);
+        Owned {
+            obj,
+            ty: PhantomData,
+        }
+    }
+}
+
+impl<L: LeanRepr> Drop for Owned<L> {
+    fn drop(&mut self) {
+        if !self.obj.is_null() {
+            unsafe { lean_dec(self.obj) };
+        }
+    }
+}
+
+impl<L: LeanRepr> fmt::Debug for Owned<L>
+where
+    L::Value: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Owned").field(&self.get()).finish()
     }
 }
 

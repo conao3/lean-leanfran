@@ -4,7 +4,7 @@
 //!
 //! `cargo run --release -p leanfran-public-test --bin handle-bench`
 
-use leanfran::{Lean, List, Local};
+use leanfran::{Lean, List, Local, Owned};
 use leanfran_public_test as p;
 use std::hint::black_box;
 use std::time::Instant;
@@ -40,6 +40,20 @@ fn commands(users: u64, count: usize) -> Vec<(p::CalcPrincipal, p::CalcCommand)>
             (actor, cmd)
         })
         .collect()
+}
+
+/// One command on an owned snapshot.
+fn command(
+    owned: &mut Owned<p::CalcSnapshot>,
+    actor: &p::CalcPrincipal,
+    cmd: &p::CalcCommand,
+) -> Option<p::CalcReply> {
+    owned.with(
+        |snap| match p::local::calc_transition(actor.clone(), &snap, cmd.clone()).get() {
+            Ok((write, reply)) => (p::local::calc_apply(snap, write), Some(reply)),
+            Err(_) => (snap, None),
+        },
+    )
 }
 
 fn per_op(label: &str, users: u64, count: usize, start: Instant) {
@@ -92,6 +106,34 @@ fn main() {
         }
         per_op("local: transition + apply", users, count, start);
         assert_eq!(local.get(), snap);
+
+        let mut owned = Owned::<p::CalcSnapshot>::new(seeded.clone());
+        let start = Instant::now();
+        for (actor, cmd) in &cmds {
+            black_box(command(&mut owned, actor, cmd));
+        }
+        per_op("owned: transition + apply", users, count, start);
+        assert_eq!(owned.get(), snap);
+
+        let engine = std::sync::Mutex::new(Owned::<p::CalcSnapshot>::new(seeded.clone()));
+        let start = Instant::now();
+        for (actor, cmd) in &cmds {
+            black_box(command(&mut engine.lock().unwrap(), actor, cmd));
+        }
+        per_op("owned in a Mutex: transition + apply", users, count, start);
+
+        let start = Instant::now();
+        std::thread::scope(|s| {
+            for part in cmds.chunks(cmds.len() / 4) {
+                let engine = &engine;
+                s.spawn(move || {
+                    for (actor, cmd) in part {
+                        black_box(command(&mut engine.lock().unwrap(), actor, cmd));
+                    }
+                });
+            }
+        });
+        per_op("owned in a Mutex, 4 threads", users, count, start);
 
         let start = Instant::now();
         for (actor, cmd) in &cmds {

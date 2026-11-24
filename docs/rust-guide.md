@@ -137,20 +137,47 @@ snapshot = kernel::local::apply(snapshot, write); // moved: the list is updated 
 - `local.share()` gives the `Lean<L>` of the value and `lean.to_local()` a `Local<L>` of a
   shared value. The functions of both modules take both kinds of handle.
 
+`leanfran::Owned<L>` is a value with one owner that can move between threads and is still
+updated in place. It is `Send`, not `Sync` and not `Clone`, and it lends the value as a `Local`
+for the time of a closure:
+
+```rust
+use leanfran::Owned;
+use std::sync::Mutex;
+
+let engine = Mutex::new(Owned::<kernel::Snapshot>::new(kernel::init()));
+
+let reply = engine.lock().unwrap().with(|snapshot| {
+    match kernel::local::transition(actor, &snapshot, command).get() {
+        Ok((write, reply)) => (kernel::local::apply(snapshot, write), Ok(reply)),
+        Err(error) => (snapshot, Err(error)),
+    }
+});
+```
+
+- The closure returns the `Local` that becomes the new value, and a result.
+- Every other `Local` made in the closure should be gone when it returns. One that is kept (in
+  a captured variable or in the result) is detected, and so is a `Local` from outside used in
+  the closure: what they share with the value is then marked as shared between threads. The
+  program stays correct, and those objects are no longer updated in place.
+- `owned.get()` converts the value, `owned.share()` gives the `Lean<L>`, and
+  `Owned::from(lean)` takes a shared value.
+
 `IO` actions, polymorphic functions, functions implemented by Rust and types with proof fields
 have no handle version.
 
 One command (a scan and an update) on a snapshot of two-number structures in a `List`
 (`cargo run --release -p leanfran-public-test --bin handle-bench` in `langs/Rust`):
 
-| rows   | Rust values | `Lean`  | `Local` |
-| ------ | ----------- | ------- | ------- |
-| 1      | 0.23 µs     | 0.29 µs | 0.12 µs |
-| 100    | 4.8 µs      | 2.5 µs  | 0.40 µs |
-| 10,000 | 767 µs      | 262 µs  | 46 µs   |
+| rows   | Rust values | `Lean`  | `Local` | `Owned` in a `Mutex` |
+| ------ | ----------- | ------- | ------- | -------------------- |
+| 1      | 0.18 µs     | 0.25 µs | 0.10 µs | 0.12 µs              |
+| 100    | 4.6 µs      | 2.4 µs  | 0.36 µs | 0.37 µs              |
+| 10,000 | 758 µs      | 223 µs  | 38 µs   | 37 µs                |
 
-What remains with `Local` is the Lean code itself: a `List` is searched and rebuilt cell by cell.
-A snapshot in an `Array` is written in one slot (`Array.setIfInBounds` on the only reference).
+What remains with `Local` and `Owned` is the Lean code itself: a `List` is searched and rebuilt
+cell by cell. A snapshot in an `Array` is written in one slot (`Array.setIfInBounds` on the only
+reference).
 
 ### Polymorphic functions
 
