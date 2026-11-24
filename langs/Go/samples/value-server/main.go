@@ -19,19 +19,19 @@ type Server struct {
 }
 
 func (s *Server) Reserve(amount uint64) (uint64, error) {
-	command := inventory.NewValue_UInt64(amount)
+	command := inventory.Value.NewUInt64(amount)
 	defer command.Close()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next, reply, err := inventory.Handle_Transition(s.snapshot.Borrow(), command.Take())
+	next, reply, err := inventory.Handle.Transition(s.snapshot.Borrow(), command.Take())
 	if err != nil {
 		return 0, err
 	}
 	defer reply.Close()
 	s.snapshot.Close()
 	s.snapshot = next
-	return inventory.ReadValue_UInt64(reply), nil
+	return inventory.Value.ReadUInt64(reply), nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -53,8 +53,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	remaining := inventory.NewValue_UInt64(5)
-	snapshot := inventory.Handle_Initial(remaining.Take())
+	remaining := inventory.Value.NewUInt64(5)
+	snapshot := inventory.Handle.Initial(remaining.Take())
 	server := &Server{snapshot: snapshot}
 	defer func() { server.snapshot.Close() }()
 	for _, amount := range []string{"2", "4", "1"} {

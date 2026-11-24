@@ -1,7 +1,7 @@
 {
   "block": "example.com/verified-clamp",
-  "hash": "dc3e689fb543351c3b40821d9ceddfdc5af36ea405f398358c1ea07f2e639021",
-  "generator_version": 10,
+  "hash": "0723ab7d4fa254ded94b28ecb9bde046750237cbd33d0a33e79e3f4c0f611eb5",
+  "generator_version": 11,
   "files": [
     "leanfran_types_gen.go",
     "leanfran_funcs_gen.go",

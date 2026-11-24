@@ -13,14 +13,14 @@ structure PublicFn where
   target : IR.Decl
   ident : String
   sig : PublicSig
-  inIdent : String := ""
 
 structure ValueConversion where
   desc : Desc
-  newIdent : String
-  readIdent : String
-  newInIdent : String := ""
-  readInIdent : String := ""
+  stem : String
+
+def ValueConversion.newIdent (c : ValueConversion) : String := "New" ++ c.stem
+
+def ValueConversion.readIdent (c : ValueConversion) : String := "Read" ++ c.stem
 
 structure PublicModule where
   state : MarshalState
@@ -98,6 +98,7 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
       set saved
       skipped := skipped.push { name := r, reason }
   let mut handles := #[]
+  let mut handleNames : NameClaims := {}
   for r in roots do
     let saved ← get
     let savedEnv ← getEnv
@@ -112,23 +113,22 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
           let exports := exportedFns env
           discard <| ofExcept (collect env exports #[target.name] >>= checkExterns env exports)
           pure sig
-      let base := (previous.map (·.ident)).getD (publicMethod cfg.strip r)
-      let ident ← freshHandleIdent ("Handle_" ++ base)
-      let inIdent ← freshHandleIdent ("HandleIn_" ++ base)
-      handles := handles.push { source := r, target, ident, inIdent, sig }
+      let base := reserveNames ["In"] (publicMethod cfg.strip r)
+      let (ident, claims) := handleNames.claim base
+      handleNames := claims
+      handles := handles.push { source := r, target, ident, sig }
     catch e =>
       if isNameCollision (← e.toMessageData.toString) then throw e
       setEnv savedEnv
       set saved
   let types := (← get).types.toList.filter (fun t => !t.anonymous && t.model.isNone)
   let inputs := types.map (fun t => Desc.named t.ident) ++ handles.toList.flatMap (·.sig.valueInputs)
-  let conversions : Array ValueConversion ← inputs.eraseDups.toArray.mapM fun desc => do
-    let stem := desc.valueStem
-    let newIdent ← freshHandleIdent ("NewValue_" ++ stem)
-    let readIdent ← freshHandleIdent ("ReadValue_" ++ stem)
-    let newInIdent ← freshHandleIdent ("NewValueIn_" ++ stem)
-    let readInIdent ← freshHandleIdent ("ReadValueIn_" ++ stem)
-    return { desc, newIdent, readIdent, newInIdent, readInIdent }
+  let mut conversions : Array ValueConversion := #[]
+  let mut conversionNames : NameClaims := {}
+  for desc in inputs.eraseDups do
+    let (stem, claims) := conversionNames.claim desc.valueStem
+    conversionNames := claims
+    conversions := conversions.push { desc, stem }
   return { state := ← get, functions, skipped, handles, conversions }
 
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
@@ -519,6 +519,10 @@ def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
     "\t_lfCodecsOnce.Do(_lfBuildCodecs)\n"
   return s!"func {f.ident}({joinArgs binders}) {signature}\{\n{ready}{checkBody}{ownership}{run}{cleanup}{branch}{returnValues output canFail}}\n\n"
 
+def valueNamespace (name : String) : String :=
+  s!"var {name} lf{name}\n\ntype lf{name} struct\{}\n\ntype lfScoped{name} struct \{\n\tscope *leanfran.ValueScope\n}\n\n" ++
+  s!"func (lf{name}) In(scope *leanfran.ValueScope) lfScoped{name} \{\n\treturn lfScoped{name}\{scope: scope}\n}\n\n"
+
 def emitValueConversion (cfg : RenderCfg) (c : ValueConversion) : String :=
   let ty := c.desc.go cfg
   let marker := c.desc.valueType cfg
@@ -528,12 +532,12 @@ def emitValueConversion (cfg : RenderCfg) (c : ValueConversion) : String :=
   let checked := c.desc.needsCheck cfg.state
   let signature := returnSignature #[wrapped] checked
   let newCall := if checked then
-    s!"leanfran.NewValueIn[{marker}](scope, {codec}, v, {quoteGo c.desc.valueStem})"
-    else s!"leanfran.NewUncheckedValueIn[{marker}](scope, {codec}, v)"
-  s!"func {c.newIdent}(v {ty}) {signature}\{\n\treturn {c.newInIdent}(nil, v)\n}\n\n" ++
-  s!"func {c.newInIdent}(scope *leanfran.ValueScope, v {ty}) {signature}\{\n\t{ready}\n\treturn {newCall}\n}\n\n" ++
-  s!"func {c.readIdent}(v {wrapped}) {ty} \{\n\treturn {c.readInIdent}(nil, v)\n}\n\n" ++
-  s!"func {c.readInIdent}(scope *leanfran.ValueScope, v {wrapped}) {ty} \{\n\t{ready}\n\treturn leanfran.ReadValueIn(scope, {codec}, v)\n}\n\n"
+    s!"leanfran.NewValueIn[{marker}](api.scope, {codec}, v, {quoteGo c.desc.valueStem})"
+    else s!"leanfran.NewUncheckedValueIn[{marker}](api.scope, {codec}, v)"
+  s!"func (lfValue) {c.newIdent}(v {ty}) {signature}\{\n\treturn lfScopedValue\{}.{c.newIdent}(v)\n}\n\n" ++
+  s!"func (api lfScopedValue) {c.newIdent}(v {ty}) {signature}\{\n\t{ready}\n\treturn {newCall}\n}\n\n" ++
+  s!"func (lfValue) {c.readIdent}(v {wrapped}) {ty} \{\n\treturn lfScopedValue\{}.{c.readIdent}(v)\n}\n\n" ++
+  s!"func (api lfScopedValue) {c.readIdent}(v {wrapped}) {ty} \{\n\t{ready}\n\treturn leanfran.ReadValueIn(api.scope, {codec}, v)\n}\n\n"
 
 def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let ret := f.sig.result
@@ -546,7 +550,7 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let fail := joinArgs (zeroes.push "err")
   let mut args := #[]
   let mut binders := #[]
-  let mut forwarded := #["nil"]
+  let mut forwarded := #[]
   let mut inputs := #[]
   let mut ownership := ""
   for (param, i) in f.sig.params.zipIdx do
@@ -598,9 +602,8 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   if raw == "raw" && (match result with | .prod .. => true | .unit => ty.isPossibleRef | _ => false) then
     body := body ++ "\tdefer rt.Lean_dec(raw)\n"
   let forward := if signature.isEmpty then "" else "return "
-  let wrapper := s!"func {f.ident}({joinArgs binders}) {signature}\{\n\t{forward}{f.inIdent}({joinArgs forwarded})\n}\n\n"
-  let scopedBinders := #["scope *leanfran.ValueScope"] ++ binders
-  return wrapper ++ s!"func {f.inIdent}({joinArgs scopedBinders}) {signature}\{\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}{returnValues output canFail}}\n\n"
+  let wrapper := s!"func (lfHandle) {f.ident}({joinArgs binders}) {signature}\{\n\t{forward}lfScopedHandle\{}.{f.ident}({joinArgs forwarded})\n}\n\n"
+  return wrapper ++ s!"func (api lfScopedHandle) {f.ident}({joinArgs binders}) {signature}\{\n\tscope := api.scope\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}{returnValues output canFail}}\n\n"
 
 def usesQualifier (source qualifier : String) : Bool := Id.run do
   let mut plain := ""
@@ -721,10 +724,12 @@ def publicSources (env : Environment) (mod : Name) (pkg version goPath : String)
   let markers := cfg.state.opaqueTypes ++ (types.filterMap fun t =>
     if t.anonymous || t.model.isSome then some t.ident else none)
   let markerBody := String.join (markers.toList.map fun n => s!"type {n} struct\{}\n\n")
+  let valueAPI := if conversions.isEmpty then "" else valueNamespace "Value" ++ String.join conversionBody.toList
+  let handleAPI := if handles.isEmpty then "" else valueNamespace "Handle" ++ String.join valueBody.toList
   let lean ← generate env mod (collected.functions.map (·.target.name) ++ collected.handles.map (·.target.name) ++
       cfg.state.deciders) pkg none version false
-  return #[("leanfran_types_gen.go", packageSource cfg mod pkg version (packageCodecs cfg types ++ String.join typeBody.toList ++ markerBody ++ String.join conversionBody.toList)),
-    ("leanfran_funcs_gen.go", packageSource cfg mod pkg version (String.join funcBody.toList ++ String.join valueBody.toList)),
+  return #[("leanfran_types_gen.go", packageSource cfg mod pkg version (packageCodecs cfg types ++ String.join typeBody.toList ++ markerBody ++ valueAPI)),
+    ("leanfran_funcs_gen.go", packageSource cfg mod pkg version (String.join funcBody.toList ++ handleAPI)),
     ("leanfran_lean_gen.go", lean)]
 
 end LeanGo

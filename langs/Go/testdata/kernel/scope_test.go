@@ -13,7 +13,7 @@ import (
 func TestValueScope(t *testing.T) {
 	var saved *leanfran.ValueScope
 	var counter leanfran.Value[Counter]
-	scalar := NewValue_UInt64(9)
+	scalar := Value.NewUInt64(9)
 	defer scalar.Close()
 	if scalar.IsExclusive() {
 		t.Fatal("scalar reports exclusive ownership")
@@ -21,19 +21,19 @@ func TestValueScope(t *testing.T) {
 	assertPanic(t, "scope callback panic", func() {
 		leanfran.WithValues(func(scope *leanfran.ValueScope) {
 			saved = scope
-			counter = NewValueIn_Counter(scope, Counter{Count: 1})
+			counter = Value.In(scope).NewCounter(Counter{Count: 1})
 			if !counter.IsExclusiveIn(scope) {
 				t.Fatal("new counter is shared")
 			}
 			alias := counter
-			counter = HandleIn_Bump(scope, counter.Take(), scalar.Borrow())
+			counter = Handle.In(scope).Bump(counter.Take(), scalar.Borrow())
 			assertPanic(t, "leanfran: empty Value", func() { alias.IsExclusiveIn(scope) })
-			if !counter.IsExclusiveIn(scope) || ReadValueIn_Counter(scope, counter).Count != 9 {
+			if !counter.IsExclusiveIn(scope) || Value.In(scope).ReadCounter(counter).Count != 9 {
 				t.Fatal("counter update failed")
 			}
-			pair := NewValueIn_PairUInt64UInt64(scope, leanfran.Pair[uint64, uint64]{Fst: 1, Snd: 2})
+			pair := Value.In(scope).NewPairUInt64UInt64(leanfran.Pair[uint64, uint64]{Fst: 1, Snd: 2})
 			left, right := leanfran.SplitValueIn(scope, pair.Take())
-			if ReadValueIn_UInt64(scope, left) != 1 || ReadValueIn_UInt64(scope, right) != 2 {
+			if Value.In(scope).ReadUInt64(left) != 1 || Value.In(scope).ReadUInt64(right) != 2 {
 				t.Fatal("unexpected split values")
 			}
 			left.CloseIn(scope)
@@ -42,7 +42,7 @@ func TestValueScope(t *testing.T) {
 		})
 	})
 	defer counter.Close()
-	if !counter.IsExclusive() || ReadValue_Counter(counter).Count != 9 {
+	if !counter.IsExclusive() || Value.ReadCounter(counter).Count != 9 {
 		t.Fatal("counter escaped the callback with the wrong value or ownership")
 	}
 	assertPanic(t, "leanfran: inactive ValueScope", func() { counter.CloseIn(saved) })
@@ -55,31 +55,31 @@ func TestValueScopeConcurrent(t *testing.T) {
 	var workers sync.WaitGroup
 	for user := range uint64(8) {
 		workers.Go(func() {
-			actor := NewValue_Actor(Actor{CanWrite: true, Tenant: 3 * user})
+			actor := Value.NewActor(Actor{CanWrite: true, Tenant: 3 * user})
 			defer actor.Close()
-			command := checked(NewValue_Command(CommandSet{Amount: 1 + user}))
+			command := checked(Value.NewCommand(CommandSet{Amount: 1 + user}))
 			defer command.Close()
 			for range calls {
 				leanfran.WithValues(func(scope *leanfran.ValueScope) {
-					writes, reply, err := HandleIn_Transition(scope, actor.Borrow(), snapshot.Borrow(), command.Borrow())
+					writes, reply, err := Handle.In(scope).Transition(actor.Borrow(), snapshot.Borrow(), command.Borrow())
 					if err != nil {
 						t.Error(err)
 						return
 					}
-					if got := ReadValueIn_UInt64(scope, reply); got != 1+user {
+					if got := Value.In(scope).ReadUInt64(reply); got != 1+user {
 						t.Errorf("reply = %d, want %d", got, 1+user)
 					}
 					reply.CloseIn(scope)
 					if !snapshot.IsExclusiveIn(scope) {
 						t.Error("snapshot is shared")
 					}
-					snapshot = HandleIn_Apply(scope, snapshot.Take(), writes.Take())
+					snapshot = Handle.In(scope).Apply(snapshot.Take(), writes.Take())
 				})
 			}
 		})
 	}
 	workers.Wait()
-	result := ReadValue_Snapshot(snapshot)
+	result := Value.ReadSnapshot(snapshot)
 	if result.Revision != 8*calls {
 		t.Fatalf("revision = %d, want %d", result.Revision, 8*calls)
 	}

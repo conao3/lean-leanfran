@@ -49,9 +49,9 @@ func main() {
 	}
 	sum, err := public.Total([]*big.Int{big.NewInt(1200), big.NewInt(800)}, public.DiscountPercent{P: big.NewInt(10)})
 	show(sum, err)
-	bigValue := values.Big_2()
+	bigValue := values.Big2()
 	roundTrip([]values.Big{bigValue}, nil, decode[values.Big])
-	data := values.Data_2()
+	data := values.Data2()
 	roundTrip(data, nil, decode[values.Data])
 	shapes := values.Shapes()
 	roundTrip(shapes, nil, values.UnmarshalShape)

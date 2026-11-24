@@ -3,8 +3,12 @@ package public_test
 import (
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"math"
 	"math/big"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -73,11 +77,11 @@ func TestScalarAndContainerRoundTrip(t *testing.T) {
 	if err != nil || a.Int64() != 7 {
 		t.Fatal(a, err)
 	}
-	b, err := public.LowerCase_2(big.NewInt(7))
+	b, err := public.LowerCase2(big.NewInt(7))
 	if err != nil || b.Int64() != 8 {
 		t.Fatal(b, err)
 	}
-	keywordFields := public.String{Type: big.NewInt(1), Func: big.NewInt(2), Validate_2: big.NewInt(3)}
+	keywordFields := public.String{Type: big.NewInt(1), Func: big.NewInt(2), Validate2: big.NewInt(3)}
 	if err := keywordFields.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -241,24 +245,77 @@ func TestPublicSignatures(t *testing.T) {
 		t.Fatalf("invalid color: %v, %v", color, err)
 	}
 
-	raw := public.NewValue_UInt64(9)
-	public.Handle_UnitEcho(public.NewValue_Unit(struct{}{}).Take())
-	leanReply := public.Handle_ReplyFor(raw.Take())
+	raw := public.Value.NewUInt64(9)
+	public.Handle.UnitEcho(public.Value.NewUnit(struct{}{}).Take())
+	leanReply := public.Handle.ReplyFor(raw.Take())
 	defer leanReply.Close()
-	if got := public.ReadValue_Reply(leanReply); got.V != 9 {
+	if got := public.Value.ReadReply(leanReply); got.V != 9 {
 		t.Fatal(got)
 	}
 	record, err := public.NewRecordValue(9)
 	if err != nil {
 		t.Fatal(err)
 	}
-	input, err := public.NewValue_Record(record)
+	input, err := public.Value.NewRecord(record)
 	if err != nil {
 		t.Fatal(err)
 	}
-	output := public.Handle_RecordValue_2(input.Take())
+	output := public.Handle.RecordValue(input.Take())
 	defer output.Close()
-	if got := public.ReadValue_Record(output); got != record {
+	if got := public.Value.ReadRecord(output); got != record {
 		t.Fatal(got)
+	}
+}
+
+func TestValueNamespaces(t *testing.T) {
+	if got := public.LeanHandle(public.LeanValue{Amount: 9}); got != 9 || public.LeanLeanHandle() != 7 {
+		t.Fatal("ordinary wrappers collided with Handle or Value")
+	}
+	if got := client.Amount(public.LeanValue{Amount: 9}); got != 9 {
+		t.Fatalf("cross-package LeanValue got %d, want 9", got)
+	}
+	leanfran.WithValues(func(scope *leanfran.ValueScope) {
+		handles := public.Handle.In(scope)
+		values := public.Value.In(scope)
+		input := values.NewLeanValue(public.LeanValue{Amount: 9})
+		number := handles.Handle(input.Take())
+		result := handles.LeanIn(number.Take())
+		defer result.CloseIn(scope)
+		if got := values.ReadUInt64(result); got != 10 {
+			t.Fatalf("scoped call got %d, want 10", got)
+		}
+	})
+}
+
+func TestGeneratedPublicIdentifiers(t *testing.T) {
+	paths, err := filepath.Glob("leanfran_*_gen.go")
+	if err != nil || len(paths) != 3 {
+		t.Fatalf("expected three generated files, got %v: %v", paths, err)
+	}
+	positions := token.NewFileSet()
+	for _, path := range paths {
+		file, err := parser.ParseFile(positions, path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			var names []*ast.Ident
+			switch declaration := node.(type) {
+			case *ast.FuncDecl:
+				names = []*ast.Ident{declaration.Name}
+			case *ast.TypeSpec:
+				names = []*ast.Ident{declaration.Name}
+			case *ast.ValueSpec:
+				names = declaration.Names
+			case *ast.Field:
+				names = declaration.Names
+			}
+			for _, name := range names {
+				if name.IsExported() && strings.ContainsRune(name.Name, '_') {
+					t.Errorf("%s: exported identifier %s contains an underscore", positions.Position(name.Pos()), name)
+				}
+			}
+			return true
+		})
 	}
 }
