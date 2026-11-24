@@ -1,6 +1,6 @@
 //! Handles (`leanfran::Lean`) and the functions of the generated `lean` module.
 
-use leanfran::{Array, Fin, Lean, List, Nat};
+use leanfran::{Array, Fin, Lean, List, Local, Nat};
 use leanfran_public_test as p;
 use p::lean as h;
 use std::sync::{Arc, Mutex};
@@ -217,4 +217,111 @@ fn a_mutex_holds_the_snapshot_for_several_threads() {
         snap.memories.iter().map(|m| m.value).sum::<u64>(),
         threads * rounds
     );
+}
+
+#[test]
+fn local_handles_agree_with_the_value_functions() {
+    let mut values = p::calc_init();
+    let mut local = p::local::calc_init();
+    let commands = [
+        p::CalcCommand::Set { value: 5 },
+        p::CalcCommand::Apply {
+            op: p::CalcOp::Mul,
+            arg: 3,
+        },
+        p::CalcCommand::Apply {
+            op: p::CalcOp::Div,
+            arg: 0,
+        },
+        p::CalcCommand::Get,
+    ];
+    for user in 0..20 {
+        for cmd in &commands {
+            let expected = p::calc_transition(principal(user), values.clone(), cmd.clone());
+            let got = p::local::calc_transition(principal(user), &local, cmd.clone()).get();
+            assert_eq!(got, expected);
+            if let Ok((write, _)) = expected {
+                values = p::calc_apply(values, write.clone());
+                local = p::local::calc_apply(local, write);
+            }
+        }
+    }
+    assert_eq!(local.get(), values);
+    assert_eq!(format!("{:?}", Local::<u8>::new(3)), "Local(3)");
+}
+
+#[test]
+fn a_local_handle_that_is_kept_keeps_its_value() {
+    let old = Local::<p::CalcSnapshot>::new(seeded(20).get());
+    let write = Some(p::CalcMemory { user: 5, value: 99 });
+    let new = p::local::calc_apply(&old, write.clone());
+    assert_eq!(old.get().memories[5].value, 5);
+    assert_eq!(new.get().memories[5].value, 99);
+    let copy = new.clone();
+    let newer = p::local::calc_apply(new, Some(p::CalcMemory { user: 5, value: 7 }));
+    assert_eq!(copy.get().memories[5].value, 99);
+    assert_eq!(newer.get().memories[5].value, 7);
+}
+
+#[test]
+fn local_and_shared_handles_convert() {
+    let local = p::local::calc_apply(
+        p::local::calc_init(),
+        Some(p::CalcMemory { user: 1, value: 2 }),
+    );
+    let shared: Lean<p::CalcSnapshot> = local.share();
+    let worker = {
+        let shared = shared.clone();
+        thread::spawn(move || {
+            let local = shared.to_local();
+            let next = p::local::calc_apply(local, Some(p::CalcMemory { user: 1, value: 3 }));
+            assert_eq!(next.get().memories[0].value, 3);
+            next.share()
+        })
+    };
+    let from_worker = worker.join().unwrap();
+    assert_eq!(shared.get().memories[0].value, 2);
+    assert_eq!(from_worker.get().memories[0].value, 3);
+    let mixed = h::calc_apply(
+        &shared.to_local(),
+        Some(p::CalcMemory { user: 9, value: 9 }),
+    );
+    assert_eq!(mixed.get().memories.len(), 2);
+    let back = p::local::calc_apply(&mixed, None);
+    assert_eq!(back.get(), mixed.get());
+}
+
+/// `Local` is neither `Send` nor `Sync`: with both impls of the trait below applying, the call
+/// would be ambiguous and this test would not compile.
+#[test]
+fn a_local_handle_stays_on_its_thread() {
+    trait AmbiguousIfSend<A> {
+        fn check() {}
+    }
+    impl<T: ?Sized> AmbiguousIfSend<()> for T {}
+    impl<T: ?Sized + Send> AmbiguousIfSend<u8> for T {}
+    trait AmbiguousIfSync<A> {
+        fn check() {}
+    }
+    impl<T: ?Sized> AmbiguousIfSync<()> for T {}
+    impl<T: ?Sized + Sync> AmbiguousIfSync<u8> for T {}
+    <Local<p::CalcSnapshot> as AmbiguousIfSend<_>>::check();
+    <Local<p::CalcSnapshot> as AmbiguousIfSync<_>>::check();
+}
+
+#[test]
+fn an_array_snapshot_is_written_in_place_or_copied() {
+    let rows: Vec<_> = (0..5)
+        .map(|user| p::CalcMemory { user, value: user })
+        .collect();
+    let kept = Local::<p::CalcArraySnapshot>::new(p::CalcArraySnapshot { memories: rows });
+    let write = Some(p::CalcMemory { user: 3, value: 30 });
+    let copied = p::local::calc_apply_array(&kept, write.clone());
+    assert_eq!(kept.get().memories[3].value, 3);
+    assert_eq!(copied.get().memories[3].value, 30);
+    let moved = p::local::calc_apply_array(copied, Some(p::CalcMemory { user: 9, value: 9 }));
+    assert_eq!(moved.get().memories.len(), 6);
+    assert_eq!(moved.get().memories[3].value, 30);
+    let shared = h::calc_apply_array(kept.share(), write);
+    assert_eq!(shared.get().memories[3].value, 30);
 }

@@ -753,8 +753,8 @@ def unboxExpr (ty : IRType) (o : String) : String :=
 
 /-- The public function `f` on handles: arguments are Rust values or handles, the result is a
     handle. `none` when `f` is an `IO` action or uses a type a handle cannot hold. -/
-def emitHandle (types : Std.HashMap String TypeDef) (decls : Std.HashMap Name Decl) (f : PublicFn) :
-    Except String (Option String) := do
+def emitHandle (types : Std.HashMap String TypeDef) (decls : Std.HashMap Name Decl) (f : PublicFn)
+    (handle : String := "Lean") : Except String (Option String) := do
   let some d := decls[f.target]? | throw s!"function was not collected: {f.target}"
   if f.sig.est || (typeUsesProof types f.sig.result).isSome then return none
   let some resTy := f.sig.result.leanType? | return none
@@ -787,14 +787,14 @@ def emitHandle (types : Std.HashMap String TypeDef) (decls : Std.HashMap Name De
   let body :=
     if d.resultType.isScalar then
       let boxed := if boxFn d.resultType == "lean_box" then "rt::lean_box(__r as usize)" else s!"rt::{boxFn d.resultType}(__r)"
-      s!"let __r: {rsType d.resultType} = {call};\n            {decStr}rt::Lean::from_owned({boxed})"
+      s!"let __r: {rsType d.resultType} = {call};\n            {decStr}rt::{handle}::from_owned({boxed})"
     else if isConst d then
-      s!"let __r: Obj = {call};\n            rt::lean_inc(__r);\n            rt::Lean::from_owned(__r)"
+      s!"let __r: Obj = {call};\n            rt::lean_inc(__r);\n            rt::{handle}::from_owned(__r)"
     else
-      s!"let __r: Obj = {call};\n            {decStr}rt::Lean::from_owned(__r)"
+      s!"let __r: Obj = {call};\n            {decStr}rt::{handle}::from_owned(__r)"
   let stmtStr := String.join (stmts.toList.map (s!"            " ++ · ++ "\n"))
   let doc := s!"`{f.rust}` on handles. {f.doc}"
-  return some s!"    #[doc = {quoteString doc}]\n    pub fn {f.rust}({", ".intercalate sigParams.toList}) -> rt::Lean<{resTy}> \{\n        unsafe \{\n{stmtStr}            {body}\n        }\n    }\n"
+  return some s!"    #[doc = {quoteString doc}]\n    pub fn {f.rust}({", ".intercalate sigParams.toList}) -> rt::{handle}<{resTy}> \{\n        unsafe \{\n{stmtStr}            {body}\n        }\n    }\n"
 
 /-! ## Rust functions -/
 
@@ -1163,6 +1163,7 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
         if (typeUsesProof types (.named td.rust)).isNone then items := items ++ emitReprImpl td
         items := items ++ "\n"
     let mut handles := ""
+    let mut locals := ""
     for f in publics do
       let res := match callees[f.target]? with
         | some c => emitPublicRust facade f c
@@ -1175,8 +1176,13 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
         | .ok (some s) => handles := handles ++ s
         | .ok none => pure ()
         | .error e => return .error e
+        match emitHandle types declMap f "Local" with
+        | .ok (some s) => locals := locals ++ s
+        | .ok none => pure ()
+        | .error e => return .error e
     unless handles.isEmpty do
-      items := items ++ "#[doc = \"The public functions on handles: an argument is a Rust value, a `&Lean<L>` or a `Lean<L>`, and the result is a `Lean<L>` that keeps the Lean value without converting it.\"]\n#[allow(unused_imports, clippy::all)]\npub mod lean {\n    use super::*;\n" ++ handles ++ "}\n\n"
+      items := items ++ "#[doc = \"The public functions on handles: an argument is a Rust value or a handle (`&Lean<L>`, `Lean<L>`, `&Local<L>`, `Local<L>`), and the result is a `Lean<L>` that keeps the Lean value without converting it and can be shared between threads.\"]\n#[allow(unused_imports, clippy::all)]\npub mod lean {\n    use super::*;\n" ++ handles ++ "}\n\n"
+      items := items ++ "#[doc = \"The public functions on handles of one thread: like the module `lean`, with a `Local<L>` as the result. A value whose only handle is passed by value is updated in place.\"]\n#[allow(unused_imports, clippy::all)]\npub mod local {\n    use super::*;\n" ++ locals ++ "}\n\n"
     let genericItems := if generics.isEmpty then "" else
       String.join (generics.toList.map fun g => emitGenericFn facade g ++ "\n") ++ emitInstModule generics ++ "\n"
     items := items ++ genericItems
