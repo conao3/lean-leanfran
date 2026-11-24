@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# != 1 || ! ${1-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo 'usage: maint/Go/bump-version.sh X.Y.Z' >&2
+if [[ $# != 1 || ! ${1-} =~ ^[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    echo 'usage: maint/Go/bump-version.sh <0.X.Y or 1.X.Y>' >&2
     exit 2
 fi
 
 cd "$(dirname "$0")/../../langs/Go"
-pattern='^def version : String := "[0-9]+\.[0-9]+\.[0-9]+"$'
-if ! grep -Eq "$pattern" Main.lean; then
-    echo 'bump-version.sh: version declaration missing from Main.lean' >&2
+lean_pattern='^def version : String := "[0-9]+\.[0-9]+\.[0-9]+"$'
+go_pattern='^const Version = "[0-9]+\.[0-9]+\.[0-9]+"$'
+if ! grep -Eq "$lean_pattern" Main.lean || ! grep -Eq "$go_pattern" leanfran.go; then
+    echo 'bump-version.sh: release version declaration missing from Main.lean or leanfran.go' >&2
     exit 1
 fi
-sed -Ei "s/$pattern/def version : String := \"$1\"/" Main.lean
+sed -Ei "s/$lean_pattern/def version : String := \"$1\"/" Main.lean
+sed -Ei "s/$go_pattern/const Version = \"$1\"/" leanfran.go
+
+git ls-files -z -- 'samples/*/go.mod' 'testdata/*/go.mod' |
+    while IFS= read -r -d '' manifest; do
+        go mod edit -modfile="$manifest" -require="github.com/conao3/leanfran-go@v$1"
+    done
+
+lake build leanfran-go
+export LEANFRAN_GO_CLI="$PWD/.lake/build/bin/leanfran-go"
+for sample in samples/verified-clamp samples/verified-nibble; do
+    (cd "$sample" && go tool leanfran check --require proved)
+done

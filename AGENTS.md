@@ -22,8 +22,8 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 
 ## Verification and releases
 
-For PHP models, maintain proof and translation fixtures alongside the native-oracle comparisons. Run property tests against the generated specs in the shared verification fixture. `make check BACKENDS=PHP` runs the PHP checks under both PHP 8.4 and PHP 8.5.
+For PHP models, maintain proof and translation fixtures alongside the native-oracle comparisons. Run property tests against the generated specs in the shared verification fixture. `make check BACKENDS=PHP` runs the PHP checks under PHP 8.4 and 8.5. `make check BACKENDS=Go` runs the Go checks under Go 1.27 and 1.26, including a local mirror publish and consumer install.
 
 Run `make check` from the repository root, or `make check BACKENDS=Python` for selected backends. Run `make format` before committing.
 
-Start the `Release` workflow once per release. It updates the shared version, checks every backend, pushes the release commit and tag, and starts `Publish`. Concurrent `Release` runs execute one at a time. If publishing to any registry fails, rerun `Publish` with the same tag. It skips versions already published.
+Start the `Release` workflow once per release. It updates the shared version, checks every backend, pushes the release commit and tag, and starts `Publish`. Concurrent `Release` runs execute one at a time. If publishing to any registry fails, rerun `Publish` with the same tag. It skips versions already published or verifies that the Go mirror tag matches the release snapshot. The Go job also verifies that Go resolves the tagged module.

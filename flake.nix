@@ -1,5 +1,5 @@
 {
-  description = "leanfran: Lean 4 backends for Rust, Python, TypeScript, Clojure and PHP";
+  description = "leanfran: Lean 4 backends for Rust, Python, TypeScript, Clojure, PHP, and Go";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

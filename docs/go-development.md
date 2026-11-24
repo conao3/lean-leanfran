@@ -47,3 +47,11 @@ nix develop .#go -c make -C langs/Go samples
 Run `make test-verify` from `langs/Go/` to check obligation states, proof freshness with Go alone, Go-to-Lean translation against the C backend, and model operations against native Go. `make test-verify-samples` checks both verified samples and demonstrates that changing the nibble mask makes the seeded test fail. `make samples` includes this target.
 
 The sum-to sample imports a generated package and calls it from Go. The greet-cli sample compiles a Lean `main` into a Go command and checks the greeting and usage paths. The pricing sample exercises generated public functions, proof validation and JSON. The sample executables are written to `langs/Go/test-out/samples/`.
+
+## Publishing
+
+The Go Publish job checks that the release tag matches `Version` in `leanfran.go` and `version` in `Main.lean`. It snapshots the Go module and license at the root of the read-only mirror `conao3/leanfran-go`. The `go-mirror` environment supplies `GO_MIRROR_DEPLOY_KEY` to push `main` and the `vX.Y.Z` tag in one atomic operation. A retry with the same tag succeeds when the snapshot matches the tagged tree. A different tree for the same tag fails.
+
+The job checks that Go resolves the tag directly from the mirror. Consumers can install the [published module](https://pkg.go.dev/github.com/conao3/leanfran-go) with `go get github.com/conao3/leanfran-go@vX.Y.Z`, substituting the published tag. The Lean compiler is available through `nix build .#go` in the source repository. Go major versions from v2 onward require the corresponding `/vN` suffix in the module and import paths.
+
+Run `nix develop .#go -c make -C langs/Go test-publish` to exercise the mirror push locally. The check resolves the tagged module and tool from a bare Git repository, builds and runs the generated range example, verifies its manifest with `go tool leanfran status`, and checks identical and conflicting tag retries.

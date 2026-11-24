@@ -227,3 +227,56 @@ jobs:
           done
           echo "conao3/leanfran $TAG did not appear on Packagist after 30 attempts" >&2
           exit 1
+
+  go:
+    name: Publish the Go module
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: go-mirror
+      url: https://pkg.go.dev/github.com/conao3/leanfran-go
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v32.0.0
+      - name: Prepare the mirror snapshot
+        run: nix develop .#go -c bash maint/Go/mirror-snapshot.sh "$TAG" "$RUNNER_TEMP/go-mirror-snapshot"
+      - name: Push the snapshot and tag to the mirror
+        env:
+          GO_MIRROR_DEPLOY_KEY: ${{ secrets.GO_MIRROR_DEPLOY_KEY }}
+        run: |
+          : "${GO_MIRROR_DEPLOY_KEY:?GO_MIRROR_DEPLOY_KEY is required}"
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/go-mirror-ssh.XXXXXXXX")
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          (umask 077; printf '%s\n' "$GO_MIRROR_DEPLOY_KEY" > "$ssh_dir/deploy-key")
+          unset GO_MIRROR_DEPLOY_KEY
+          ssh-keygen -y -P '' -f "$ssh_dir/deploy-key" > /dev/null
+          cat > "$ssh_dir/known_hosts" <<'KEY'
+          github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+          KEY
+          export GIT_SSH_COMMAND="ssh -F /dev/null -i \"$ssh_dir/deploy-key\" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=\"$ssh_dir/known_hosts\" -o HostKeyAlgorithms=ssh-ed25519"
+          bash maint/Go/mirror-push.sh "$TAG" "$RUNNER_TEMP/go-mirror-snapshot" git@github.com:conao3/leanfran-go.git
+      - name: Verify the tagged Go module
+        env:
+          GOPROXY: direct
+        run: |
+          cd "$RUNNER_TEMP"
+          for attempt in {1..6}; do
+            if nix develop "$GITHUB_WORKSPACE#go" -c go list -m "github.com/conao3/leanfran-go@$TAG"; then
+              exit 0
+            fi
+            if [[ $attempt != 6 ]]; then
+              sleep 10
+            fi
+          done
+          echo "Go could not resolve github.com/conao3/leanfran-go@$TAG" >&2
+          exit 1
