@@ -87,6 +87,7 @@ def build (ws : Workspace) (out : FilePath) : IO Unit := do
     let generated := tmp / "export.c"
     let lean := ws.lakeEnv.lean
     let env := ws.augmentedEnvVars
+    let cFlags := #["-I", lean.includeDir.toString] ++ lean.ccFlags
     discard <| run {
       cmd := lean.lean.toString
       env := env
@@ -95,7 +96,7 @@ def build (ws : Workspace) (out : FilePath) : IO Unit := do
     for (source, name) in #[(generated, "export"), (out / s!"{target.cPrefix}.c", "wrapper"),
         (out / "leanfran.c", "support")] do
       let obj := tmp / s!"leanfran_{target.cPrefix}_{name}.o"
-      let some () ← (Lake.compileO obj source lean.ccFlags lean.cc).toBaseIO
+      let some () ← (Lake.compileO obj source cFlags lean.cc).toBaseIO
         | throw <| IO.userError s!"could not compile {source}"
       native := native.push obj
     let file := s!"lib{target.cPrefix}.a"
