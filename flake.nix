@@ -161,7 +161,10 @@
             pkgs.cmake
             pkgs.pkg-config
           ]
-          ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.gcc;
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            pkgs.gcc
+            pkgs.clang
+          ];
           pythonEnv = {
             UV_PYTHON_DOWNLOADS = "never";
             UV_PYTHON = "${pkgs.python314}/bin/python3";
