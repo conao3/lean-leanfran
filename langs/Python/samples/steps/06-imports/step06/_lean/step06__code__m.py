@@ -1462,12 +1462,14 @@ def _pub_wordIndex(ws: "list[str]") -> "list[tuple[str, list[Nat]]]":
 def _pub_wordIndex__lean(ws: "list[str] | Lean[list[str]]") -> "Lean[list[tuple[str, list[Nat]]]]":
     "Lean `LeanPythonEmbed.step06.code.m.wordIndex`, on handles."
     __a0 = _m.lean_arg(_D1, ws, "ws")
+    _m.give(ws)
     return _m.handle(_D3, l_LeanPythonEmbed_step06_code_m_wordIndex(__a0))
 
 
 def _pub_wordIndex__local(ws: "list[str] | Lean[list[str]] | Local[list[str]]") -> "Local[list[tuple[str, list[Nat]]]]":
     "Lean `LeanPythonEmbed.step06.code.m.wordIndex`, on local handles."
     __a0 = _m.local_arg(_D1, ws, "ws", True)
+    _m.give(ws)
     return _m.local_handle(_D3, l_LeanPythonEmbed_step06_code_m_wordIndex(__a0))
 
 
@@ -1481,12 +1483,14 @@ def _pub_dedup(xs: "list[Nat]") -> "list[Nat]":
 def _pub_dedup__lean(xs: "list[Nat] | Lean[list[Nat]]") -> "Lean[list[Nat]]":
     "Lean `LeanPythonEmbed.step06.code.m.dedup`, on handles."
     __a0 = _m.lean_arg(_D5, xs, "xs")
+    _m.give(xs)
     return _m.handle(_D5, l_LeanPythonEmbed_step06_code_m_dedup(__a0))
 
 
 def _pub_dedup__local(xs: "list[Nat] | Lean[list[Nat]] | Local[list[Nat]]") -> "Local[list[Nat]]":
     "Lean `LeanPythonEmbed.step06.code.m.dedup`, on local handles."
     __a0 = _m.local_arg(_D5, xs, "xs", True)
+    _m.give(xs)
     return _m.local_handle(_D5, l_LeanPythonEmbed_step06_code_m_dedup(__a0))
 
 

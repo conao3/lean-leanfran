@@ -360,12 +360,14 @@ def _pub_squares(xs: "list[int]") -> "list[int]":
 def _pub_squares__lean(xs: "list[int] | Lean[list[int]]") -> "Lean[list[int]]":
     "Lean `LeanPythonEmbed.step05.code.m.squares`, on handles."
     __a0 = _m.lean_arg(_D1, xs, "xs")
+    _m.give(xs)
     return _m.handle(_D1, l_LeanPythonEmbed_step05_code_m_squares(__a0))
 
 
 def _pub_squares__local(xs: "list[int] | Lean[list[int]] | Local[list[int]]") -> "Local[list[int]]":
     "Lean `LeanPythonEmbed.step05.code.m.squares`, on local handles."
     __a0 = _m.local_arg(_D1, xs, "xs", True)
+    _m.give(xs)
     return _m.local_handle(_D1, l_LeanPythonEmbed_step05_code_m_squares(__a0))
 
 
@@ -379,12 +381,14 @@ def _pub_evens(xs: "list[Nat]") -> "list[Nat]":
 def _pub_evens__lean(xs: "list[Nat] | Lean[list[Nat]]") -> "Lean[list[Nat]]":
     "Lean `LeanPythonEmbed.step05.code.m.evens`, on handles."
     __a0 = _m.lean_arg(_D3, xs, "xs")
+    _m.give(xs)
     return _m.handle(_D3, l_LeanPythonEmbed_step05_code_m_evens(__a0))
 
 
 def _pub_evens__local(xs: "list[Nat] | Lean[list[Nat]] | Local[list[Nat]]") -> "Local[list[Nat]]":
     "Lean `LeanPythonEmbed.step05.code.m.evens`, on local handles."
     __a0 = _m.local_arg(_D3, xs, "xs", True)
+    _m.give(xs)
     return _m.local_handle(_D3, l_LeanPythonEmbed_step05_code_m_evens(__a0))
 
 
@@ -400,6 +404,7 @@ def _pub_lookup__lean(k: "str | Lean[str]", xs: "list[tuple[str, Nat]] | Lean[li
     "Lean `LeanPythonEmbed.step05.code.m.lookup`, on handles."
     __a0 = _m.lean_arg(_D5, k, "k")
     __a1 = _m.lean_arg(_D7, xs, "xs")
+    _m.give(k, xs)
     return _m.handle(_D9, l_LeanPythonEmbed_step05_code_m_lookup(__a0, __a1))
 
 
@@ -407,6 +412,7 @@ def _pub_lookup__local(k: "str | Lean[str] | Local[str]", xs: "list[tuple[str, N
     "Lean `LeanPythonEmbed.step05.code.m.lookup`, on local handles."
     __a0 = _m.local_arg(_D5, k, "k", False)
     __a1 = _m.local_arg(_D7, xs, "xs", False)
+    _m.give(k, xs)
     __r = l_LeanPythonEmbed_step05_code_m_lookup(__a0, __a1)
     _m.local_done(k, __a0)
     _m.local_done(xs, __a1)
@@ -425,6 +431,7 @@ def _pub_histogram__lean(xs: "list[Nat] | Lean[list[Nat]]", buckets: "Nat | Lean
     "Lean `LeanPythonEmbed.step05.code.m.histogram`, on handles."
     __a0 = _m.lean_arg(_D3, xs, "xs")
     __a1 = _m.lean_arg(_D11, buckets, "buckets")
+    _m.give(xs, buckets)
     return _m.handle(_D13, l_LeanPythonEmbed_step05_code_m_histogram(__a0, __a1))
 
 
@@ -432,6 +439,7 @@ def _pub_histogram__local(xs: "list[Nat] | Lean[list[Nat]] | Local[list[Nat]]", 
     "Lean `LeanPythonEmbed.step05.code.m.histogram`, on local handles."
     __a0 = _m.local_arg(_D3, xs, "xs", False)
     __a1 = _m.local_arg(_D11, buckets, "buckets", True)
+    _m.give(xs, buckets)
     __r = l_LeanPythonEmbed_step05_code_m_histogram(__a0, __a1)
     _m.local_done(xs, __a0)
     return _m.local_handle(_D13, __r)

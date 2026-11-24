@@ -801,12 +801,14 @@ def _pub_fromRoman(s: "str") -> "Nat | None":
 def _pub_fromRoman__lean(s: "str | Lean[str]") -> "Lean[Nat | None]":
     "Lean `LeanPythonEmbed.roman.numerals.roman.fromRoman`, on handles."
     __a0 = _m.lean_arg(_D1, s, "s")
+    _m.give(s)
     return _m.handle(_D3, l_LeanPythonEmbed_roman_numerals_roman_fromRoman(__a0))
 
 
 def _pub_fromRoman__local(s: "str | Lean[str] | Local[str]") -> "Local[Nat | None]":
     "Lean `LeanPythonEmbed.roman.numerals.roman.fromRoman`, on local handles."
     __a0 = _m.local_arg(_D1, s, "s", True)
+    _m.give(s)
     return _m.local_handle(_D3, l_LeanPythonEmbed_roman_numerals_roman_fromRoman(__a0))
 
 
@@ -820,12 +822,14 @@ def _pub_toRoman(n: "Nat") -> "str":
 def _pub_toRoman__lean(n: "Nat | Lean[Nat]") -> "Lean[str]":
     "Lean `LeanPythonEmbed.roman.numerals.roman.toRoman`, on handles."
     __a0 = _m.lean_arg(_D5, n, "n")
+    _m.give(n)
     return _m.handle(_D1, l_LeanPythonEmbed_roman_numerals_roman_toRoman(__a0))
 
 
 def _pub_toRoman__local(n: "Nat | Lean[Nat] | Local[Nat]") -> "Local[str]":
     "Lean `LeanPythonEmbed.roman.numerals.roman.toRoman`, on local handles."
     __a0 = _m.local_arg(_D5, n, "n", False)
+    _m.give(n)
     __r = l_LeanPythonEmbed_roman_numerals_roman_toRoman(__a0)
     _m.local_done(n, __a0)
     return _m.local_handle(_D1, __r)

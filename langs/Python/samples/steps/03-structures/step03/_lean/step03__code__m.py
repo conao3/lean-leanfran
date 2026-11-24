@@ -184,6 +184,7 @@ def _pub_Point_add__lean(p: "Point | Lean[Point]", q: "Point | Lean[Point]") -> 
     "Lean `LeanPythonEmbed.step03.code.m.Point.add`, on handles."
     __a0 = _m.lean_arg(_D1, p, "p")
     __a1 = _m.lean_arg(_D1, q, "q")
+    _m.give(p, q)
     return _m.handle(_D1, l_LeanPythonEmbed_step03_code_m_Point_add(__a0, __a1))
 
 
@@ -191,6 +192,7 @@ def _pub_Point_add__local(p: "Point | Lean[Point] | Local[Point]", q: "Point | L
     "Lean `LeanPythonEmbed.step03.code.m.Point.add`, on local handles."
     __a0 = _m.local_arg(_D1, p, "p", False)
     __a1 = _m.local_arg(_D1, q, "q", True)
+    _m.give(p, q)
     __r = l_LeanPythonEmbed_step03_code_m_Point_add(__a0, __a1)
     _m.local_done(p, __a0)
     return _m.local_handle(_D1, __r)
@@ -206,12 +208,14 @@ def _pub_Point_norm1(p: "Point") -> "Nat":
 def _pub_Point_norm1__lean(p: "Point | Lean[Point]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step03.code.m.Point.norm1`, on handles."
     __a0 = _m.lean_arg(_D1, p, "p")
+    _m.give(p)
     return _m.handle(_D3, l_LeanPythonEmbed_step03_code_m_Point_norm1(__a0))
 
 
 def _pub_Point_norm1__local(p: "Point | Lean[Point] | Local[Point]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step03.code.m.Point.norm1`, on local handles."
     __a0 = _m.local_arg(_D1, p, "p", False)
+    _m.give(p)
     __r = l_LeanPythonEmbed_step03_code_m_Point_norm1(__a0)
     _m.local_done(p, __a0)
     return _m.local_handle(_D3, __r)
@@ -227,12 +231,14 @@ def _pub_Range_width(r: "Range") -> "Nat":
 def _pub_Range_width__lean(r: "Range | Lean[Range]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step03.code.m.Range.width`, on handles."
     __a0 = _m.lean_arg(_D5, r, "r")
+    _m.give(r)
     return _m.handle(_D3, l_LeanPythonEmbed_step03_code_m_Range_width(__a0))
 
 
 def _pub_Range_width__local(r: "Range | Lean[Range] | Local[Range]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step03.code.m.Range.width`, on local handles."
     __a0 = _m.local_arg(_D5, r, "r", False)
+    _m.give(r)
     __r = l_LeanPythonEmbed_step03_code_m_Range_width(__a0)
     _m.local_done(r, __a0)
     return _m.local_handle(_D3, __r)
@@ -250,6 +256,7 @@ def _pub_Range_shift__lean(r: "Range | Lean[Range]", k: "Nat | Lean[Nat]") -> "L
     "Lean `LeanPythonEmbed.step03.code.m.Range.shift`, on handles."
     __a0 = _m.lean_arg(_D5, r, "r")
     __a1 = _m.lean_arg(_D3, k, "k")
+    _m.give(r, k)
     return _m.handle(_D5, l_LeanPythonEmbed_step03_code_m_Range_shift(__a0, __a1))
 
 
@@ -257,6 +264,7 @@ def _pub_Range_shift__local(r: "Range | Lean[Range] | Local[Range]", k: "Nat | L
     "Lean `LeanPythonEmbed.step03.code.m.Range.shift`, on local handles."
     __a0 = _m.local_arg(_D5, r, "r", True)
     __a1 = _m.local_arg(_D3, k, "k", False)
+    _m.give(r, k)
     __r = l_LeanPythonEmbed_step03_code_m_Range_shift(__a0, __a1)
     _m.local_done(k, __a1)
     return _m.local_handle(_D5, __r)

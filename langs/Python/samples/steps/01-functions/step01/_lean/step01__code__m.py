@@ -190,12 +190,14 @@ def _pub_greet(name: "str") -> "str":
 def _pub_greet__lean(name: "str | Lean[str]") -> "Lean[str]":
     "Lean `LeanPythonEmbed.step01.code.m.greet`, on handles."
     __a0 = _m.lean_arg(_D1, name, "name")
+    _m.give(name)
     return _m.handle(_D1, l_LeanPythonEmbed_step01_code_m_greet(__a0))
 
 
 def _pub_greet__local(name: "str | Lean[str] | Local[str]") -> "Local[str]":
     "Lean `LeanPythonEmbed.step01.code.m.greet`, on local handles."
     __a0 = _m.local_arg(_D1, name, "name", False)
+    _m.give(name)
     __r = l_LeanPythonEmbed_step01_code_m_greet(__a0)
     _m.local_done(name, __a0)
     return _m.local_handle(_D1, __r)
@@ -211,12 +213,14 @@ def _pub_double(n: "Nat") -> "Nat":
 def _pub_double__lean(n: "Nat | Lean[Nat]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step01.code.m.double`, on handles."
     __a0 = _m.lean_arg(_D3, n, "n")
+    _m.give(n)
     return _m.handle(_D3, l_LeanPythonEmbed_step01_code_m_double(__a0))
 
 
 def _pub_double__local(n: "Nat | Lean[Nat] | Local[Nat]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step01.code.m.double`, on local handles."
     __a0 = _m.local_arg(_D3, n, "n", False)
+    _m.give(n)
     __r = l_LeanPythonEmbed_step01_code_m_double(__a0)
     _m.local_done(n, __a0)
     return _m.local_handle(_D3, __r)
@@ -232,12 +236,14 @@ def _pub_fact(arg0: "Nat") -> "Nat":
 def _pub_fact__lean(arg0: "Nat | Lean[Nat]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step01.code.m.fact`, on handles."
     __a0 = _m.lean_arg(_D3, arg0, "arg0")
+    _m.give(arg0)
     return _m.handle(_D3, l_LeanPythonEmbed_step01_code_m_fact(__a0))
 
 
 def _pub_fact__local(arg0: "Nat | Lean[Nat] | Local[Nat]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step01.code.m.fact`, on local handles."
     __a0 = _m.local_arg(_D3, arg0, "arg0", False)
+    _m.give(arg0)
     __r = l_LeanPythonEmbed_step01_code_m_fact(__a0)
     _m.local_done(arg0, __a0)
     return _m.local_handle(_D3, __r)
@@ -253,12 +259,14 @@ def _pub_isPrime(n: "Nat") -> "bool":
 def _pub_isPrime__lean(n: "Nat | Lean[Nat]") -> "Lean[bool]":
     "Lean `LeanPythonEmbed.step01.code.m.isPrime`, on handles."
     __a0 = _m.lean_arg(_D3, n, "n")
+    _m.give(n)
     return _m.handle(_D5, l_LeanPythonEmbed_step01_code_m_isPrime(__a0))
 
 
 def _pub_isPrime__local(n: "Nat | Lean[Nat] | Local[Nat]") -> "Local[bool]":
     "Lean `LeanPythonEmbed.step01.code.m.isPrime`, on local handles."
     __a0 = _m.local_arg(_D3, n, "n", False)
+    _m.give(n)
     __r = l_LeanPythonEmbed_step01_code_m_isPrime(__a0)
     _m.local_done(n, __a0)
     return _m.local_handle(_D5, __r)

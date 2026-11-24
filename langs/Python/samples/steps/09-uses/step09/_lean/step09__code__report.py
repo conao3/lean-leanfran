@@ -280,12 +280,14 @@ def _pub_totalArea(xs: "list[_ext0.Shape]") -> "Nat":
 def _pub_totalArea__lean(xs: "list[_ext0.Shape] | Lean[list[_ext0.Shape]]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step09.code.report.totalArea`, on handles."
     __a0 = _m.lean_arg(_D1, xs, "xs")
+    _m.give(xs)
     return _m.handle(_D3, l_LeanPythonEmbed_step09_code_report_totalArea(__a0))
 
 
 def _pub_totalArea__local(xs: "list[_ext0.Shape] | Lean[list[_ext0.Shape]] | Local[list[_ext0.Shape]]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step09.code.report.totalArea`, on local handles."
     __a0 = _m.local_arg(_D1, xs, "xs", True)
+    _m.give(xs)
     return _m.local_handle(_D3, l_LeanPythonEmbed_step09_code_report_totalArea(__a0))
 
 
@@ -299,12 +301,14 @@ def _pub_largest(xs: "list[_ext0.Shape]") -> "_ext0.Shape | None":
 def _pub_largest__lean(xs: "list[_ext0.Shape] | Lean[list[_ext0.Shape]]") -> "Lean[_ext0.Shape | None]":
     "Lean `LeanPythonEmbed.step09.code.report.largest`, on handles."
     __a0 = _m.lean_arg(_D1, xs, "xs")
+    _m.give(xs)
     return _m.handle(_D5, l_LeanPythonEmbed_step09_code_report_largest(__a0))
 
 
 def _pub_largest__local(xs: "list[_ext0.Shape] | Lean[list[_ext0.Shape]] | Local[list[_ext0.Shape]]") -> "Local[_ext0.Shape | None]":
     "Lean `LeanPythonEmbed.step09.code.report.largest`, on local handles."
     __a0 = _m.local_arg(_D1, xs, "xs", False)
+    _m.give(xs)
     __r = l_LeanPythonEmbed_step09_code_report_largest(__a0)
     _m.local_done(xs, __a0)
     return _m.local_handle(_D5, __r)

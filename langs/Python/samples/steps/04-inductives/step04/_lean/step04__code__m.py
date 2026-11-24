@@ -379,12 +379,14 @@ def _pub_Suit_isRed(arg0: "Suit") -> "bool":
 def _pub_Suit_isRed__lean(arg0: "Suit | Lean[Suit]") -> "Lean[bool]":
     "Lean `LeanPythonEmbed.step04.code.m.Suit.isRed`, on handles."
     __a0 = _m.lean_arg(_D1, arg0, "arg0")
+    _m.give(arg0)
     return _m.handle(_D3, l_LeanPythonEmbed_step04_code_m_Suit_isRed(__a0))
 
 
 def _pub_Suit_isRed__local(arg0: "Suit | Lean[Suit] | Local[Suit]") -> "Local[bool]":
     "Lean `LeanPythonEmbed.step04.code.m.Suit.isRed`, on local handles."
     __a0 = _m.local_arg(_D1, arg0, "arg0", True)
+    _m.give(arg0)
     return _m.local_handle(_D3, l_LeanPythonEmbed_step04_code_m_Suit_isRed(__a0))
 
 
@@ -398,12 +400,14 @@ def _pub_Expr_simp(arg0: "Expr") -> "Expr":
 def _pub_Expr_simp__lean(arg0: "Expr | Lean[Expr]") -> "Lean[Expr]":
     "Lean `LeanPythonEmbed.step04.code.m.Expr.simp`, on handles."
     __a0 = _m.lean_arg(_D5, arg0, "arg0")
+    _m.give(arg0)
     return _m.handle(_D5, l_LeanPythonEmbed_step04_code_m_Expr_simp(__a0))
 
 
 def _pub_Expr_simp__local(arg0: "Expr | Lean[Expr] | Local[Expr]") -> "Local[Expr]":
     "Lean `LeanPythonEmbed.step04.code.m.Expr.simp`, on local handles."
     __a0 = _m.local_arg(_D5, arg0, "arg0", True)
+    _m.give(arg0)
     return _m.local_handle(_D5, l_LeanPythonEmbed_step04_code_m_Expr_simp(__a0))
 
 
@@ -417,12 +421,14 @@ def _pub_Expr_eval(arg0: "Expr") -> "int":
 def _pub_Expr_eval__lean(arg0: "Expr | Lean[Expr]") -> "Lean[int]":
     "Lean `LeanPythonEmbed.step04.code.m.Expr.eval`, on handles."
     __a0 = _m.lean_arg(_D5, arg0, "arg0")
+    _m.give(arg0)
     return _m.handle(_D7, l_LeanPythonEmbed_step04_code_m_Expr_eval(__a0))
 
 
 def _pub_Expr_eval__local(arg0: "Expr | Lean[Expr] | Local[Expr]") -> "Local[int]":
     "Lean `LeanPythonEmbed.step04.code.m.Expr.eval`, on local handles."
     __a0 = _m.local_arg(_D5, arg0, "arg0", False)
+    _m.give(arg0)
     __r = l_LeanPythonEmbed_step04_code_m_Expr_eval(__a0)
     _m.local_done(arg0, __a0)
     return _m.local_handle(_D7, __r)

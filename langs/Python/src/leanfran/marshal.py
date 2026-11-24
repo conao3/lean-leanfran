@@ -468,10 +468,7 @@ def lean_arg(type_, v, name):
     if c is Local or c is _Taken:
         local = v.local if c is _Taken else v
         _check_handle(type_, local, name)
-        obj = _share(local._value())
-        if c is _Taken:
-            local._obj = _GONE
-        return obj
+        return _share(local._value())
     return to_lean(type_.desc, v, name)
 
 
@@ -492,13 +489,19 @@ def local_arg(type_, v, name, owned):
     if c is _Taken:
         local = v.local
         _check_handle(type_, local, name)
-        obj = local._value()
-        local._obj = _GONE
-        return obj
+        return local._value()
     if c is Lean:
         _check_handle(type_, v, name)
         return v._obj
     return to_lean(type_.desc, v, name)
+
+
+def give(*args):
+    """Empties the handles passed with ``take()``, once every argument of the call is converted."""
+    for v in args:
+        if v.__class__ is _Taken:
+            v.local._value()
+            v.local._obj = _GONE
 
 
 def local_done(v, obj):

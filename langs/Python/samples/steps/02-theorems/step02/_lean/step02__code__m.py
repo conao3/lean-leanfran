@@ -102,6 +102,7 @@ def _pub_clamp__lean(lo: "int | Lean[int]", hi: "int | Lean[int]", x: "int | Lea
     __a0 = _m.lean_arg(_D1, lo, "lo")
     __a1 = _m.lean_arg(_D1, hi, "hi")
     __a2 = _m.lean_arg(_D1, x, "x")
+    _m.give(lo, hi, x)
     return _m.handle(_D1, l_LeanPythonEmbed_step02_code_m_clamp(__a0, __a1, __a2))
 
 
@@ -110,6 +111,7 @@ def _pub_clamp__local(lo: "int | Lean[int] | Local[int]", hi: "int | Lean[int] |
     __a0 = _m.local_arg(_D1, lo, "lo", False)
     __a1 = _m.local_arg(_D1, hi, "hi", False)
     __a2 = _m.local_arg(_D1, x, "x", False)
+    _m.give(lo, hi, x)
     __r = l_LeanPythonEmbed_step02_code_m_clamp(__a0, __a1, __a2)
     _m.local_done(lo, __a0)
     _m.local_done(hi, __a1)
@@ -127,12 +129,14 @@ def _pub_sumTo(arg0: "Nat") -> "Nat":
 def _pub_sumTo__lean(arg0: "Nat | Lean[Nat]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step02.code.m.sumTo`, on handles."
     __a0 = _m.lean_arg(_D3, arg0, "arg0")
+    _m.give(arg0)
     return _m.handle(_D3, l_LeanPythonEmbed_step02_code_m_sumTo(__a0))
 
 
 def _pub_sumTo__local(arg0: "Nat | Lean[Nat] | Local[Nat]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step02.code.m.sumTo`, on local handles."
     __a0 = _m.local_arg(_D3, arg0, "arg0", False)
+    _m.give(arg0)
     __r = l_LeanPythonEmbed_step02_code_m_sumTo(__a0)
     _m.local_done(arg0, __a0)
     return _m.local_handle(_D3, __r)

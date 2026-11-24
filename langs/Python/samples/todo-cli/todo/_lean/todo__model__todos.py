@@ -585,12 +585,14 @@ def _pub_pending(ts: "Todos") -> "list[Todo]":
 def _pub_pending__lean(ts: "Todos | Lean[Todos]") -> "Lean[list[Todo]]":
     "Lean `LeanPythonEmbed.todo.model.todos.pending`, on handles."
     __a0 = _m.lean_arg(_D1, ts, "ts")
+    _m.give(ts)
     return _m.handle(_D3, l_LeanPythonEmbed_todo_model_todos_pending(__a0))
 
 
 def _pub_pending__local(ts: "Todos | Lean[Todos] | Local[Todos]") -> "Local[list[Todo]]":
     "Lean `LeanPythonEmbed.todo.model.todos.pending`, on local handles."
     __a0 = _m.local_arg(_D1, ts, "ts", True)
+    _m.give(ts)
     return _m.local_handle(_D3, l_LeanPythonEmbed_todo_model_todos_pending(__a0))
 
 
@@ -606,6 +608,7 @@ def _pub_complete__lean(ts: "Todos | Lean[Todos]", id: "Nat | Lean[Nat]") -> "Le
     "Lean `LeanPythonEmbed.todo.model.todos.complete`, on handles."
     __a0 = _m.lean_arg(_D1, ts, "ts")
     __a1 = _m.lean_arg(_D5, id, "id")
+    _m.give(ts, id)
     return _m.handle(_D1, l_LeanPythonEmbed_todo_model_todos_complete(__a0, __a1))
 
 
@@ -613,6 +616,7 @@ def _pub_complete__local(ts: "Todos | Lean[Todos] | Local[Todos]", id: "Nat | Le
     "Lean `LeanPythonEmbed.todo.model.todos.complete`, on local handles."
     __a0 = _m.local_arg(_D1, ts, "ts", True)
     __a1 = _m.local_arg(_D5, id, "id", False)
+    _m.give(ts, id)
     __r = l_LeanPythonEmbed_todo_model_todos_complete(__a0, __a1)
     _m.local_done(id, __a1)
     return _m.local_handle(_D1, __r)
@@ -630,6 +634,7 @@ def _pub_byPriority__lean(ts: "Todos | Lean[Todos]", p: "Priority | Lean[Priorit
     "Lean `LeanPythonEmbed.todo.model.todos.byPriority`, on handles."
     __a0 = _m.lean_arg(_D1, ts, "ts")
     __a1 = _m.lean_arg(_D7, p, "p")
+    _m.give(ts, p)
     return _m.handle(_D3, l_LeanPythonEmbed_todo_model_todos_byPriority(__a0, __a1))
 
 
@@ -637,6 +642,7 @@ def _pub_byPriority__local(ts: "Todos | Lean[Todos] | Local[Todos]", p: "Priorit
     "Lean `LeanPythonEmbed.todo.model.todos.byPriority`, on local handles."
     __a0 = _m.local_arg(_D1, ts, "ts", True)
     __a1 = _m.local_arg(_D7, p, "p", True)
+    _m.give(ts, p)
     return _m.local_handle(_D3, l_LeanPythonEmbed_todo_model_todos_byPriority(__a0, __a1))
 
 
@@ -654,6 +660,7 @@ def _pub_add__lean(ts: "Todos | Lean[Todos]", title: "str | Lean[str]", priority
     __a0 = _m.lean_arg(_D1, ts, "ts")
     __a1 = _m.lean_arg(_D9, title, "title")
     __a2 = _m.lean_arg(_D7, priority, "priority")
+    _m.give(ts, title, priority)
     return _m.handle(_D1, l_LeanPythonEmbed_todo_model_todos_add(__a0, __a1, __a2))
 
 
@@ -662,6 +669,7 @@ def _pub_add__local(ts: "Todos | Lean[Todos] | Local[Todos]", title: "str | Lean
     __a0 = _m.local_arg(_D1, ts, "ts", True)
     __a1 = _m.local_arg(_D9, title, "title", True)
     __a2 = _m.local_arg(_D7, priority, "priority", True)
+    _m.give(ts, title, priority)
     return _m.local_handle(_D1, l_LeanPythonEmbed_todo_model_todos_add(__a0, __a1, __a2))
 
 

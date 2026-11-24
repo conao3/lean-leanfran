@@ -157,6 +157,20 @@ def test_local_handles_update_in_place_only_when_taken(pub):
     assert (sample.get().count, third.get().count) == (2, 4)
 
 
+def test_a_taken_handle_survives_a_rejected_call(pub):
+    tree = pub.Tree.ofList.local([2, 1])
+    with pytest.raises(ValidationError):
+        pub.Tree.insert.local(tree.take(), -1)
+    assert pub.Tree.toList.local(tree).get() == [1, 2]
+    with pytest.raises(ValidationError):
+        pub.Tree.insert.lean(tree.take(), -1)
+    assert pub.Tree.toList.local(tree).get() == [1, 2]
+    taken = tree.take()
+    assert pub.Tree.toList.local(pub.Tree.insert.local(taken, 3)).get() == [1, 2, 3]
+    with pytest.raises(ValueError, match="take"):
+        pub.Tree.insert.local(taken, 4)
+
+
 def test_local_and_shared_handles_mix(pub):
     local = pub.squares.local([1, 2])
     shared = local.share()

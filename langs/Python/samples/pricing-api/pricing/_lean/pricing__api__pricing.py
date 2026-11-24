@@ -149,12 +149,14 @@ def _pub_subtotal(items: "list[_ext0.LineItem]") -> "Nat":
 def _pub_subtotal__lean(items: "list[_ext0.LineItem] | Lean[list[_ext0.LineItem]]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.pricing.api.pricing.subtotal`, on handles."
     __a0 = _m.lean_arg(_D1, items, "items")
+    _m.give(items)
     return _m.handle(_D3, l_LeanPythonEmbed_pricing_api_pricing_subtotal(__a0))
 
 
 def _pub_subtotal__local(items: "list[_ext0.LineItem] | Lean[list[_ext0.LineItem]] | Local[list[_ext0.LineItem]]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.pricing.api.pricing.subtotal`, on local handles."
     __a0 = _m.local_arg(_D1, items, "items", False)
+    _m.give(items)
     __r = l_LeanPythonEmbed_pricing_api_pricing_subtotal(__a0)
     _m.local_done(items, __a0)
     return _m.local_handle(_D3, __r)
@@ -172,6 +174,7 @@ def _pub_total__lean(items: "list[_ext0.LineItem] | Lean[list[_ext0.LineItem]]",
     "Lean `LeanPythonEmbed.pricing.api.pricing.total`, on handles."
     __a0 = _m.lean_arg(_D1, items, "items")
     __a1 = _m.lean_arg(_D5, d, "d")
+    _m.give(items, d)
     return _m.handle(_D3, l_LeanPythonEmbed_pricing_api_pricing_total(__a0, __a1))
 
 
@@ -179,6 +182,7 @@ def _pub_total__local(items: "list[_ext0.LineItem] | Lean[list[_ext0.LineItem]] 
     "Lean `LeanPythonEmbed.pricing.api.pricing.total`, on local handles."
     __a0 = _m.local_arg(_D1, items, "items", False)
     __a1 = _m.local_arg(_D5, d, "d", False)
+    _m.give(items, d)
     __r = l_LeanPythonEmbed_pricing_api_pricing_total(__a0, __a1)
     _m.local_done(items, __a0)
     _m.local_done(d, __a1)

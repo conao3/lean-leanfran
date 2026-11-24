@@ -893,6 +893,7 @@ def _pub_insertCount__lean(w: "str | Lean[str]", arg1: "list[tuple[str, Nat]] | 
     "Lean `LeanPythonEmbed.wordcount.count.wc.insertCount`, on handles."
     __a0 = _m.lean_arg(_D1, w, "w")
     __a1 = _m.lean_arg(_D3, arg1, "arg1")
+    _m.give(w, arg1)
     return _m.handle(_D3, l_LeanPythonEmbed_wordcount_count_wc_insertCount(__a0, __a1))
 
 
@@ -900,6 +901,7 @@ def _pub_insertCount__local(w: "str | Lean[str] | Local[str]", arg1: "list[tuple
     "Lean `LeanPythonEmbed.wordcount.count.wc.insertCount`, on local handles."
     __a0 = _m.local_arg(_D1, w, "w", True)
     __a1 = _m.local_arg(_D3, arg1, "arg1", True)
+    _m.give(w, arg1)
     return _m.local_handle(_D3, l_LeanPythonEmbed_wordcount_count_wc_insertCount(__a0, __a1))
 
 
@@ -913,12 +915,14 @@ def _pub_count(s: "str") -> "Counts":
 def _pub_count__lean(s: "str | Lean[str]") -> "Lean[Counts]":
     "Lean `LeanPythonEmbed.wordcount.count.wc.count`, on handles."
     __a0 = _m.lean_arg(_D1, s, "s")
+    _m.give(s)
     return _m.handle(_D5, l_LeanPythonEmbed_wordcount_count_wc_count(__a0))
 
 
 def _pub_count__local(s: "str | Lean[str] | Local[str]") -> "Local[Counts]":
     "Lean `LeanPythonEmbed.wordcount.count.wc.count`, on local handles."
     __a0 = _m.local_arg(_D1, s, "s", True)
+    _m.give(s)
     return _m.local_handle(_D5, l_LeanPythonEmbed_wordcount_count_wc_count(__a0))
 
 
@@ -932,12 +936,14 @@ def _pub_frequencies(s: "str") -> "list[tuple[str, Nat]]":
 def _pub_frequencies__lean(s: "str | Lean[str]") -> "Lean[list[tuple[str, Nat]]]":
     "Lean `LeanPythonEmbed.wordcount.count.wc.frequencies`, on handles."
     __a0 = _m.lean_arg(_D1, s, "s")
+    _m.give(s)
     return _m.handle(_D3, l_LeanPythonEmbed_wordcount_count_wc_frequencies(__a0))
 
 
 def _pub_frequencies__local(s: "str | Lean[str] | Local[str]") -> "Local[list[tuple[str, Nat]]]":
     "Lean `LeanPythonEmbed.wordcount.count.wc.frequencies`, on local handles."
     __a0 = _m.local_arg(_D1, s, "s", False)
+    _m.give(s)
     __r = l_LeanPythonEmbed_wordcount_count_wc_frequencies(__a0)
     _m.local_done(s, __a0)
     return _m.local_handle(_D3, __r)
@@ -953,12 +959,14 @@ def _pub_words(s: "str") -> "list[str]":
 def _pub_words__lean(s: "str | Lean[str]") -> "Lean[list[str]]":
     "Lean `LeanPythonEmbed.wordcount.count.wc.words`, on handles."
     __a0 = _m.lean_arg(_D1, s, "s")
+    _m.give(s)
     return _m.handle(_D7, l_LeanPythonEmbed_wordcount_count_wc_words(__a0))
 
 
 def _pub_words__local(s: "str | Lean[str] | Local[str]") -> "Local[list[str]]":
     "Lean `LeanPythonEmbed.wordcount.count.wc.words`, on local handles."
     __a0 = _m.local_arg(_D1, s, "s", False)
+    _m.give(s)
     __r = l_LeanPythonEmbed_wordcount_count_wc_words(__a0)
     _m.local_done(s, __a0)
     return _m.local_handle(_D7, __r)
@@ -976,6 +984,7 @@ def _pub_top__lean(s: "str | Lean[str]", k: "Nat | Lean[Nat]") -> "Lean[list[tup
     "Lean `LeanPythonEmbed.wordcount.count.wc.top`, on handles."
     __a0 = _m.lean_arg(_D1, s, "s")
     __a1 = _m.lean_arg(_D9, k, "k")
+    _m.give(s, k)
     return _m.handle(_D3, l_LeanPythonEmbed_wordcount_count_wc_top(__a0, __a1))
 
 
@@ -983,6 +992,7 @@ def _pub_top__local(s: "str | Lean[str] | Local[str]", k: "Nat | Lean[Nat] | Loc
     "Lean `LeanPythonEmbed.wordcount.count.wc.top`, on local handles."
     __a0 = _m.local_arg(_D1, s, "s", False)
     __a1 = _m.local_arg(_D9, k, "k", True)
+    _m.give(s, k)
     __r = l_LeanPythonEmbed_wordcount_count_wc_top(__a0, __a1)
     _m.local_done(s, __a0)
     return _m.local_handle(_D3, __r)

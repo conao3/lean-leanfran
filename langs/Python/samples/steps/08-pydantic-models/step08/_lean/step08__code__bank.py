@@ -156,6 +156,7 @@ def _pub_transfer__lean(a: "_ext0.Account | Lean[_ext0.Account]", b: "_ext0.Acco
     __a0 = _m.lean_arg(_D1, a, "a")
     __a1 = _m.lean_arg(_D1, b, "b")
     __a2 = _m.lean_arg(_D3, amount, "amount")
+    _m.give(a, b, amount)
     return _m.handle(_D5, l_LeanPythonEmbed_step08_code_bank_transfer(__a0, __a1, __a2))
 
 
@@ -164,6 +165,7 @@ def _pub_transfer__local(a: "_ext0.Account | Lean[_ext0.Account] | Local[_ext0.A
     __a0 = _m.local_arg(_D1, a, "a", True)
     __a1 = _m.local_arg(_D1, b, "b", True)
     __a2 = _m.local_arg(_D3, amount, "amount", False)
+    _m.give(a, b, amount)
     __r = l_LeanPythonEmbed_step08_code_bank_transfer(__a0, __a1, __a2)
     _m.local_done(amount, __a2)
     return _m.local_handle(_D5, __r)

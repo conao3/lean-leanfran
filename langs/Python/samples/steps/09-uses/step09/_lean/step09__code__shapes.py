@@ -75,12 +75,14 @@ def _pub_Shape_area(arg0: "Shape") -> "Nat":
 def _pub_Shape_area__lean(arg0: "Shape | Lean[Shape]") -> "Lean[Nat]":
     "Lean `LeanPythonEmbed.step09.code.shapes.Shape.area`, on handles."
     __a0 = _m.lean_arg(_D1, arg0, "arg0")
+    _m.give(arg0)
     return _m.handle(_D3, l_LeanPythonEmbed_step09_code_shapes_Shape_area(__a0))
 
 
 def _pub_Shape_area__local(arg0: "Shape | Lean[Shape] | Local[Shape]") -> "Local[Nat]":
     "Lean `LeanPythonEmbed.step09.code.shapes.Shape.area`, on local handles."
     __a0 = _m.local_arg(_D1, arg0, "arg0", False)
+    _m.give(arg0)
     __r = l_LeanPythonEmbed_step09_code_shapes_Shape_area(__a0)
     _m.local_done(arg0, __a0)
     return _m.local_handle(_D3, __r)

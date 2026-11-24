@@ -55,6 +55,7 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   let mut localParams := #[]
   let mut localStmts := #[]
   let mut localDone := #[]
+  let mut names := #[]
   let mut leanTypes := #[]
   for h : i in [0:f.sig.params.size] do
     match f.sig.params[i] with
@@ -69,6 +70,7 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
       leanParams := leanParams.push s!"{nm}: {quoteString s!"{desc.pyType} | Lean[{desc.pyType}]"}"
       leanStmts := leanStmts.push s!"    __a{i} = _m.lean_arg({tn}, {nm}, {quoteString nm})"
       let borrowed := d.params[i]!.borrow
+      names := names.push nm
       localParams := localParams.push s!"{nm}: {quoteString s!"{desc.pyType} | Lean[{desc.pyType}] | Local[{desc.pyType}]"}"
       localStmts := localStmts.push s!"    __a{i} = _m.local_arg({tn}, {nm}, {quoteString nm}, {if borrowed then "False" else "True"})"
       if borrowed then localDone := localDone.push s!"    _m.local_done({nm}, __a{i})"
@@ -85,12 +87,13 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   let doc := quoteString s!"Lean `{f.lean}`."
   let src := s!"def {pyName}({joinArgs sigParams}) -> {quoteString f.sig.result.pyType}:\n    {doc}\n" ++
     String.join (stmts.toList.map (· ++ "\n")) ++ s!"    return {ret}\n\n\n"
+  let give := if names.isEmpty then "" else s!"    _m.give({joinArgs names})\n"
   let leanSrc := if f.sig.est then "" else
     s!"def {pyName}__lean({joinArgs leanParams}) -> {quoteString s!"Lean[{f.sig.result.pyType}]"}:\n    {quoteString s!"Lean `{f.lean}`, on handles."}\n" ++
-    String.join (leanStmts.toList.map (· ++ "\n")) ++ s!"    return _m.handle({rt}, {call})\n\n\n"
+    String.join (leanStmts.toList.map (· ++ "\n")) ++ give ++ s!"    return _m.handle({rt}, {call})\n\n\n"
   let localSrc := if f.sig.est then "" else
     s!"def {pyName}__local({joinArgs localParams}) -> {quoteString s!"Local[{f.sig.result.pyType}]"}:\n    {quoteString s!"Lean `{f.lean}`, on local handles."}\n" ++
-    String.join (localStmts.toList.map (· ++ "\n")) ++
+    String.join (localStmts.toList.map (· ++ "\n")) ++ give ++
     (if localDone.isEmpty then s!"    return _m.local_handle({rt}, {call})\n\n\n"
      else s!"    __r = {call}\n" ++ String.join (localDone.toList.map (· ++ "\n")) ++ s!"    return _m.local_handle({rt}, __r)\n\n\n")
   let leanArgs := if f.sig.est then "" else
