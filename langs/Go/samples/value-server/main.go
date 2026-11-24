@@ -51,7 +51,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	default:
-		fmt.Fprintln(w, remaining)
+		_, _ = fmt.Fprintln(w, remaining)
 	}
 }
 
