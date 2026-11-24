@@ -179,6 +179,7 @@ def computeName (n : Name) : String := "compute_" ++ goName n
 structure Ctx where
   decls : Std.HashMap Name Decl
   tailTargets : Std.HashSet Name
+  cores : Std.HashSet Name
   self : Name
   selfParams : Array Param
   resultType : IRType
@@ -241,6 +242,21 @@ def targetDecl (c : Name) : EmitM Decl := do
 
 def emitVDecl (x : VarId) (ty : IRType) (e : IR.Expr) : EmitM Unit := do
   let xs := varName x
+  let ctx ← read
+  if let .fap c ys := e then
+    if ctx.hasFrame && ctx.cores.contains c then
+      let d ← targetDecl c
+      let args ← callArgs d ys
+      let call := s!"{coreName c}({joinArgs (#["frame"] ++ args)})"
+      emitLn "{"
+      indented do
+        emitLn "extra := frame.SuspendExtra()"
+        let completed := s!"frame.Result({box d.resultType call})"
+        if ty.isErased || ty.isVoid then emitLn completed
+        else emitLn s!"{xs} = {unbox ty completed}"
+        emitLn "frame.ResumeExtra(extra)"
+      emitLn "}"
+      return
   let rhs ← match e with
     | .ctor info _ =>
       if ty.isScalar then pure (toString info.cidx)
@@ -518,7 +534,7 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl)
       unless locals.toList.all (supportedType ∘ Prod.snd) do
         throw s!"unsupported aggregate IR type in {n}"
       let ctx : Ctx := {
-        decls, tailTargets, self := n, selfParams := ps, resultType := ty, hasFrame := core,
+        decls, tailTargets, cores, self := n, selfParams := ps, resultType := ty, hasFrame := core,
         canTail := !stored, inlineJps, labelParams, varTypes, internalOnly
       }
       let emit : EmitM Unit := do
@@ -537,10 +553,12 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl)
         if core then functionHeader implementationName (#["frame *rt.Tail"] ++ parameters ps) ty
         else functionHeader implementationName (parameters ps) ty
       if core then
-        let boxed := (ps.filter liveParam).map fun p => box p.ty (varName p.x)
-        let call := s!"rt.Run({tailName n}, {slice boxed})"
-        pieces := pieces.push (name, header ++ s!"\treturn {unbox ty call}\n}\n")
-        pieces := pieces.push (tailName n, emitAdapter d (tailName n) implementationName true false true)
+        let args := (ps.filter liveParam).map (varName ·.x)
+        let call := s!"{implementationName}({joinArgs (#["frame"] ++ args)})"
+        let result := unbox ty s!"frame.Result({box ty call})"
+        pieces := pieces.push (name, header ++ s!"\tframe := rt.AcquireTail()\n\tdefer rt.ReleaseTail(frame)\n\treturn {result}\n}\n")
+      if tailTargets.contains n then
+        pieces := pieces.push (tailName n, emitAdapter d (tailName n) implementationName core false true)
       pieces := pieces.push (implementationName, implementationHeader ++ variables ++ start ++ st.out ++ "}\n")
   if papTargets.contains n then
     let borrowed := ps.any fun p => liveParam p && p.borrow && p.ty.isPossibleRef
@@ -680,7 +698,7 @@ def generate (env : Environment) (mod : Name) (roots : Array Name) (pkg : String
     for c in calls.direct do
       if c != f && edges.contains c then
         tailTargets := tailTargets.insert c
-  let mut cores := tailTargets
+  let mut cores : Std.HashSet Name := {}
   for (f, calls) in edges.toList do
     if calls.apply || calls.direct.toList.any (fun c => c != f && tailTargets.contains c) then
       cores := cores.insert f

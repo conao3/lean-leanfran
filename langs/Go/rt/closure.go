@@ -31,31 +31,41 @@ func (t *Tail) schedule(fn func(*Tail, []V) V, args []V) {
 	t.next = fn
 }
 
-func Run(fn func(*Tail, []V) V, args []V) V {
-	var t Tail
+var tailFrames = sync.Pool{New: func() any { return new(Tail) }}
+
+func AcquireTail() *Tail { return tailFrames.Get().(*Tail) }
+
+func ReleaseTail(t *Tail) {
+	*t = Tail{}
+	tailFrames.Put(t)
+}
+
+func (t *Tail) SuspendExtra() *extraArgs {
+	extra := t.extra
+	t.extra = nil
+	return extra
+}
+
+func (t *Tail) ResumeExtra(extra *extraArgs) { t.extra = extra }
+
+func (t *Tail) Result(v V) V {
 	for {
-		t.next = nil
-		v := fn(&t, args)
-		if t.next != nil {
-			fn, args = t.next, t.args
-			continue
-		}
-		if t.extra == nil {
-			return v
-		}
-		extra := t.extra
-		t.extra = extra.next
-		v = TailApply(&t, v, extra.values)
-		for t.next == nil && t.extra != nil {
-			extra = t.extra
+		if fn := t.next; fn != nil {
+			t.next = nil
+			v = fn(t, t.args)
+		} else if extra := t.extra; extra != nil {
 			t.extra = extra.next
-			v = TailApply(&t, v, extra.values)
-		}
-		if t.next == nil {
+			v = TailApply(t, v, extra.values)
+		} else {
 			return v
 		}
-		fn, args = t.next, t.args
 	}
+}
+
+func Run(fn func(*Tail, []V) V, args []V) V {
+	t := AcquireTail()
+	defer ReleaseTail(t)
+	return t.Result(fn(t, args))
 }
 
 func TailCall(t *Tail, fn func(*Tail, []V) V, args []V) V {

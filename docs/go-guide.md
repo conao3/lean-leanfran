@@ -260,17 +260,40 @@ s.snapshot = next
 return inventory.ReadUInt64Value(reply), nil
 ```
 
-The kernel fixture measures one `transition` and one `apply` on the first row, including reading the reply in Go. Each run starts with a snapshot of the given size. The handle benchmark prepares the actor and command before timing.
+Call `v.IsExclusive()` to check whether the Lean heap object has one reference at that moment. Scalars and persistent objects return false. Go copies of the same handle share one owner, and child objects have their own reference counts. To check a handle and consume it under the same lock, use `v.IsExclusiveIn(scope)` inside `leanfran.WithValues`.
 
-On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU was:
+`WithValues` holds the runtime mutex across a callback. Pass its `*leanfran.ValueScope` to the generated `FValueIn`, `New<T>ValueIn`, and `Read<T>ValueIn` functions and to `Value.CloseIn` or `leanfran.SplitValueIn`. Use the scoped calls throughout the callback and call `WithValues` from outside any active callback. The scope expires on return. Handles can outlive it and use ordinary calls again. The JSON summary's `scopedValueFunctions` map gives the generated names.
 
-| Snapshot rows | Ordinary Go wrappers | Handle wrappers |
-| ---: | ---: | ---: |
-| 10 | 8.64 µs, 78 allocs | 1.54 µs, 6 allocs |
-| 100 | 71.56 µs, 582 allocs | 1.74 µs, 6 allocs |
-| 1,000 | 728.79 µs, 5,541 allocs | 1.86 µs, 6 allocs |
+```go
+var result uint64
+var err error
+leanfran.WithValues(func(scope *leanfran.ValueScope) {
+    next, reply, callErr := inventory.TransitionValueIn(scope, s.snapshot.Borrow(), command.Take())
+    if callErr != nil {
+        err = callErr
+        return
+    }
+    defer reply.CloseIn(scope)
+    result = inventory.ReadUInt64ValueIn(scope, reply)
+    s.snapshot.CloseIn(scope)
+    s.snapshot = next
+})
+return result, err
+```
 
-At 100 rows, enclosing the handle calls in the server mutex took 2.05 µs with 6 allocations. Converting a new Go command on every iteration took 2.72 µs with 9 allocations.
+The kernel fixture measures `transition`, `apply`, and reading the reply in Go. For handle measurements, it prepares the actor and command outside the timed loop and hands the snapshot to `apply` with `Take`. The final-row benchmark selects the last row on every call.
+
+On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of three runs on one CPU was:
+
+| Snapshot rows | Ordinary wrappers, first row | Handles, first row | Handles, final row | Scoped handles, final row |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | | | 1.20 µs, 7 allocs | 1.14 µs, 8 allocs |
+| 10 | 10.29 µs, 80 allocs | 1.17 µs, 7 allocs | | |
+| 100 | 77.89 µs, 584 allocs | 1.32 µs, 7 allocs | 3.98 µs, 7 allocs | 4.20 µs, 8 allocs |
+| 1,000 | 775.51 µs, 5,543 allocs | 1.29 µs, 7 allocs | 31.10 µs, 7 allocs | 30.65 µs, 8 allocs |
+| 10,000 | | | 1.25 ms, 7 allocs | 0.88 ms, 8 allocs |
+
+At 100 rows, the first-row handle benchmark took 1.16 µs with 7 allocations under the server mutex. Converting a Go command each time took 1.66 µs with 10 allocations.
 
 ## JSON and JSON Schema
 

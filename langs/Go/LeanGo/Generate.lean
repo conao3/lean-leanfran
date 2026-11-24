@@ -13,11 +13,14 @@ structure PublicFn where
   target : IR.Decl
   ident : String
   sig : PublicSig
+  inIdent : String := ""
 
 structure ValueConversion where
   desc : Desc
   newIdent : String
   readIdent : String
+  newInIdent : String := ""
+  readInIdent : String := ""
 
 structure PublicModule where
   state : MarshalState
@@ -118,11 +121,17 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
       set saved
   let types := (← get).types.toList.filter (fun t => !t.anonymous && t.model.isNone)
   let inputs := types.map (fun t => Desc.named t.ident) ++ handles.toList.flatMap (·.sig.valueInputs)
-  let conversions ← inputs.eraseDups.toArray.mapM fun desc => do
+  let conversions : Array ValueConversion ← inputs.eraseDups.toArray.mapM fun desc => do
     let stem := desc.valueStem ++ "Value"
     let newIdent ← freshHandleIdent ("New" ++ stem)
     let readIdent ← freshHandleIdent ("Read" ++ stem)
     return { desc, newIdent, readIdent }
+  handles ← handles.mapM fun f => do
+    return { f with inIdent := ← freshHandleIdent (f.ident ++ "In") }
+  let conversions ← conversions.mapM fun c => do
+    let newInIdent ← freshHandleIdent (c.newIdent ++ "In")
+    let readInIdent ← freshHandleIdent (c.readIdent ++ "In")
+    return { c with newInIdent, readInIdent }
   return { state := ← get, functions, skipped, handles, conversions }
 
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
@@ -472,8 +481,10 @@ def emitValueConversion (cfg : RenderCfg) (c : ValueConversion) : String :=
   let wrapped := c.desc.value cfg
   let codec := c.desc.codec cfg
   let ready := "_lfCodecsOnce.Do(_lfBuildCodecs)"
-  s!"func {c.newIdent}(v {ty}) ({wrapped}, error) \{\n\t{ready}\n\treturn leanfran.NewValue[{marker}]({codec}, v, {quoteGo c.desc.valueStem})\n}\n\n" ++
-  s!"func {c.readIdent}(v {wrapped}) {ty} \{\n\t{ready}\n\treturn leanfran.ReadValue({codec}, v)\n}\n\n"
+  s!"func {c.newIdent}(v {ty}) ({wrapped}, error) \{\n\treturn {c.newInIdent}(nil, v)\n}\n\n" ++
+  s!"func {c.newInIdent}(scope *leanfran.ValueScope, v {ty}) ({wrapped}, error) \{\n\t{ready}\n\treturn leanfran.NewValueIn[{marker}](scope, {codec}, v, {quoteGo c.desc.valueStem})\n}\n\n" ++
+  s!"func {c.readIdent}(v {wrapped}) {ty} \{\n\treturn {c.readInIdent}(nil, v)\n}\n\n" ++
+  s!"func {c.readInIdent}(scope *leanfran.ValueScope, v {wrapped}) {ty} \{\n\t{ready}\n\treturn leanfran.ReadValueIn(scope, {codec}, v)\n}\n\n"
 
 def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let ret := f.sig.result
@@ -485,6 +496,7 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let fail := joinArgs (zeroes.push "err")
   let mut args := #[]
   let mut binders := #[]
+  let mut forwarded := #["nil"]
   let mut inputs := #[]
   let mut ownership := ""
   for (param, i) in f.sig.params.zipIdx do
@@ -493,6 +505,7 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
     | .value _ d =>
       let x := s!"a{i}"
       let some p := f.target.params[i]? | throw s!"incompatible IR parameters for {f.target.name}"
+      forwarded := forwarded.push x
       binders := binders.push s!"{x} leanfran.ValueInput[{d.valueType cfg}]"
       let input := s!"inputs[{inputs.size}].Lean()"
       inputs := inputs.push s!"{x}.Use()"
@@ -519,7 +532,7 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   | .except e _ =>
     let errType := if e.convertible then e.go cfg else e.value cfg
     let errValue := if e.convertible then s!"{e.codec cfg}.FromLean(rt.Lean_ctor_get(raw, 0))" else
-      s!"leanfran.WrapValue[{e.valueType cfg}](leanfran.OwnValueField(raw, 0))"
+      s!"leanfran.WrapValueIn[{e.valueType cfg}](scope, leanfran.OwnValueField(raw, 0))"
     let ready := if e.convertible then "\t\t_lfCodecsOnce.Do(_lfBuildCodecs)\n" else ""
     body := body ++ s!"\tdefer rt.Lean_dec(raw)\n\tif rt.Lean_obj_tag(raw) == 0 \{\n{ready}\t\terr := &leanfran.ExceptError[{errType}]\{Value: {errValue}}\n\t\treturn {fail}\n\t}\n"
     raw := "rt.Lean_ctor_get(raw, 0)"
@@ -527,13 +540,15 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   let output := match result with
     | .unit => "nil"
     | .prod a b =>
-      s!"leanfran.WrapValue[{a.valueType cfg}](leanfran.OwnValueField({raw}, 0)), leanfran.WrapValue[{b.valueType cfg}](leanfran.OwnValueField({raw}, 1)), nil"
+      s!"leanfran.WrapValueIn[{a.valueType cfg}](scope, leanfran.OwnValueField({raw}, 0)), leanfran.WrapValueIn[{b.valueType cfg}](scope, leanfran.OwnValueField({raw}, 1)), nil"
     | d =>
       let owned := if raw == "raw" then raw else "leanfran.OwnValueField(raw, 0)"
-      s!"leanfran.WrapValue[{d.valueType cfg}]({owned}), nil"
+      s!"leanfran.WrapValueIn[{d.valueType cfg}](scope, {owned}), nil"
   if raw == "raw" && (match result with | .prod .. => true | .unit => ty.isPossibleRef | _ => false) then
     body := body ++ "\tdefer rt.Lean_dec(raw)\n"
-  return s!"func {f.ident}({joinArgs binders}) {signature} \{\n\tleanfran.LockValues()\n\tdefer leanfran.UnlockValues()\n{prepare}{ownership}{run}{io}{body}\treturn {output}\n}\n\n"
+  let wrapper := s!"func {f.ident}({joinArgs binders}) {signature} \{\n\treturn {f.inIdent}({joinArgs forwarded})\n}\n\n"
+  let scopedBinders := #["scope *leanfran.ValueScope"] ++ binders
+  return wrapper ++ s!"func {f.inIdent}({joinArgs scopedBinders}) {signature} \{\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}\treturn {output}\n}\n\n"
 
 def usesQualifier (source qualifier : String) : Bool := Id.run do
   let mut plain := ""

@@ -13,7 +13,7 @@ leanc -O2 -o "$out/oracle" "$out/Kernel.c" "$out/Oracle.c"
 cp testdata/kernel/*_test.go "$generated/"
 go vet "./$generated"
 LEANFRAN_KERNEL_ORACLE="$out/oracle" go test -count=1 "./$generated"
-LEANFRAN_KERNEL_ORACLE="$out/oracle" CGO_ENABLED=1 go test -race -count=1 "./$generated" -run 'TestConcurrentValues|TestSharedValues'
+LEANFRAN_KERNEL_ORACLE="$out/oracle" CGO_ENABLED=1 go test -race -count=1 "./$generated" -run 'TestConcurrentValues|TestSharedValues|TestValueScope'
 
 typecheck="$out/_typecheck"
 mkdir -p "$typecheck"

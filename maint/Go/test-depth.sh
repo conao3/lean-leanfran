@@ -16,6 +16,8 @@ grep -Fq 'rt.TailCall(frame, tail_L_LeanGoTest_ControlDepth_chainMiddle,' "$out/
 grep -Fq 'rt.TailCall(frame, tail_L_LeanGoTest_ControlDepth_chainEnd,' "$out/main.go"
 sed -n '/^func core_L_LeanGoTest_ControlDepth_applyStep(/,/^}/p' "$out/main.go" |
     grep -F 'return rt.TailApply(frame,' > /dev/null
+sed -n '/^func core_L_LeanGoTest_ControlDepth_nonTail(/,/^}/p' "$out/main.go" |
+    grep -F 'frame.Result(core_L_LeanGoTest_ControlDepth_nonTail(frame,' > /dev/null
 go vet "./$out"
 CGO_ENABLED=0 go build -o "$out/run" "./$out"
 

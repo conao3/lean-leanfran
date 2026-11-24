@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+
+	"github.com/conao3/leanfran-go"
 )
 
 func TestCommandAllocations(t *testing.T) {
@@ -86,4 +88,74 @@ func BenchmarkCommand(b *testing.B) {
 			}
 		}
 	})
+}
+
+func BenchmarkLastRowCommand(b *testing.B) {
+	for _, rows := range []int64{1, 100, 1_000, 10_000} {
+		b.Run(fmt.Sprint(rows), func(b *testing.B) {
+			snapshot := initialValue(rows)
+			actor := checked(NewActorValue(Actor{Tenant: uint64(rows - 1), CanWrite: true}))
+			command := checked(NewCommandValue(CommandSet{Amount: 1}))
+			defer func() { snapshot.Close() }()
+			defer actor.Close()
+			defer command.Close()
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := handleStep(&snapshot, actor, command); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func TestLastRowCommandAllocations(t *testing.T) {
+	for _, rows := range []int64{1, 100, 1_000, 10_000} {
+		t.Run(fmt.Sprint(rows), func(t *testing.T) {
+			snapshot := initialValue(rows)
+			actor := checked(NewActorValue(Actor{Tenant: uint64(rows - 1), CanWrite: true}))
+			command := checked(NewCommandValue(CommandSet{Amount: 7}))
+			defer func() { snapshot.Close() }()
+			defer actor.Close()
+			defer command.Close()
+			allocations := testing.AllocsPerRun(100, func() {
+				if reply, err := handleStep(&snapshot, actor, command); err != nil || reply != 7 {
+					t.Fatalf("reply = %d, err = %v", reply, err)
+				}
+			})
+			if allocations > 10 {
+				t.Fatalf("%d rows: %g allocations per command, want at most 10", rows, allocations)
+			}
+			result := ReadSnapshotValue(snapshot)
+			if result.Rows[rows-1].Amount != 7 || result.Revision != 101 {
+				t.Fatalf("amount = %d, revision = %d", result.Rows[rows-1].Amount, result.Revision)
+			}
+			t.Logf("%d rows: %g allocations per command", rows, allocations)
+		})
+	}
+}
+
+func BenchmarkScopedLastRowCommand(b *testing.B) {
+	for _, rows := range []int64{1, 100, 1_000, 10_000} {
+		b.Run(fmt.Sprint(rows), func(b *testing.B) {
+			snapshot := initialValue(rows)
+			actor := checked(NewActorValue(Actor{Tenant: uint64(rows - 1), CanWrite: true}))
+			command := checked(NewCommandValue(CommandSet{Amount: 1}))
+			defer func() { snapshot.Close() }()
+			defer actor.Close()
+			defer command.Close()
+			b.ReportAllocs()
+			for b.Loop() {
+				leanfran.WithValues(func(scope *leanfran.ValueScope) {
+					writes, reply, err := TransitionValueIn(scope, actor.Borrow(), snapshot.Borrow(), command.Borrow())
+					if err != nil {
+						b.Fatal(err)
+					}
+					_ = ReadUInt64ValueIn(scope, reply)
+					reply.CloseIn(scope)
+					snapshot = checked(ApplyValueIn(scope, snapshot.Take(), writes.Take()))
+				})
+			}
+		})
+	}
 }
