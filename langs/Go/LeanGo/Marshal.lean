@@ -431,7 +431,11 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
                  anonymous := alias?.isNone, kind := .subtype fi.desc inv fi.bounds }
       let constructor ← if v.1.invariants.isEmpty || external || model.isSome then pure none else some <$> freshIdent ("New" ++ ident)
       return { ident, kind := .struct { v.1 with constructor } trivial, model }
-  let kind ← if variants.all (fun v => v.fields.isEmpty && v.invariants.isEmpty) then
+  let kind ← if variants.size == 1 && model.isNone then do
+      let v := variants[0]!
+      let constructor ← if external || v.invariants.isEmpty then pure none else some <$> freshIdent ("New" ++ ident)
+      pure (.sum #[{ v with ident, constructor }] trivial)
+    else if variants.all (fun v => v.fields.isEmpty && v.invariants.isEmpty) then
       let ctors ← variants.mapM fun v => do
         let base := ident ++ capitalizeIdent v.name
         let ident ← if external || model.isSome then pure base else freshIdent base
@@ -445,7 +449,7 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
         return { v with ident := ctor, constructor }
       pure (.sum vs trivial)
   let decoder ← match kind with
-    | .sum .. => if external then pure none else some <$> freshIdent ("Unmarshal" ++ ident)
+    | .sum vs _ => if external || vs.size == 1 then pure none else some <$> freshIdent ("Unmarshal" ++ ident)
     | _ => pure none
   return { ident, decoder, kind, model }
 

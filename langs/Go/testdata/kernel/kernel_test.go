@@ -25,20 +25,20 @@ func checked[T any](value T, err error) T {
 }
 
 func initialValue(size int64) leanfran.Value[Snapshot] {
-	n := checked(NewNatValue(big.NewInt(size)))
-	return checked(InitialValue(n.Take()))
+	n := checked(NewValue_Nat(big.NewInt(size)))
+	return Handle_Initial(n.Take())
 }
 
 func handleStep(snapshot *leanfran.Value[Snapshot], actor leanfran.Value[Actor], command leanfran.Value[Command]) (uint64, error) {
-	writes, reply, err := TransitionValue(actor.Borrow(), snapshot.Borrow(), command.Borrow())
+	writes, reply, err := Handle_Transition(actor.Borrow(), snapshot.Borrow(), command.Borrow())
 	if err != nil {
 		return 0, err
 	}
-	next, err := ApplyValue(snapshot.Take(), writes.Take())
+	next := Handle_Apply(snapshot.Take(), writes.Take())
 	*snapshot = next
-	result := ReadUInt64Value(reply)
+	result := ReadValue_UInt64(reply)
 	reply.Close()
-	return result, err
+	return result, nil
 }
 
 func publicStep(snapshot *Snapshot, actor Actor, command Command) (uint64, error) {
@@ -59,7 +59,7 @@ func renderReply(reply uint64, err error) string {
 	if !errors.As(err, &leanError) {
 		panic(err)
 	}
-	return "error " + string(leanError.Value)
+	return "error " + ErrorRender(leanError.Value)
 }
 
 func renderRows(snapshot Snapshot) string {
@@ -75,7 +75,7 @@ func renderRows(snapshot Snapshot) string {
 		} else {
 			fmt.Fprint(&out, *row.Limit)
 		}
-		fmt.Fprintf(&out, ", %s", row.Mode)
+		fmt.Fprintf(&out, ", %s", ModeRender(row.Mode))
 	}
 	return out.String()
 }
@@ -129,8 +129,8 @@ func TestKernelOracle(t *testing.T) {
 		}
 		fmt.Fprintf(&input, "%d %d %s %d\n", permission, actor.Tenant, op, arg)
 		goReply := renderReply(publicStep(&goSnapshot, actor, command))
-		valueActor := checked(NewActorValue(actor))
-		valueCommand := checked(NewCommandValue(command))
+		valueActor := NewValue_Actor(actor)
+		valueCommand := checked(NewValue_Command(command))
 		valueReply := renderReply(handleStep(&valueSnapshot, valueActor, valueCommand))
 		valueActor.Close()
 		valueCommand.Close()
@@ -140,7 +140,7 @@ func TestKernelOracle(t *testing.T) {
 		publicLines = append(publicLines, goReply)
 	})
 	publicRows := renderRows(goSnapshot)
-	if got := renderRows(ReadSnapshotValue(valueSnapshot)); got != publicRows {
+	if got := renderRows(ReadValue_Snapshot(valueSnapshot)); got != publicRows {
 		t.Fatal("Go snapshot and handle snapshot differ")
 	}
 	publicLines = append(publicLines, publicRows)
@@ -164,8 +164,8 @@ func TestKernelOracle(t *testing.T) {
 func TestConcurrentValues(t *testing.T) {
 	const calls = 200
 	snapshot := initialValue(100)
-	actor := checked(NewActorValue(Actor{CanWrite: true}))
-	command := checked(NewCommandValue(CommandAdd{Amount: 1}))
+	actor := NewValue_Actor(Actor{CanWrite: true})
+	command := checked(NewValue_Command(CommandAdd{Amount: 1}))
 	defer actor.Close()
 	defer command.Close()
 
@@ -186,22 +186,22 @@ func TestConcurrentValues(t *testing.T) {
 	}
 	group.Wait()
 	defer snapshot.Close()
-	if value := ReadSnapshotValue(snapshot); value.Revision != 8*calls || value.Rows[0].Amount != 8*calls-1 {
+	if value := ReadValue_Snapshot(snapshot); value.Revision != 8*calls || value.Rows[0].Amount != 8*calls-1 {
 		t.Fatalf("revision %d and amount %d after %d commands", value.Revision, value.Rows[0].Amount, 8*calls)
 	}
 }
 
 func TestSharedValues(t *testing.T) {
 	origin := initialValue(100)
-	writes := checked(NewWritesValue(WritesAmount{Value: 12}))
+	writes := checked(NewValue_Writes(WritesAmount{Value: 12}))
 	defer origin.Close()
 	defer writes.Close()
 	var group sync.WaitGroup
 	for range 8 {
 		group.Go(func() {
 			for range 100 {
-				derived := checked(ApplyValue(origin.Borrow(), writes.Borrow()))
-				if snapshot := ReadSnapshotValue(derived); snapshot.Rows[0].Amount != 12 {
+				derived := Handle_Apply(origin.Borrow(), writes.Borrow())
+				if snapshot := ReadValue_Snapshot(derived); snapshot.Rows[0].Amount != 12 {
 					t.Errorf("derived amount = %d", snapshot.Rows[0].Amount)
 				}
 				derived.Close()
@@ -209,45 +209,42 @@ func TestSharedValues(t *testing.T) {
 		})
 	}
 	group.Wait()
-	if got := ReadSnapshotValue(origin).Rows[0].Amount; got != math.MaxUint64 {
+	if got := ReadValue_Snapshot(origin).Rows[0].Amount; got != math.MaxUint64 {
 		t.Fatalf("borrowed snapshot mutated: %d", got)
 	}
 }
 
 func TestValueOwnership(t *testing.T) {
-	arg := checked(NewUInt64Value(21))
+	arg := NewValue_UInt64(21)
 	a := arg
-	total := checked(AddValuesValue(arg.Take(), arg.Borrow()))
+	total := Handle_AddValues(arg.Take(), arg.Borrow())
 	defer total.Close()
-	if got := ReadUInt64Value(total); got != 42 {
+	if got := ReadValue_UInt64(total); got != 42 {
 		t.Fatalf("add result = %d", got)
 	}
-	assertPanic(t, "leanfran: empty Value", func() { ReadUInt64Value(a) })
+	assertPanic(t, "leanfran: empty Value", func() { ReadValue_UInt64(a) })
 	a.Close()
-	a = checked(NewUInt64Value(21))
+	a = NewValue_UInt64(21)
 	defer a.Close()
-	assertPanic(t, "leanfran: Value taken twice in one call", func() { checked(AddValuesValue(a.Take(), a.Take())) })
+	assertPanic(t, "leanfran: Value taken twice in one call", func() { Handle_AddValues(a.Take(), a.Take()) })
 	assertPanic(t, "leanfran: empty Value", func() {
-		checked(AddValuesValue(a.Take(), leanfran.ValueInput[uint64]{}))
+		Handle_AddValues(a.Take(), leanfran.ValueInput[uint64]{})
 	})
-	if got := ReadUInt64Value(a); got != 21 {
+	if got := ReadValue_UInt64(a); got != 21 {
 		t.Fatalf("unconsumed argument = %d", got)
 	}
-	first, second, err := PairValueValue(a.Borrow())
-	if err != nil {
-		t.Fatal(err)
-	}
+	first, second := Handle_PairValue(a.Borrow())
 	defer first.Close()
 	defer second.Close()
-	pair := checked(NewPairUInt64UInt64Value(leanfran.Pair[uint64, uint64]{Fst: 1, Snd: 2}))
+	pair := NewValue_PairUInt64UInt64(leanfran.Pair[uint64, uint64]{Fst: 1, Snd: 2})
 	left, right := leanfran.SplitValue(pair.Take())
 	defer left.Close()
 	defer right.Close()
-	if ReadUInt64Value(first) != 21 || ReadUInt64Value(second) != 21 ||
-		ReadUInt64Value(left) != 1 || ReadUInt64Value(right) != 2 {
+	if ReadValue_UInt64(first) != 21 || ReadValue_UInt64(second) != 21 ||
+		ReadValue_UInt64(left) != 1 || ReadValue_UInt64(right) != 2 {
 		t.Fatal("unexpected product components")
 	}
-	assertPanic(t, "leanfran: empty Value", func() { ReadPairUInt64UInt64Value(pair) })
+	assertPanic(t, "leanfran: empty Value", func() { ReadValue_PairUInt64UInt64(pair) })
 }
 
 func assertPanic(t *testing.T, want string, f func()) {
@@ -261,28 +258,28 @@ func assertPanic(t *testing.T, want string, f func()) {
 }
 
 func TestOpaqueValues(t *testing.T) {
-	key := checked(NewUInt64Value(math.MaxUint64))
+	key := NewValue_UInt64(math.MaxUint64)
 	defer key.Close()
-	verified := checked(VerifyValue(key.Borrow()))
-	revealed := checked(ReadVerifiedValue(verified.Take()))
+	verified := Handle_Verify(key.Borrow())
+	revealed := Handle_ReadVerified(verified.Take())
 	defer revealed.Close()
-	if got := ReadUInt64Value(revealed); got != math.MaxUint64 {
+	if got := ReadValue_UInt64(revealed); got != math.MaxUint64 {
 		t.Fatalf("verified value = %d", got)
 	}
-	capacity := checked(NewNatValue(big.NewInt(4)))
+	capacity := checked(NewValue_Nat(big.NewInt(4)))
 	defer capacity.Close()
-	cache := checked(NewCacheValue(capacity.Borrow()))
-	cache = checked(InsertCacheValue(cache.Take(), key.Borrow(), key.Borrow()))
+	cache := Handle_NewCache(capacity.Borrow())
+	cache = Handle_InsertCache(cache.Take(), key.Borrow(), key.Borrow())
 	defer cache.Close()
-	found := checked(FindCacheValue(cache.Borrow(), key.Borrow()))
+	found := Handle_FindCache(cache.Borrow(), key.Borrow())
 	defer found.Close()
-	if got := ReadOptionUInt64Value(found); got == nil || *got != math.MaxUint64 {
+	if got := ReadValue_OptionUInt64(found); got == nil || *got != math.MaxUint64 {
 		t.Fatalf("cache lookup = %v", got)
 	}
-	entries := checked(EmptyMapValue(capacity.Borrow()))
-	size := checked(MapSizeValue(entries.Take()))
+	entries := Handle_EmptyMap(capacity.Borrow())
+	size := Handle_MapSize(entries.Take())
 	defer size.Close()
-	if got := ReadNatValue(size).Uint64(); got != 0 {
+	if got := ReadValue_Nat(size).Uint64(); got != 0 {
 		t.Fatalf("empty map size = %d", got)
 	}
 }
@@ -298,22 +295,22 @@ func rawValue[T any](v leanfran.Value[T]) rt.V {
 }
 
 func TestTakeReusesLeanObjects(t *testing.T) {
-	n := checked(NewUInt64Value(math.MaxUint64))
+	n := NewValue_UInt64(math.MaxUint64)
 	defer n.Close()
-	counter := checked(NewCounterValue(Counter{Count: 1, Other: 2}))
+	counter := NewValue_Counter(Counter{Count: 1, Other: 2})
 	defer counter.Close()
 	before := rawValue(counter)
-	changed := checked(BumpValue(counter.Take(), n.Borrow()))
+	changed := Handle_Bump(counter.Take(), n.Borrow())
 	defer changed.Close()
-	if got := rawValue(changed); got != before || ReadCounterValue(changed).Count != math.MaxUint64 {
+	if got := rawValue(changed); got != before || ReadValue_Counter(changed).Count != math.MaxUint64 {
 		t.Fatal("Take did not reuse the counter")
 	}
-	values := checked(NewArrayUInt64Value([]uint64{1, 2}))
+	values := NewValue_ArrayUInt64([]uint64{1, 2})
 	defer values.Close()
 	before = rawValue(values)
-	updated := checked(ReplaceLastValue(values.Take(), n.Borrow()))
+	updated := Handle_ReplaceLast(values.Take(), n.Borrow())
 	defer updated.Close()
-	if got := rawValue(updated); got != before || ReadArrayUInt64Value(updated)[1] != math.MaxUint64 {
+	if got := rawValue(updated); got != before || ReadValue_ArrayUInt64(updated)[1] != math.MaxUint64 {
 		t.Fatal("Take did not reuse the array")
 	}
 }

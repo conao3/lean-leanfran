@@ -22,6 +22,8 @@ type NamedType struct {
 	Module           string
 	Fields           map[string]string
 	Cases            map[string]string
+	Constructors     map[string]string
+	ZeroCase         string
 	Invariants       bool
 	Plain            bool
 }

@@ -117,4 +117,25 @@ def stdEcho (x : Std.TreeMap Nat Nat) : Std.TreeMap Nat Nat := x
 def ioRefEcho (x : IO.Ref Nat) : IO.Ref Nat := x
 def systemEcho (x : System.FilePath) : System.FilePath := x
 
+inductive Reply where
+  | value (v : UInt64)
+
+def replyFor (v : UInt64) : Reply := .value v
+
+inductive Given where
+  | only : UInt64 → Given
+
+def givenFor (v : UInt64) : Given := .only v
+
+inductive Marker where
+  | only
+
+def markerFor : Marker := .only
+
+inductive Record where
+  | value (v : UInt64) (h : v > 0)
+  | missing
+
+def recordValue (record : Record) : Record := record
+
 end LeanGoTest.Public

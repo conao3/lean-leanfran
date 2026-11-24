@@ -31,6 +31,9 @@ func (t *translation) structure(node ast.Node, typ types.Type, init map[int]stri
 }
 
 func (t *translation) structLiteral(x *ast.CompositeLit, typ types.Type, shape *types.Struct) string {
+	if desc, ok := t.namedType(typ); ok && desc.ZeroCase != "" && len(x.Elts) == 0 {
+		return t.zero(x, typ)
+	}
 	values := make(map[int]string)
 	var binds strings.Builder
 	for i, item := range x.Elts {

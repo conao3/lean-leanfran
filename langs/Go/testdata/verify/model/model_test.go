@@ -48,9 +48,9 @@ func TestGoOperations(t *testing.T) {
 		if !p && (gotU.Fst != uq || gotU.Snd != ur) {
 			t.Fatalf("unsigned(%d, %d) = %v, want (%d, %d)", ua, ub, gotU, uq, ur)
 		}
-		gotS, err := models.Shifts(uint8(a), ub)
-		if err != nil || gotS.Fst != uint8(a)<<ub || gotS.Snd != uint8(a)>>ub {
-			t.Fatalf("shifts(%d, %d) = %v, %v", uint8(a), ub, gotS, err)
+		gotS := models.Shifts(uint8(a), ub)
+		if gotS.Fst != uint8(a)<<ub || gotS.Snd != uint8(a)>>ub {
+			t.Fatalf("shifts(%d, %d) = %v", uint8(a), ub, gotS)
 		}
 		var signedShift uint8
 		p = panicFrom(func() { signedShift = uint8(a) << b })
@@ -78,13 +78,13 @@ func TestGoOperations(t *testing.T) {
 		if !p && !slices.Equal(updated, ys) {
 			t.Fatalf("update(%v, %d, %d) = %v, want %v", xs, b, a, updated, ys)
 		}
-		length, err := models.Length(xs)
-		if err != nil || length != int64(len(xs)) {
-			t.Fatalf("len(%v) = %d, %v", xs, length, err)
+		length := models.Length(xs)
+		if length != int64(len(xs)) {
+			t.Fatalf("len(%v) = %d", xs, length)
 		}
-		converted, err := models.Convert(a)
-		if err != nil || converted.Fst != uint8(a) || converted.Snd.Fst != uint64(a) || converted.Snd.Snd != int8(a) {
-			t.Fatalf("convert(%d) = %v, %v", a, converted, err)
+		converted := models.Convert(a)
+		if converted.Fst != uint8(a) || converted.Snd.Fst != uint64(a) || converted.Snd.Snd != int8(a) {
+			t.Fatalf("convert(%d) = %v", a, converted)
 		}
 	}
 	for _, a := range edges {

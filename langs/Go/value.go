@@ -218,6 +218,14 @@ func NewValueIn[T, G any](scope *ValueScope, codec Codec[G], v G, path string) (
 	return newValue[T](scope, codec, v, path)
 }
 
+func NewUncheckedValueIn[T, G any](scope *ValueScope, codec Codec[G], v G) Value[T] {
+	if scope != nil {
+		BeginValueOperation(scope)
+		defer EndValueOperation(scope)
+	}
+	return WrapValueIn[T](scope, codec.ToLean(v))
+}
+
 func newValue[T, G any](scope *ValueScope, codec Codec[G], v G, path string) (Value[T], error) {
 	if codec.Check != nil {
 		var validation ValidationError

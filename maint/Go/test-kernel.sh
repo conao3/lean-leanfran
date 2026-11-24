@@ -26,11 +26,11 @@ import (
 )
 
 func wrongType(v leanfran.Value[kernel.Actor], command leanfran.Value[kernel.Command]) {
-    kernel.TransitionValue(v.Borrow(), v.Borrow(), command.Borrow())
+    kernel.Handle_Transition(v.Borrow(), v.Borrow(), command.Borrow())
 }
 GO
 if go test "$typecheck/wrong-type.go" >"$out/wrong-type.txt" 2>&1; then
-    printf 'TransitionValue accepted an Actor in place of a Snapshot\n' >&2
+    printf 'Handle_Transition accepted an Actor in place of a Snapshot\n' >&2
     exit 1
 fi
 grep -F 'as leanfran.ValueInput[kernel.Snapshot]' "$out/wrong-type.txt"

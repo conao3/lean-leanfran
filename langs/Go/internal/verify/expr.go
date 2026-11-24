@@ -27,12 +27,6 @@ func (t *translation) value(node ast.Expr, typ types.Type) string {
 			return tv.Value.String()
 		case constant.String:
 			s := constant.StringVal(tv.Value)
-			if desc, ok := t.namedType(typ); ok && desc.Cases != nil {
-				if ctor := desc.Cases[s]; ctor != "" {
-					return name + "." + leanName(ctor)
-				}
-				t.reject(node, "constant is not a constructor of %v", typ)
-			}
 			if !utf8.ValidString(s) {
 				t.reject(node, "invalid UTF-8 string constant")
 			}
@@ -203,9 +197,6 @@ func (t *translation) binary(node ast.Node, op token.Token, a, b string, typ, rh
 	switch op {
 	case token.ADD:
 		if bt != nil && bt.Info()&types.IsString != 0 {
-			if desc, ok := t.namedType(typ); ok && desc.Cases != nil {
-				t.reject(node, "concatenation may produce an invalid generated enum value")
-			}
 			sym = "++"
 		}
 	case token.SUB, token.MUL:
@@ -258,9 +249,6 @@ func (t *translation) binary(node ast.Node, op token.Token, a, b string, typ, rh
 		if bt == nil {
 			t.reject(node, "ordering of unsupported type %v", typ)
 		}
-		if desc, ok := t.namedType(typ); ok && desc.Cases != nil {
-			a, b = enumString(desc, a), enumString(desc, b)
-		}
 		return "(decide (" + a + " " + sym + " " + b + "))"
 	case token.LAND, token.LOR:
 	default:
@@ -283,15 +271,7 @@ func (t *translation) call(x *ast.CallExpr, passError bool) string {
 		to, from := basic(typ), basic(source)
 		v := t.value(x.Args[0], nil)
 		if to != nil && from != nil && to.Info()&types.IsString != 0 && from.Info()&types.IsString != 0 {
-			if t.leanType(x, typ) == t.leanType(x, source) {
-				return v
-			}
-			if t.leanType(x, typ) == "String" {
-				if desc, ok := t.namedType(source); ok && desc.Cases != nil {
-					return enumString(desc, v)
-				}
-			}
-			t.reject(x, "unsupported conversion to a generated enum")
+			return v
 		}
 		if to == nil || from == nil || to.Info()&types.IsInteger == 0 || from.Info()&types.IsInteger == 0 {
 			t.reject(x, "unsupported conversion from %v to %v", source, typ)
@@ -308,11 +288,7 @@ func (t *translation) call(x *ast.CallExpr, passError bool) string {
 			} else if _, ok := ty.Underlying().(*types.Slice); !ok {
 				t.reject(x, "unsupported len argument %v", ty)
 			}
-			val := t.value(x.Args[0], nil)
-			if desc, ok := t.namedType(ty); ok && desc.Cases != nil {
-				val = enumString(desc, val)
-			}
-			return apply(name, val)
+			return apply(name, t.value(x.Args[0], nil))
 		case "min", "max":
 			name := builtin.Name()
 			if b := basic(info.TypeOf(x)); b != nil {
@@ -320,12 +296,7 @@ func (t *translation) call(x *ast.CallExpr, passError bool) string {
 				if b.Info()&types.IsFloat != 0 {
 					name = "Go.float" + suffix
 				} else if b.Info()&types.IsString != 0 {
-					key := "id"
-					if desc, ok := t.namedType(info.TypeOf(x)); ok && desc.Cases != nil {
-						arg := t.next()
-						key = "(fun " + arg + " => " + enumString(desc, arg) + ")"
-					}
-					name = apply("Go.string"+suffix, key)
+					name = apply("Go.string"+suffix, "id")
 				}
 			}
 			val := t.value(x.Args[0], info.TypeOf(x))
@@ -336,6 +307,11 @@ func (t *translation) call(x *ast.CallExpr, passError bool) string {
 		}
 	}
 	if f, ok := obj.(*types.Func); ok && f.Pkg() != nil {
+		if desc, ok := t.namedType(info.TypeOf(x)); ok && f.Pkg().Path() == desc.Path && len(x.Args) == 0 {
+			if ctor := desc.Constructors[f.Name()]; ctor != "" {
+				return leanName(desc.Lean) + "." + leanName(ctor)
+			}
+		}
 		callee := t.resolve(f, x.Pos())
 		if callee.errorPair && !passError {
 			t.reject(x, "an error-returning model can only be used in a direct return")
