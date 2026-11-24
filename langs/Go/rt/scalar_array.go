@@ -176,3 +176,6 @@ func Lean_float_array_set(a, i V, f float64) V {
 	}
 	return a
 }
+
+func BytesFromSlice(values []byte) V { return byteArray(append([]byte(nil), values...)) }
+func Bytes(v V) []byte               { return append([]byte{}, byteData(v).values...) }

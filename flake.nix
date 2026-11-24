@@ -138,6 +138,7 @@
             pkgs.gofumpt
             pkgs.golangci-lint
             pkgs.gopls
+            pkgs.python3
             pkgs.gcc
             pkgs.gnumake
           ];

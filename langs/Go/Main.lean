@@ -3,21 +3,23 @@ import LeanGo
 open Lean LeanGo
 
 def version : String := "0.7.0"
-def generatorVersion : String := "3"
+def generatorVersion : String := "4"
 
 def usage : String := "leanfran-go --version | --generator-version
 leanfran-go module generate --module-name <Name> [options]
 
   --roots <Name> ...          Lean definitions to compile
-  --namespace <Name>          Limit default roots to this Lean namespace
+  --namespace <Name>          Strip this prefix from public names
+  --type-module <N=path>      Import public types from another Go package
   --import <Name> ...         More modules to import
   --search-path <dir> ...     Extra .olean search directories
   --package <name>            Generated Go package name
   --main <Name>               Generate an executable Go package
   --internal-only             Generate runtime-facing functions
+  --output-dir <dir>          Generate a typed Go package
   --output-file <path>        Output path (default: stdout)
   --output json|text          Summary format (default: json)
-  --batch <file>              JSON array of jobs with module and output_file
+  --batch <file>              JSON jobs with module and output_file or output_dir
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 "
@@ -28,6 +30,8 @@ structure JobOpts where
   package? : Option String := none
   main? : Option Name := none
   outputFile : Option System.FilePath := none
+  outputDir : Option System.FilePath := none
+  typeModules : Array (Name × String) := #[]
   internalOnly : Bool := false
 
 structure Job extends JobOpts where
@@ -54,7 +58,7 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
       | _ => { o with searchPath := o.searchPath ++ vs.map System.FilePath.mk }
     return ← parseOpts (rest.drop vs.size) o
   unless #["--module-name", "--namespace", "--package", "--main", "--batch", "--output-file",
-      "--output"].contains flag do
+      "--output", "--output-dir", "--type-module"].contains flag do
     throw s!"unknown parameter: {flag}"
   let v :: rest := rest | throw s!"expected a value for {flag}"
   unless isValue v do throw s!"expected a value for {flag}"
@@ -65,6 +69,12 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
   | "--main" => parseOpts rest { o with main? := v.toName }
   | "--batch" => parseOpts rest { o with batch := some v }
   | "--output-file" => parseOpts rest { o with outputFile := some v }
+  | "--output-dir" => parseOpts rest { o with outputDir := some v }
+  | "--type-module" =>
+    let [ns, path] := v.splitOn "=" | throw "expected --type-module N=importpath"
+    if ns.isEmpty || path.isEmpty || o.typeModules.any (·.1 == ns.toName) then
+      throw s!"invalid or repeated --type-module: {v}"
+    parseOpts rest { o with typeModules := o.typeModules.push (ns.toName, path) }
   | _ =>
     if v == "json" || v == "text" then parseOpts rest { o with output := v }
     else throw s!"--output must be json or text: {v}"
@@ -83,9 +93,16 @@ def parseJobs (j : Json) (internalOnly : Bool) : Except String (Array Job) := do
     let namespace? := (← optionalField (α := String) e "namespace").map String.toName
     let package? ← optionalField (α := String) e "package"
     let main? := (← optionalField (α := String) e "main").map String.toName
-    let outputFile := some (System.FilePath.mk (← e.getObjValAs? String "output_file"))
+    let outputFile := (← optionalField (α := String) e "output_file").map System.FilePath.mk
+    let outputDir := (← optionalField (α := String) e "output_dir").map System.FilePath.mk
+    unless outputFile.isSome != outputDir.isSome do
+      throw s!"{module}: expected exactly one of output_file or output_dir"
+    let typeModules ← ((← optionalField (α := Array String) e "type_modules").getD #[]).mapM fun spec => do
+      let [ns, path] := spec.splitOn "=" | throw "expected type_modules entries in N=importpath form"
+      if ns.isEmpty || path.isEmpty then throw s!"invalid type module: {spec}"
+      pure (ns.toName, path)
     let internalOnly := (← optionalField (α := Bool) e "internal_only").getD internalOnly
-    return { module, roots, namespace?, package?, main?, outputFile, internalOnly }
+    return { module, roots, namespace?, package?, main?, outputFile, outputDir, typeModules, internalOnly }
 
 def goPackage (job : Job) : Except String String := do
   let moduleName := match job.module with
@@ -118,6 +135,46 @@ def defaultRoots (env : Environment) (job : Job) : Array Name := Id.run do
     | _ => pure ()
   return roots
 
+def publicDecls (env : Environment) (job : Job) : Array Name × Array Name := Id.run do
+  let some idx := env.getModuleIdx? job.module | return (#[], job.roots)
+  let mut types := #[]
+  let mut roots := #[]
+  for c in env.header.moduleData[idx.toNat]!.constNames do
+    let publicName := (privateToUserName? c).getD c
+    if publicName.isInternalDetail then continue
+    if (declRangeExt.find? (level := .exported) env c).isNone && !isPrivateName c then continue
+    match env.find? c with
+    | some (.inductInfo _) => types := types.push c
+    | some (.defnInfo d) =>
+      if d.type.isSort then types := types.push c
+      else if isPrivateName c || (IR.findEnvDecl env (csimpTarget env c)).isSome then roots := roots.push c
+    | some (.opaqueInfo _) => roots := roots.push c
+    | _ => pure ()
+  return (types.qsort Name.lt, (if job.roots.isEmpty then roots else job.roots).qsort Name.lt)
+
+def writePublic (dir : System.FilePath) (sources : Array (String × String)) : IO (Array String) := do
+  let mut formatted := #[]
+  for (name, source) in sources do
+    let tmp ← IO.FS.createTempFile
+    let (_, path) := tmp
+    try
+      IO.FS.writeFile path source
+      let out ← IO.Process.output { cmd := "gofmt", args := #[path.toString] }
+      unless out.exitCode == 0 do throw (IO.userError out.stderr)
+      formatted := formatted.push (name, out.stdout)
+    finally
+      IO.FS.removeFile path
+  IO.FS.createDirAll dir
+  for (name, source) in formatted do
+    IO.FS.writeFile (dir / name) source
+  for entry in ← dir.readDir do
+    if entry.fileName.endsWith ".go" && !sources.any (·.1 == entry.fileName) then
+      if (← entry.path.metadata).type == .file then
+        let handle ← IO.FS.Handle.mk entry.path .read
+        if (← handle.getLine).startsWith "// Code generated by leanfran-go" then
+          IO.FS.removeFile entry.path
+  return sources.map (fun (name, _) => (dir / name).toString)
+
 def printSummary (o : Opts) (summary : Json) (toStderr : Bool) : IO Unit := do
   let print := if toStderr || (summary.getObjVal? "error").isOk then IO.eprintln else IO.println
   if o.output == "json" then print summary.compress
@@ -125,7 +182,14 @@ def printSummary (o : Opts) (summary : Json) (toStderr : Bool) : IO Unit := do
     let mod := (summary.getObjValD "module").getStr?.toOption.getD ""
     match (summary.getObjValD "error").getStr? with
     | .ok e => print s!"leanfran-go: {mod}: {e}"
-    | .error _ => print s!"{mod}: package {(summary.getObjValD "package").getStr?.toOption.getD ""}"
+    | .error _ =>
+      print s!"{mod}: package {(summary.getObjValD "package").getStr?.toOption.getD ""}"
+      for file in (summary.getObjValD "files").getArr?.toOption.getD #[] do
+        print s!"  wrote {file.getStr?.toOption.getD ""}"
+      for skipped in (summary.getObjValD "skipped").getArr?.toOption.getD #[] do
+        let name := (skipped.getObjValD "name").getStr?.toOption.getD ""
+        let reason := (skipped.getObjValD "reason").getStr?.toOption.getD ""
+        print s!"  skipped {name}: {reason}"
 
 def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
   let mod := toString job.module
@@ -134,6 +198,20 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
   let pkg ← match goPackage job with
     | .ok name => pure name
     | .error e => return ← failed 252 e
+  if let some dir := job.outputDir then
+    let (types, roots) := publicDecls env job
+    let strip := job.namespace?.getD job.module
+    let typeModules := job.typeModules.qsort (fun a b =>
+      if a.1.components.length == b.1.components.length then Name.lt a.1 b.1
+      else a.1.components.length > b.1.components.length)
+    let (publicModule, env) ← try inspectPublic env { strip, typeModules } types roots
+      catch e => return ← failed 254 e.toString
+    let sources ← match publicSources env job.module pkg generatorVersion publicModule with
+      | .ok sources => pure sources
+      | .error reason => return ← failed 254 reason
+    let files ← writePublic dir sources
+    let skipped := publicModule.skipped.map fun s => Json.mkObj [("name", toString s.name), ("reason", s.reason)]
+    return (Json.mkObj [("module", mod), ("package", pkg), ("files", toJson files), ("skipped", toJson skipped)], 0)
   let roots := if job.roots.isEmpty then defaultRoots env job else job.roots.map (csimpTarget env)
   let source ← match generate env job.module roots pkg job.main? generatorVersion job.internalOnly with
     | .ok source => pure source
@@ -149,11 +227,11 @@ def fail (code : UInt32) (msg : String) : IO UInt32 := do
   IO.eprintln s!"leanfran-go: {msg}"
   return code
 
-def moduleGenerate (o : Opts) : IO UInt32 := do
+unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
   let jobs ← match o.batch with
     | some file =>
       if o.moduleName.isSome || !o.roots.isEmpty || o.namespace?.isSome || o.package?.isSome ||
-          o.main?.isSome || o.outputFile.isSome then
+          o.main?.isSome || o.outputFile.isSome || o.outputDir.isSome || !o.typeModules.isEmpty then
         return ← fail 252 "put module and output options in the batch jobs"
       match Json.parse (← IO.FS.readFile file) >>= (parseJobs · o.internalOnly) with
       | .ok jobs => pure jobs
@@ -161,13 +239,22 @@ def moduleGenerate (o : Opts) : IO UInt32 := do
     | none =>
       let some module := o.moduleName | return ← fail 252 "--module-name is required"
       pure #[{ o.toJobOpts with module : Job }]
+  for job in jobs do
+    if (job.typeModules.map Prod.fst).toList.eraseDups.length != job.typeModules.size then
+      return ← fail 252 "duplicate type module namespace"
+    if job.outputDir.isSome && (job.outputFile.isSome || job.internalOnly || job.main?.isSome) then
+      return ← fail 252 "--output-dir requires a public library package"
+    if job.outputDir.isNone && !job.typeModules.isEmpty then
+      return ← fail 252 "--type-module requires --output-dir"
   initSearchPath (← findSysroot) o.searchPath.toList
   let searchPath ← searchPathRef.get
   let mods := (jobs.map (·.module) ++ o.imports).foldl (fun a m => if a.contains m then a else a.push m) #[]
   for m in mods do
     if (← searchPath.findWithExt "olean" m).isNone then
       return ← fail 252 s!"module not found: {m}"
-  let env ← importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024)
+  let publicOutput := jobs.any (·.outputDir.isSome)
+  if publicOutput then enableInitializersExecution
+  let env ← importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024) (loadExts := publicOutput)
   let mut code : UInt32 := 0
   let mut summaries := #[]
   for job in jobs do
@@ -177,10 +264,10 @@ def moduleGenerate (o : Opts) : IO UInt32 := do
   if o.batch.isSome && o.output == "json" then
     IO.println (Json.arr summaries).compress
   else
-    for summary in summaries do printSummary o summary (o.batch.isNone && o.outputFile.isNone)
+    for summary in summaries do printSummary o summary (o.batch.isNone && o.outputFile.isNone && o.outputDir.isNone)
   return code
 
-def main (args : List String) : IO UInt32 := do
+unsafe def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0

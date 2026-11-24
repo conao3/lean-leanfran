@@ -32,3 +32,15 @@ test "$status" = 2
 test ! -s "$out/usage.out"
 printf 'usage: greet-cli NAME\n' | diff -u - "$out/usage.err"
 printf 'samples sum-to and greet-cli pass\n'
+
+lean --root=samples/pricing -o "$out/Pricing.olean" samples/pricing/Pricing.lean
+"$compiler" module generate --module-name Pricing --search-path "$out"     --output text --output-dir "$source/pricing"
+test -z "$(gofmt -l "$source/pricing" samples/pricing)"
+for file in "$source/pricing/"*_gen.go; do
+    cmp "$file" "samples/pricing/pricing/${file##*/}"
+done
+go vet ./samples/pricing/...
+CGO_ENABLED=0 go build -o "$out/pricing" ./samples/pricing
+"$out/pricing" > "$out/pricing.out"
+printf '1800\n{"hi":3,"lo":1}\n' | diff -u - "$out/pricing.out"
+printf 'sample pricing passes\n'
