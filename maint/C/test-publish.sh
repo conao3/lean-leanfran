@@ -31,7 +31,18 @@ fi
 checkout="$temp/checkout"
 version=${tag#v}
 git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "$remote" "$checkout"
-grep -Fx "version = \"$version\"" "$checkout/langs/C/lakefile.toml"
+
+check_version() {
+    local actual
+    actual=$(sed -En "$2" "$1")
+    if [[ $actual != "$version" ]]; then
+        printf 'test-publish.sh: %s: expected version %s, found %s\n' \
+            "$1" "$version" "${actual:-<missing>}" >&2
+        return 1
+    fi
+}
+
+check_version "$checkout/langs/C/lakefile.toml" 's/^version = "([^"]*)"$/\1/p'
 
 mkdir "$temp/consumer"
 cp "$checkout/lean-toolchain" "$temp/consumer/"
@@ -42,7 +53,7 @@ check_consumer() (
     cd "$temp/consumer/tests/cases"
     "$compiler" generate --module-name Examples.PublicApi --out-dir "$out"
     "$compiler" build --out-dir "$out"
-    grep -Fx "#define LEANFRAN_VERSION \"$version\"" "$out/leanfran.h"
+    check_version "$out/leanfran.h" 's/^#define LEANFRAN_VERSION "([^"]*)"$/\1/p'
     flags=$(pkg-config --cflags --libs "$out/public_api.pc")
     eval 'cc -std=c11 ../link/main.c -o "$out/consumer" '"$flags"
     "$out/consumer"
