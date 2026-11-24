@@ -5,7 +5,7 @@ import pydantic
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from leanfran import Err, Ok
+from leanfran import Err, Lean, LeanType, Ok
 
 
 def test_scalars(pub):
@@ -71,6 +71,53 @@ def test_except_json(pub):
     assert json.loads(pub.Attempt.retry(a).model_dump_json()) == {"id": 2, "result": {"ok": {"x": 1, "y": 0}}}
     schema = pub.Attempt.model_json_schema()
     assert {"$ref": "#/$defs/Err_str_"} in schema["properties"]["result"]["anyOf"]
+
+
+def test_handles(pub):
+    xs = pub.squares.lean.params["xs"].new([1, -2, 3])
+    assert isinstance(xs, Lean)
+    ys = pub.squares.lean(xs)
+    assert ys.get() == [1, 4, 9]
+    assert xs.get() == [1, -2, 3]
+    assert pub.squares.lean(ys).get() == [1, 16, 81]
+    assert pub.squares.lean(ys).get() == [1, 16, 81]
+    assert ys.get() == [1, 4, 9]
+    assert pub.squares.lean([2]).get() == [4]
+    assert repr(ys) == "Lean([1, 4, 9])"
+    assert pub.answer.lean().get() == 42
+    assert pub.answer() == 42
+    assert pub.mix.lean(255, 65535, 1, 2, 3).get() == 255 + 65535 + 6
+    assert pub.safeDiv.lean(7, 2).get() == Ok(value=3)
+    assert pub.orZero.lean(pub.orZero.lean.params["r"].new(Ok(value=9))).get() == 9
+    assert pub.safeDiv.lean(7, 2).type.new(Ok(value=9)).get() == Ok(value=9)
+
+
+def test_handles_keep_their_value(pub):
+    tree = pub.Tree.ofList.lean([2, 1, 3])
+    bigger = pub.Tree.insert.lean(tree, 0)
+    assert pub.Tree.toList.lean(tree).get() == [1, 2, 3]
+    assert pub.Tree.toList.lean(bigger).get() == [0, 1, 2, 3]
+    assert pub.Tree.insert.lean(tree, 4).get() == pub.Tree.insert(tree.get(), 4)
+    sample = pub.Sample.bump.lean(pub.Sample(name="s", count=1, weight=0.5, flag=False, tags=["t"]))
+    again = pub.Sample.bump.lean(sample)
+    assert sample.get().count == 2
+    assert again.get().count == 3
+    assert pub.Sample.describe.lean(sample).get() == pub.Sample.describe(sample.get())
+
+
+def test_handle_types(pub):
+    xs_type = pub.squares.lean.params["xs"]
+    assert isinstance(xs_type, LeanType)
+    assert xs_type == pub.squares.lean.result
+    assert xs_type != pub.sumList.lean.params["xs"]
+    assert pub.squares.lean(xs_type.new([3])).type == xs_type
+    with pytest.raises(ValidationError, match="expected a handle of list\\[Nat\\]"):
+        pub.sumList.lean(xs_type.new([1]))
+    with pytest.raises(ValidationError):
+        xs_type.new(["a"])
+    with pytest.raises(ValidationError, match="non-negative"):
+        pub.double.lean(-1)
+    assert not hasattr(pub.readBack, "lean")
 
 
 def test_argument_errors(pub):

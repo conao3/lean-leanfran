@@ -14,7 +14,7 @@ import pydantic
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic_core import PydanticCustomError, SchemaSerializer, SchemaValidator, ValidationError, core_schema
 
-from leanfran.runtime import Ctor, LArray, _f32, _list_to_py, _py_to_list
+from leanfran.runtime import _RC, PERSISTENT, Ctor, LArray, _f32, _list_to_py, _py_to_list
 
 Field = pydantic.Field
 """Used by generated models for the field options (``alias``, ``exclude_if``)."""
@@ -54,6 +54,10 @@ class Desc:
     def to_py(self, x):
         raise NotImplementedError
 
+    def key(self):
+        """A value equal for the descriptors of the same Lean type (also across generated modules)."""
+        return (self.__class__,)
+
 
 def _is_int(v):
     return isinstance(v, int) and not isinstance(v, bool)
@@ -86,6 +90,9 @@ class UIntD(Desc):
         self.bits = bits
         self.limit = 1 << bits
 
+    def key(self):
+        return (UIntD, self.bits)
+
     def to_lean(self, v):
         if not _is_int(v) or not 0 <= v < self.limit:
             _fail(f"expected an int in [0, 2^{self.bits}) (Lean `UInt{self.bits}`)", v)
@@ -101,6 +108,9 @@ class SIntD(Desc):
         self.half = 1 << (bits - 1)
         self.mask = (1 << bits) - 1
 
+    def key(self):
+        return (SIntD, self.bits)
+
     def to_lean(self, v):
         if not _is_int(v) or not -self.half <= v < self.half:
             _fail(f"expected an int in [-2^{self.bits - 1}, 2^{self.bits - 1}) (Lean `Int{self.bits}`)", v)
@@ -113,6 +123,9 @@ class SIntD(Desc):
 class FinD(Desc):
     def __init__(self, n):
         self.n = n
+
+    def key(self):
+        return (FinD, self.n)
 
     def to_lean(self, v):
         if not _is_int(v) or not 0 <= v < self.n:
@@ -193,6 +206,9 @@ class ListD(Desc):
     def __init__(self, d):
         self.d = d
 
+    def key(self):
+        return (self.__class__, self.d.key())
+
     def _items(self, v):
         if not isinstance(v, (list, tuple)):
             _fail("expected a list", v)
@@ -223,6 +239,9 @@ class OptionD(Desc):
     def __init__(self, d):
         self.d = d
 
+    def key(self):
+        return (OptionD, self.d.key())
+
     def to_lean(self, v):
         if v is None:
             return 0
@@ -238,6 +257,9 @@ class ProdD(Desc):
     def __init__(self, a, b):
         self.a = a
         self.b = b
+
+    def key(self):
+        return (ProdD, self.a.key(), self.b.key())
 
     def to_lean(self, v):
         if not isinstance(v, (tuple, list)) or len(v) != 2:
@@ -275,6 +297,9 @@ class NamedD(Desc):
             self._info = infos[0] if infos else t.__lean__
         return self._info
 
+    def key(self):
+        return (NamedD, id(self.info()))
+
     def to_lean(self, v):
         return self.info().to_lean(v)
 
@@ -302,6 +327,90 @@ def to_lean(desc, v, name):
 
 def to_py(desc, x):
     return desc.to_py(x)
+
+
+# ---------------------------------------------------------------------------
+# Handles: Lean values kept without converting them
+
+_SHARED = PERSISTENT // 2
+
+
+def _share(x):
+    """Marks ``x`` and what it reaches as never updated in place (a persistent reference count),
+    stopping at objects that are already marked."""
+    stack = [x]
+    while stack:
+        o = stack.pop()
+        c = o.__class__
+        if c is Ctor:
+            if o.rc < _SHARED:
+                o.rc = PERSISTENT
+                stack.extend(o.objs)
+        elif c is LArray:
+            if o.rc < _SHARED:
+                o.rc = PERSISTENT
+                stack.extend(o.data)
+        elif c in _RC:
+            o.rc = PERSISTENT
+    return x
+
+
+class LeanType:
+    """A Lean type of a public function: ``new`` makes a handle of a Python value."""
+
+    __slots__ = ("desc", "python")
+
+    def __init__(self, desc, python):
+        self.desc = desc
+        self.python = python
+
+    def new(self, value):
+        """The handle of the Lean value of ``value``, checked like an argument."""
+        return Lean(self, _share(to_lean(self.desc, value, "value")))
+
+    def __eq__(self, other):
+        return isinstance(other, LeanType) and self.desc.key() == other.desc.key()
+
+    def __hash__(self):
+        return hash(self.desc.key())
+
+    def __repr__(self):
+        return f"LeanType({self.python})"
+
+
+class Lean[T]:
+    """A Lean value kept as the runtime's object, without converting it to a Python value.
+
+    The ``lean`` attribute of a generated function takes handles (or Python values) and returns a
+    handle; ``get`` converts a handle to the Python value. A handle is immutable.
+    """
+
+    __slots__ = ("_obj", "type")
+
+    def __init__(self, type_, obj):
+        self.type = type_
+        self._obj = obj
+
+    def get(self) -> T:
+        """The Python value of the handle."""
+        return self.type.desc.to_py(self._obj)
+
+    def __repr__(self):
+        return f"Lean({self.get()!r})"
+
+
+def lean_arg(type_, v, name):
+    """The runtime value of the argument ``v`` of a function on handles: a handle or a Python value."""
+    if v.__class__ is Lean:
+        if v.type is not type_ and v.type != type_:
+            f = _Fail(f"expected a handle of {type_.python}, got a handle of {v.type.python}", v, (name,))
+            raise _validation_error("leanfran-python", f)
+        return v._obj
+    return to_lean(type_.desc, v, name)
+
+
+def handle(type_, x):
+    return Lean(type_, _share(x))
 
 
 def io_result(r, desc, error_to_string):
@@ -564,6 +673,9 @@ class ExceptD(Desc):
         self.ok_type = ok_type
         self._classes = None
 
+    def key(self):
+        return (ExceptD, self.err.key(), self.ok.key())
+
     def classes(self):
         if self._classes is None:
             err = Err[eval(self.err_type, self.g)]
@@ -763,11 +875,17 @@ def register_inductive(base, pairs):
 # Module assembly
 
 
-def attach(g, path, fn, lean_name=None):
+def attach(g, path, fn, lean_name=None, lean=None, params=None, result=None):
     fn.__name__ = path[-1]
     fn.__qualname__ = ".".join(path)
     fn.__lean_name__ = lean_name
     fn.__lean_module__ = g.get("__lean_module__")
+    if lean is not None:
+        lean.__name__ = path[-1]
+        lean.__qualname__ = ".".join([*path, "lean"])
+        lean.params = params
+        lean.result = result
+        fn.lean = lean
     if len(path) == 1:
         g[path[0]] = fn
         return
