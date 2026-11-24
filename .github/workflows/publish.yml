@@ -280,3 +280,17 @@ jobs:
           done
           echo "Go could not resolve github.com/conao3/leanfran-go@$TAG" >&2
           exit 1
+
+  c:
+    name: Verify the tagged C compiler
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v32.0.0
+      - run: nix develop .#c -c maint/C/test-publish.sh "$TAG"
+        env:
+          TAG: ${{ inputs.tag }}
