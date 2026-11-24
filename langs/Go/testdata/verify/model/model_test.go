@@ -117,10 +117,10 @@ func TestGoOperations(t *testing.T) {
 	}
 	for _, a := range floats {
 		for _, b := range floats {
-			got, err := models.Bounds(a, b)
-			if err != nil || !same(got.Fst, min(a, b)) || !same(got.Snd.Fst, max(a, b)) ||
+			got := models.Bounds(a, b)
+			if !same(got.Fst, min(a, b)) || !same(got.Snd.Fst, max(a, b)) ||
 				got.Snd.Snd.Fst != (a < b) || got.Snd.Snd.Snd != (a == b) {
-				t.Fatalf("bounds(%v, %v) = %v, %v", a, b, got, err)
+				t.Fatalf("bounds(%v, %v) = %v", a, b, got)
 			}
 		}
 	}
