@@ -143,11 +143,11 @@ have no handle version.
 One command (a scan and an update) on a snapshot of two-number structures in a `List`
 (`cargo run --release -p leanfran-public-test --bin handle-bench` in `langs/Rust`):
 
-| rows | Rust values | `Lean` | `Local` |
-| ---- | ----------- | ------ | ------- |
-| 1    | 0.21 µs     | 0.28 µs | 0.12 µs |
-| 100  | 4.8 µs      | 2.4 µs  | 0.39 µs |
-| 10,000 | 880 µs    | 265 µs  | 43 µs   |
+| rows   | Rust values | `Lean`  | `Local` |
+| ------ | ----------- | ------- | ------- |
+| 1      | 0.23 µs     | 0.29 µs | 0.12 µs |
+| 100    | 4.8 µs      | 2.5 µs  | 0.40 µs |
+| 10,000 | 767 µs      | 262 µs  | 46 µs   |
 
 What remains with `Local` is the Lean code itself: a `List` is searched and rebuilt cell by cell.
 A snapshot in an `Array` is written in one slot (`Array.setIfInBounds` on the only reference).
