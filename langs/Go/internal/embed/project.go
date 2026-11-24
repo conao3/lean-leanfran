@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/conao3/leanfran-go/internal/verify"
 )
 
 const (
@@ -46,6 +48,8 @@ type block struct {
 	pos           token.Position
 	source        source
 	imports, uses []string
+	wrappers      map[string]string
+	verifyTypes   []verify.NamedType
 	modelExprs    []ast.Expr
 	models        []*model
 	deps          []*block

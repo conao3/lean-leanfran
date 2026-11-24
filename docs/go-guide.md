@@ -70,6 +70,72 @@ Use `Models(Item{}, Color(""))` to make a Go struct and a named string type avai
 
 Use `leanfran:"ge=1,le=100"` for inclusive integer bounds, `leanfran:"min_len=1"` for a minimum number of Unicode code points, and `leanfran:"min_items=1"` for a minimum slice length. These tags become proof fields such as `Quantity_ge`. An invalid Go value passed to a generated function produces a `*leanfran.ValidationError`. The [models sample](../langs/Go/samples/embed-models/) shares an order between two packages.
 
+## Verify a Go function in Lean
+
+Attach a `//leanfran:model` directive to a Go function. Put the specification in an embedded Lean block. This example checks a nibble mask against a remainder operation.
+
+```go
+var _ = leanfran.Lean(`
+def nibbleSpec (x : UInt8) : UInt8 := x % 16
+def inRange (_x r : UInt8) : Bool := decide (r < 16)
+`)
+
+//leanfran:model refines=nibbleSpec ensures=in_range:inRange
+func Nibble(x uint8) uint8 { return x & 15 }
+```
+
+| Directive option | Meaning |
+| --- | --- |
+| `refines=name` | A Lean function with the same arguments that returns the expected result. |
+| `requires=name` | A Lean function with the same arguments that returns `Bool`. Every obligation assumes it returns `true`. |
+| `ensures=label:name[,label:name…]` | Lean functions returning `Bool` that take the original arguments followed by the result. Use a distinct label for each postcondition. The label `refines` is reserved. |
+| `spec=import/path` | The package that contains the block. The modeled function's package is the default. |
+
+Specify at least one refinement or postcondition. Use Lean names relative to the block, with dots for nested namespaces. The named specifications also need public Go wrappers for the generated property tests.
+
+### Obligations and proof status
+
+Find the generated module `LeanGoModel.B<hex>` under `.leanfran/workspace/verification` after running `go tool leanfran check`. The suffix is the Go package import path encoded as hexadecimal UTF-8 bytes. Write the proofs in `lean/Proofs/` beside `go.mod` and import that module. Each obligation is an abbreviation such as `Nibble.obligation.refines`. Prove it with a declaration named `Nibble.proof.refines` in the model's namespace. The [nibble proof](../langs/Go/samples/verified-nibble/lean/Proofs/Nibble.lean) establishes the equality and range bound for every input. The [clamp proof](../langs/Go/samples/verified-clamp/lean/Proofs/Clamp.lean) compares early returns with nested Lean `min` and `max` under an ordered-bounds precondition.
+
+A refinement compares the translated return value with the specification for every input that satisfies `requires`. Where the model can fail, refinement requires `Except.ok` with the specified value. A postcondition for a fallible function constrains every successful return. General `for` loops use a partial fixed point. A diverging loop has no successful logical result.
+
+```sh
+go tool leanfran check --require proved
+go test ./...
+go tool leanfran status
+```
+
+`check` runs `sync`, type-checks Go with the generated files present, builds the translated models and proof modules, and writes `leanfran.lock` in the Go module root. It reports each obligation's state.
+
+| State | Meaning |
+| --- | --- |
+| `proved` | The declaration has the expected type and depends only on `propext`, `Quot.sound`, and `Classical.choice`. |
+| `sorry` | The declaration depends on `sorryAx`. |
+| `axioms` | The declaration depends on an axiom outside the allowed set. This includes tactics that add a native-computation axiom. |
+| `missing` | The expected proof declaration is absent. |
+| `mismatch` | The declaration's type differs from the obligation. |
+| `failed` | A proof file declaring the expected proof fails to build. |
+| `unextracted` | The translator or Lean could not produce the obligation. Diagnostics include a Go source location. |
+| `stale` | `status` needs a fresh lock after a change to the Go sources, specs, proofs, configuration, or model library. |
+
+`check --require proved` exits with an error if any obligation has a state other than `proved`. Ordinary `check` exits with an error when extraction or a requested proof build fails. `status` reads the saved state and checks freshness with Go alone.
+
+### Go subset and proof scope
+
+The translator accepts top-level, non-generic functions with local state. It uses fixed-width Lean integers, `Bool`, `String`, `Float`, and `Array` for slices. On 64-bit targets `int` and `uint` map to `Int64` and `UInt64`. Named strings use `String` unless they represent a Lean-generated enum. Supported structs have direct fields and a matching type in an embedded block. Untagged Go structs can be made available to the block with `Models`. For a Lean-generated type with validation constraints, use values that satisfy the generated validator. The translated signatures assume only the invariants of supported generated types. Tags on hand-written Go structs supply no proof assumptions. When a supported `Models` struct has tagged fields, use the block's `GoValues.<Name>` type in specs. Its Go wrapper accepts the original Go struct, and its Lean representation contains just the field values.
+
+Supported statements include local declaration and assignment, parallel assignment, increment and decrement, `+=`, `-=`, `*=`, `if`, early returns, expression `switch`, `for` and integer or slice `range`. Slice writes and appends require a uniquely owned local slice of scalar elements. A return from `(T, error)` can use `nil`, `errors.New`, or `fmt.Errorf` with a single constant message. An error-returning model call can be forwarded in a direct return. Calls between models must be statically resolved and acyclic.
+
+Expressions cover fixed-width arithmetic, unsigned bitwise operators, comparisons, short-circuit booleans, `len`, `min`, `max`, integer conversions, string concatenation, indexing, field reads, and supported slice and struct literals. Integer division truncates toward zero. Division by zero, indexing outside a slice, negative shift counts, and `panic` produce modeled failures. Shifts by the integer width or more return zero. Strings must contain valid UTF-8, and `len` counts bytes. The slice model treats a nil slice as empty.
+
+Keep pointers, maps, channels, goroutines, I/O, globals, closures, methods, generics, `defer`, `recover`, slice expressions, string ranges, and writes through slice aliases outside modeled functions. Other unsupported forms include named error results, keyed slice literals, and cases that combine a switch break with a continue to an enclosing loop. Flattened generated structs and constructors requiring proofs need a spec over a supported value representation.
+
+The trusted pieces outside each proof are the Go translator, [the operation model](../langs/Go/lean/LeanGoLib/Go.lean), the leanfran Go generator and runtime, the Go compiler, and the valid UTF-8 input contract. Translation tests compare handwritten Go with the generated model via Lean's C backend. Operation tests compare code generated from the Lean operation model with native Go, including boundary values and the correspondence between modeled failures and Go panics. These tests include valid multibyte strings and byte lengths. Property tests exercise the generated spec wrappers, the Go toolchain, and the user's implementation together on valid inputs.
+
+### Property tests
+
+`sync` generates `leanfran_model_test.go` in each modeled Go package. Commit it alongside the embedded Go outputs and the lock. The generated `TestLeanfranModels` calls `leanfrantest.Check(t, model)`. It uses boundary values and seeded random values, discards inputs rejected by the precondition, and reports the seed and input when the implementation and spec disagree. It defaults to 200 accepted inputs with seed 1. For manual tests, supply options `leanfrantest.Runs(n)` and `leanfrantest.Seed(seed)`. These tests use the generated Go specifications and run with Go alone.
+
 ## Generating from a compiled Lean module
 
 Build the compiler with `nix build .#go` at the repository root. Use the same Lean toolchain as the compiler to produce the `.olean` files. Place Go and `gofmt` on your PATH and add `github.com/conao3/leanfran-go` to your Go module.

@@ -27,7 +27,10 @@ func run(args []string) int {
 	}
 	flags := flag.NewFlagSet("leanfran "+command, flag.ContinueOnError)
 	dir := flags.String("dir", ".", "directory within the Go module")
-	var compiler string
+	var compiler, require string
+	if command == "check" {
+		flags.StringVar(&require, "require", "", "require every obligation to be proved")
+	}
 	if command != "status" {
 		flags.StringVar(&compiler, "leanfran-go", "", "path to the Lean-to-Go compiler")
 	}
@@ -41,7 +44,11 @@ func run(args []string) int {
 		fmt.Fprintln(os.Stderr, "leanfran: unexpected positional arguments")
 		return 1
 	}
-	if err := embed.Run(command, *dir, compiler, os.Stdout, os.Stderr); err != nil {
+	if require != "" && require != "proved" {
+		fmt.Fprintf(os.Stderr, "leanfran: invalid proof requirement %q\n", require)
+		return 1
+	}
+	if err := embed.Run(command, *dir, compiler, require == "proved", os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "leanfran: %v\n", err)
 		return 1
 	}

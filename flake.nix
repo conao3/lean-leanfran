@@ -64,14 +64,17 @@
               inherit version;
               src = pkgs.lib.fileset.toSource {
                 root = ./.;
-                fileset = pkgs.lib.fileset.unions [
-                  ./lean-toolchain
-                  (./. + "/langs/${backend}/lakefile.toml")
-                  (./. + "/langs/${backend}/lake-manifest.json")
-                  (./. + "/langs/${backend}/Main.lean")
-                  (./. + "/langs/${backend}/${library}.lean")
-                  (./. + "/langs/${backend}/${library}")
-                ];
+                fileset = pkgs.lib.fileset.unions (
+                  [
+                    ./lean-toolchain
+                    (./. + "/langs/${backend}/lakefile.toml")
+                    (./. + "/langs/${backend}/lake-manifest.json")
+                    (./. + "/langs/${backend}/Main.lean")
+                    (./. + "/langs/${backend}/${library}.lean")
+                    (./. + "/langs/${backend}/${library}")
+                  ]
+                  ++ pkgs.lib.optional (backend == "Go") ./langs/Go/lean/LeanGoLib
+                );
               };
               postUnpack = ''sourceRoot="$sourceRoot/langs/${backend}"'';
               nativeBuildInputs = [
@@ -87,6 +90,11 @@
                 runHook preInstall
                 install -Dm755 .lake/build/bin/${binary} $out/bin/${binary}
                 wrapProgram $out/bin/${binary} --set-default LEAN_SYSROOT ${pkgs.lean4}
+              ''
+              + pkgs.lib.optionalString (backend == "Go") ''
+                install -Dm644 lean/LeanGoLib/Go.lean $out/share/leanfran-go/LeanGoLib/Go.lean
+              ''
+              + ''
                 runHook postInstall
               '';
               meta.mainProgram = binary;

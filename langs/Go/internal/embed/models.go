@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/importer"
+	"go/token"
 	"go/types"
 	"io"
 	"math/big"
@@ -16,12 +17,14 @@ import (
 )
 
 type model struct {
-	Lean   string            `json:"lean"`
-	Path   string            `json:"path"`
-	Name   string            `json:"name"`
-	Fields map[string]string `json:"fields,omitempty"`
-	Cases  map[string]string `json:"cases,omitempty"`
-	Source string            `json:"-"`
+	Lean       string            `json:"lean"`
+	Path       string            `json:"path"`
+	Name       string            `json:"name"`
+	Fields     map[string]string `json:"fields,omitempty"`
+	Cases      map[string]string `json:"cases,omitempty"`
+	Plain      bool              `json:"plain,omitempty"`
+	Restricted bool              `json:"restricted,omitempty"`
+	Source     string            `json:"-"`
 }
 
 type modelImporter struct {
@@ -30,6 +33,8 @@ type modelImporter struct {
 	active map[string]bool
 	info   map[string]*types.Info
 	binary types.Importer
+	strict bool
+	errors map[string]error
 }
 
 func (i *modelImporter) Import(path string) (*types.Package, error) {
@@ -38,7 +43,7 @@ func (i *modelImporter) Import(path string) (*types.Package, error) {
 	}
 	if pkg := i.p.packages[path]; pkg != nil {
 		out, _, err := i.check(pkg)
-		if out != nil {
+		if out != nil && (!i.strict || err == nil) {
 			return out, nil
 		}
 		return nil, err
@@ -48,21 +53,44 @@ func (i *modelImporter) Import(path string) (*types.Package, error) {
 
 func (i *modelImporter) check(pkg *goPackage) (*types.Package, *types.Info, error) {
 	if out := i.cache[pkg.path]; out != nil {
-		return out, i.info[pkg.path], nil
+		return out, i.info[pkg.path], i.errors[pkg.path]
 	}
 	if i.active[pkg.path] {
 		return nil, nil, fmt.Errorf("import cycle at %s", pkg.path)
 	}
 	i.active[pkg.path] = true
 	defer delete(i.active, pkg.path)
-	info := &types.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
-	conf := types.Config{Importer: i, Error: func(error) {}}
+	info := &types.Info{
+		Types:      make(map[ast.Expr]types.TypeAndValue),
+		Defs:       make(map[*ast.Ident]types.Object),
+		Uses:       make(map[*ast.Ident]types.Object),
+		Selections: make(map[*ast.SelectorExpr]*types.Selection),
+	}
+	conf := types.Config{Importer: i, Sizes: types.SizesFor("gc", "amd64"), Error: func(error) {}}
 	out, err := conf.Check(pkg.path, pkg.fset, pkg.files, info)
 	if out != nil {
 		i.cache[pkg.path] = out
 		i.info[pkg.path] = info
+		if i.strict {
+			i.errors[pkg.path] = err
+		}
 	}
 	return out, info, err
+}
+
+func (i *modelImporter) initBinary(files *token.FileSet) {
+	p := i.p
+	if i.binary == nil {
+		i.binary = importer.ForCompiler(files, "gc", func(path string) (io.ReadCloser, error) {
+			cmd := command(p.root, "go", "list", "-export", "-f", "{{.Export}}", path)
+			cmd.Env = append(os.Environ(), "GOWORK=off")
+			out, err := cmd.Output()
+			if err != nil {
+				return nil, processError(err)
+			}
+			return os.Open(strings.TrimSpace(string(out)))
+		})
+	}
 }
 
 func (p *project) loadModels() error {
@@ -72,22 +100,13 @@ func (p *project) loadModels() error {
 		if len(b.modelExprs) == 0 {
 			continue
 		}
-		if i.binary == nil {
-			i.binary = importer.ForCompiler(b.pkg.fset, "gc", func(path string) (io.ReadCloser, error) {
-				cmd := command(p.root, "go", "list", "-export", "-f", "{{.Export}}", path)
-				cmd.Env = append(os.Environ(), "GOWORK=off")
-				out, err := cmd.Output()
-				if err != nil {
-					return nil, processError(err)
-				}
-				return os.Open(strings.TrimSpace(string(out)))
-			})
-		}
+		i.initBinary(b.pkg.fset)
 		_, info, checkErr := i.check(b.pkg)
 		if info == nil {
 			return b.errorf("Models: %v", checkErr)
 		}
 		builder := modelBuilder{done: make(map[string]*model), active: make(map[string]bool)}
+		values := modelBuilder{plain: true, done: make(map[string]*model), active: make(map[string]bool)}
 		for _, expr := range b.modelExprs {
 			typeExpr := expr
 			if call, ok := expr.(*ast.CallExpr); ok {
@@ -124,13 +143,49 @@ func (p *project) loadModels() error {
 			if _, err := builder.add(named); err != nil {
 				return b.errorf("Models: %v", err)
 			}
+			if tagged, supported := needsPlainModel(named, make(map[types.Type]bool)); tagged && supported {
+				if _, err := values.add(named); err != nil {
+					return b.errorf("Models: %v", err)
+				}
+			}
 		}
-		b.models = builder.ordered
+		b.models = append(builder.ordered, values.ordered...)
 	}
 	return nil
 }
 
+func needsPlainModel(typ types.Type, active map[types.Type]bool) (tagged, supported bool) {
+	t := types.Unalias(typ)
+	switch x := t.(type) {
+	case *types.Named:
+		st, ok := x.Underlying().(*types.Struct)
+		if !ok || active[t] {
+			return false, false
+		}
+		active[t] = true
+		defer delete(active, t)
+		for i := 0; i < st.NumFields(); i++ {
+			if _, ok := reflect.StructTag(st.Tag(i)).Lookup("leanfran"); ok {
+				tagged = true
+			}
+			nested, ok := needsPlainModel(st.Field(i).Type(), active)
+			if !ok {
+				return false, false
+			}
+			tagged = tagged || nested
+		}
+		return tagged, true
+	case *types.Slice:
+		return needsPlainModel(x.Elem(), active)
+	case *types.Basic:
+		return false, leanBasics[x.Name()] != "" && x.Kind() != types.Float32
+	default:
+		return false, false
+	}
+}
+
 type modelBuilder struct {
+	plain   bool
 	done    map[string]*model
 	active  map[string]bool
 	ordered []*model
@@ -145,7 +200,11 @@ func (b *modelBuilder) add(t *types.Named) (*model, error) {
 	}
 	name := obj.Name()
 	path := obj.Pkg().Path()
-	ns := "LeanGoModels.P" + hex.EncodeToString([]byte(path))
+	prefix := "LeanGoModels.P"
+	if b.plain {
+		prefix = "LeanGoModels.V"
+	}
+	ns := prefix + hex.EncodeToString([]byte(path))
 	key := ns + "." + name
 	if existing := b.done[key]; existing != nil {
 		return existing, nil
@@ -155,11 +214,15 @@ func (b *modelBuilder) add(t *types.Named) (*model, error) {
 	}
 	b.active[key] = true
 	defer delete(b.active, key)
-	m := &model{Lean: key, Path: path, Name: name}
+	m := &model{Lean: key, Path: path, Name: name, Plain: b.plain}
 	var src strings.Builder
 	fmt.Fprintf(&src, "\nnamespace %s\n", ns)
 	switch typ := t.Underlying().(type) {
 	case *types.Struct:
+		if !b.plain {
+			tagged, supported := needsPlainModel(t, make(map[types.Type]bool))
+			m.Restricted = tagged || !supported
+		}
 		m.Fields = make(map[string]string)
 		fmt.Fprintf(&src, "structure %s where\n", leanIdent(name))
 		claims := make(map[string]bool)
@@ -171,9 +234,13 @@ func (b *modelBuilder) add(t *types.Named) (*model, error) {
 			if !field.Exported() || field.Embedded() {
 				return nil, fmt.Errorf("%s.%s has unsupported field type %s (expected an explicitly named exported field)", t, field.Name(), field.Type())
 			}
-			tags, err := fieldTags(typ.Tag(idx))
-			if err != nil {
-				return nil, fmt.Errorf("%s.%s: %w", t, field.Name(), err)
+			var tags map[string]string
+			if !b.plain {
+				var err error
+				tags, err = fieldTags(typ.Tag(idx))
+				if err != nil {
+					return nil, fmt.Errorf("%s.%s: %w", t, field.Name(), err)
+				}
 			}
 			asNat := tags["ge"] == "0" && isBigInt(field.Type())
 			lean, goShape, err := b.fieldType(field.Type(), asNat)
@@ -259,6 +326,9 @@ func (b *modelBuilder) fieldType(t types.Type, asNat bool) (lean, goShape string
 	}
 	switch v := types.Unalias(t).(type) {
 	case *types.Basic:
+		if b.plain && v.Kind() == types.Int32 {
+			return "Int32", "", nil
+		}
 		if lean := leanBasics[v.Name()]; lean != "" {
 			switch v.Kind() {
 			case types.Int, types.Uint:
@@ -268,7 +338,7 @@ func (b *modelBuilder) fieldType(t types.Type, asNat bool) (lean, goShape string
 			}
 		}
 	case *types.Slice:
-		if basic, ok := types.Unalias(v.Elem()).(*types.Basic); ok && basic.Kind() == types.Uint8 {
+		if basic, ok := types.Unalias(v.Elem()).(*types.Basic); ok && basic.Kind() == types.Uint8 && !b.plain {
 			return "ByteArray", "", nil
 		}
 		lean, shape, err := b.fieldType(v.Elem(), false)

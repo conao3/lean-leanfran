@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "hash": "911d250085852cd96dc91601fcc03052cd87d7da21ad15a0f1c4e42815a8b97b",
+  "obligations": [
+    {
+      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d636c616d70.Clamp",
+      "label": "in_range",
+      "status": "proved",
+      "axioms": [
+        "Quot.sound",
+        "propext"
+      ],
+      "file": "lean/Proofs/Clamp.lean",
+      "line": 14
+    },
+    {
+      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d636c616d70.Clamp",
+      "label": "refines",
+      "status": "proved",
+      "axioms": [
+        "Quot.sound",
+        "propext"
+      ],
+      "file": "lean/Proofs/Clamp.lean",
+      "line": 6
+    }
+  ]
+}

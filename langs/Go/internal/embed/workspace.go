@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/conao3/leanfran-go"
+	"github.com/conao3/leanfran-go/internal/verify"
+	leanlib "github.com/conao3/leanfran-go/lean"
 )
 
 const generatorVersion = leanfran.GeneratorVersion
@@ -116,6 +118,9 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, stderr
 			return nil, err
 		}
 	}
+	if err := writeVerificationModule(work, "LeanGoLib.Go", leanlib.Source); err != nil {
+		return nil, err
+	}
 	origins, jobs, err := writeModules(work, stage, blocks, p)
 	if err != nil {
 		return nil, err
@@ -137,13 +142,29 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, stderr
 	if err := os.WriteFile(batch, data, 0o600); err != nil {
 		return nil, err
 	}
-	output, err = command(work, "lake", "env", compiler, "module", "generate", "--batch", batch, "--output", "text").CombinedOutput()
+	output, err = command(work, "lake", "env", compiler, "module", "generate", "--batch", batch, "--output", "json").Output()
 	if err != nil {
-		return nil, fmt.Errorf("leanfran-go: %w\n%s", err, output)
+		return nil, fmt.Errorf("leanfran-go: %w\n%s", processError(err), output)
 	}
 
+	var summaries []struct {
+		Module    string
+		Functions map[string]string
+		Types     []verify.NamedType
+	}
+	if err := json.Unmarshal(output, &summaries); err != nil || len(summaries) != len(blocks) {
+		return nil, fmt.Errorf("invalid leanfran-go batch result: %s", output)
+	}
 	var changes []change
 	for i, b := range blocks {
+		if summaries[i].Module != b.module {
+			return nil, fmt.Errorf("invalid leanfran-go batch module %q", summaries[i].Module)
+		}
+		b.wrappers = summaries[i].Functions
+		b.verifyTypes = summaries[i].Types
+		for j := range b.verifyTypes {
+			b.verifyTypes[j].Module = b.module
+		}
 		m := manifest{Block: b.pkg.path, Hash: b.hash, Generator: generatorVersion, Files: generatedNames}
 		for _, name := range m.Files {
 			data, err := os.ReadFile(filepath.Join(jobs[i].OutputDir, name))
@@ -205,10 +226,21 @@ func writeModules(work, stage string, blocks []*block, p *project) (map[string]o
 		for _, use := range b.uses {
 			fmt.Fprintf(&header, "open %s\n", p.blocks[use].module)
 		}
+		plainNames := make(map[string]int)
+		for _, m := range b.models {
+			if m.Plain {
+				plainNames[m.Name]++
+			}
+		}
 		for _, m := range b.models {
 			namespace, name, _ := strings.Cut(m.Lean, ".")
 			prefix, _, _ := strings.Cut(name, ".")
-			fmt.Fprintf(&header, "open %s.%s (%s)\n", namespace, prefix, leanIdent(strings.TrimPrefix(name, prefix+".")))
+			if !m.Plain {
+				fmt.Fprintf(&header, "open %s.%s (%s)\n", namespace, prefix, leanIdent(strings.TrimPrefix(name, prefix+".")))
+			} else if plainNames[m.Name] == 1 {
+				fmt.Fprintf(&header, "namespace GoValues\nabbrev %s := %s.%s.%s\nend GoValues\n",
+					leanIdent(m.Name), namespace, prefix, leanIdent(m.Name))
+			}
 			if !emitted[m.Lean] {
 				modelSource.WriteString(m.Source)
 				emitted[m.Lean] = true
