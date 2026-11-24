@@ -86,3 +86,52 @@ if [[ $(uname -s) == Linux ]]; then
     link_public initialization "${sanitizer[@]}" "$out/public_api.c" "$out/leanfran.c"
     ASAN_OPTIONS="$ASAN_OPTIONS:use_sigaltstack=0" "$scratch/initialization" </dev/null
 fi
+
+cd "$backend/tests/types"
+types="$scratch/types"
+roots=Typed.mixed,Typed.checkMixed,Typed.tree,Typed.checkTree,Typed.color,Typed.single
+roots+=,Typed.arrays,Typed.lists,Typed.bytes,Typed.naturals,Typed.integers,Typed.options
+roots+=,Typed.multiple,Typed.checked,Typed.checkUnit,Typed.sampleArray,Typed.empty,Typed.positional
+"$compiler" generate --module-name PublicTypes --roots "$roots" --out-dir "$types"
+"$compiler" build --out-dir "$types"
+
+rejected() {
+    local diagnostic=$1
+    shift
+    local status=0
+    "$compiler" generate --module-name PublicTypes --out-dir "$scratch/collision" "$@" \
+        >"$scratch/rejected" 2>&1 || status=$?
+    test "$status" -eq 254
+    grep -F "$diagnostic" "$scratch/rejected"
+    test ! -e "$scratch/collision"
+}
+
+rejected 'C name collision: public_types_foo_bar' --roots Collision.fooBar,Collision.foo_bar
+rejected 'C name collision: public_types_collision_fields.foo_bar' --roots Collision.echo
+rejected 'unsupported parameter type' --roots Typed.unsupported
+
+renamed="$scratch/renamed"
+"$compiler" generate --module-name PublicTypes --out-dir "$renamed" \
+    --roots Collision.echo,Collision.fooBar,Collision.foo_bar \
+    --rename Collision.fooBar=camel_case --rename Collision.Fields.fooBar=camel_case \
+    --rename Collision.Fields=renamed_fields
+grep -F 'lf_status public_types_camel_case(' "$renamed/public_types.h"
+grep -F 'bool camel_case;' "$renamed/public_types.h"
+grep -F 'typedef struct public_types_renamed_fields' "$renamed/public_types.h"
+"$compiler" build --out-dir "$renamed"
+
+types_args=(-I"$types" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/roundtrip.c")
+leanc "${types_args[@]}" "$types/libpublic_types.a" -o "$scratch/roundtrip"
+"$scratch/roundtrip" </dev/null
+if [[ $(uname -s) == Linux ]]; then
+    lean_include="$(lean --print-prefix)/include"
+    strict=(-std=c11 -O2 -Wall -Wextra -Werror -pedantic -isystem "$lean_include")
+    for source in public_types leanfran; do
+        gcc "${strict[@]}" -c "$types/$source.c" -o "$scratch/gcc_$source.o"
+        clang "${strict[@]}" -Wno-unused-command-line-argument \
+            -c "$types/$source.c" -o "$scratch/clang_$source.o"
+    done
+    leanc "${types_args[@]}" "${sanitizer[@]}" "$types/public_types.c" "$types/leanfran.c" \
+        "$types/libpublic_types.a" -o "$scratch/roundtrip_sanitized"
+    "$scratch/roundtrip_sanitized" </dev/null
+fi

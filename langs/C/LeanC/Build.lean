@@ -73,41 +73,60 @@ private def missingExterns (lean : LeanInstall) (externs : Std.HashSet String) :
   return missing.toArray.qsort (· < ·)
 
 private def selectExports (env : Environment) (moduleName : Name) (cPrefix : String)
-    (roots : Array Name) (checks : Checks) : ExceptT String IO (Array Export) := do
+    (roots : Array Name) (checks : Checks) (renames : Renames) : ExceptT String IO (Array Export × Array Desc) := do
   if let some chain := leanImportChain env moduleName then
     let message := s!"Lean compiler import: {" -> ".intercalate (chain.map Name.toString)}"
     unless checks.allowLeanImport do throw s!"{message} (use --allow-lean-import to allow)"
   let names := if roots.isEmpty then defaultRoots env moduleName else roots
   let mut exports := #[]
+  let mut descs := #[]
   for name in names.qsort Name.lt do
-    match readExport env cPrefix name with
+    let read : MetaM (Except String (Export × Array Desc)) := do
+      try
+        return .ok (← (readExport cPrefix renames name).run descs)
+      catch error =>
+        return .error (← error.toMessageData.toString)
+    let described ← ExceptT.lift <| read.run'.toIO' {fileName := "<C exports>", fileMap := default} {env}
+    match described with
     | .error message =>
-      if !roots.isEmpty then throw message
+      if !roots.isEmpty || message.startsWith "C name collision:" then throw message
       IO.eprintln s!"leanfran-c: skipping {message}"
-    | .ok entry =>
-      if [s!"{cPrefix}_init", s!"{cPrefix}_initialize"].contains entry.symbol ||
-          exports.any (fun prev => prev.symbol == entry.symbol) then
-        throw s!"C name collision: {entry.symbol}"
+    | .ok (entry, types) =>
       exports := exports.push entry
+      descs := types
+  let mut claimed : Std.HashSet String := {}
+  let reserved := [s!"{cPrefix}_init", s!"lf_{cPrefix}_initialize", s!"lf_{cPrefix}_nat_decimal",
+    s!"lf_{cPrefix}_int_decimal", "init_error", "initialize_once"]
+  let supportNames := ["LF_INLINE", "lf_error_clear", "lf_set_error", "lf_copy_string", "lf_copy_io_error",
+    "lf_str_free", "lf_byte_array_free", "lf_byte_array_to_lean", "lf_byte_array_from_lean"]
+  let integerNames := ["lf_nat_from_u64", "lf_nat_to_u64", "lf_nat_from_lean_u64",
+    "lf_int_from_i64", "lf_int_to_i64", "lf_int_from_lean_i64"] ++
+    ["lf_nat", "lf_int"].flatMap fun name =>
+      ["free", "from_dec", "to_dec", "from_lean", "to_lean"].map fun suffix => s!"{name}_{suffix}"
+  let typeNames := descs.toList.flatMap Desc.names
+  let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}"]
+  for name in reserved ++ supportNames ++ integerNames ++ typeNames ++ functionNames do
+    if claimed.contains name then throw s!"C name collision: {name}"
+    claimed := claimed.insert name
   let sorryRoots ← exports.filterM fun entry => usesSorry env entry.name
   if !sorryRoots.isEmpty then
     let names := ", ".intercalate (sorryRoots.toList.map fun entry => s!"'{entry.name}'")
     let message := s!"{names} depends on sorryAx"
     if checks.allowSorry then IO.eprintln s!"leanfran-c: warning: {message}"
     else throw s!"{message} (use --allow-sorry to allow)"
-  return exports
+  return (exports, descs)
 
 private def generateFiles (env : Environment) (lean : LeanInstall) (target : Target)
-    (out : FilePath) (roots : Array Name) (checks : Checks) : ExceptT String IO Unit := do
-  let exports ← selectExports env target.moduleName.toName target.cPrefix roots checks
+    (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames) : ExceptT String IO Unit := do
+  let (exports, descs) ← selectExports env target.moduleName.toName target.cPrefix roots checks renames
   let calls ← foreignCalls env (exports.map (·.name))
   let externs ← missingExterns lean calls.externs
   let implementations := calls.implementations.map fun pair => s!"{pair.1} -> {pair.2}"
   let file := exportPath target out
   IO.FS.createDirAll file.parent.get!
-  IO.FS.writeFile file (emitExportModule target.moduleName.toName exports)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource target.moduleName.toName target.cPrefix exports)
+  IO.FS.writeFile file (emitExportModule target.moduleName.toName target.cPrefix exports)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports descs)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource target.moduleName.toName target.cPrefix exports descs)
   IO.FS.writeFile (out / "leanfran.h") (include_str "../support/leanfran.h")
   IO.FS.writeFile (out / "leanfran.c") (include_str "../support/leanfran.c")
   let writeReport := fun suffix (lines : Array String) =>
@@ -118,13 +137,13 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
   IO.FS.writeFile (out / "leanfran.json") ((toJson target).compress ++ "\n")
 
 unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name)
-    (checks : Checks := {}) : IO (Except String Unit) := do
+    (checks : Checks := {}) (renames : Renames := {}) : IO (Except String Unit) := do
   let mod ← findModule ws target
   discard <| ws.runBuild mod.olean.fetch
   Lean.initSearchPath ws.lakeEnv.lean.sysroot ws.leanPath
   Lean.enableInitializersExecution
   let env ← Lean.importModules #[{module := mod.name}] {} (loadExts := true)
-  (generateFiles env ws.lakeEnv.lean target out roots checks).run
+  (generateFiles env ws.lakeEnv.lean target out roots checks renames).run
 
 def build (ws : Workspace) (out : FilePath) (shared : Bool := false) : IO Unit := do
   let out ← IO.FS.realPath out

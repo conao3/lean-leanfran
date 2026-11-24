@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := check
 .PHONY: build check format format-check
 
-c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c)
+c_sources := $(wildcard support/*.c support/*.h support/*.inc tests/*.c tests/link/*.c tests/types/*.c)
 clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
 
 build:
