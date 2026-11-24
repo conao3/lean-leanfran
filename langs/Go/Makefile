@@ -1,7 +1,8 @@
+.NOTPARALLEL:
 .DEFAULT_GOAL := check
 .PHONY: build check format format-check gen-externs externs-check
 
-GO_SOURCES := leanfran.go rt ../../maint/Go/gen-externs
+GO_SOURCES := leanfran.go rt samples/sum-to/main.go ../../maint/Go/gen-externs ../../maint/Go/fuzz-gen ../../maint/Go/numeric
 CHECK_TARGETS :=
 
 include make/*.mk
@@ -31,3 +32,9 @@ gen-externs:
 
 externs-check:
 	diff -u LeanGo/RuntimeExterns.lean test-out/RuntimeExterns.lean
+	@LC_ALL=C; export LC_ALL; \
+	sed -n 's/^  "\([^"]*\)".*/\1/p' ../PHP/LeanPhp/RuntimeExterns.lean | sort > test-out/php-externs.txt; \
+	sed -n 's/^  "\([^"]*\)".*/\1/p' LeanGo/RuntimeExterns.lean | sort > test-out/go-externs.txt; \
+	test -s test-out/php-externs.txt && test -s test-out/go-externs.txt || exit 1; \
+	missing="$$(comm -23 test-out/php-externs.txt test-out/go-externs.txt)" || exit $$?; \
+	if [ -n "$$missing" ]; then printf 'Missing PHP runtime externs:\n%s\n' "$$missing"; exit 1; fi

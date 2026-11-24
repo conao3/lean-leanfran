@@ -40,13 +40,29 @@ func Lean_panic_fn(v, message V) V {
 
 func Lean_panic_fn_borrowed(v, message V) V { return Lean_panic_fn(own(v), message) }
 
+type InternalPanic struct {
+	Message string
+}
+
+func (p *InternalPanic) Error() string { return p.Message }
+
 func Lean_internal_panic(message string) {
-	_, _ = fmt.Fprintln(os.Stderr, "INTERNAL PANIC: "+message)
-	os.Exit(1)
+	panic(&InternalPanic{Message: message})
 }
 
 func Lean_internal_panic_unreachable() {
 	Lean_internal_panic("unreachable code has been reached")
+}
+
+func RecoverInternalPanic() {
+	if value := recover(); value != nil {
+		failure, ok := value.(*InternalPanic)
+		if !ok {
+			panic(value)
+		}
+		_, _ = fmt.Fprintln(os.Stderr, "INTERNAL PANIC: "+failure.Message)
+		os.Exit(1)
+	}
 }
 
 func cString(v V) string {
@@ -54,13 +70,44 @@ func cString(v V) string {
 	return s
 }
 
+func libuvError(errno syscall.Errno) syscall.Errno {
+	switch errno {
+	case syscall.EBADMSG:
+		return syscall.EPROTO
+	case syscall.ECHILD:
+		return syscall.ESRCH
+	case syscall.EDEADLK:
+		return syscall.EBUSY
+	case syscall.EDOM, syscall.ENOSTR:
+		return syscall.EINVAL
+	case syscall.EIDRM:
+		return syscall.EPIPE
+	case syscall.EINPROGRESS:
+		return syscall.EISCONN
+	case syscall.ENETRESET, syscall.ENOLINK:
+		return syscall.ECONNRESET
+	case syscall.ENOLCK:
+		return syscall.EAGAIN
+	case syscall.ENOMSG:
+		return syscall.ENODATA
+	case syscall.ENOSR:
+		return syscall.ENOBUFS
+	case syscall.ETIME:
+		return syscall.ETIMEDOUT
+	case syscall.ENOTSUP:
+		return syscall.EOPNOTSUPP
+	default:
+		return errno
+	}
+}
+
 func ioErrorTag(errno syscall.Errno) uint16 {
 	switch errno {
-	case syscall.EEXIST, syscall.EINPROGRESS, syscall.EISCONN:
+	case syscall.EEXIST, syscall.EISCONN:
 		return 0
-	case syscall.EADDRINUSE, syscall.EBUSY, syscall.EDEADLK, syscall.ETXTBSY:
+	case syscall.EADDRINUSE, syscall.EBUSY, syscall.ETXTBSY:
 		return 2
-	case syscall.ECONNRESET, syscall.EIDRM, syscall.ENETDOWN, syscall.ENETRESET, syscall.ENOLINK, syscall.EPIPE:
+	case syscall.ECONNRESET, syscall.ENETDOWN, syscall.EPIPE:
 		return 3
 	case syscall.EADDRNOTAVAIL, syscall.EAFNOSUPPORT, syscall.ENODEV, syscall.ENOPROTOOPT,
 		syscall.ENOSYS, syscall.EOPNOTSUPP, syscall.ERANGE, syscall.ESPIPE, syscall.EXDEV:
@@ -80,21 +127,48 @@ func ioErrorTag(errno syscall.Errno) uint16 {
 	case syscall.ENOENT:
 		return 11
 	case syscall.ELOOP, syscall.ENAMETOOLONG, syscall.EDESTADDRREQ, syscall.EILSEQ, syscall.EINVAL,
-		syscall.EDOM, syscall.EBADF, syscall.ENOEXEC, syscall.ENOTCONN, syscall.ENOTSOCK:
+		syscall.EBADF, syscall.ENOEXEC, syscall.ENOTCONN, syscall.ENOTSOCK:
 		return 12
 	case syscall.EACCES, syscall.EROFS, syscall.ECONNABORTED, syscall.EFBIG, syscall.EPERM:
 		return 13
 	case syscall.EMFILE, syscall.ENFILE, syscall.ENOSPC, syscall.E2BIG, syscall.EAGAIN,
-		syscall.EMLINK, syscall.EMSGSIZE, syscall.ENOBUFS, syscall.ENOLCK, syscall.ENOMEM:
+		syscall.EMLINK, syscall.EMSGSIZE, syscall.ENOBUFS, syscall.ENOMEM:
 		return 14
-	case syscall.EISDIR, syscall.EBADMSG, syscall.ENOTDIR:
+	case syscall.EISDIR, syscall.ENOTDIR:
 		return 15
-	case syscall.ENXIO, syscall.EHOSTUNREACH, syscall.ENETUNREACH, syscall.ECHILD,
-		syscall.ECONNREFUSED, syscall.ENOMSG, syscall.ESRCH:
+	case syscall.ENXIO, syscall.EHOSTUNREACH, syscall.ENETUNREACH,
+		syscall.ECONNREFUSED, syscall.ENODATA, syscall.ESRCH:
 		return 16
 	default:
 		return 1
 	}
+}
+
+var libuvMessages = map[syscall.Errno]string{
+	syscall.EADDRNOTAVAIL: "address not available",
+	syscall.EAFNOSUPPORT:  "address family not supported",
+	syscall.EBUSY:         "resource busy or locked",
+	syscall.EEXIST:        "file already exists",
+	syscall.EFAULT:        "bad address in system call argument",
+	syscall.EHOSTUNREACH:  "host is unreachable",
+	syscall.EILSEQ:        "illegal byte sequence",
+	syscall.EIO:           "i/o error",
+	syscall.EISCONN:       "socket is already connected",
+	syscall.EISDIR:        "illegal operation on a directory",
+	syscall.ELOOP:         "too many symbolic links encountered",
+	syscall.ENAMETOOLONG:  "name too long",
+	syscall.ENFILE:        "file table overflow",
+	syscall.ENODATA:       "no data available",
+	syscall.ENODEV:        "no such device",
+	syscall.ENOMEM:        "not enough memory",
+	syscall.ENOTCONN:      "socket is not connected",
+	syscall.ENXIO:         "no such device or address",
+	syscall.EOPNOTSUPP:    "operation not supported on socket",
+	syscall.ERANGE:        "result too large",
+	syscall.ESPIPE:        "invalid seek",
+	syscall.ETIMEDOUT:     "connection timed out",
+	syscall.ETXTBSY:       "text file is busy",
+	syscall.EXDEV:         "cross-device link not permitted",
 }
 
 func ioErrorHasFilename(tag uint16) bool { return tag == 0 || tag >= 10 && tag <= 16 }
@@ -107,8 +181,13 @@ func ioError(err error) V {
 	if !errors.As(err, &errno) {
 		return Lean_mk_io_user_error(Lean_mk_string(err.Error()))
 	}
-	tag := ioErrorTag(errno)
-	details := Lean_mk_string(errno.Error())
+	translated := libuvError(errno)
+	tag := ioErrorTag(translated)
+	detail, ok := libuvMessages[translated]
+	if !ok {
+		detail = translated.Error()
+	}
+	details := Lean_mk_string(detail)
 	n := 1
 	if ioErrorHasFilename(tag) {
 		n++
@@ -117,22 +196,27 @@ func ioError(err error) V {
 	Lean_ctor_set_uint32(v, 8*n, uint32(errno))
 	Lean_ctor_set(v, n-1, details)
 	if n == 2 {
-		var fileName string
 		var pathErr *os.PathError
-		var linkErr *os.LinkError
-		switch {
-		case errors.As(err, &pathErr):
-			fileName = pathErr.Path
-		case errors.As(err, &linkErr):
-			fileName = linkErr.Old
+		var filename string
+		hasFilename := errors.As(err, &pathErr)
+		if hasFilename {
+			filename = pathErr.Path
 		}
 		if tag == 10 || tag == 11 {
-			Lean_ctor_set(v, 0, Lean_mk_string(fileName))
-		} else if fileName != "" {
-			Lean_ctor_set(v, 0, ctor(1, Lean_mk_string(fileName)))
+			Lean_ctor_set(v, 0, Lean_mk_string(filename))
+		} else if hasFilename {
+			Lean_ctor_set(v, 0, ctor(1, Lean_mk_string(filename)))
 		}
 	}
 	return v
+}
+
+func withoutPath(err error) error {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err
+	}
+	return err
 }
 
 func ioResult(value V, err error) V {
@@ -230,6 +314,7 @@ type fileHandle struct {
 	mu     sync.Mutex
 	file   *os.File
 	reader *bufio.Reader
+	output *processOutput
 	owned  bool
 }
 
@@ -239,6 +324,9 @@ func newHandle(file *os.File, owned bool) V {
 }
 
 func (h *fileHandle) close() {
+	if h.output != nil {
+		h.output.close()
+	}
 	if h.owned {
 		_ = h.file.Close()
 	}
@@ -251,7 +339,11 @@ func Lean_io_prim_handle_mk(name V, mode uint8) V {
 		os.O_RDONLY, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, os.O_WRONLY | os.O_CREATE | os.O_EXCL,
 		os.O_RDWR, os.O_WRONLY | os.O_CREATE | os.O_APPEND,
 	}
-	file, err := os.OpenFile(cString(name), flags[mode], 0o666)
+	path := String(name)
+	if strings.ContainsRune(path, 0) {
+		return embeddedNUL(name)
+	}
+	file, err := os.OpenFile(path, flags[mode], 0o666)
 	if err != nil {
 		return ioResult(V{}, err)
 	}
@@ -272,7 +364,7 @@ func Lean_io_prim_handle_get_line(v V) V {
 	if errors.Is(err, io.EOF) {
 		err = nil
 	}
-	return ioResult(Lean_mk_string(strings.ToValidUTF8(line, "\uFFFD")), err)
+	return ioResult(Lean_mk_string(strings.ToValidUTF8(line, "\uFFFD")), withoutPath(err))
 }
 
 func Lean_io_prim_handle_read(v V, count uint64) V {
@@ -282,25 +374,31 @@ func Lean_io_prim_handle_read(v V, count uint64) V {
 	if count == 0 {
 		return Lean_io_result_mk_ok(byteArray(nil))
 	}
+	if count > uint64(int(^uint(0)>>1)) {
+		return ioResult(V{}, syscall.ENOMEM)
+	}
 	data := make([]byte, count)
 	n, err := io.ReadFull(h.reader, data)
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+	if n != 0 || errors.Is(err, io.EOF) {
 		err = nil
 	}
-	return ioResult(byteArray(data[:n]), err)
+	return ioResult(byteArray(data[:n]), withoutPath(err))
 }
 
 func (h *fileHandle) write(data []byte) V {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.output != nil {
+		return ioResult(V{}, syscall.EBADF)
+	}
 	if n := h.reader.Buffered(); n > 0 {
 		if _, err := h.file.Seek(-int64(n), io.SeekCurrent); err != nil {
-			return ioResult(V{}, err)
+			return ioResult(V{}, withoutPath(err))
 		}
 		h.reader.Reset(h.file)
 	}
 	_, err := h.file.Write(data)
-	return ioResult(V{}, err)
+	return ioResult(V{}, withoutPath(err))
 }
 
 func Lean_io_prim_handle_put_str(v, s V) V   { return handle(v).write(stringData(s).data) }
@@ -310,22 +408,28 @@ func Lean_io_prim_handle_rewind(v V) V {
 	h := handle(v)
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.output != nil {
+		return ioResult(V{}, syscall.ESPIPE)
+	}
 	_, err := h.file.Seek(0, io.SeekStart)
 	if err == nil {
 		h.reader.Reset(h.file)
 	}
-	return ioResult(V{}, err)
+	return ioResult(V{}, withoutPath(err))
 }
 
 func Lean_io_prim_handle_truncate(v V) V {
 	h := handle(v)
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.output != nil {
+		return ioResult(V{}, syscall.EINVAL)
+	}
 	offset, err := h.file.Seek(0, io.SeekCurrent)
 	if err == nil {
 		err = h.file.Truncate(offset - int64(h.reader.Buffered()))
 	}
-	return ioResult(V{}, err)
+	return ioResult(V{}, withoutPath(err))
 }
 
 func Lean_stream_of_handle(v V) V {
@@ -398,7 +502,7 @@ func Lean_get_set_stdin(v V) V  { return setStream(0, v) }
 func Lean_get_set_stdout(v V) V { return setStream(1, v) }
 func Lean_get_set_stderr(v V) V { return setStream(2, v) }
 
-func Lean_dbg_trace(message, fn V) V {
+func writeDebugTrace(message V) {
 	stream := Lean_get_stderr()
 	out := own(Lean_ctor_get(stream, 4))
 	Lean_dec(stream)
@@ -407,6 +511,10 @@ func Lean_dbg_trace(message, fn V) V {
 		Lean_internal_panic("Could not write debug trace")
 	}
 	Lean_dec(result)
+}
+
+func Lean_dbg_trace(message, fn V) V {
+	writeDebugTrace(message)
 	return Lean_apply(fn, []V{{}})
 }
 
@@ -415,7 +523,7 @@ func Lean_dbg_sleep(ms uint32, fn V) V {
 	return Lean_apply(fn, []V{{}})
 }
 
-var monotonicStart = time.Now()
+var monotonicStart = time.Now().Add(-time.Millisecond)
 
 func Lean_io_mono_ms_now() V { return Lean_box(uint64(time.Since(monotonicStart).Milliseconds())) }
 
@@ -455,20 +563,47 @@ func Lean_io_app_path() V {
 }
 
 func Lean_io_realpath(v V) V {
-	path := cString(v)
-	Lean_dec(v)
+	defer Lean_dec(v)
+	path := String(v)
+	if strings.ContainsRune(path, 0) {
+		return embeddedNUL(v)
+	}
 	resolved, err := filepath.EvalSymlinks(path)
 	if err == nil {
 		resolved, err = filepath.Abs(resolved)
 	}
-	return ioResult(Lean_mk_string(resolved), err)
+	if err != nil {
+		return ioResult(V{}, &os.PathError{Path: path, Err: syscall.ENOENT})
+	}
+	return Lean_io_result_mk_ok(Lean_mk_string(resolved))
 }
 
-func Lean_io_remove_file(v V) V  { return ioResult(V{}, syscall.Unlink(cString(v))) }
-func Lean_io_remove_dir(v V) V   { return ioResult(V{}, syscall.Rmdir(cString(v))) }
-func Lean_io_create_dir(v V) V   { return ioResult(V{}, os.Mkdir(cString(v), 0o777)) }
-func Lean_io_rename(a, b V) V    { return ioResult(V{}, os.Rename(cString(a), cString(b))) }
-func Lean_io_hard_link(a, b V) V { return ioResult(V{}, os.Link(cString(a), cString(b))) }
+func Lean_io_remove_file(v V) V { return pathAction(v, syscall.Unlink) }
+func Lean_io_remove_dir(v V) V  { return pathAction(v, syscall.Rmdir) }
+
+func Lean_io_create_dir(v V) V {
+	return pathAction(v, func(path string) error { return syscall.Mkdir(path, 0o777) })
+}
+
+func Lean_io_rename(a, b V) V    { return twoPaths(a, b, syscall.Rename, true) }
+func Lean_io_hard_link(a, b V) V { return twoPaths(a, b, syscall.Link, false) }
+
+func twoPaths(a, b V, action func(string, string) error, both bool) V {
+	first, second := String(a), String(b)
+	if strings.ContainsRune(first, 0) {
+		return embeddedNUL(a)
+	}
+	if strings.ContainsRune(second, 0) {
+		return embeddedNUL(b)
+	}
+	if err := action(first, second); err != nil {
+		if both {
+			first += " and/or " + second
+		}
+		return ioResult(V{}, &os.PathError{Path: first, Err: err})
+	}
+	return Lean_io_result_mk_ok(V{})
+}
 
 func Lean_io_exit(code uint8) V {
 	os.Exit(int(code))

@@ -15,3 +15,15 @@ name = "LeanGoTest"
 [[lean_exe]]
 name = "oracle"
 root = "LeanGoTest.OracleMain"
+
+[[lean_exe]]
+name = "oracle-io"
+root = "LeanGoTest.IoMain"
+
+[[lean_exe]]
+name = "oracle-control-depth"
+root = "LeanGoTest.ControlDepthMain"
+
+[[lean_exe]]
+name = "oracle-fuzz"
+root = "LeanGoTest.FuzzMain"

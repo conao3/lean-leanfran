@@ -68,7 +68,7 @@ func Lean_cstr_to_nat(s string) V {
 	}
 	n, ok := new(big.Int).SetString(s, 10)
 	if !ok || n.Sign() < 0 {
-		panic("invalid Nat literal: " + s)
+		Lean_internal_panic("invalid Nat literal: " + s)
 	}
 	return natValue(n)
 }
@@ -79,7 +79,7 @@ func Lean_cstr_to_int(s string) V {
 	}
 	n, ok := new(big.Int).SetString(s, 10)
 	if !ok {
-		panic("invalid Int literal: " + s)
+		Lean_internal_panic("invalid Int literal: " + s)
 	}
 	return intValue(n)
 }
@@ -201,7 +201,7 @@ func Lean_nat_shiftl(a, b V) V {
 		return a
 	}
 	if b.p != nil || b.n > math.MaxUint32 {
-		panic("Nat.shiftl exponent is too big")
+		Lean_internal_panic("Nat.shiftl exponent is too big")
 	}
 	if a.p == nil && b.n < 63 && a.n <= math.MaxInt64>>b.n {
 		return V{n: a.n << b.n}
@@ -234,7 +234,7 @@ func Lean_int_shift_right(a, b V) V {
 
 func integerPow(a, b *big.Int) *big.Int {
 	if a.BitLen() > 1 && (!b.IsUint64() || b.Uint64() > math.MaxUint32) {
-		panic("Nat.pow exponent is too big")
+		Lean_internal_panic("Nat.pow exponent is too big")
 	}
 	return new(big.Int).Exp(a, b, nil)
 }

@@ -9,3 +9,4 @@ cd "$(dirname "$0")/.."
 (cd langs/TypeScript && nix develop ../..#typescript -c ../../maint/TypeScript/bump-version.sh "$v")
 (cd langs/Clojure && nix develop ../..#clojure -c clojure -T:build set-version :version "\"$v\"")
 (cd langs/PHP && nix develop ../..#php -c ../../maint/PHP/bump-version.sh "$v")
+(cd langs/Go && nix develop ../..#go -c ../../maint/Go/bump-version.sh "$v")
