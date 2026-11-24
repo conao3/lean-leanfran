@@ -28,9 +28,11 @@ generate --roots LeanGoTest.Panic.unreachable LeanGoTest.Panic.unreadableRef \
 cp testdata/panic/panic_test.go "$tmp/library/"
 test -z "$(gofmt -l "$tmp/command/main.go" "$tmp/library/fixture.go")"
 go vet "$tmp/command/main.go"
-go vet "$tmp/library/"*.go
+library="./${tmp#"$PWD/"}/library"
+go vet "$library"
+golangci-lint run "$library"
 CGO_ENABLED=0 go build -o "$tmp/main-go" "$tmp/command/main.go"
-CGO_ENABLED=0 go test -count=1 "./${tmp#"$PWD/"}/library"
+CGO_ENABLED=0 go test -count=1 "$library"
 
 for mode in main-panic panic io-error; do
     for backend in oracle main-go; do
