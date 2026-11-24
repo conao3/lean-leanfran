@@ -1,8 +1,8 @@
-.PHONY: test test-diff test-runtime
+.PHONY: test test-diff test-runtime test-determinism
 
 CHECK_TARGETS += test
 
-test: test-runtime test-diff
+test: test-runtime test-diff test-determinism
 
 test-runtime:
 	go vet ./...
@@ -17,3 +17,6 @@ test-runtime:
 
 test-diff:
 	bash ../../maint/Go/test-diff.sh
+
+test-determinism:
+	bash ../../maint/Go/test-determinism.sh

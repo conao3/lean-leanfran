@@ -3,7 +3,7 @@ import LeanGo
 open Lean LeanGo
 
 def version : String := "0.7.0"
-def generatorVersion : String := "2"
+def generatorVersion : String := "3"
 
 def usage : String := "leanfran-go --version | --generator-version
 leanfran-go module generate --module-name <Name> [options]
@@ -88,8 +88,12 @@ def parseJobs (j : Json) (internalOnly : Bool) : Except String (Array Job) := do
     return { module, roots, namespace?, package?, main?, outputFile, internalOnly }
 
 def goPackage (job : Job) : Except String String := do
+  let moduleName := match job.module with
+    | .str _ s => s.toLower
+    | .num _ n => toString n
+    | .anonymous => ""
   let pkg := if job.main?.isSome then "main" else
-    job.package?.getD ((toString job.module).replace "." "" |>.toLower)
+    job.package?.getD moduleName
   let letters (c : Char) := c.isAlpha || c == '_'
   let reserved := #["break", "default", "func", "interface", "select", "case", "defer", "go",
     "map", "struct", "chan", "else", "goto", "package", "switch", "const", "fallthrough",

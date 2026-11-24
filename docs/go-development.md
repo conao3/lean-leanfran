@@ -16,6 +16,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 - Extend the differential fixtures when runtime behavior changes. Regenerate the extern inventory with `make gen-externs` and commit it with the runtime change.
 - When generated code changes, raise `generatorVersion` in `Main.lean` and `GeneratorVersion` in `leanfran.go` together. Regenerate the sample package in `samples/sum-to/arith/` with the compiler command from `maint/Go/test-samples.sh`.
 - A mutable `rt.V` belongs to one goroutine. Generated package initializers mark their shared values persistent before publication. Each caller can construct its own inputs and call generated functions concurrently. Lean tasks run synchronously.
+- Internal runtime errors and unreachable IR raise `*rt.InternalPanic`. A Go caller can recover and call the library again. The generated command entry point handles this panic during initialization and execution, prints its diagnostic, and exits with status 1.
 - Use `gofumpt` for handwritten Go and `gofmt` for generated Go. Run static checks and the native comparison in the backend shell.
 
 ## Verification
@@ -27,7 +28,7 @@ nix shell nixpkgs#gnumake -c make check BACKENDS=Go
 nix build .#go
 ```
 
-The check compares output, errors, and exit status with Lean's C backend. It exercises the numeric externs, seeded fuzz cases, tail and non-tail recursion, container update complexity, IR constructor coverage, and concurrent calls to a generated package under the Go race detector. It also checks the extern inventory, handwritten and generated code, and both samples.
+The check compares output, errors, and exit status with Lean's C backend. It also compares two independent runs of the compiler on the same input and checks the default package name for a nested Lean module. It exercises the numeric externs, seeded fuzz cases, tail and non-tail recursion, container update complexity, IR constructor coverage, and concurrent calls to a generated package under the Go race detector. It also checks the extern inventory, handwritten and generated code, and both samples.
 
 ```sh
 nix develop .#go -c make -C langs/Go gen-externs

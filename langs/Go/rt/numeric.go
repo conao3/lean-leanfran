@@ -68,7 +68,7 @@ func Lean_cstr_to_nat(s string) V {
 	}
 	n, ok := new(big.Int).SetString(s, 10)
 	if !ok || n.Sign() < 0 {
-		panic("invalid Nat literal: " + s)
+		Lean_internal_panic("invalid Nat literal: " + s)
 	}
 	return natValue(n)
 }
@@ -79,7 +79,7 @@ func Lean_cstr_to_int(s string) V {
 	}
 	n, ok := new(big.Int).SetString(s, 10)
 	if !ok {
-		panic("invalid Int literal: " + s)
+		Lean_internal_panic("invalid Int literal: " + s)
 	}
 	return intValue(n)
 }

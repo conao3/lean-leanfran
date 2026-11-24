@@ -685,6 +685,7 @@ def runtimeExterns : Array String := #[
   "natString",
   "pow",
   "powf",
+  "recoverInternalPanic",
   "reset",
   "reuse",
   "round",

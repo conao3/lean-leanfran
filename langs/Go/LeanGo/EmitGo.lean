@@ -481,7 +481,7 @@ def storeValue (ty : IRType) (value : String) : String :=
 def emitDecl (env : Environment) (decls : Std.HashMap Name Decl)
     (exports : Std.HashMap String Name)
     (tailTargets cores papTargets initGlobals : Std.HashSet Name) (internalOnly : Bool)
-    (d : Decl) : Except String String := do
+    (d : Decl) : Except String (Array (String × String)) := do
   let n := d.name
   let ps := d.params
   let ty := d.resultType
@@ -495,11 +495,11 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl)
   let mut pieces := #[]
   match d with
   | .extern .. =>
-    pieces := pieces.push (← emitExtern env decls exports internalOnly d)
+    pieces := pieces.push (name, ← emitExtern env decls exports internalOnly d)
   | .fdecl _ _ _ body _ =>
     if stored then
-      pieces := pieces.push s!"var {globalName n} {goType ty}\n"
-      pieces := pieces.push (header ++ s!"\treturn {globalName n}\n}\n")
+      pieces := pieces.push (globalName n, s!"var {globalName n} {goType ty}\n")
+      pieces := pieces.push (name, header ++ s!"\treturn {globalName n}\n}\n")
     unless initGlobals.contains n do
       let jps := joinPoints body {}
       let reachable := reachableJps body jps
@@ -532,22 +532,22 @@ def emitDecl (env : Environment) (decls : Std.HashMap Name Decl)
         unless t.isErased || t.isVoid do
           variables := variables ++ s!"\tvar x_{i} {goType t}\n\t_ = x_{i}\n"
       let start := if st.usesStart then "_start:\n" else ""
+      let implementationName := if core then coreName n else if stored then computeName n else name
       let implementationHeader :=
-        if core then functionHeader (coreName n) (#["frame *rt.Tail"] ++ parameters ps) ty
-        else if stored then functionHeader (computeName n) #[] ty
-        else header
+        if core then functionHeader implementationName (#["frame *rt.Tail"] ++ parameters ps) ty
+        else functionHeader implementationName (parameters ps) ty
       if core then
         let boxed := (ps.filter liveParam).map fun p => box p.ty (varName p.x)
         let call := s!"rt.Run({tailName n}, {slice boxed})"
-        pieces := pieces.push (header ++ s!"\treturn {unbox ty call}\n}\n")
-        pieces := pieces.push (emitAdapter d (tailName n) (coreName n) true false true)
-      pieces := pieces.push (implementationHeader ++ variables ++ start ++ st.out ++ "}\n")
+        pieces := pieces.push (name, header ++ s!"\treturn {unbox ty call}\n}\n")
+        pieces := pieces.push (tailName n, emitAdapter d (tailName n) implementationName true false true)
+      pieces := pieces.push (implementationName, implementationHeader ++ variables ++ start ++ st.out ++ "}\n")
   if papTargets.contains n then
     let borrowed := ps.any fun p => liveParam p && p.borrow && p.ty.isPossibleRef
     let useCore := core && !borrowed
     let callee := if useCore then coreName n else name
-    pieces := pieces.push (emitAdapter d (adapterName n) callee useCore true false)
-  return "\n".intercalate pieces.toList
+    pieces := pieces.push (adapterName n, emitAdapter d (adapterName n) callee useCore true false)
+  return pieces
 
 structure Initializers where
   roots : Array Name := #[]
@@ -603,7 +603,8 @@ partial def scheduleValue (env : Environment) (decls : Std.HashMap Name Decl)
   return st
 
 def emitInitializers (env : Environment) (decls : Array Decl) (declMap : Std.HashMap Name Decl)
-    (exports : Std.HashMap String Name) (inits : Initializers) (internalOnly : Bool) : Except String String := do
+    (exports : Std.HashMap String Name) (inits : Initializers) (name : String)
+    (internalOnly : Bool) : Except String String := do
   let mut st : InitOrder := {}
   for (n, action) in inits.entries do
     let target := if action.isAnonymous then n else action
@@ -618,9 +619,9 @@ def emitInitializers (env : Environment) (decls : Array Decl) (declMap : Std.Has
     st := { st with lines := st.lines ++ s!"\t{line}\n" }
   for d in decls do
     st := scheduleValue env declMap exports inits d.name st
-  return if st.lines.isEmpty then "" else s!"func init() \{\n\trt.SetInitializing(true)\n\tdefer rt.SetInitializing(false)\n{st.lines}}\n"
+  return if st.lines.isEmpty then "" else s!"func {name}() \{\n\trt.SetInitializing(true)\n\tdefer rt.SetInitializing(false)\n{st.lines}}\n"
 
-def emitMain (env : Environment) (d : Decl) (internalOnly : Bool) : Except String String := do
+def emitMain (env : Environment) (d : Decl) (hasInitializers internalOnly : Bool) : Except String String := do
   let n := d.name
   let some info := env.find? n | throw s!"unknown main declaration: {n}"
   let hasArgs := match info.type with | .forallE .. => true | _ => false
@@ -636,7 +637,8 @@ def emitMain (env : Environment) (d : Decl) (internalOnly : Bool) : Except Strin
     throw s!"expected {n} to return IO Unit or IO UInt32"
   let args := if hasArgs then "args" else ""
   let argDecl := if hasArgs then "args" else "_"
-  return s!"func main() \{\n\trt.Lean_run_main(func({argDecl} rt.V, _ rt.V) rt.V \{\n\t\treturn {methodName internalOnly n}({args})\n\t}, {hasArgs}, {returnsCode})\n}\n"
+  let initCall := if hasInitializers then "\tinitializeLean()\n" else ""
+  return s!"func main() \{\n\tdefer rt.RecoverInternalPanic()\n{initCall}\trt.Lean_run_main(func({argDecl} rt.V, _ rt.V) rt.V \{\n\t\treturn {methodName internalOnly n}({args})\n\t}, {hasArgs}, {returnsCode})\n}\n"
 
 def generate (env : Environment) (mod : Name) (roots : Array Name) (pkg : String)
     (main? : Option Name) (generatorVersion : String) (internalOnly : Bool) : Except String String := do
@@ -651,6 +653,7 @@ def generate (env : Environment) (mod : Name) (roots : Array Name) (pkg : String
     if next.entries.size == inits.entries.size then break
     inits := next
     decls ← collect env exports (baseRoots ++ inits.roots)
+  decls := decls.qsort (fun a b => Name.lt a.name b.name)
   let mut missing : Array String := #[]
   for d in decls do
     if let .extern f .. := d then
@@ -677,12 +680,14 @@ def generate (env : Environment) (mod : Name) (roots : Array Name) (pkg : String
   for (f, calls) in edges.toList do
     if calls.apply || calls.direct.toList.any (fun c => c != f && tailTargets.contains c) then
       cores := cores.insert f
-  let mut items ← decls.mapM (emitDecl env declMap exports tailTargets cores papTargets inits.globals internalOnly)
-  let init ← emitInitializers env decls declMap exports inits internalOnly
-  unless init.isEmpty do items := items.push init
+  let definitions ← decls.mapM (emitDecl env declMap exports tailTargets cores papTargets inits.globals internalOnly)
+  let mut items := definitions.flatten
+  let initializerName := if main?.isSome then "initializeLean" else "init"
+  let init ← emitInitializers env decls declMap exports inits initializerName internalOnly
+  unless init.isEmpty do items := items.push (initializerName, init)
   if let some m := main? then
-    items := items.push (← emitMain env declMap[m]! internalOnly)
-  let body := "\n".intercalate items.toList
+    items := items.push ("main", ← emitMain env declMap[m]! (!init.isEmpty) internalOnly)
+  let body := "\n".intercalate ((items.qsort (fun a b => a.1 < b.1)).toList.map Prod.snd)
   let imports := if (body.splitOn "rt.").length > 1 then "\nimport \"github.com/conao3/leanfran-go/rt\"\n" else ""
   let moduleLabel := (toString mod).replace "\n" "\\n" |>.replace "\r" "\\r"
   let header := s!"// Code generated by leanfran-go (generator {generatorVersion}) from {moduleLabel}. DO NOT EDIT.\n\npackage {pkg}\n{imports}"

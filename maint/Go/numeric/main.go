@@ -309,6 +309,7 @@ func pairString(value rt.V, single bool) string {
 }
 
 func main() {
+	defer rt.RecoverInternalPanic()
 	scanner := bufio.NewScanner(os.Stdin)
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()

@@ -40,13 +40,29 @@ func Lean_panic_fn(v, message V) V {
 
 func Lean_panic_fn_borrowed(v, message V) V { return Lean_panic_fn(own(v), message) }
 
+type InternalPanic struct {
+	Message string
+}
+
+func (p *InternalPanic) Error() string { return p.Message }
+
 func Lean_internal_panic(message string) {
-	_, _ = fmt.Fprintln(os.Stderr, "INTERNAL PANIC: "+message)
-	os.Exit(1)
+	panic(&InternalPanic{Message: message})
 }
 
 func Lean_internal_panic_unreachable() {
 	Lean_internal_panic("unreachable code has been reached")
+}
+
+func RecoverInternalPanic() {
+	if value := recover(); value != nil {
+		failure, ok := value.(*InternalPanic)
+		if !ok {
+			panic(value)
+		}
+		_, _ = fmt.Fprintln(os.Stderr, "INTERNAL PANIC: "+failure.Message)
+		os.Exit(1)
+	}
 }
 
 func cString(v V) string {
