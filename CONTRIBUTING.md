@@ -9,9 +9,9 @@ make format
 make check BACKENDS="Python TypeScript"
 ```
 
-The root `flake.nix` and `flake.lock` define the development environments and compiler packages. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure PHP`. To use backend-specific commands, run `nix develop .#python` or select the `.#rust`, `.#typescript`, `.#clojure`, `.#php`, or `.#php85` shell at the root, then enter the backend directory. `nix develop` provides all toolsets.
+The root `flake.nix` and `flake.lock` define the development environments and compiler packages. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure PHP Go`. To use backend-specific commands, run `nix develop .#python` or select the `.#rust`, `.#typescript`, `.#clojure`, `.#php`, `.#php85`, `.#go`, or `.#go126` shell at the root, then enter the backend directory. `nix develop` provides all toolsets.
 
-Build compiler packages with `nix build .#python` or select the `.#typescript`, `.#clojure`, `.#rust`, or `.#php` target. The Rust package includes the compiler, Cargo CLI, and Aeneas. `nix fmt` formats Nix, Rust, and Python across the repository. `make format` also formats TypeScript, Clojure, and PHP. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
+Build compiler packages with `nix build .#python` or select the `.#typescript`, `.#clojure`, `.#rust`, `.#php`, or `.#go` target. The Rust package includes the compiler, Cargo CLI, and Aeneas. `nix fmt` formats Nix, Rust, and Python across the repository. `make format` also formats TypeScript, Clojure, PHP, and Go. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
 
 ## Backend development
 
@@ -22,8 +22,9 @@ Build compiler packages with `nix build .#python` or select the `.#typescript`, 
 | TypeScript | [langs/TypeScript/README.md](langs/TypeScript/README.md) | [TypeScript development](docs/typescript-development.md) |
 | Clojure    | [langs/Clojure/README.md](langs/Clojure/README.md)       | [Clojure development](docs/clojure-development.md)       |
 | PHP        | [langs/PHP/README.md](langs/PHP/README.md)               | [PHP development](docs/php-development.md)                |
+| Go         | [langs/Go/](langs/Go/)                                 | `make check BACKENDS=Go`                                 |
 
-Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with both PHP 8.4 and 8.5, and builds the Python, TypeScript, Clojure, and PHP Nix packages. The PHP check also covers embedded models, PHP-to-Lean translation and proof states, and seeded tests against generated Lean specifications.
+Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with PHP 8.4 and 8.5 and Go with Go 1.27 and 1.26, and builds the Python, TypeScript, Clojure, PHP, and Go Nix packages. The PHP check also covers embedded models, PHP-to-Lean translation and proof states, and seeded tests against generated Lean specifications.
 
 ## Packaging
 
