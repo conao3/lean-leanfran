@@ -72,7 +72,7 @@ unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots :
   let cPrefix := target.cPrefix
   let reserved := [s!"{cPrefix}_init", s!"lf_{cPrefix}_initialize", s!"lf_{cPrefix}_nat_decimal",
     s!"lf_{cPrefix}_int_decimal", "init_error", "initialize_once"]
-  let supportNames := ["lf_error_clear", "lf_set_error", "lf_copy_string", "lf_copy_io_error",
+  let supportNames := ["LF_INLINE", "lf_error_clear", "lf_set_error", "lf_copy_string", "lf_copy_io_error",
     "lf_str_free", "lf_byte_array_free", "lf_byte_array_to_lean", "lf_byte_array_from_lean"]
   let integerNames := ["lf_nat_from_u64", "lf_nat_to_u64", "lf_nat_from_lean_u64",
     "lf_int_from_i64", "lf_int_to_i64", "lf_int_from_lean_i64"] ++

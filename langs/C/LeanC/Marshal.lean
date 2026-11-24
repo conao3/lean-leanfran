@@ -121,17 +121,20 @@ def emitPrimitive (ty : CType) : String := Id.run do
     toBody := "    (void)in;\n    (void)err;\n    *out = lean_box(0);\n    return LF_OK;\n"
     fromBody := "    (void)in;\n    (void)err;\n    *out = (lf_unit){0};\n    return LF_OK;\n"
   | _ => pure ()
-  return s!"static inline {ty.toPrototype} \{\n{toBody}}\n\nstatic inline {ty.fromPrototype} \{\n{fromBody}}\n\n"
+  return s!"LF_INLINE {ty.toPrototype} \{\n{toBody}}\n\nLF_INLINE {ty.fromPrototype} \{\n{fromBody}}\n\n"
 
 def emitMarshalSupport (cPrefix : String) : String :=
-  "static inline void lf_str_free(lf_str *value) { lf_free(value->ptr); *value = (lf_str){0}; }\n\n" ++
+  "#if defined(__GNUC__) || defined(__clang__)\n" ++
+  "#define LF_INLINE static inline __attribute__((unused))\n" ++
+  "#else\n#define LF_INLINE static inline\n#endif\n\n" ++
+  "LF_INLINE void lf_str_free(lf_str *value) { lf_free(value->ptr); *value = (lf_str){0}; }\n\n" ++
   s!"extern lean_object *lf_{cPrefix}_nat_decimal(lean_object *);\n" ++
   s!"extern lean_object *lf_{cPrefix}_int_decimal(lean_object *);\n" ++
   "extern bool lf_nat_from_lean_u64(b_lean_obj_arg, uint64_t *);\n" ++
   "extern bool lf_int_from_lean_i64(b_lean_obj_arg, int64_t *);\n" ++
   String.join ([CType.nat, .int].map fun ty =>
     let (width, stem) := if ty == .nat then ("u64", "nat") else ("i64", "int")
-    s!"extern {ty.toPrototype};\nstatic inline {ty.fromPrototype} \{\n" ++
+    s!"extern {ty.toPrototype};\nLF_INLINE {ty.fromPrototype} \{\n" ++
       s!"    {ty.cName} value = \{0};\n" ++
       s!"    if (!{ty.cName}_from_lean_{width}(in, &value.value)) \{\n" ++
       s!"        lean_inc(in);\n        lean_object *decimal = lf_{cPrefix}_{stem}_decimal(in);\n" ++
@@ -247,12 +250,12 @@ def Desc.emitSequence (desc : Desc) : String := Id.run do
     else "size_t len = 0;\nfor (lean_object *cell = in; !lean_is_scalar(cell); cell = lean_ctor_get(cell, 1)) ++len;\n"
   let read := if array then "lean_array_get_core(in, out->len)" else "lean_ctor_get(in, 0)"
   let advance := if array then "" else "in = lean_ctor_get(in, 1);\n"
-  return s!"static inline {ty.toPrototype} \{\n" ++
+  return s!"LF_INLINE {ty.toPrototype} \{\n" ++
     "if (in->items == NULL && in->len != 0) return lf_set_error(err, LF_INVALID, \"Null item buffer\");\n" ++
     init ++ loop ++ "lean_object *field;\n" ++
     s!"lf_status status = {item.converter}_to_lean(&in->items[i], &field, err);\n" ++
     "if (status != LF_OK) { lean_dec(value); return status; }\n" ++ push ++ "}\n*out = value;\nreturn LF_OK;\n}\n\n" ++
-    s!"static inline {ty.fromPrototype} \{\n*out = ({desc.name})\{0};\n" ++
+    s!"LF_INLINE {ty.fromPrototype} \{\n*out = ({desc.name})\{0};\n" ++
     length ++ "if (len == 0) return LF_OK;\n" ++
     "if (len > SIZE_MAX / sizeof(*out->items)) return lf_set_error(err, LF_IO, \"Output length is too large\");\n" ++
     "out->items = calloc(len, sizeof(*out->items));\n" ++
@@ -290,14 +293,14 @@ def Desc.emitCtors (desc : Desc) : String := Id.run do
   if hasFields then
     toBody := toBody ++ "fail:\nlean_dec(value);\nreturn status;\n"
     fromBody := fromBody ++ s!"fail:\n{desc.name}_free(out);\nreturn status;\n"
-  return s!"static inline {ty.toPrototype} \{\n{toBody}}\n\n" ++
-    s!"static inline {ty.fromPrototype} \{\n{fromBody}}\n\n"
+  return s!"LF_INLINE {ty.toPrototype} \{\n{toBody}}\n\n" ++
+    s!"LF_INLINE {ty.fromPrototype} \{\n{fromBody}}\n\n"
 
 def emitMarshalling (cPrefix : String) (descs : Array Desc) : String :=
   emitMarshalSupport cPrefix ++
     String.join (descs.toList.map fun desc =>
       let ty := CType.named desc.name
-      s!"static inline {ty.toPrototype};\nstatic inline {ty.fromPrototype};\n") ++ "\n" ++
+      s!"LF_INLINE {ty.toPrototype};\nLF_INLINE {ty.fromPrototype};\n") ++ "\n" ++
     String.join (descs.toList.map fun desc => desc.emitFree ++
       if desc.shape == .list || desc.shape == .array then desc.emitSequence else desc.emitCtors)
 

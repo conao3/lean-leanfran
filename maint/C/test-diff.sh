@@ -124,6 +124,10 @@ types_args=(-I"$types" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/roun
 leanc "${types_args[@]}" "$types/libpublic_types.a" -o "$scratch/roundtrip"
 "$scratch/roundtrip" </dev/null
 if [[ $(uname -s) == Linux ]]; then
+    lean_include="$(lean --print-prefix)/include"
+    strict=(-std=c11 -Wall -Wextra -Werror -pedantic -isystem "$lean_include" -fsyntax-only)
+    gcc "${strict[@]}" "$types/public_types.c" "$types/leanfran.c"
+    clang "${strict[@]}" -Wno-unused-command-line-argument "$types/public_types.c" "$types/leanfran.c"
     leanc "${types_args[@]}" "${sanitizer[@]}" "$types/public_types.c" "$types/leanfran.c" \
         "$types/libpublic_types.a" -o "$scratch/roundtrip_sanitized"
     "$scratch/roundtrip_sanitized" </dev/null

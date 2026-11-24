@@ -30,12 +30,12 @@ static bool lf_json_append(lf_json_buffer *out, const char *text, size_t len) {
     return true;
 }
 
-static bool lf_json_literal(lf_json_buffer *out, const char *text) {
+LF_INLINE bool lf_json_literal(lf_json_buffer *out, const char *text) {
     return lf_json_append(out, text, strlen(text));
 }
 
-static inline bool lf_json_string(lf_json_buffer *out, const char *ptr,
-                                  size_t len) {
+LF_INLINE bool lf_json_string(lf_json_buffer *out, const char *ptr,
+                              size_t len) {
     if (!lf_json_literal(out, "\"")) {
         return false;
     }
@@ -73,7 +73,7 @@ static inline bool lf_json_string(lf_json_buffer *out, const char *ptr,
     return lf_json_literal(out, "\"");
 }
 
-static inline bool lf_json_char(lf_json_buffer *out, uint32_t c) {
+LF_INLINE bool lf_json_char(lf_json_buffer *out, uint32_t c) {
     char bytes[4];
     size_t len;
     if (c < 0x80) {
@@ -98,22 +98,21 @@ static inline bool lf_json_char(lf_json_buffer *out, uint32_t c) {
     return lf_json_string(out, bytes, len);
 }
 
-static inline bool lf_json_unsigned(lf_json_buffer *out, uint64_t value,
-                                    bool quoted) {
+LF_INLINE bool lf_json_unsigned(lf_json_buffer *out, uint64_t value,
+                                bool quoted) {
     char buf[32];
     int len = snprintf(buf, sizeof(buf), "%" PRIu64, value);
     return quoted ? lf_json_string(out, buf, (size_t)len)
                   : lf_json_append(out, buf, (size_t)len);
 }
 
-static inline bool lf_json_signed(lf_json_buffer *out, int64_t value) {
+LF_INLINE bool lf_json_signed(lf_json_buffer *out, int64_t value) {
     char buf[32];
     int len = snprintf(buf, sizeof(buf), "%" PRId64, value);
     return lf_json_append(out, buf, (size_t)len);
 }
 
-static inline bool lf_json_float(lf_json_buffer *out, double value,
-                                 int precision) {
+LF_INLINE bool lf_json_float(lf_json_buffer *out, double value, int precision) {
     if (isnan(value)) {
         return lf_json_literal(out, "\"NaN\"");
     }
