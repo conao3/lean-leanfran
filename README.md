@@ -111,7 +111,15 @@ Choose a language above and install its host package and compiler. Lean 4.35.0 i
 nix profile install 'github:conao3/lean-leanfran#python'
 ```
 
-The compiler targets also include `#rust`, `#typescript`, `#clojure`, `#php`, and `#go`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime from Packagist with `composer require conao3/leanfran`. For Go, build the compiler with `nix build .#go` and add the runtime to your application module with `go get github.com/conao3/leanfran-go`. Follow the language quick start for dependencies, project setup, and generation commands.
+The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime from Packagist with `composer require conao3/leanfran`.
+
+Nix can install the Go compiler from any directory.
+
+```sh
+nix profile install 'github:conao3/lean-leanfran#go'
+```
+
+Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to your application. Follow the other language quick starts for their dependencies, project setup, and generation commands.
 
 ## Documentation
 
