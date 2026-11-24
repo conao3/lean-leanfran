@@ -39,6 +39,6 @@ public def lookup (k : UInt32) : UInt32 :=
   m.getD k 0
 
 private def hidden : UInt8 := 5
-public def unsupported (value : Nat) : Nat := value + 1
+public def unsupported (f : Nat → Nat) : Nat := f 1
 
 end Example

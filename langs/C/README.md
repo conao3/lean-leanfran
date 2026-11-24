@@ -14,7 +14,7 @@ Run the generator and build commands through `lake env` when your Lake installat
 
 The module must belong to a Lake library. With no `--roots`, the generator selects supported public definitions declared by the module. Pass a comma-separated list of fully qualified names to select specific definitions. The C prefix defaults to the last component of the module name in snake case. Use `--prefix` to set it explicitly.
 
-Include `core.h` and call `core_init` before calling any generated function. The generated C ABI supports booleans, fixed-width integers, `USize`, floating-point numbers, `Char`, `String`, and `IO` results. An `IO Unit` function takes no output pointer. String arguments are borrowed UTF-8 byte ranges. String results can contain zero bytes and include a trailing NUL after the reported length. Release the result's `ptr` with `lf_free`.
+Include `core.h` and call `core_init` before calling any generated function. The [C guide](../../docs/c-guide.md) describes the public type mappings, naming, and ownership rules. An `IO Unit` function takes no output pointer. String arguments are borrowed UTF-8 byte ranges. String results can contain zero bytes and include a trailing NUL after the reported length. Release the result's `ptr` with `lf_free`.
 
 Start each `lf_error` with `{0}` and release its message with `lf_error_clear`. Pass `NULL` to receive only the status code. Initialization may be called repeatedly or concurrently.
 

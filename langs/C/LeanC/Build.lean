@@ -45,7 +45,7 @@ def findModule (ws : Workspace) (target : Target) : IO Lake.Module := do
 def exportPath (target : Target) (dir : FilePath) : FilePath :=
   Lean.modToFilePath dir (exportModule target.moduleName.toName) "lean"
 
-unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name) :
+unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name) (renames : Renames := {}) :
     IO (Except String Unit) := do
   let mod ← findModule ws target
   discard <| ws.runBuild mod.olean.fetch
@@ -54,21 +54,40 @@ unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots :
   let env ← Lean.importModules #[{module := mod.name}] {} (loadExts := true)
   let names := if roots.isEmpty then defaultRoots env mod.name else roots
   let mut exports := #[]
+  let mut descs := #[]
   for name in names.qsort Name.lt do
-    match readExport env target.cPrefix name with
+    let read : MetaM (Except String (Export × Array Desc)) := do
+      try
+        return .ok (← (readExport target.cPrefix renames name).run descs)
+      catch error =>
+        return .error (← error.toMessageData.toString)
+    match ← read.run' |>.toIO' {fileName := "<C exports>", fileMap := default} {env} with
     | .error message =>
-      if !roots.isEmpty then return .error message
+      if !roots.isEmpty || message.startsWith "C name collision:" then return .error message
       IO.eprintln s!"leanfran-c: skipping {message}"
-    | .ok entry =>
-      if [s!"{target.cPrefix}_init", s!"{target.cPrefix}_initialize"].contains entry.symbol ||
-          exports.any (fun prev => prev.symbol == entry.symbol) then
-        return .error s!"C name collision: {entry.symbol}"
+    | .ok (entry, types) =>
       exports := exports.push entry
+      descs := types
+  let mut claimed : Std.HashSet String := {}
+  let cPrefix := target.cPrefix
+  let reserved := [s!"{cPrefix}_init", s!"lf_{cPrefix}_initialize", s!"lf_{cPrefix}_nat_decimal",
+    s!"lf_{cPrefix}_int_decimal", "init_error", "initialize_once"]
+  let supportNames := ["lf_error_clear", "lf_set_error", "lf_copy_string", "lf_copy_io_error",
+    "lf_str_free", "lf_byte_array_free", "lf_byte_array_to_lean", "lf_byte_array_from_lean"]
+  let integerNames := ["lf_nat_from_u64", "lf_nat_to_u64", "lf_nat_from_lean_u64",
+    "lf_int_from_i64", "lf_int_to_i64", "lf_int_from_lean_i64"] ++
+    ["lf_nat", "lf_int"].flatMap fun name =>
+      ["free", "from_dec", "to_dec", "from_lean", "to_lean"].map fun suffix => s!"{name}_{suffix}"
+  let typeNames := descs.toList.flatMap Desc.names
+  let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}"]
+  for name in reserved ++ supportNames ++ integerNames ++ typeNames ++ functionNames do
+    if claimed.contains name then return .error s!"C name collision: {name}"
+    claimed := claimed.insert name
   let file := exportPath target out
   IO.FS.createDirAll file.parent.get!
-  IO.FS.writeFile file (emitExportModule mod.name exports)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource mod.name target.cPrefix exports)
+  IO.FS.writeFile file (emitExportModule mod.name target.cPrefix exports)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports descs)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource mod.name target.cPrefix exports descs)
   IO.FS.writeFile (out / "leanfran.h") (include_str "../support/leanfran.h")
   IO.FS.writeFile (out / "leanfran.c") (include_str "../support/leanfran.c")
   IO.FS.writeFile (out / "leanfran.json") ((toJson target).compress ++ "\n")

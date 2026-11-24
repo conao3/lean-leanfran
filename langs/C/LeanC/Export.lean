@@ -1,48 +1,9 @@
 import Lean
+import LeanC.Desc
 
 open Lean
 
 namespace LeanC
-
-inductive CType where
-  | bool | uint8 | uint16 | uint32 | uint64 | int8 | int16 | int32 | int64
-  | usize | float | float32 | char | string | unit
-  deriving BEq, Inhabited
-
-def CType.ofName : Name → Option CType
-  | `Bool => some .bool
-  | `UInt8 => some .uint8
-  | `UInt16 => some .uint16
-  | `UInt32 => some .uint32
-  | `UInt64 => some .uint64
-  | `Int8 => some .int8
-  | `Int16 => some .int16
-  | `Int32 => some .int32
-  | `Int64 => some .int64
-  | `USize => some .usize
-  | `Float => some .float
-  | `Float32 => some .float32
-  | `Char => some .char
-  | `String => some .string
-  | `Unit | `PUnit => some .unit
-  | _ => none
-
-def CType.leanName : CType → String
-  | .bool => "Bool"
-  | .uint8 => "UInt8"
-  | .uint16 => "UInt16"
-  | .uint32 => "UInt32"
-  | .uint64 => "UInt64"
-  | .int8 => "Int8"
-  | .int16 => "Int16"
-  | .int32 => "Int32"
-  | .int64 => "Int64"
-  | .usize => "USize"
-  | .float => "Float"
-  | .float32 => "Float32"
-  | .char => "Char"
-  | .string => "String"
-  | .unit => "Unit"
 
 structure Export where
   name : Name
@@ -50,22 +11,9 @@ structure Export where
   args : Array CType
   result : CType
   io : Bool
-
-def snakeCase (name : String) : String := Id.run do
-  let chars := name.toList.toArray
-  let mut result := ""
-  for i in [:chars.size] do
-    let c := chars[i]!
-    if c.isUpper && i > 0 then
-      let prev := chars[i - 1]!
-      if prev.isLower || prev.isDigit || (prev.isUpper && chars[i + 1]?.any Char.isLower) then
-        result := result.push '_'
-    result := result.push (if c.isAlphanum then c.toLower else '_')
-  return result
-
-def lastComponent : Name → String
-  | .str _ s => s
-  | n => n.toString
+  argTypes : Array String
+  resultType : String
+  exception : Option CType := none
 
 def validPrefix (cPrefix : String) : Bool :=
   cPrefix.toList.head?.any Char.isAlpha && cPrefix.toList.all (fun c => c.isAlphanum || c == '_') &&
@@ -84,33 +32,58 @@ def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
        | some (.opaqueInfo _) => true
        | _ => false)
 
-def readExport (env : Environment) (cPrefix : String) (name : Name) : Except String Export := do
-  let some info := env.find? name | throw s!"unknown declaration '{name}'"
+def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM Export := do
+  let some info := (← getEnv).find? name | throwError "unknown declaration '{name}'"
   match info with
   | .defnInfo _ | .opaqueInfo _ => pure ()
-  | _ => throw s!"'{name}' is not a definition"
-  if name.isInternalDetail || isPrivateName name then throw s!"'{name}' is not public"
+  | _ => throwError "'{name}' is not a definition"
+  if name.isInternalDetail || isPrivateName name then throwError "'{name}' is not public"
   let mut type := info.type
   let mut args := #[]
+  let mut argTypes := #[]
   while let .forallE _ domain body _ := type do
-    let some arg := domain.consumeMData.constName? >>= CType.ofName | throw s!"'{name}' has an unsupported parameter type"
-    if arg == .unit then throw s!"'{name}' has an unsupported parameter type"
+    let domain := domain.consumeMData
+    let arg ← try readType cPrefix renames domain catch e =>
+      if (← e.toMessageData.toString).startsWith "C name collision:" then throw e
+      throwError "'{name}' has an unsupported parameter type: {e.toMessageData}"
+    if arg == .unit then throwError "'{name}' has an unsupported parameter type"
     args := args.push arg
+    argTypes := argTypes.push (← leanTypeSource domain)
     type := body
   let io := type.isAppOfArity `IO 1
   let result := if io then type.appArg! else type
-  let some nameOfResult := result.constName? | throw s!"'{name}' has an unsupported result type"
-  let some result := CType.ofName nameOfResult | throw s!"'{name}' has an unsupported result type"
-  if result == .unit && !io then throw s!"'{name}' has an unsupported result type"
-  return { name, symbol := s!"{cPrefix}_{snakeCase (lastComponent name)}", args, result, io }
+  let exception ← if result.isAppOfArity `Except 2 then
+    some <$> readType cPrefix renames result.appFn!.appArg!
+    else pure none
+  let value := if exception.isSome then result.appArg! else result
+  let resultC ← try readType cPrefix renames value catch e =>
+    if (← e.toMessageData.toString).startsWith "C name collision:" then throw e
+    throwError "'{name}' has an unsupported result type: {e.toMessageData}"
+  if resultC == .unit && !io && exception.isNone then
+    throwError "'{name}' has an unsupported result type"
+  return {
+    name, symbol := escapeIdentifier s!"{cPrefix}_{publicName renames name (lastComponent name)}",
+    args, result := resultC, io, argTypes, resultType := ← leanTypeSource result, exception }
 
-def emitExportModule (mod : Name) (exports : Array Export) : String :=
-  s!"import {mod}\n\n" ++ String.join (exports.toList.map fun entry =>
-    let args := entry.args.toList.zipIdx.map fun (ty, i) => s!" (a{i} : {ty.leanName})"
-    let names := entry.args.toList.zipIdx.map fun (_, i) => s!" a{i}"
+def Export.boxResult (entry : Export) : Bool :=
+  !entry.io && entry.exception.isNone && entry.result.byPointer
+
+def emitExportModule (mod : Name) (cPrefix : String) (exports : Array Export) : String :=
+  s!"import {mod}\n\n" ++
+  s!"@[export lf_{cPrefix}_nat_decimal]\ndef lf_{cPrefix}_nat_decimal (n : Nat) : String := toString n\n\n" ++
+  s!"@[export lf_{cPrefix}_int_decimal]\ndef lf_{cPrefix}_int_decimal (n : Int) : String := toString n\n\n" ++
+  String.join (exports.toList.map fun entry =>
+    let args := entry.argTypes.toList.zipIdx.map fun (ty, i) =>
+      if entry.args[i]!.byPointer then s!" (a{i} : Prod ({ty}) Bool)" else s!" (a{i} : {ty})"
+    let names := entry.args.toList.zipIdx.map fun (ty, i) =>
+      if ty.byPointer then s!" a{i}.1" else s!" a{i}"
     let dummy := if args.isEmpty then " (_ : UInt8)" else ""
-    let result := if entry.io then s!"IO {entry.result.leanName}" else entry.result.leanName
+    let result := if entry.io then s!"IO ({entry.resultType})"
+      else if entry.boxResult then s!"Prod ({entry.resultType}) Bool"
+      else entry.resultType
+    let call := s!"@_root_.{entry.name}{String.join names}"
+    let body := if entry.boxResult then s!"({call}, false)" else call
     s!"@[export lf_{entry.symbol}]\ndef lf_{entry.symbol}{dummy}{String.join args} : {result} :=\n" ++
-      s!"  @_root_.{entry.name}{String.join names}\n\n")
+      s!"  {body}\n\n")
 
 end LeanC
