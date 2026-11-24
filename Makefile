@@ -1,11 +1,11 @@
-BACKENDS ?= Rust Python TypeScript Clojure PHP Go
+BACKENDS ?= Rust Python TypeScript Clojure PHP Go C
 
 .DEFAULT_GOAL := check
 .PHONY: build check format format-check
 
 build check format format-check:
 	@set -eu; for backend in $(BACKENDS); do \
-		case "$$backend" in Rust|Python|TypeScript|Clojure|PHP|Go) ;; *) echo "Unknown backend: $$backend" >&2; exit 2 ;; esac; \
+		case "$$backend" in Rust|Python|TypeScript|Clojure|PHP|Go|C) ;; *) echo "Unknown backend: $$backend" >&2; exit 2 ;; esac; \
 		shells=$$(printf '%s' "$$backend" | tr '[:upper:]' '[:lower:]'); \
 		if [ "$$backend:$@" = PHP:check ]; then shells="php php85"; fi; \
 		if [ "$$backend:$@" = Go:check ]; then shells="go go126"; fi; \

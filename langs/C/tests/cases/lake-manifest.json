@@ -1,0 +1,14 @@
+{"version": "1.3.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "c_dependency",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../dependency",
+   "copy": false,
+   "configFile": "lakefile.toml"}],
+ "name": "c_cases",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

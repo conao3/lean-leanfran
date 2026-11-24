@@ -1,0 +1,15 @@
+name = "c_cases"
+
+[[require]]
+name = "c_dependency"
+path = "../dependency"
+
+[[lean_lib]]
+name = "Examples"
+
+[[lean_lib]]
+name = "Base"
+
+[[lean_exe]]
+name = "oracle"
+root = "Oracle"

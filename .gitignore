@@ -48,3 +48,5 @@
 /Rust/**/.lake/
 /Rust/**/.lake-aeneas/
 /Rust/**/test-out/
+/langs/C/**/.lake/
+/langs/C/test-out/

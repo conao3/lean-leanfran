@@ -1,0 +1,16 @@
+name = "leanfran-c"
+version = "0.10.0"
+defaultTargets = ["leanfran-c"]
+
+[[lean_lib]]
+name = "LeanC"
+needs = ["support"]
+
+[[input_dir]]
+name = "support"
+text = true
+
+[[lean_exe]]
+name = "leanfran-c"
+root = "Main"
+supportInterpreter = true
