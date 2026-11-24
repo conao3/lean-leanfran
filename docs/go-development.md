@@ -11,7 +11,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 - `langs/Go/lean/LeanGoLib/Go.lean` defines modeled failure and Go operations. The tool embeds its source and writes it into the Lake workspace. The Nix compiler package also installs the source in `share/leanfran-go/LeanGoLib/`.
 - `langs/Go/leanfrantest/` runs seeded tests against public Lean spec wrappers. It is called by the Go files that `sync` generates in each modeled package.
 - `langs/Go/schema/` renders JSON and JSON Schema from generated descriptors. The root Go package provides validation errors and typed conversion combinators.
-- `langs/Go/rt/` implements the runtime. It uses `rt.V` for Lean objects and Go's fixed-width types for unboxed scalars. Arrays and strings use copy-on-write, and tail calls between functions use a trampoline.
+- `langs/Go/value.go` manages handle ownership and serializes Lean reference counts shared across handle calls. `langs/Go/rt/` implements the runtime. It uses `rt.V` for Lean objects and Go's fixed-width types for unboxed scalars. Arrays and strings use copy-on-write, and tail calls between functions use a trampoline.
 - `langs/Go/LeanGo/RuntimeExterns.lean` lists the runtime symbols. The emitter reports missing names before producing output.
 - `langs/Go/LeanGoTest/` holds Lean fixtures for native and generated programs. `langs/Go/testdata/` holds Go drivers for generated packages. `langs/Go/test-out/` holds check artifacts.
 - `langs/Go/make/` registers check targets through `CHECK_TARGETS`. `maint/Go/` contains the extern generator and the test scripts.
@@ -44,9 +44,17 @@ nix develop .#go -c make -C langs/Go samples
 
 `test-embed-scan` checks literal scanning, source positions, and block dependencies. `test-embed` installs the CLI as a module tool in a fixture, checks round-trip models and tags, and verifies that failed proofs and syntax errors preserve the installed Go. It checks manifests with a PATH that contains Go alone. `test-embed-samples` rebuilds the two embedded modules, compares their generated files with the checkout, and compares the range sample with a native Lean C oracle.
 
+Run `make test-kernel` in `langs/Go/` to compare 5,000 seeded commands through the ordinary Go functions, the handle functions, and Lean's native C backend. It also checks distinct handle types at compile time, tests shared handles with eight goroutines under the race detector, and checks allocation limits. After generation, run the kernel benchmark in the backend shell:
+
+```sh
+cd langs/Go
+go test ./test-out/_generated/kernel -run '^$' -bench '^BenchmarkCommand$' \
+  -benchmem -benchtime=300ms -cpu=1 -count=5
+```
+
 Run `make test-verify` from `langs/Go/` to check obligation states, proof freshness with Go alone, Go-to-Lean translation against the C backend, and model operations against native Go. `make test-verify-samples` checks both verified samples and demonstrates that changing the nibble mask makes the seeded test fail. `make samples` includes this target.
 
-The sum-to sample imports a generated package and calls it from Go. The greet-cli sample compiles a Lean `main` into a Go command and checks the greeting and usage paths. The pricing sample exercises generated public functions, proof validation and JSON. The sample executables are written to `langs/Go/test-out/samples/`.
+The sum-to sample imports a generated package and calls it from Go. The greet-cli sample compiles a Lean `main` into a Go command and checks the greeting and usage paths. The pricing sample exercises generated public functions, proof validation and JSON. The value-server sample keeps an inventory snapshot under a mutex and tests a successful reservation, a rejection, and the next successful reservation through an HTTP handler. The sample executables are written to `langs/Go/test-out/samples/`.
 
 ## Publishing
 
