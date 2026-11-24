@@ -24,8 +24,10 @@ end
 @[noinline] partial def cpsStep (n acc : UInt64) : Nat :=
   applyStep (fun k value => cpsStep k (value + 1)) n acc
 
+@[noinline] def nonTailBase (n : Nat) : Nat := n + 1
+
 @[noinline] def nonTail (n : Nat) : Nat :=
-  if n = 0 then 0 else nonTail (n - 1) + 1
+  if n = 0 then nonTailBase n else nonTail (n - 1) + 1
 termination_by n
 
 def run (args : List String) : IO UInt32 := do
