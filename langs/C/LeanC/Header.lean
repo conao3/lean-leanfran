@@ -1,61 +1,29 @@
 import LeanC.Export
+import LeanC.Except
 
 open Lean
 
 namespace LeanC
 
-def CType.cName : CType → String
-  | .bool => "bool"
-  | .uint8 => "uint8_t"
-  | .uint16 => "uint16_t"
-  | .uint32 | .char => "uint32_t"
-  | .uint64 => "uint64_t"
-  | .int8 => "int8_t"
-  | .int16 => "int16_t"
-  | .int32 => "int32_t"
-  | .int64 => "int64_t"
-  | .usize => "size_t"
-  | .float => "double"
-  | .float32 => "float"
-  | .string => "lf_str"
-  | .unit => "void"
-
-def CType.abiName : CType → String
-  | .bool | .int8 => "uint8_t"
-  | .int16 => "uint16_t"
-  | .int32 => "uint32_t"
-  | .int64 => "uint64_t"
-  | .string | .unit => "lean_object *"
-  | ty => ty.cName
-
-def CType.isSignedInt : CType → Bool
-  | .int8 | .int16 | .int32 | .int64 => true
-  | _ => false
-
 def CType.unbox (ty : CType) (value : String) : String :=
-  let op := match ty with
-    | .uint32 | .int32 | .char => "lean_unbox_uint32"
-    | .uint64 | .int64 => "lean_unbox_uint64"
-    | .usize => "lean_unbox_usize"
-    | .float => "lean_unbox_float"
-    | .float32 => "lean_unbox_float32"
-    | _ => "lean_unbox"
-  if ty == .string then value else s!"({ty.abiName}){op}({value})"
+  if ty == .string then value else CType.unboxAbi ty.abiName value
 
 def Export.prototype (entry : Export) : String :=
-  let params := entry.args.toList.zipIdx.map fun (ty, i) => s!"{ty.cName} a{i}"
+  let params := entry.args.toList.zipIdx.map fun (ty, i) =>
+    if ty.byPointer then s!"const {ty.cName} *a{i}" else s!"{ty.cName} a{i}"
   let params := if entry.result == .unit then params else params ++ [s!"{entry.result.cName} *out"]
   s!"lf_status {entry.symbol}({String.intercalate ", " (params ++ ["lf_error *err"])})"
 
-def emitHeader (cPrefix : String) (exports : Array Export) : String :=
+def emitHeader (cPrefix : String) (exports : Array Export) (descs : Array Desc) : String :=
   let guard := s!"LEANFRAN_{cPrefix}_H"
   s!"#ifndef {guard}\n#define {guard}\n\n#include \"leanfran.h\"\n\n" ++
     "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n" ++
+    emitTypeDeclarations descs ++
     s!"lf_status {cPrefix}_init(lf_error *err);\n" ++
     String.join (exports.toList.map fun entry => entry.prototype ++ ";\n") ++
     "\n#ifdef __cplusplus\n}\n#endif\n\n#endif\n"
 
-def emitWrapper (entry : Export) : String := Id.run do
+def emitScalarWrapper (entry : Export) : String := Id.run do
   let resultType := if entry.io then "lean_object *" else entry.result.abiName
   let params := if entry.args.isEmpty then #["uint8_t"] else entry.args.map CType.abiName
   let mut lines := #[s!"extern {resultType} lf_{entry.symbol}({String.intercalate ", " params.toList});",
@@ -105,10 +73,67 @@ def emitWrapper (entry : Export) : String := Id.run do
   let status := if entry.result == .string then "status" else "LF_OK"
   return String.intercalate "\n" (lines.toList ++ [s!"    return {status};", "}", ""])
 
-def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) : String :=
+def Export.usesMarshalling (entry : Export) : Bool :=
+  entry.args.any CType.byPointer || entry.result.byPointer || entry.exception.isSome
+
+def emitWrapper (entry : Export) : String := Id.run do
+  unless entry.usesMarshalling do return emitScalarWrapper entry
+  let resultAbi := if entry.io || entry.exception.isSome then "lean_object *" else entry.result.abiName
+  let abi := if entry.args.isEmpty then #["uint8_t"] else entry.args.map CType.abiName
+  let mut code := s!"extern {resultAbi} lf_{entry.symbol}({String.intercalate ", " abi.toList});\n" ++
+    entry.prototype ++ " {\n" ++
+    "if (!atomic_load(&initialized)) return lf_set_error(err, LF_NOT_INITIALIZED, \"Call the module initializer first\");\n"
+  if entry.result != .unit then
+    code := code ++ "if (out == NULL) return lf_set_error(err, LF_INVALID, \"Output pointer is null\");\n"
+  let mut owned := #[]
+  let mut args := #[]
+  for (ty, i) in entry.args.toList.zipIdx do
+    if ty.byPointer then
+      code := code ++ s!"if (a{i} == NULL) return lf_set_error(err, LF_INVALID, \"Argument {i} is null\");\n"
+    else if ty == .char then
+      code := code ++ s!"if ({invalidChar s!"a{i}"}) return lf_set_error(err, LF_INVALID, \"Invalid Unicode scalar value\");\n"
+    if ty.byPointer || ty == .string then
+      code := code ++ s!"lean_object *arg{i} = lean_box(0);\n"
+      owned := owned.push (ty, i)
+      args := args.push s!"arg{i}"
+    else
+      args := args.push s!"({ty.abiName})a{i}"
+  code := code ++ "lf_status status = LF_OK;\n"
+  for (ty, i) in owned do
+    let arg := if ty.byPointer then s!"a{i}" else s!"&a{i}"
+    code := code ++ s!"status = {ty.converter}_to_lean({arg}, &arg{i}, err);\nif (status != LF_OK) goto bad_arg;\n"
+    if ty.byPointer then
+      code := code ++ s!"lean_object *box{i} = lean_alloc_ctor(0, 2, 0);\n" ++
+        s!"lean_ctor_set(box{i}, 0, arg{i});\nlean_ctor_set(box{i}, 1, lean_box(0));\narg{i} = box{i};\n"
+  if args.isEmpty then args := #["0"]
+  code := code ++ s!"{resultAbi} result = lf_{entry.symbol}({String.intercalate ", " args.toList});\n"
+  if entry.io then
+    code := code ++ "if (lean_io_result_is_error(result)) { status = lf_copy_io_error(result, err); goto done; }\n"
+  let value := if entry.io then "lean_io_result_get_value(result)"
+    else if entry.boxResult then "lean_ctor_get(result, 0)" else "result"
+  if let some error := entry.exception then
+    code := code ++ s!"if (lean_obj_tag({value}) == 0) \{\n{emitExcept error value}}\n"
+  let value := if entry.exception.isSome then s!"lean_ctor_get({value}, 0)" else value
+  if entry.result != .unit then
+    if resultAbi == "lean_object *" then
+      code := code ++ s!"status = {entry.result.converter}_from_lean({value}, out, err);\n"
+    else if entry.result.isSignedInt then
+      code := code ++ "memcpy(out, &result, sizeof(*out));\n"
+    else
+      code := code ++ s!"*out = ({entry.result.cName})result;\n"
+  if resultAbi == "lean_object *" then
+    if entry.io || entry.exception.isSome then code := code ++ "done:\n"
+    code := code ++ "lean_dec(result);\n"
+  code := code ++ "return status;\n"
+  unless owned.isEmpty do
+    code := code ++ "bad_arg:\n" ++
+      String.join (owned.toList.map fun (_, i) => s!"lean_dec(arg{i});\n") ++ "return status;\n"
+  return code ++ "}\n"
+
+def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc) : String :=
   let init := Lean.mkModuleInitializationFunctionName (exportModule mod)
   s!"#include \"{cPrefix}.h\"\n" ++
-    "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <string.h>\n\n" ++
+    "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <stdlib.h>\n#include <string.h>\n\n" ++
     "extern lf_status lf_set_error(lf_error *, lf_status, const char *);\n" ++
     "extern lf_status lf_copy_string(b_lean_obj_arg, lf_str *, lf_error *);\n" ++
     "extern lf_status lf_copy_io_error(b_lean_obj_arg, lf_error *);\n" ++
@@ -127,6 +152,8 @@ def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) : String
     "        const char *message = init_error.message == NULL ? \"Lean initialization failed\" : init_error.message;\n" ++
     "        return lf_set_error(err, init_error.status, message);\n" ++
     "    }\n    return LF_OK;\n}\n\n" ++
+    (if exports.any Export.usesMarshalling then emitMarshalling cPrefix descs else "") ++
+    (if exports.any (·.exception.isSome) then emitExceptSupport descs else "") ++
     String.intercalate "\n" (exports.toList.map emitWrapper)
 
 end LeanC

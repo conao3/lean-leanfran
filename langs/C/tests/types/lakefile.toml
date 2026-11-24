@@ -1,0 +1,5 @@
+name = "public-types"
+defaultTargets = ["PublicTypes"]
+
+[[lean_lib]]
+name = "PublicTypes"

@@ -18,7 +18,7 @@ Generation rejects exported definitions that depend on `sorryAx` and prints the 
 
 The build writes a static archive by default. Pass `--shared` to build a shared library linked with `libleanshared`. For Make, include `out/core.mk` and use `CORE_CFLAGS` and `CORE_LDLIBS`. For CMake, set `core_DIR` to the output directory, call `find_package(core CONFIG REQUIRED)`, and link against `core::core`. The link files refer to the output directory and the local Lean toolchain. Regenerate them after moving either directory.
 
-Include `core.h` and call `core_init` before calling any generated function. The generated C ABI supports booleans, fixed-width integers, `USize`, floating-point numbers, `Char`, `String`, and `IO` results. An `IO Unit` function takes no output pointer. String arguments are borrowed UTF-8 byte ranges. String results can contain zero bytes and include a trailing NUL after the reported length. Release the result's `ptr` with `lf_free`.
+Include `core.h` and call `core_init` before calling any generated function. The [C guide](../../docs/c-guide.md) describes the public type mappings, naming, and ownership rules. An `IO Unit` function takes no output pointer. String arguments are borrowed UTF-8 byte ranges. String results can contain zero bytes and include a trailing NUL after the reported length. Release the result's `ptr` with `lf_free`.
 
 Start each `lf_error` with `{0}` and release its message with `lf_error_clear`. Pass `NULL` to receive only the status code. Initialization may be called repeatedly or concurrently.
 
