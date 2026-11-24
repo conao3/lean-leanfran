@@ -76,7 +76,7 @@ for cc in gcc clang; do
     "$scratch/test-cc"
 done
 link_from_pc "$out/public_api.pc" g++ -std=c++17 -Wall -Wextra -Werror -pedantic \
-    main.c -o "$scratch/test-cpp"
+    -x c++ main.c -x none -o "$scratch/test-cpp"
 "$scratch/test-cpp"
 
 for bindings in "$out" "$shared"; do
