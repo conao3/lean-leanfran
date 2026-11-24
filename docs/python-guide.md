@@ -54,6 +54,7 @@ sync, it raises `LeanBlockStale`. With `LEANFRAN_PYTHON_AUTO_SYNC=1` it runs `le
 | `Option α`                                     | `α \| None`                                                  |
 | `List α`, `Array α`                            | `list[α]`                                                    |
 | `α × β`                                        | `tuple[α, β]`                                                |
+| `Except ε α`                                   | `leanfran.Ok[α] \| leanfran.Err[ε]`                          |
 | `{x : α // p x}`                               | `Annotated[α, AfterValidator(p)]`                            |
 | structure                                      | a frozen, strict pydantic model                              |
 | inductive type, constructors without arguments | `enum.StrEnum`                                               |
@@ -73,11 +74,25 @@ match shape:
         ...
 ```
 
+A function returning `Except ε α` returns `Ok(value=…)` or `Err(error=…)`, and an `Except`
+argument or field takes either:
+
+```python
+from leanfran import Err, Ok
+
+match kernel.transition(actor, snapshot, command):
+    case Ok(value=(write, reply)):
+        ...
+    case Err(error=e):
+        ...
+```
+
 ### JSON
 
 The JSON of a generated model is the JSON of Lean's derived `ToJson`: a structure is an object, a
 constructor without arguments is its name (`"dot"`), a constructor with named arguments is
 `{"rect": {"width": 1, "height": 2}}`, with unnamed arguments `{"num": 7}` or `{"pair": [1, "x"]}`.
+`Ok` is `{"ok": value}` and `Err` is `{"error": error}`, the JSON of `deriving instance ToJson for Except`.
 `tests/test_json.py` compares the generated models with a native Lean program that prints `toJson`.
 
 ### Your pydantic models in Lean

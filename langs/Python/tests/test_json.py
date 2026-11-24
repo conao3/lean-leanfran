@@ -7,10 +7,15 @@ import pytest
 from conftest import ROOT, generate
 from pydantic import TypeAdapter
 
+from leanfran import Err, Ok
+
 
 @pytest.fixture(scope="module")
 def js():
-    roots = [f"LeanPythonTest.Json.{n}" for n in ("outers", "shapes", "tokens", "colors", "trees", "names")]
+    roots = [
+        f"LeanPythonTest.Json.{n}"
+        for n in ("outers", "shapes", "tokens", "colors", "trees", "names", "results", "outcomes")
+    ]
     return generate("LeanPythonTest.Json", ROOT / "test-out/json_types.py", roots)
 
 
@@ -28,6 +33,8 @@ def test_same_json(js, oracle_lines):
         (js.Color, js.colors()),
         (js.Tree, js.trees()),
         (js.Names, js.names()),
+        (Ok[js.Shape] | Err[str], js.results()),
+        (js.Outcome, js.outcomes()),
     ]
     ours = []
     for t, values in groups:
@@ -41,7 +48,7 @@ def test_same_json(js, oracle_lines):
 def test_parse_lean_json(js, oracle_lines):
     ta = TypeAdapter(js.Outer)
     assert ta.validate_json(json.dumps(oracle_lines[0])) == js.outers()[0]
-    assert TypeAdapter(js.Tree).validate_json(json.dumps(oracle_lines[-3])) == js.trees()[-1]
+    assert TypeAdapter(js.Tree).validate_json(json.dumps(oracle_lines[12])) == js.trees()[-1]
 
 
 def test_field_names(js):
