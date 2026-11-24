@@ -87,6 +87,32 @@ match kernel.transition(actor, snapshot, command):
         ...
 ```
 
+### Handles
+
+A generated function converts its arguments to Lean values and its result back on every call,
+which costs time in proportion to their size. `fn.lean` is the same function on handles
+(`leanfran.Lean`): it takes Python values or handles and returns a handle, which keeps the Lean
+value without converting it.
+
+```python
+snapshot = kernel.init.lean()
+result = kernel.transition.lean(actor, snapshot, command).get()
+snapshot = kernel.apply.lean(snapshot, write)
+rows = snapshot.get()
+snapshot = kernel.apply.lean.params["snap"].new(rows)
+```
+
+- `handle.get()` converts a handle to the Python value.
+- `fn.lean.params[name]` and `fn.lean.result` are the Lean types of the function
+  (`leanfran.LeanType`), and `handle.type` is the type of a handle. `type.new(value)` checks a
+  Python value like an argument and makes a handle. A handle of another Lean type is rejected
+  with `ValidationError`.
+- A handle is immutable: Lean functions that receive it build new values instead of updating in
+  place.
+
+`IO` actions have no `lean`. With a snapshot of 100 two-number structures in a `List`, one
+`transition` and `apply` takes 0.18 ms with a handle against 1.25 ms with Python values.
+
 ### JSON
 
 The JSON of a generated model is the JSON of Lean's derived `ToJson`: a structure is an object, a
