@@ -533,6 +533,68 @@ class ModelUnion:
 
 
 # ---------------------------------------------------------------------------
+# `Except ε α`: `Ok[α] | Err[ε]`
+
+
+class Ok[T](LeanModel):
+    """Lean `Except.ok value`. JSON: ``{"ok": value}``."""
+
+    value: T = Field(alias="ok")
+
+    __match_args__ = ("value",)
+
+
+class Err[E](LeanModel):
+    """Lean `Except.error error`. JSON: ``{"error": error}``."""
+
+    error: E
+
+    __match_args__ = ("error",)
+
+
+class ExceptD(Desc):
+    """Lean `Except ε α`. ``err_type`` and ``ok_type`` are the Python types of `ε` and `α`, as
+    source evaluated in the generated module ``g`` (they may name types defined later)."""
+
+    def __init__(self, g, err, ok, err_type, ok_type):
+        self.g = g
+        self.err = err
+        self.ok = ok
+        self.err_type = err_type
+        self.ok_type = ok_type
+        self._classes = None
+
+    def classes(self):
+        if self._classes is None:
+            err = Err[eval(self.err_type, self.g)]
+            ok = Ok[eval(self.ok_type, self.g)]
+            self._classes = (err, ok, pydantic.TypeAdapter(ok | err))
+        return self._classes
+
+    def to_lean(self, v):
+        if not isinstance(v, (Ok, Err)):
+            try:
+                v = self.classes()[2].validate_python(v)
+            except ValidationError as e:
+                _fail(str(e), v)
+        if isinstance(v, Ok):
+            try:
+                return Ctor(1, [self.ok.to_lean(v.value)])
+            except _Fail as f:
+                raise _at("value", f) from None
+        try:
+            return Ctor(0, [self.err.to_lean(v.error)])
+        except _Fail as f:
+            raise _at("error", f) from None
+
+    def to_py(self, x):
+        err, ok, _ = self.classes()
+        if x.tag == 1:
+            return ok.model_construct(value=self.ok.to_py(x.objs[0]))
+        return err.model_construct(error=self.err.to_py(x.objs[0]))
+
+
+# ---------------------------------------------------------------------------
 # Inductive types: a model per constructor, JSON as Lean's `deriving ToJson, FromJson`
 
 
@@ -724,6 +786,6 @@ def attach(g, path, fn, lean_name=None):
 
 def finish(g):
     for v in list(g.values()):
-        if isinstance(v, type) and issubclass(v, LeanModel) and v is not LeanModel:
+        if isinstance(v, type) and issubclass(v, LeanModel) and v not in (LeanModel, Ok, Err):
             v.model_rebuild(force=True, _types_namespace=g)
             v.__match_args__ = tuple(v.model_fields)

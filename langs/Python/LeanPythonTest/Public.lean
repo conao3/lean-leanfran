@@ -138,4 +138,29 @@ def failing (_ : Unit) : IO Nat := throw (IO.userError "nope")
 
 def applyTwice (f : α → α) (x : α) : α := f (f x)
 
+inductive DivError where
+  | byZero
+  | tooLarge (limit : Nat)
+
+def safeDiv (a b : Nat) : Except DivError Nat :=
+  if b == 0 then .error .byZero else if a > 1000 then .error (.tooLarge 1000) else .ok (a / b)
+
+def orZero (r : Except String Nat) : Nat :=
+  match r with
+  | .ok v => v
+  | .error _ => 0
+
+structure Attempt where
+  id : Nat
+  result : Except String Point
+
+def Attempt.retry (a : Attempt) : Attempt :=
+  match a.result with
+  | .ok _ => a
+  | .error e => { a with id := a.id + 1, result := if e == "again" then .ok ⟨a.id, 0⟩ else .error e }
+
+def partitionResults (xs : List (Except String Nat)) : Option (Except Unit (List Nat × List String)) :=
+  if xs.isEmpty then none
+  else some (.ok (xs.filterMap (fun | .ok v => some v | _ => none), xs.filterMap (fun | .error e => some e | _ => none)))
+
 end LeanPythonTest.Public

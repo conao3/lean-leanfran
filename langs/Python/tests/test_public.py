@@ -5,6 +5,8 @@ import pydantic
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from leanfran import Err, Ok
+
 
 def test_scalars(pub):
     assert pub.double(21) == 42
@@ -28,6 +30,47 @@ def test_containers(pub):
     assert pub.firstEven_q([1]) is None
     assert pub.swap((1, "a")) == ("a", 1)
     assert pub.lastOf(9) == 9
+
+
+def test_except(pub):
+    assert pub.safeDiv(7, 2) == Ok(value=3)
+    assert pub.safeDiv(7, 0) == Err(error=pub.DivError.byZero())
+    assert pub.safeDiv(2000, 1) == Err(error=pub.DivError.tooLarge(limit=1000))
+    match pub.safeDiv(9, 3):
+        case Ok(v):
+            assert v == 3
+        case _:
+            pytest.fail("expected Ok")
+    assert pub.orZero(Ok(value=5)) == 5
+    assert pub.orZero(Err(error="e")) == 0
+    assert pub.orZero({"ok": 6}) == 6
+    with pytest.raises(ValidationError, match="non-negative"):
+        pub.orZero(Ok(value=-1))
+    with pytest.raises(ValidationError):
+        pub.orZero(Err(error=1))
+    with pytest.raises(ValidationError):
+        pub.orZero(5)
+    a = pub.Attempt(id=1, result=Err(error="again"))
+    assert pub.Attempt.retry(a) == pub.Attempt(id=2, result=Ok(value=pub.Point(x=1, y=0)))
+    assert pub.Attempt.retry(pub.Attempt(id=1, result=Err(error="stop"))).result == Err(error="stop")
+    assert pub.partitionResults([]) is None
+    assert pub.partitionResults([Ok(value=1), Err(error="x"), Ok(value=2)]) == Ok(value=([1, 2], ["x"]))
+
+
+def test_except_json(pub):
+    r = pub.safeDiv(7, 2)
+    assert r.model_dump_json() == '{"ok":3}'
+    assert pub.safeDiv(7, 0).model_dump_json() == '{"error":"byZero"}'
+    assert pub.safeDiv(2000, 1).model_dump_json() == '{"error":{"tooLarge":{"limit":1000}}}'
+    ta = TypeAdapter(Ok[pub.Point] | Err[str])
+    assert ta.validate_json('{"ok": {"x": 1, "y": -1}}') == Ok(value=pub.Point(x=1, y=-1))
+    assert ta.validate_json('{"error": "e"}') == Err(error="e")
+    with pytest.raises(ValidationError):
+        ta.validate_json('{"ok": 1, "error": "e"}')
+    a = pub.Attempt.model_validate_json('{"id": 1, "result": {"error": "again"}}')
+    assert json.loads(pub.Attempt.retry(a).model_dump_json()) == {"id": 2, "result": {"ok": {"x": 1, "y": 0}}}
+    schema = pub.Attempt.model_json_schema()
+    assert {"$ref": "#/$defs/Err_str_"} in schema["properties"]["result"]["anyOf"]
 
 
 def test_argument_errors(pub):

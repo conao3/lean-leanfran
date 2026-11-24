@@ -4,7 +4,7 @@ import LeanPython.EmitPy
 /-! # Public Python types and functions
 
 The Lean types of the public functions are mapped to Python types: scalars to `int`, `bool`,
-`str`, `float`; `List`/`Array` to `list`, `Option` to `T | None`, `Prod` to `tuple`; structures
+`str`, `float`; `List`/`Array` to `list`, `Option` to `T | None`, `Prod` to `tuple`, `Except` to `Ok[T] | Err[E]`; structures
 to pydantic models; inductive types to a `StrEnum` (nullary constructors only) or to a pydantic
 model per constructor under a common base class. Constructor layouts come from
 `Compiler.LCNF.getCtorLayout`. Proof fields become validators that run a decision procedure
@@ -53,6 +53,7 @@ inductive Desc where
   | array (d : Desc)
   | option (d : Desc)
   | prod (a b : Desc)
+  | except (e a : Desc)
   | fin (n : Nat)
   /-- A generated type (by its Python name). -/
   | named (py : String)
@@ -71,6 +72,7 @@ partial def Desc.pyType : Desc → String
   | .list d | .array d => s!"list[{d.pyType}]"
   | .option d => s!"{d.pyType} | None"
   | .prod a b => s!"tuple[{a.pyType}, {b.pyType}]"
+  | .except e a => s!"Ok[{a.pyType}] | Err[{e.pyType}]"
   | .fin n => s!"Annotated[int, Ge(0), Lt({n})]"
   | .named py => py
 
@@ -89,6 +91,7 @@ partial def Desc.pyDesc : Desc → String
   | .array d => s!"_m.ArrayD({d.pyDesc})"
   | .option d => s!"_m.OptionD({d.pyDesc})"
   | .prod a b => s!"_m.ProdD({a.pyDesc}, {b.pyDesc})"
+  | .except e a => s!"_m.ExceptD(globals(), {e.pyDesc}, {a.pyDesc}, {quoteString e.pyType}, {quoteString a.pyType})"
   | .fin n => s!"_m.FinD({n})"
   | .named py => s!"_m.NamedD(globals(), {quoteString py})"
 
@@ -173,7 +176,7 @@ structure MarshalCfg where
 
 abbrev MarshalM := StateRefT MarshalState (ReaderT MarshalCfg MetaM)
 
-def unsupportedTypes : List Name := [``ByteArray, ``FloatArray, ``Thunk, ``Task, ``Except, ``IO.Ref]
+def unsupportedTypes : List Name := [``ByteArray, ``FloatArray, ``Thunk, ``Task, ``IO.Ref]
 
 def deciderName (py ctor field : String) : Name :=
   .str (.str (.str (.str .anonymous "LeanPythonGen") py) ctor) (field ++ "_decide")
@@ -262,6 +265,7 @@ partial def descOf (t : Lean.Expr) : MarshalM Desc := do
   | ``Array, #[a] => return .array (← descOf a)
   | ``Option, #[a] => return .option (← descOf a)
   | ``Prod, #[a, b] => return .prod (← descOf a) (← descOf b)
+  | ``Except, #[e, a] => return .except (← descOf e) (← descOf a)
   | ``Fin, #[n] =>
     let some v ← (evalNat (← instantiateMVars n)).run | throwError "`Fin` with a bound that is not a literal: `{n}`"
     return .fin v

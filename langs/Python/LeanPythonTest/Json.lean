@@ -48,6 +48,17 @@ structure Names where
   x' : Nat
   deriving ToJson, FromJson
 
+deriving instance ToJson, FromJson for Except
+
+structure Outcome where
+  id : Nat
+  result : Except String Shape
+  deriving ToJson, FromJson
+
+def results : List (Except String Shape) := [.ok (.circle 3), .ok .dot, .error "bad"]
+
+def outcomes : List Outcome := [⟨1, .ok (.rect 1 2)⟩, ⟨2, .error "no"⟩]
+
 def names : List Names := [{ note? := some "n", lambda := 1, x' := 2 }, { note? := none, lambda := 3, x' := 4 }]
 
 def outers : List Outer :=
@@ -65,6 +76,7 @@ def trees : List Tree := [.leaf, .node (.node .leaf 1 .leaf) 2 .leaf]
 def lines : List String :=
   (outers.map fun o => (toJson o).compress) ++ (shapes.map fun s => (toJson s).compress) ++
   (tokens.map fun t => (toJson t).compress) ++ (colors.map fun c => (toJson c).compress) ++
-  (trees.map fun t => (toJson t).compress) ++ (names.map fun n => (toJson n).compress)
+  (trees.map fun t => (toJson t).compress) ++ (names.map fun n => (toJson n).compress) ++
+  (results.map fun r => (toJson r).compress) ++ (outcomes.map fun o => (toJson o).compress)
 
 end LeanPythonTest.Json
