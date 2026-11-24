@@ -63,6 +63,7 @@ structure RenderCfg where
   env : Environment
   state : MarshalState
   imports : Array String
+  goPath : String
 
 def RenderCfg.findType (cfg : RenderCfg) (name : String) : TypeDef :=
   (cfg.state.types.find? (·.ident == name)).getD default
@@ -81,6 +82,7 @@ partial def Desc.go (cfg : RenderCfg) : Desc → String
   | .bytes => "[]byte"
   | .uint b => s!"uint{b}"
   | .sint b => s!"int{b}"
+  | .hostInt signed => if signed then "int" else "uint"
   | .usize => "uint64"
   | .isize => "int64"
   | .fin n => if n ≤ 2 ^ 64 then "uint64" else "*big.Int"
@@ -91,6 +93,7 @@ partial def Desc.go (cfg : RenderCfg) : Desc → String
   | .foreign path name => s!"{cfg.alias path}.{name}"
   | .named name =>
     match cfg.findType name with
+    | { model := some m, .. } => if m.path == cfg.goPath then m.name else s!"{cfg.alias m.path}.{m.name}"
     | { anonymous := true, kind := .subtype d .., .. } => d.go cfg
     | _ => name
 
@@ -106,6 +109,8 @@ partial def Desc.codec (cfg : RenderCfg) : Desc → String
   | .bytes => "leanfran.Scalar(\"bytes\", 0, rt.BytesFromSlice, rt.Bytes)"
   | .uint b => s!"leanfran.Fixed[uint{b}](\"uint\", {b})"
   | .sint b => s!"leanfran.Fixed[int{b}](\"sint\", {b})"
+  | .hostInt true => "leanfran.Fixed[int](\"sint\", 64)"
+  | .hostInt false => "leanfran.Fixed[uint](\"uint\", 64)"
   | .usize => "leanfran.Fixed[uint64](\"usize\", 64)"
   | .isize => "leanfran.Fixed[int64](\"isize\", 64)"
   | .fin n => if n ≤ 2 ^ 64 then s!"leanfran.Fin(\"{n}\")" else s!"leanfran.Big(\"fin\", \"{n}\")"
@@ -134,12 +139,14 @@ def variantCode (cfg : RenderCfg) (v : VariantInfo) (trivial : Bool) : String :=
   s!"\{Name: {quoteGo v.name}, Tag: {v.cidx}, Objects: {v.size}, ScalarBytes: {8 * v.usize + v.ssize}, Trivial: {trivial}, Positional: {v.positional}, Fields: []schema.Field\{{fields}}}"
 
 def descBody (cfg : RenderCfg) (t : TypeDef) : String :=
+  let modelKind (kind : String) := quoteGo (if t.model.isSome then "model" else kind)
   let fields := match t.kind with
-    | .enum cases => s!"Kind: \"enum\", Cases: []string\{{joinArgs (cases.map (quoteGo ∘ Prod.fst))}}"
+    | .enum cases => s!"Kind: {modelKind "enum"}, Cases: []string\{{joinArgs (cases.map (quoteGo ∘ Prod.fst))}}"
     | .subtype base _ bounds => s!"Kind: \"subtype\", First: {base.codec cfg}.Desc, Bounds: {boundsCode bounds}"
-    | .struct v trivial => s!"Kind: \"struct\", Variants: []schema.Variant\{{variantCode cfg v trivial.isSome}}"
+    | .struct v trivial => s!"Kind: {modelKind "struct"}, Variants: []schema.Variant\{{variantCode cfg v trivial.isSome}}"
     | .sum vs trivial => s!"Kind: \"inductive\", Variants: []schema.Variant\{{joinArgs (vs.map (variantCode cfg · trivial.isSome))}}"
-  s!"func desc{t.ident}() *schema.Desc \{\n\treturn &schema.Desc\{Name: {quoteGo t.ident}, {fields}}\n}\n\n"
+  let goType := if let some m := t.model then s!"GoType: {quoteGo (m.path ++ "." ++ m.name)}, " else ""
+  s!"func desc{t.ident}() *schema.Desc \{\n\treturn &schema.Desc\{Name: {quoteGo (t.model.map (·.name) |>.getD t.ident)}, {goType}{fields}}\n}\n\n"
 
 def codecDecl (name ty : String) (external : Bool) : String :=
   let privateCodec := s!"func codec{name}() leanfran.Codec[{ty}] \{\n\treturn leanfran.Ref(desc{name}, to{name}, from{name}, check{name})\n}\n\n"
@@ -201,7 +208,7 @@ def variantDecl (cfg : RenderCfg) (ty : String) (fs : Array FieldInfo) (ctor : O
   let members := joinArgs (fs.zipIdx.map fun (f, i) => s!"{f.property}: a{i}")
   return defn ++ s!"func {ctor}({args}) ({ty}, error) \{\n\tv := {ty}\{{members}}\n\tif err := v.Validate(); err != nil \{ return {ty}\{}, err }\n\treturn v, nil\n}\n\n"
 
-def variantFuncs (cfg : RenderCfg) (ty : String) (v : VariantInfo) (layout : String)
+def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (layout : String)
     (path : String) : Except String (String × Array FieldInfo) := do
   let mut flat := #[]
   let mut toFields := #[]
@@ -233,17 +240,18 @@ def variantFuncs (cfg : RenderCfg) (ty : String) (v : VariantInfo) (layout : Str
     "\tstart := len(e.Issues)\n" ++ check ++ "\tif len(e.Issues) != start { return }\n" ++
       invariants
   let fromLayout := if fromFields.isEmpty then "" else s!"\tlayout := {layout}\n"
-  let code := s!"func to{ty}(v {ty}) rt.V \{\n\treturn {layout}.Build([]rt.V\{{joinArgs toFields}})\n}\n\n" ++
-    s!"func from{ty}(v rt.V) {ty} \{\n{fromLayout}{prelude}\treturn {ty}\{{joinArgs fromFields}}\n}\n\n" ++
-    s!"func check{ty}(e *leanfran.ValidationError, v {ty}) \{\n{checkBody}}\n\n"
+  let code := s!"func to{stem}(v {ty}) rt.V \{\n\treturn {layout}.Build([]rt.V\{{joinArgs toFields}})\n}\n\n" ++
+    s!"func from{stem}(v rt.V) {ty} \{\n{fromLayout}{prelude}\treturn {ty}\{{joinArgs fromFields}}\n}\n\n" ++
+    s!"func check{stem}(e *leanfran.ValidationError, v {ty}) \{\n{checkBody}}\n\n"
   return (code, flat)
 
-def emitEnum (name : String) (cases : Array (String × String)) : String := Id.run do
+def emitEnum (name ty label : String) (cases : Array (String × String)) (model : Bool) : String := Id.run do
   let constants := cases.map fun (c, ident) => s!"\t{ident} {name} = {quoteGo c}\n"
-  return s!"type {name} string\n\nconst (\n{String.join constants.toList})\n\n" ++
-    s!"func to{name}(v {name}) rt.V \{\n\tfor i, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return rt.Lean_box(uint64(i)) }\n\t}\n\trt.Lean_internal_panic(\"invalid {name}\")\n\treturn rt.V\{}\n}\n\n" ++
-    s!"func from{name}(v rt.V) {name} \{\n\treturn {name}(desc{name}().Cases[rt.Lean_unbox(v)])\n}\n\n" ++
-    s!"func check{name}(e *leanfran.ValidationError, v {name}) \{\n\tfor _, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return }\n\t}\n\te.Add(\"expected {name}\")\n}\n\n"
+  let decl := if model then "" else s!"type {ty} string\n\nconst (\n{String.join constants.toList})\n\n"
+  return decl ++
+    s!"func to{name}(v {ty}) rt.V \{\n\tfor i, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return rt.Lean_box(uint64(i)) }\n\t}\n\trt.Lean_internal_panic(\"invalid {label}\")\n\treturn rt.V\{}\n}\n\n" ++
+    s!"func from{name}(v rt.V) {ty} \{\n\treturn {ty}(desc{name}().Cases[rt.Lean_unbox(v)])\n}\n\n" ++
+    s!"func check{name}(e *leanfran.ValidationError, v {ty}) \{\n\tfor _, c := range desc{name}().Cases \{\n\t\tif string(v) == c \{ return }\n\t}\n\te.Add(\"expected {label}\")\n}\n\n"
 
 def emitSubtype (cfg : RenderCfg) (t : TypeDef) (base : Desc) (inv : InvInfo) : Except String String := do
   let name := t.ident
@@ -268,7 +276,7 @@ def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (trivial 
   let mut checks := ""
   for (v, i) in vs.zipIdx do
     let ty := v.ident
-    let (code, fields) ← variantFuncs cfg ty v s!"desc{name}().Variants[{i}]" s!", {quoteGo v.name}"
+    let (code, fields) ← variantFuncs cfg ty ty v s!"desc{name}().Variants[{i}]" s!", {quoteGo v.name}"
     out := out ++ variantDecl cfg ty fields v.constructor ++
       s!"func ({ty}) is{name}() \{}\n\n" ++ valueMethods ty name true ++ code
     toCases := toCases ++ s!"\tcase {ty}: return to{ty}(x)\n\tcase *{ty}: return to{ty}(*x)\n"
@@ -284,18 +292,19 @@ def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (trivial 
 
 def emitType (cfg : RenderCfg) (t : TypeDef) : Except String String := do
   let name := t.ident
+  let ty := (Desc.named name).go cfg
   let (body, methods) ← match t.kind with
-    | .enum cases => pure (emitEnum name cases, true)
+    | .enum cases => pure (emitEnum name ty (t.model.map (·.name) |>.getD name) cases t.model.isSome, t.model.isNone)
     | .struct v _ =>
-      let (code, fields) ← variantFuncs cfg name v s!"desc{name}().Variants[0]" ""
-      pure (variantDecl cfg name fields v.constructor ++ code, true)
+      let (code, fields) ← variantFuncs cfg name ty v s!"desc{name}().Variants[0]" ""
+      pure ((if t.model.isSome then "" else variantDecl cfg name fields v.constructor) ++ code, t.model.isNone)
     | .subtype base inv _ => pure (← emitSubtype cfg t base inv, !t.anonymous)
     | .sum vs trivial => pure (← emitSum cfg name vs trivial.isSome t.decoder.get!, false)
-  return descBody cfg t ++ codecDecl name ((Desc.named name).go cfg) (!t.anonymous) ++ body ++
+  return descBody cfg t ++ codecDecl name ty (!t.anonymous && t.model.isNone) ++ body ++
     if methods then valueMethods name name true else ""
 
 def Desc.needsCheck : Desc → Bool
-  | .bool | .float | .float32 | .uint _ | .sint _ | .unit | .usize | .isize | .bytes => false
+  | .bool | .float | .float32 | .uint _ | .sint _ | .hostInt _ | .unit | .usize | .isize | .bytes => false
   | _ => true
 
 def emitPublicFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
@@ -377,10 +386,12 @@ def packageSource (cfg : RenderCfg) (mod : Name) (pkg generatorVersion body : St
   let mod := (toString mod).replace "\n" "\\n" |>.replace "\r" "\\r"
   s!"// Code generated by leanfran-go (generator {generatorVersion}) from {mod}. DO NOT EDIT.\n\npackage {pkg}\n{imports}\n{body}"
 
-def publicSources (env : Environment) (mod : Name) (pkg version : String) (collected : PublicModule) :
+def publicSources (env : Environment) (mod : Name) (pkg version goPath : String) (collected : PublicModule) :
     Except String (Array (String × String)) := do
-  let imports := (collected.state.foreignTypes.toArray.map (·.1.1)).toList.eraseDups.toArray.qsort (· < ·)
-  let cfg := { env, state := collected.state, imports : RenderCfg }
+  let paths := collected.state.foreignTypes.toArray.map (·.1.1) ++
+    (collected.state.types.filterMap (·.model.map (·.path))).filter (· != goPath)
+  let imports := paths.toList.eraseDups.toArray.qsort (· < ·)
+  let cfg := { env, state := collected.state, imports, goPath : RenderCfg }
   let types ← (cfg.state.types.qsort (fun a b => a.ident < b.ident)).mapM (emitType cfg)
   let funcs ← (collected.functions.qsort (fun a b => a.ident < b.ident)).mapM (emitPublicFn cfg)
   let lean ← generate env mod (collected.functions.map (·.target.name) ++ cfg.state.deciders) pkg none version false

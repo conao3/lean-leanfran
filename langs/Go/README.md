@@ -1,17 +1,28 @@
 # leanfran for Go
 
-Compile Lean functions and types to a Go package. The generated code uses the leanfran runtime and builds without CGo.
+Embed Lean definitions and proofs in a Go package. `go tool leanfran sync` checks the Lean and generates Go functions and types in the same package.
 
-Build the compiler from the repository root.
+```go
+package arithmetic
 
-```sh
-nix build .#go
+import "github.com/conao3/leanfran-go"
+
+var _ = leanfran.Lean(`
+def twice (n : Nat) : Nat := n + n
+
+theorem twice_ge (n : Nat) : n ≤ twice n := by
+  unfold twice
+  omega
+`)
 ```
 
-The [pricing sample](samples/pricing/) has Lean definitions, their generated Go package, and a Go caller. Run it from this directory with Go 1.26 or later.
+With Go 1.26 or later, Lean, Lake, and `leanfran-go` available, run the following from the application module.
 
 ```sh
-go run ./samples/pricing
+go get -tool github.com/conao3/leanfran-go/cmd/leanfran
+go tool leanfran sync
 ```
 
-See the [Go guide](../../docs/go-guide.md) for generating a package, calling its functions, and using JSON and JSON Schema. See [Go development](../../docs/go-development.md) for building and testing the backend.
+Go callers can now use `arithmetic.Twice(big.NewInt(21))`. Commit the generated Go and manifest so the application can build with Go alone.
+
+Build the compiler with `nix build .#go` from the repository root. The [range sample](samples/embed-range/) includes a Lean structure, a theorem, and a Go caller. The [Go guide](../../docs/go-guide.md) covers configuration, importing Go models, generated packages, and JSON Schema. See [Go development](../../docs/go-development.md) for building and testing the backend.

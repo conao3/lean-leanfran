@@ -58,6 +58,7 @@ inductive Desc where
   | uint (bits : Nat)
   | sint (bits : Nat)
   | usize | isize
+  | hostInt (signed : Bool)
   | list (d : Desc)
   | array (d : Desc)
   | option (d : Desc)
@@ -106,17 +107,35 @@ inductive TypeKind where
   | subtype (base : Desc) (inv : InvInfo) (bounds : Array (String × Int))
   deriving Inhabited
 
+structure ModelSpec where
+  lean : String
+  path : String
+  name : String
+  fields : Std.TreeMap String String := {}
+  cases : Std.TreeMap String String := {}
+  deriving Inhabited
+
+partial def Desc.modelField (d : Desc) (shape : String) : Desc :=
+  if shape == "int" then .hostInt true
+  else if shape == "uint" then .hostInt false
+  else match d with
+    | .array a => .array (a.modelField (shape.drop 2).toString)
+    | .option a => .option (a.modelField (shape.drop 1).toString)
+    | _ => d
+
 structure TypeDef where
   ident : String
   kind : TypeKind
   anonymous : Bool := false
   constructor : Option String := none
   decoder : Option String := none
+  model : Option ModelSpec := none
   deriving Inhabited
 
 structure MarshalCfg where
   strip : Name
   typeModules : Array (Name × String) := #[]
+  models : Array ModelSpec := #[]
 
 structure MarshalState where
   types : Array TypeDef := #[]
@@ -177,11 +196,19 @@ def boundOf (v : Lean.Expr) (p : Lean.Expr) : MetaM (Option (String × Int)) := 
   let lenKind (e : Lean.Expr) : Option String := match e.getAppFnArgs with
     | (``String.length, #[x]) => if x == v then some "Length" else none
     | (``List.length, #[_, x]) => if x == v then some "Items" else none
+    | (``ByteArray.size, #[x]) => if x == v then some "Items" else none
     | (``Array.size, #[_, x]) => if x == v then some "Items" else none
     | _ => none
   let flip : String → String
     | "lt" => "gt" | "le" => "ge" | "gt" => "lt" | _ => "le"
-  let (op, target, lit) := if a == v || (lenKind a).isSome then (op, a, b) else (flip op, b, a)
+  let isNumericView (e : Lean.Expr) : Bool :=
+    let e := match e.getAppFnArgs with | (``Int.ofNat, #[x]) => x | _ => e
+    e == v || match e.getAppFnArgs with
+      | (n, #[x]) =>
+        ([``UInt8.toNat, ``UInt16.toNat, ``UInt32.toNat, ``UInt64.toNat,
+          ``Int8.toInt, ``Int16.toInt, ``Int32.toInt, ``Int64.toInt].contains n) && x == v
+      | _ => false
+  let (op, target, lit) := if isNumericView a || (lenKind a).isSome then (op, a, b) else (flip op, b, a)
   let some c ← literalInt? lit | return none
   if let some k := lenKind target then
     return some <| match op with
@@ -189,7 +216,7 @@ def boundOf (v : Lean.Expr) (p : Lean.Expr) : MetaM (Option (String × Int)) := 
       | "le" => (s!"max{k}", c)
       | "gt" => (s!"min{k}", c + 1)
       | _ => (s!"min{k}", c)
-  unless target == v do return none
+  unless isNumericView target do return none
   return some <| match op with
     | "lt" => ("exclusiveMaximum", c)
     | "le" => ("maximum", c)
@@ -290,6 +317,13 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
   if args.size != ind.numParams then throwError "polymorphic type `{t}`"
   let paramArgs ← args[:ind.numParams].toArray.filterM fun a => return !(← isProof a)
   let names ← if c == ``Subtype then pure #[] else paramArgs.mapM fun a => return toString (← ppExpr a)
+  if let some model := cfg.models.find? (fun m => m.lean.toName == c) then
+    let ident ← freshIdent ("Model" ++ typeIdentOf .anonymous c #[])
+    let d := Desc.named ident
+    modify fun s => { s with byType := s.byType.insert key d }
+    let td ← typeDef c t args ident alias? false (some model)
+    modify fun s => { s with types := s.types.push td }
+    return d
   if c != ``Subtype || alias?.isSome then
     let source := alias?.getD c
     if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) => ns.isPrefixOf source && source != ns then
@@ -316,7 +350,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
   return d
 
 partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident : String) (alias? : Option Name)
-    (external : Bool) : MarshalM TypeDef := do
+    (external : Bool) (model : Option ModelSpec := none) : MarshalM TypeDef := do
   let env ← getEnv
   let cfg ← read
   let some (.inductInfo ind) := env.find? c | throwError "unsupported type `{t}`"
@@ -357,10 +391,12 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
           continue
         if (← whnf ty).isSort then throwError "the constructor `{ctor}` has a type field `{raw}`"
         let d ← descOf ty
+        let d := if let some m := model then d.modelField (m.fields.getD raw "") else d
         let optKey := isStruct && raw.endsWith "?" && raw.length > 1 && (match d with | .option _ => true | _ => false)
         let key := if !named then s!"a{fields.size}" else if optKey then (raw.dropEndWhile (· == '?')).copy else raw
         let (property, claims) ← ofExcept (props.claim (goIdent (capitalizeIdent key)))
         props := claims
+        let property := if model.isSome then raw else property
         let flat := isStruct && (isSubobjectField? env c names[i]!).isSome
         let (slot, pos) := slotOf (layout.fieldInfo[i]?.getD .erased)
         fields := fields.push { key, property, slot, pos, desc := d, omitNone := optKey, flat }
@@ -379,13 +415,13 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
         let constructor ← if alias?.isNone || external then pure none else some <$> freshIdent ("New" ++ ident)
         return { ident, constructor,
                  anonymous := alias?.isNone, kind := .subtype fi.desc inv fi.bounds }
-      let constructor ← if v.1.invariants.isEmpty || external then pure none else some <$> freshIdent ("New" ++ ident)
-      return { ident, kind := .struct { v.1 with constructor } trivial }
+      let constructor ← if v.1.invariants.isEmpty || external || model.isSome then pure none else some <$> freshIdent ("New" ++ ident)
+      return { ident, kind := .struct { v.1 with constructor } trivial, model }
   let kind ← if variants.all (fun v => v.fields.isEmpty && v.invariants.isEmpty) then
       let ctors ← variants.mapM fun v => do
         let base := ident ++ capitalizeIdent v.name
-        let ident ← if external then pure base else freshIdent base
-        pure (v.name, ident)
+        let ident ← if external || model.isSome then pure base else freshIdent base
+        pure ((model.bind (fun m => m.cases.get? v.name)).getD v.name, ident)
       pure (TypeKind.enum ctors)
     else do
       let vs ← variants.mapM fun v => do
@@ -397,7 +433,7 @@ partial def typeDef (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (ident :
   let decoder ← match kind with
     | .sum .. => if external then pure none else some <$> freshIdent ("Unmarshal" ++ ident)
     | _ => pure none
-  return { ident, decoder, kind }
+  return { ident, decoder, kind, model }
 
 end
 

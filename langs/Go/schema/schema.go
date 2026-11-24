@@ -46,7 +46,7 @@ func JSONSchema(d *Desc, target string) (map[string]any, error) {
 
 func (b *builder) generate(d *Desc) document {
 	d = d.resolve()
-	switch d.Kind {
+	switch d.dataKind() {
 	case "nat":
 		return document{"type": "integer", "minimum": 0}
 	case "int":
@@ -111,7 +111,7 @@ func (b *builder) namedType(d *Desc) document {
 	}
 	b.named[d.Name] = true
 	var result document
-	switch d.Kind {
+	switch d.dataKind() {
 	case "struct":
 		result = b.fields(d.Variants[0])
 	case "inductive":

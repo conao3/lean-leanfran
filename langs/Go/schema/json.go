@@ -14,7 +14,7 @@ import (
 func Payload(d *Desc, v rt.V) any {
 	d = d.resolve()
 	n := rt.Lean_unbox(v)
-	switch d.Kind {
+	switch d.dataKind() {
 	case "nat", "fin":
 		return json.Number(rt.NatString(v))
 	case "int":
@@ -147,7 +147,7 @@ type Report func(message string, path ...any)
 
 func Parse(d *Desc, value any, report Report) rt.V {
 	d = d.resolve()
-	switch d.Kind {
+	switch d.dataKind() {
 	case "nat", "int", "fin":
 		num, ok := value.(json.Number)
 		if n, parsed := new(big.Int).SetString(string(num), 10); ok && parsed {
@@ -298,7 +298,7 @@ func constructor(tag uint16, fields ...rt.V) rt.V {
 }
 
 func parseSequence(d *Desc, values []any, report Report) rt.V {
-	switch d.Kind {
+	switch d.dataKind() {
 	case "bytes":
 		item := Desc{Kind: "uint", Bits: 8}
 		out := make([]byte, len(values))

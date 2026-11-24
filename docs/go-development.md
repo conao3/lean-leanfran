@@ -6,6 +6,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 
 - `langs/Go/Main.lean` implements the `leanfran-go` CLI. `langs/Go/LeanGo/EmitGo.lean` collects reachable IR, emits Go, and assembles package initialization and command entry points.
 - `langs/Go/LeanGo/Marshal.lean` inspects Lean signatures and constructor layouts and compiles proof deciders. `Generate.lean` emits public types, typed conversions, descriptors and function wrappers.
+- `langs/Go/cmd/leanfran/` implements the module tool. `internal/embed/` scans Go with `go/parser`, reads the selected model types with `go/types`, and builds a Lake workspace for the embedded blocks. The batch generator uses the model's Go import path and fields to emit a codec against the original type.
 - `langs/Go/schema/` renders JSON and JSON Schema from generated descriptors. The root Go package provides validation errors and typed conversion combinators.
 - `langs/Go/rt/` implements the runtime. It uses `rt.V` for Lean objects and Go's fixed-width types for unboxed scalars. Arrays and strings use copy-on-write, and tail calls between functions use a trampoline.
 - `langs/Go/LeanGo/RuntimeExterns.lean` lists the runtime symbols. The emitter reports missing names before producing output.
@@ -16,7 +17,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 
 - Use the repository's `lean-toolchain` for compiler builds and native oracles. Check the toolchain's Lean sources and `lean.h` for the symbol, argument order, erased parameters, and ownership of each extern. Increment a retained value read from a container and leave borrowed arguments owned by the caller.
 - Extend the differential fixtures when runtime behavior changes. Regenerate the extern inventory with `make gen-externs` and commit it with the runtime change.
-- When generated code changes, raise `generatorVersion` in `Main.lean` and `GeneratorVersion` in `leanfran.go` together. Regenerate the Go packages in `samples/sum-to/arith/` and `samples/pricing/pricing/` with the compiler commands from `maint/Go/test-samples.sh`.
+- When generated code changes, raise `generatorVersion` in `Main.lean` and `GeneratorVersion` in `leanfran.go` together. Regenerate the Go packages in `samples/sum-to/arith/` and `samples/pricing/pricing/` with the compiler commands from `maint/Go/test-samples.sh`. Run `go tool leanfran sync` in each embedded sample module with `LEANFRAN_GO_CLI` pointing to the rebuilt compiler.
 - A mutable `rt.V` belongs to one goroutine. Generated package initializers mark their shared values persistent before publication. Each caller can construct its own inputs and call generated functions concurrently. Lean tasks run synchronously.
 - Internal runtime errors and unreachable IR raise `*rt.InternalPanic`. A Go caller can recover and call the library again. The generated command entry point handles this panic during initialization and execution, prints its diagnostic, and exits with status 1.
 - Use `gofumpt` for handwritten Go and `gofmt` for generated Go. Run static checks and the native comparison in the backend shell.
@@ -37,5 +38,7 @@ nix develop .#go -c make -C langs/Go gen-externs
 nix develop .#go126 -c make -C langs/Go fuzz SEED=42 N=2000
 nix develop .#go -c make -C langs/Go samples
 ```
+
+`test-embed-scan` checks literal scanning, source positions, and block dependencies. `test-embed` installs the CLI as a module tool in a fixture, checks round-trip models and tags, and verifies that failed proofs and syntax errors preserve the installed Go. It checks manifests with a PATH that contains Go alone. `test-embed-samples` rebuilds the two embedded modules, compares their generated files with the checkout, and compares the range sample with a native Lean C oracle.
 
 The sum-to sample imports a generated package and calls it from Go. The greet-cli sample compiles a Lean `main` into a Go command and checks the greeting and usage paths. The pricing sample exercises generated public functions, proof validation and JSON. The sample executables are written to `langs/Go/test-out/samples/`.

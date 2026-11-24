@@ -5,6 +5,7 @@ import "github.com/conao3/leanfran-go/rt"
 type Desc struct {
 	Kind          string
 	Name          string
+	GoType        string
 	Bits          int
 	Bound         string
 	First, Second *Desc
@@ -91,4 +92,14 @@ func (v Variant) Get(value rt.V, i int) rt.V {
 		rt.Lean_internal_panic("unknown field slot " + f.Slot)
 		return rt.V{}
 	}
+}
+
+func (d *Desc) dataKind() string {
+	if d.Kind == "model" {
+		if len(d.Cases) != 0 {
+			return "enum"
+		}
+		return "struct"
+	}
+	return d.Kind
 }
