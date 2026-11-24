@@ -9,9 +9,9 @@ make format
 make check BACKENDS="Python TypeScript"
 ```
 
-The root `flake.nix` and `flake.lock` define the development environments and compiler packages. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure PHP Go`. To use backend-specific commands, run `nix develop .#python` or select the `.#rust`, `.#typescript`, `.#clojure`, `.#php`, `.#php85`, `.#go`, or `.#go126` shell at the root, then enter the backend directory. `nix develop` provides all toolsets.
+The root `flake.nix` and `flake.lock` define the development environments and compiler packages. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure PHP Go C`. To use backend-specific commands, run `nix develop .#python` or select the `.#rust`, `.#typescript`, `.#clojure`, `.#php`, `.#php85`, `.#go`, `.#go126`, or `.#c` shell at the root, then enter the backend directory. `nix develop` provides all toolsets.
 
-Build compiler packages with `nix build .#python` or select the `.#typescript`, `.#clojure`, `.#rust`, `.#php`, or `.#go` target. The Rust package includes the compiler, Cargo CLI, and Aeneas. `nix fmt` formats Nix, Rust, and Python across the repository. `make format` also formats TypeScript, Clojure, PHP, and Go. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
+Build compiler packages with `nix build .#python` or select the `.#typescript`, `.#clojure`, `.#rust`, `.#php`, `.#go`, or `.#c` target. The Rust package includes the compiler, Cargo CLI, and Aeneas. `nix fmt` formats Nix, Rust, and Python across the repository. `make format` also formats TypeScript, Clojure, PHP, Go, and C. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
 
 ## Backend development
 
@@ -23,8 +23,9 @@ Build compiler packages with `nix build .#python` or select the `.#typescript`, 
 | Clojure    | [langs/Clojure/README.md](langs/Clojure/README.md)       | [Clojure development](docs/clojure-development.md)       |
 | PHP        | [langs/PHP/README.md](langs/PHP/README.md)               | [PHP development](docs/php-development.md)                |
 | Go         | [langs/Go/README.md](langs/Go/README.md)                 | [Go development](docs/go-development.md)                  |
+| C          | [langs/C/README.md](langs/C/README.md)                  | [C development](docs/c-development.md)                    |
 
-Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with PHP 8.4 and 8.5 and Go with Go 1.27 and 1.26, and builds the Python, TypeScript, Clojure, PHP, and Go Nix packages. The PHP check also covers embedded models, PHP-to-Lean translation and proof states, and seeded tests against generated Lean specifications.
+Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with PHP 8.4 and 8.5 and Go with Go 1.27 and 1.26, and builds the Python, TypeScript, Clojure, PHP, Go, and C Nix packages. CI also checks Go and C on macOS arm64. The PHP check also covers embedded models, PHP-to-Lean translation and proof states, and seeded tests against generated Lean specifications.
 
 ## Packaging
 
@@ -35,6 +36,8 @@ Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -
 PHP applications install the runtime from Packagist with `composer require conao3/leanfran`. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
 
 Go applications install the module with `go get github.com/conao3/leanfran-go`. The release snapshot places the module and its license at the root of the read-only mirror `conao3/leanfran-go`. Go resolves versions from the mirror's Git tags. Build the compiler with `nix build .#go`.
+
+C applications build the compiler and support files with `nix build .#c`. See the [C guide](docs/c-guide.md) for generating an API and linking it with the Lean toolchain.
 
 ## Releases
 
