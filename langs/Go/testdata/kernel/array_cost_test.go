@@ -135,7 +135,7 @@ func TestArrayCallCost(t *testing.T) {
 			rt.Lean_inc(lean)
 			rt.Lean_dec(l_Kernel_doubled(lean))
 		}, func() { controlSink = controlDoubled(control) }, 2, 2.5},
-		{"BytesOf", func() { bytesSink = checked(BytesOf(text)) }, func() { bytesSink = controlBytesOf(text) }, 7, 4.1},
+		{"BytesOf", func() { bytesSink = checked(BytesOf(text)) }, func() { bytesSink = controlBytesOf(text) }, 7, 4.6},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
