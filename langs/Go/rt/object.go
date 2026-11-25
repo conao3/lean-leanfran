@@ -14,6 +14,7 @@ type Obj struct {
 	rc   int32
 	tag  uint16
 	kind uint8
+	hasX bool
 	fs   []V
 }
 
@@ -23,11 +24,16 @@ type objX struct {
 }
 
 func newObjX(kind uint8, fs []V, x any) *Obj {
-	o := &objX{Obj: Obj{rc: 1, kind: kind, fs: fs}, x: x}
+	o := &objX{Obj: Obj{rc: 1, kind: kind, hasX: true, fs: fs}, x: x}
 	return &o.Obj
 }
 
-func (o *Obj) ext() *objX { return (*objX)(unsafe.Pointer(o)) }
+func (o *Obj) ext() *objX {
+	if !o.hasX {
+		Lean_internal_panic("object without a Go value")
+	}
+	return (*objX)(unsafe.Pointer(o))
+}
 
 const (
 	kindCtor uint8 = iota
