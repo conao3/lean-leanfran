@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/conao3/leanfran-go/rt"
 )
@@ -29,9 +30,14 @@ type Value[T any] struct {
 
 type valueOwner struct {
 	raw    rt.V
-	valid  bool
-	region atomic.Pointer[Region]
+	region *Region
 }
+
+func (o *valueOwner) regionPtr() *unsafe.Pointer {
+	return (*unsafe.Pointer)(unsafe.Pointer(&o.region))
+}
+
+func (o *valueOwner) loadRegion() *Region { return (*Region)(atomic.LoadPointer(o.regionPtr())) }
 
 type ValueInput[T any] struct {
 	value Value[T]
@@ -60,8 +66,8 @@ type valueScopeState struct {
 	scope  ValueScope
 	region *Region
 	mu     sync.Mutex
+	used   int32
 	active bool
-	used   int
 	slots  [8]valueOwner
 }
 
@@ -94,7 +100,7 @@ func BeginValueOperation(scope *ValueScope, inputs []ValueUse) ValueOperation {
 		var region *Region
 		for i := range inputs {
 			if owner := inputs[i].owner; owner != nil {
-				if r := owner.region.Load(); r != nil {
+				if r := owner.loadRegion(); r != nil {
 					if region == nil {
 						region = r
 					} else if r != region {
@@ -133,12 +139,12 @@ func (op ValueOperation) join(o *valueOwner) {
 	if o == nil {
 		return
 	}
-	r := o.region.Load()
-	if r == nil && o.region.CompareAndSwap(nil, op.region) {
+	r := o.loadRegion()
+	if r == nil && atomic.CompareAndSwapPointer(o.regionPtr(), nil, unsafe.Pointer(op.region)) {
 		return
 	}
 	if r == nil {
-		r = o.region.Load()
+		r = o.loadRegion()
 	}
 	if r != op.region {
 		panic(mixedRegions)
@@ -146,12 +152,11 @@ func (op ValueOperation) join(o *valueOwner) {
 }
 
 func (o *valueOwner) clear() {
-	o.raw = rt.V{}
-	o.valid = false
+	o.raw = rt.Hole()
 }
 
 func (o *valueOwner) release() {
-	if o != nil && o.valid {
+	if o != nil && !rt.IsHole(o.raw) {
 		raw := o.raw
 		o.clear()
 		rt.Lean_dec(raw)
@@ -159,7 +164,7 @@ func (o *valueOwner) release() {
 }
 
 func (o *valueOwner) check() {
-	if o == nil || !o.valid {
+	if o == nil || rt.IsHole(o.raw) {
 		panic("leanfran: empty Value")
 	}
 }
@@ -182,7 +187,7 @@ func (v Value[T]) Region() *Region {
 	if v.owner == nil {
 		return nil
 	}
-	return v.owner.region.Load()
+	return v.owner.loadRegion()
 }
 
 func (v Value[T]) IsExclusive() bool { return v.IsExclusiveIn(nil) }
@@ -204,8 +209,27 @@ func (v ValueInput[T]) Use() ValueUse { return ValueUse{owner: v.value.owner, ta
 func (u ValueUse) Lean() rt.V { return u.raw }
 
 func (op ValueOperation) Acquire(inputs []ValueUse) {
+	joining := false
+	for i := range inputs {
+		owner := inputs[i].owner
+		if owner == nil {
+			owner.check()
+		}
+		if r := owner.loadRegion(); r != op.region {
+			if r != nil {
+				panic(mixedRegions)
+			}
+			joining = joining || !inputs[i].take
+		}
+	}
+	if joining {
+		for i := range inputs {
+			if !inputs[i].take {
+				op.join(inputs[i].owner)
+			}
+		}
+	}
 	for i, input := range inputs {
-		op.join(input.owner)
 		input.owner.check()
 		if input.take {
 			for _, previous := range inputs[:i] {
@@ -239,7 +263,7 @@ func TrackLeakedValues(enabled bool) { trackLeaks.Store(enabled) }
 func LeakedValues() int64 { return leakedValues.Load() }
 
 func countLeakedValue(o *valueOwner) {
-	if o.valid {
+	if !rt.IsHole(o.raw) {
 		leakedValues.Add(1)
 	}
 }
@@ -248,17 +272,14 @@ func newOwner(op ValueOperation, raw rt.V) *valueOwner {
 	var owner *valueOwner
 	switch {
 	case trackLeaks.Load():
-		owner = &valueOwner{raw: raw, valid: true}
+		owner = &valueOwner{raw: raw, region: op.region}
 		runtime.SetFinalizer(owner, countLeakedValue)
-	case op.scope != nil && op.scope.used < len(op.scope.slots):
+	case op.scope != nil && int(op.scope.used) < len(op.scope.slots):
 		owner = &op.scope.slots[op.scope.used]
 		op.scope.used++
-		owner.raw, owner.valid = raw, true
+		owner.raw, owner.region = raw, op.region
 	default:
-		owner = &valueOwner{raw: raw, valid: true}
-	}
-	if op.region != nil {
-		owner.region.Store(op.region)
+		owner = &valueOwner{raw: raw, region: op.region}
 	}
 	return owner
 }
@@ -272,9 +293,7 @@ func WrapValueIn[T any](op ValueOperation, raw rt.V) Value[T] {
 func WrapFieldsIn[A, B any](op ValueOperation, pair rt.V) (Value[A], Value[B]) {
 	a, b := OwnValueField(pair, 0), OwnValueField(pair, 1)
 	if op.scope == nil && !trackLeaks.Load() {
-		owners := &[2]valueOwner{{raw: a, valid: true}, {raw: b, valid: true}}
-		owners[0].region.Store(op.region)
-		owners[1].region.Store(op.region)
+		owners := &[2]valueOwner{{raw: a, region: op.region}, {raw: b, region: op.region}}
 		return Value[A]{owner: &owners[0]}, Value[B]{owner: &owners[1]}
 	}
 	return Value[A]{owner: newOwner(op, a)}, Value[B]{owner: newOwner(op, b)}

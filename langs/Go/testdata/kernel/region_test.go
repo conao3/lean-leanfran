@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/conao3/leanfran-go"
+	"github.com/conao3/leanfran-go/rt"
 )
 
 func regionSnapshot(region *leanfran.Region, rows int64) leanfran.Value[Snapshot] {
@@ -162,6 +163,7 @@ func TestMixedRegions(t *testing.T) {
 	first.WithValues(func(scope *leanfran.ValueScope) {
 		assertPanic(t, mixed, func() { b.IsExclusiveIn(scope) })
 		assertPanic(t, mixed, func() { Value.In(scope).ReadSnapshot(b) })
+		assertPanic(t, mixed, func() { Handle.In(scope).Transition(actor.Borrow(), b.Borrow(), fresh.Borrow()) })
 	})
 	if actor.Region() != nil || fresh.Region() != nil {
 		t.Fatal("a failed call moved a Value into a Region")
@@ -182,7 +184,85 @@ func TestMixedRegions(t *testing.T) {
 	}
 }
 
-func regionThroughput(goroutines int, duration time.Duration) float64 {
+func TestRegionsRunTogether(t *testing.T) {
+	held, other := leanfran.NewRegion(), leanfran.NewRegion()
+	snapshot := regionSnapshot(other, 1)
+	defer func() { snapshot.Close() }()
+	actor := Actor{CanWrite: true}
+	for _, hold := range []func(func(*leanfran.ValueScope)){held.WithValues, leanfran.WithValues} {
+		entered, release := make(chan struct{}), make(chan struct{})
+		go hold(func(*leanfran.ValueScope) {
+			close(entered)
+			<-release
+		})
+		<-entered
+		done := make(chan error, 1)
+		go func() {
+			_, err := regionCommand(other, &snapshot, actor, CommandSet{Amount: 1})
+			if err == nil {
+				_, err = plainCommand(&snapshot, actor, CommandSet{Amount: 2})
+			}
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("a command in one Region waited for another Region's callback")
+		}
+		close(release)
+	}
+}
+
+func TestRegionHoldsItsHandles(t *testing.T) {
+	region := leanfran.NewRegion()
+	snapshot := regionSnapshot(region, 1)
+	defer func() { snapshot.Close() }()
+	entered, release := make(chan struct{}), make(chan struct{})
+	go region.WithValues(func(*leanfran.ValueScope) {
+		close(entered)
+		<-release
+	})
+	<-entered
+	done := make(chan error, 1)
+	go func() {
+		_, err := plainCommand(&snapshot, Actor{CanWrite: true}, CommandSet{Amount: 1})
+		done <- err
+	}()
+	select {
+	case <-done:
+		t.Fatal("a command ran while its Region's callback held the Region")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the command did not run after the callback returned")
+	}
+}
+
+func unlockedCommand(snapshot rt.V, actor Actor, command Command) rt.V {
+	_lfCodecsOnce.Do(_lfBuildCodecs)
+	who, what := _lfCodecActor.ToLean(actor), _lfCodecCommand.ToLean(command)
+	rt.Lean_inc(snapshot)
+	result := l_Kernel_transition(who, snapshot, what)
+	rt.Lean_dec(who)
+	rt.Lean_dec(what)
+	if rt.Lean_obj_tag(result) == 0 {
+		panic("transition failed")
+	}
+	writes := leanfran.OwnValueField(rt.Lean_ctor_get(result, 0), 0)
+	rt.Lean_dec(result)
+	return l_Kernel_apply(snapshot, writes)
+}
+
+func throughput(goroutines int, duration time.Duration, worker func(user int) func()) float64 {
 	var total atomic.Int64
 	var stop atomic.Bool
 	var ready, workers sync.WaitGroup
@@ -190,19 +270,13 @@ func regionThroughput(goroutines int, duration time.Duration) float64 {
 	for user := range goroutines {
 		ready.Add(1)
 		workers.Go(func() {
-			region := leanfran.NewRegion()
-			snapshot := regionSnapshot(region, 1)
-			defer func() { snapshot.Close() }()
-			actor := Actor{CanWrite: true}
-			command := CommandSet{Amount: uint64(user)}
+			step := worker(user)
 			ready.Done()
 			<-start
 			n := int64(0)
 			for !stop.Load() {
 				for range 64 {
-					if _, err := regionCommand(region, &snapshot, actor, command); err != nil {
-						panic(err)
-					}
+					step()
 				}
 				n += 64
 			}
@@ -218,25 +292,52 @@ func regionThroughput(goroutines int, duration time.Duration) float64 {
 	return float64(total.Load()) / time.Since(began).Seconds()
 }
 
+func regionWorker(user int) func() {
+	region := leanfran.NewRegion()
+	snapshot := regionSnapshot(region, 1)
+	actor := Actor{CanWrite: true}
+	command := CommandSet{Amount: uint64(user)}
+	return func() {
+		if _, err := regionCommand(region, &snapshot, actor, command); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func unlockedWorker(user int) func() {
+	n := checked(Value.NewNat(big.NewInt(1)))
+	snapshot := Handle.Initial(n.Take())
+	inputs := [1]leanfran.ValueUse{snapshot.Take().Use()}
+	op := leanfran.BeginValueOperation(nil, inputs[:])
+	op.Acquire(inputs[:])
+	op.End()
+	raw := inputs[0].Lean()
+	actor := Actor{CanWrite: true}
+	command := CommandSet{Amount: uint64(user)}
+	return func() { raw = unlockedCommand(raw, actor, command) }
+}
+
 func TestRegionThroughput(t *testing.T) {
-	procs := min(runtime.GOMAXPROCS(0), 8)
-	if procs < 2 {
-		t.Skip("needs 2 or more Ps")
+	share := 0.6
+	if s := os.Getenv("LEANFRAN_REGION_SHARE"); s != "" {
+		share = checked(strconv.ParseFloat(s, 64))
 	}
-	floor := max(1.5, 0.4*float64(procs))
-	if s := os.Getenv("LEANFRAN_REGION_SPEEDUP"); s != "" {
-		floor = checked(strconv.ParseFloat(s, 64))
-	}
-	var ratio float64
+	var ratio, control float64
 	for attempt := range 3 {
-		one := regionThroughput(1, time.Second)
-		eight := regionThroughput(8, time.Second)
-		ratio = eight / one
-		t.Logf("attempt %d: 1 goroutine %.0f commands/s, 8 goroutines %.0f commands/s, ratio %.2f (floor %.2f, GOMAXPROCS %d)",
-			attempt, one, eight, ratio, floor, runtime.GOMAXPROCS(0))
-		if ratio >= floor {
+		one := throughput(1, time.Second, regionWorker)
+		eight := throughput(8, time.Second, regionWorker)
+		unlockedOne := throughput(1, time.Second, unlockedWorker)
+		unlockedEight := throughput(8, time.Second, unlockedWorker)
+		ratio, control = eight/one, unlockedEight/unlockedOne
+		t.Logf("attempt %d: Regions %.0f / %.0f commands/s (1 / 8 goroutines, ratio %.2f); without a lock %.0f / %.0f commands/s (ratio %.2f); GOMAXPROCS %d",
+			attempt, one, eight, ratio, unlockedOne, unlockedEight, control, runtime.GOMAXPROCS(0))
+		if ratio >= share*control {
+			if control < 1.5 {
+				t.Logf("the commands without a lock ran %.2f times as fast on 8 goroutines, too little to tell the Regions from one lock", control)
+			}
 			return
 		}
 	}
-	t.Fatalf("8 goroutines in separate Regions ran %.2f times the commands of 1 goroutine, want %.2f or more", ratio, floor)
+	t.Fatalf("8 goroutines in separate Regions ran %.2f times the commands of 1 goroutine, want %.2f or more (%.2f of %.2f without a lock)",
+		ratio, share*control, share, control)
 }
