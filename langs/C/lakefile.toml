@@ -1,5 +1,5 @@
 name = "leanfran-c"
-version = "0.13.1"
+version = "0.13.2"
 defaultTargets = ["leanfran-c", "LeanCLib"]
 
 [[lean_lib]]

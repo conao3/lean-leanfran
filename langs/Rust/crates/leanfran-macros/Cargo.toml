@@ -15,7 +15,7 @@ categories.workspace = true
 proc-macro = true
 
 [dependencies]
-leanfran-build = { path = "../leanfran-build", version = "0.13.1" }
+leanfran-build = { path = "../leanfran-build", version = "0.13.2" }
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "3", features = ["full"] }

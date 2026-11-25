@@ -3,7 +3,7 @@ import LeanGo.Check
 
 open Lean LeanGo
 
-def version : String := "0.13.1"
+def version : String := "0.13.2"
 def generatorVersion : String := "14"
 
 def usage : String := "leanfran-go --version | --generator-version | --lean-version
