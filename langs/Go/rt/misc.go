@@ -139,7 +139,7 @@ func Lean_name_eq(a, b V) uint8 {
 		if a.p == nil || b.p == nil || a.p.tag != b.p.tag {
 			return 0
 		}
-		x, y := a.p.fs[1], b.p.fs[1]
+		x, y := Lean_ctor_get(a, 1), Lean_ctor_get(b, 1)
 		if a.p.tag == 1 {
 			if Lean_string_dec_eq(x, y) == 0 {
 				return 0
@@ -147,7 +147,7 @@ func Lean_name_eq(a, b V) uint8 {
 		} else if Lean_nat_dec_eq(x, y) == 0 {
 			return 0
 		}
-		a, b = a.p.fs[0], b.p.fs[0]
+		a, b = Lean_ctor_get(a, 0), Lean_ctor_get(b, 0)
 	}
 	return 1
 }

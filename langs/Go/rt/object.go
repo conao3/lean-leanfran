@@ -12,27 +12,79 @@ type V struct {
 
 type Obj struct {
 	rc   int32
-	tag  uint16
+	tag  uint8
 	kind uint8
-	hasX bool
-	fs   []V
+	nfs  uint16
 }
 
-type objX struct {
+const (
+	headerSize = unsafe.Sizeof(Obj{})
+	fieldSize  = unsafe.Sizeof(V{})
+	hasX       = 0x80
+)
+
+type objS struct {
 	Obj
-	x any
+	fs []V
+}
+
+type extSlot struct{ x any }
+
+type objX struct {
+	objS
+	extSlot
+}
+
+type ctorN[A any] struct {
+	Obj
+	_ A
+}
+
+type ctorX[A any] struct {
+	Obj
+	_ A
+	extSlot
 }
 
 func newObjX(kind uint8, fs []V, x any) *Obj {
-	o := &objX{Obj: Obj{rc: 1, kind: kind, hasX: true, fs: fs}, x: x}
+	o := &objX{objS: objS{Obj: Obj{rc: 1, kind: kind | hasX}, fs: fs}, extSlot: extSlot{x}}
 	return &o.Obj
 }
 
-func (o *Obj) ext() *objX {
-	if !o.hasX {
+func newCtorX3(x any) V {
+	o := &ctorX[[3]V]{Obj: Obj{rc: 1, kind: kindCtor | hasX, nfs: 3}, extSlot: extSlot{x}}
+	return V{p: &o.Obj}
+}
+
+func (o *Obj) kindOf() uint8 { return o.kind &^ hasX }
+
+func (o *Obj) s() *objS { return (*objS)(unsafe.Pointer(o)) }
+
+func (o *Obj) field(i int) *V {
+	return (*V)(unsafe.Add(unsafe.Pointer(o), headerSize+uintptr(i)*fieldSize))
+}
+
+func (o *Obj) children() []V {
+	if o.kind&^hasX != kindCtor {
+		return o.s().fs
+	}
+	if o.nfs == 0 {
+		return nil
+	}
+	return unsafe.Slice(o.field(0), o.nfs)
+}
+
+func (o *Obj) ext() *extSlot {
+	switch o.kind {
+	case kindCtor | hasX:
+		return (*extSlot)(unsafe.Add(unsafe.Pointer(o), headerSize+uintptr(o.nfs)*fieldSize))
+	case kindCtor:
 		Lean_internal_panic("object without a Go value")
 	}
-	return (*objX)(unsafe.Pointer(o))
+	if o.kind&hasX == 0 {
+		Lean_internal_panic("object without a Go value")
+	}
+	return &(*objX)(unsafe.Pointer(o)).extSlot
 }
 
 const (
@@ -65,10 +117,10 @@ func Lean_obj_tag(v V) uint64 {
 	if v.p == nil {
 		return v.n
 	}
-	if v.p.kind == kindCtor {
+	if v.p.kind&^hasX == kindCtor {
 		return uint64(v.p.tag)
 	}
-	switch v.p.kind {
+	switch v.p.kind &^ hasX {
 	case kindClosure:
 		return 245
 	case kindArray:
@@ -132,10 +184,11 @@ func freeObj(root *Obj) {
 		i := len(stack) - 1
 		o := stack[i]
 		stack = stack[:i]
-		if o.kind == kindPromise {
-			resolveTask(o.fs[0], V{})
+		kind := o.kindOf()
+		if kind == kindPromise {
+			resolveTask(o.s().fs[0], V{})
 		}
-		for _, f := range o.fs {
+		for _, f := range o.children() {
 			if f.p != nil && f.p.rc > 0 {
 				f.p.rc--
 				if f.p.rc == 0 {
@@ -143,7 +196,7 @@ func freeObj(root *Obj) {
 				}
 			}
 		}
-		if o.kind == kindHandle {
+		if kind == kindHandle {
 			o.ext().x.(*fileHandle).close()
 		}
 		o.rc = -1
@@ -165,7 +218,7 @@ func Lean_mark_persistent(v V) V {
 			continue
 		}
 		o.rc = 0
-		for _, f := range o.fs {
+		for _, f := range o.children() {
 			if f.p != nil && f.p.rc > 0 {
 				stack = append(stack, f.p)
 			}
@@ -174,34 +227,10 @@ func Lean_mark_persistent(v V) V {
 	return v
 }
 
-type ctor1 struct {
-	Obj
-	fields [1]V
-}
-
-type ctor2 struct {
-	Obj
-	fields [2]V
-}
-
-type ctor3 struct {
-	Obj
-	fields [3]V
-}
-
-type ctor4 struct {
-	Obj
-	fields [4]V
-}
-
-type ctor6 struct {
-	Obj
-	fields [6]V
-}
-
-type ctor8 struct {
-	Obj
-	fields [8]V
+func allocCtor[A any](words int) *Obj {
+	o := new(ctorN[A])
+	o.nfs = uint16(words)
+	return &o.Obj
 }
 
 func Lean_alloc_ctor(tag uint16, numObjs, scalarBytes int) V {
@@ -210,63 +239,82 @@ func Lean_alloc_ctor(tag uint16, numObjs, scalarBytes int) V {
 	switch {
 	case words == 0:
 		p = &Obj{}
-	case words == 1:
-		o := &ctor1{}
-		o.fs = o.fields[:]
-		p = &o.Obj
-	case words == 2:
-		o := &ctor2{}
-		o.fs = o.fields[:]
-		p = &o.Obj
-	case words == 3:
-		o := &ctor3{}
-		o.fs = o.fields[:]
-		p = &o.Obj
-	case words == 4:
-		o := &ctor4{}
-		o.fs = o.fields[:]
-		p = &o.Obj
-	case words <= 6:
-		o := &ctor6{}
-		o.fs = o.fields[:words]
-		p = &o.Obj
-	case words <= 8:
-		o := &ctor8{}
-		o.fs = o.fields[:words]
-		p = &o.Obj
+	case words <= 2:
+		if words == 1 {
+			p = allocCtor[[1]V](1)
+		} else {
+			p = allocCtor[[2]V](2)
+		}
+	case words <= 4:
+		if words == 3 {
+			p = allocCtor[[3]V](3)
+		} else {
+			p = allocCtor[[4]V](4)
+		}
 	default:
-		p = &Obj{fs: make([]V, words)}
+		p = allocLargeCtor(words)
 	}
 	p.rc = 1
-	p.tag = tag
-	p.kind = kindCtor
+	p.tag = uint8(tag)
 	return V{p: p}
+}
+
+func allocLargeCtor(words int) *Obj {
+	switch {
+	case words <= 5:
+		return allocCtor[[5]V](words)
+	case words <= 6:
+		return allocCtor[[6]V](words)
+	case words <= 8:
+		return allocCtor[[8]V](words)
+	case words <= 12:
+		return allocCtor[[12]V](words)
+	case words <= 16:
+		return allocCtor[[16]V](words)
+	case words <= 24:
+		return allocCtor[[24]V](words)
+	case words <= 32:
+		return allocCtor[[32]V](words)
+	case words <= 64:
+		return allocCtor[[64]V](words)
+	case words <= 128:
+		return allocCtor[[128]V](words)
+	case words <= 256:
+		return allocCtor[[256]V](words)
+	case words <= 512:
+		return allocCtor[[512]V](words)
+	}
+	Lean_internal_panic("constructor with more than 512 words")
+	return nil
 }
 
 func ctor(tag uint16, fields ...V) V {
 	v := Lean_alloc_ctor(tag, len(fields), 0)
-	copy(v.p.fs, fields)
+	for i, f := range fields {
+		*v.p.field(i) = f
+	}
 	return v
 }
 
-func Lean_ctor_get(v V, i int) V        { return v.p.fs[i] }
-func Lean_ctor_set(v V, i int, value V) { v.p.fs[i] = value }
-func Lean_ctor_set_tag(v V, tag uint16) { v.p.tag = tag }
+func Lean_ctor_get(v V, i int) V        { return *v.p.field(i) }
+func Lean_ctor_set(v V, i int, value V) { *v.p.field(i) = value }
+func Lean_ctor_set_tag(v V, tag uint16) { v.p.tag = uint8(tag) }
 
 func Lean_ctor_release(v V, i int) {
-	Lean_dec(v.p.fs[i])
-	v.p.fs[i] = V{}
+	f := v.p.field(i)
+	Lean_dec(*f)
+	*f = V{}
 }
 
-func Lean_ctor_get_usize(v V, i int) uint64    { return v.p.fs[i].n }
-func Lean_ctor_set_usize(v V, i int, n uint64) { v.p.fs[i].n = n }
+func Lean_ctor_get_usize(v V, i int) uint64    { return v.p.field(i).n }
+func Lean_ctor_set_usize(v V, i int, n uint64) { v.p.field(i).n = n }
 
 func ctorBits(v V, offset int) uint64 {
-	return v.p.fs[offset/8].n >> (8 * (offset % 8))
+	return v.p.field(offset/8).n >> (8 * (offset % 8))
 }
 
 func setCtorBits(v V, offset int, n, mask uint64) {
-	f := &v.p.fs[offset/8].n
+	f := &v.p.field(offset / 8).n
 	shift := 8 * (offset % 8)
 	*f = *f&^(mask<<shift) | (n << shift)
 }
