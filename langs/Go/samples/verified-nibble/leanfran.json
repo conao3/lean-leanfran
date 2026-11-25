@@ -1,7 +1,7 @@
 {
   "block": "example.com/verified-nibble",
-  "hash": "4240964fa29b5bad3381325e54e1b57dd69d5584a0f7a16d688f92d8e91056ae",
-  "generator_version": 11,
+  "hash": "a8049f15ee4ae2a5878237bad0a3bdd310b8776c90c205ca4e18e818fa12eeae",
+  "generator_version": 12,
   "files": [
     "leanfran_types_gen.go",
     "leanfran_funcs_gen.go",

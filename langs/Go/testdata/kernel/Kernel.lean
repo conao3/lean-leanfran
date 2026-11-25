@@ -139,4 +139,6 @@ def pairValue (n : UInt64) : UInt64 × UInt64 := (n, n)
 
 def addValues (a b : UInt64) : UInt64 := a + b
 
+def hasRow (snapshot : Snapshot) (id : UInt64) : Bool := snapshot.rows.any (·.id == id)
+
 end Kernel

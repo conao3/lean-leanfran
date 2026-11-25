@@ -11,15 +11,15 @@ type scalarArray[T byte | float64] struct {
 }
 
 func byteArray(values []byte) V {
-	return V{p: &Obj{rc: 1, kind: kindByteArray, x: &scalarArray[byte]{values}}}
+	return V{p: newObjX(kindByteArray, nil, &scalarArray[byte]{values})}
 }
 
 func floatArray(values []float64) V {
-	return V{p: &Obj{rc: 1, kind: kindFloatArray, x: &scalarArray[float64]{values}}}
+	return V{p: newObjX(kindFloatArray, nil, &scalarArray[float64]{values})}
 }
 
-func byteData(v V) *scalarArray[byte]     { return v.p.x.(*scalarArray[byte]) }
-func floatData(v V) *scalarArray[float64] { return v.p.x.(*scalarArray[float64]) }
+func byteData(v V) *scalarArray[byte]     { return v.p.ext().x.(*scalarArray[byte]) }
+func floatData(v V) *scalarArray[float64] { return v.p.ext().x.(*scalarArray[float64]) }
 
 func Lean_sarray_size(v V) uint64 {
 	if v.p.kind == kindByteArray {

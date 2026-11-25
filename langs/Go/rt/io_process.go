@@ -295,8 +295,7 @@ func Lean_io_process_spawn(args V) V {
 		return ioResult(V{}, withoutPath(err))
 	}
 	state := &process{pid: command.Process.Pid, cmd: command, group: group, done: make(chan struct{})}
-	result := ctor(0, V{}, V{}, V{})
-	result.p.x = state
+	result := V{p: newObjX(kindCtor, make([]V, 3), state)}
 	if parent[0] != nil {
 		Lean_ctor_set(result, 0, newHandle(parent[0], true))
 	}
@@ -309,7 +308,7 @@ func Lean_io_process_spawn(args V) V {
 	return Lean_io_result_mk_ok(result)
 }
 
-func childProcess(child V) *process { return child.p.x.(*process) }
+func childProcess(child V) *process { return child.p.ext().x.(*process) }
 
 func Lean_io_process_child_wait(_, child V) V { return childProcess(child).wait(false) }
 
@@ -341,8 +340,7 @@ func Lean_io_process_child_pid(_, child V) uint32 {
 }
 
 func Lean_io_process_child_take_stdin(_, child V) V {
-	result := ctor(0, V{}, own(Lean_ctor_get(child, 1)), own(Lean_ctor_get(child, 2)))
-	result.p.x = childProcess(child)
+	result := V{p: newObjX(kindCtor, []V{{}, own(Lean_ctor_get(child, 1)), own(Lean_ctor_get(child, 2))}, childProcess(child))}
 	stdin := own(Lean_ctor_get(child, 0))
 	Lean_dec(child)
 	return Lean_io_result_mk_ok(ctor(0, stdin, result))

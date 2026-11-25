@@ -3,6 +3,7 @@ package leanfran
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/conao3/leanfran-go/rt"
 )
@@ -27,9 +28,8 @@ type Value[T any] struct {
 }
 
 type valueOwner struct {
-	raw          rt.V
-	hasFinalizer bool
-	valid        bool
+	raw   rt.V
+	valid bool
 }
 
 type ValueInput[T any] struct {
@@ -57,8 +57,8 @@ type valueScopeState struct {
 	scope  ValueScope
 	mu     sync.Mutex
 	active bool
-	owners []*valueOwner
-	small  [8]*valueOwner
+	used   int
+	slots  [8]valueOwner
 }
 
 func WithValues(f func(*ValueScope)) {
@@ -66,7 +66,6 @@ func WithValues(f func(*ValueScope)) {
 	defer UnlockValues()
 	state := &valueScopeState{active: true}
 	state.scope.state = state
-	state.owners = state.small[:0]
 	defer state.finish()
 	f(&state.scope)
 }
@@ -75,13 +74,6 @@ func (s *valueScopeState) finish() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.active = false
-	for _, owner := range s.owners {
-		if owner.valid {
-			owner.registerCleanup()
-		}
-	}
-	clear(s.owners)
-	s.owners = nil
 }
 
 func BeginValueOperation(scope *ValueScope) {
@@ -109,9 +101,6 @@ func EndValueOperation(scope *ValueScope) {
 }
 
 func (o *valueOwner) clear() {
-	if o.hasFinalizer {
-		runtime.SetFinalizer(o, nil)
-	}
 	o.raw = rt.V{}
 	o.valid = false
 }
@@ -180,29 +169,52 @@ func AcquireValueInputs(inputs []ValueUse) {
 	}
 }
 
-func releaseCollectedValue(o *valueOwner) {
-	LockValues()
-	defer UnlockValues()
-	rt.Lean_dec(o.raw)
+var (
+	trackLeaks   atomic.Bool
+	leakedValues atomic.Int64
+)
+
+func TrackLeakedValues(enabled bool) { trackLeaks.Store(enabled) }
+
+func LeakedValues() int64 { return leakedValues.Load() }
+
+func countLeakedValue(o *valueOwner) {
+	if o.valid {
+		leakedValues.Add(1)
+	}
 }
 
-func (o *valueOwner) registerCleanup() {
-	o.hasFinalizer = true
-	runtime.SetFinalizer(o, releaseCollectedValue)
+func newOwner(scope *ValueScope, raw rt.V) *valueOwner {
+	if trackLeaks.Load() {
+		owner := &valueOwner{raw: raw, valid: true}
+		runtime.SetFinalizer(owner, countLeakedValue)
+		return owner
+	}
+	if scope != nil {
+		state := scope.state
+		if state.used < len(state.slots) {
+			owner := &state.slots[state.used]
+			state.used++
+			owner.raw, owner.valid = raw, true
+			return owner
+		}
+	}
+	return &valueOwner{raw: raw, valid: true}
 }
 
 func WrapValue[T any](raw rt.V) Value[T] { return WrapValueIn[T](nil, raw) }
 
 func WrapValueIn[T any](scope *ValueScope, raw rt.V) Value[T] {
-	owner := &valueOwner{raw: raw, valid: true}
-	if !rt.Lean_is_scalar(raw) {
-		if scope == nil {
-			owner.registerCleanup()
-		} else {
-			scope.state.owners = append(scope.state.owners, owner)
-		}
+	return Value[T]{owner: newOwner(scope, raw)}
+}
+
+func WrapFieldsIn[A, B any](scope *ValueScope, pair rt.V) (Value[A], Value[B]) {
+	a, b := OwnValueField(pair, 0), OwnValueField(pair, 1)
+	if scope == nil && !trackLeaks.Load() {
+		owners := &[2]valueOwner{{raw: a, valid: true}, {raw: b, valid: true}}
+		return Value[A]{owner: &owners[0]}, Value[B]{owner: &owners[1]}
 	}
-	return Value[T]{owner: owner}
+	return Value[A]{owner: newOwner(scope, a)}, Value[B]{owner: newOwner(scope, b)}
 }
 
 func NewValue[T, G any](codec Codec[G], v G, path string) (Value[T], error) {
@@ -226,14 +238,20 @@ func NewUncheckedValueIn[T, G any](scope *ValueScope, codec Codec[G], v G) Value
 	return WrapValueIn[T](scope, codec.ToLean(v))
 }
 
+var validations = sync.Pool{New: func() any { return new(ValidationError) }}
+
 func newValue[T, G any](scope *ValueScope, codec Codec[G], v G, path string) (Value[T], error) {
 	if codec.Check != nil {
-		var validation ValidationError
-		codec.Check(&validation, v)
+		validation := validations.Get().(*ValidationError)
+		codec.Check(validation, v)
 		if len(validation.Issues) != 0 {
-			validation.Prefix(0, path)
-			return Value[T]{}, &validation
+			failed := &ValidationError{Issues: validation.Issues}
+			failed.Prefix(0, path)
+			validation.Issues = nil
+			validations.Put(validation)
+			return Value[T]{}, failed
 		}
+		validations.Put(validation)
 	}
 	return WrapValueIn[T](scope, codec.ToLean(v)), nil
 }
@@ -264,5 +282,5 @@ func SplitValueIn[A, B any](scope *ValueScope, v ValueInput[PairType[A, B]]) (Va
 	AcquireValueInputs(inputs[:])
 	raw := inputs[0].Lean()
 	defer rt.Lean_dec(raw)
-	return WrapValueIn[A](scope, OwnValueField(raw, 0)), WrapValueIn[B](scope, OwnValueField(raw, 1))
+	return WrapFieldsIn[A, B](scope, raw)
 }

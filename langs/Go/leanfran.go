@@ -2,4 +2,4 @@ package leanfran
 
 const Version = "0.11.1"
 
-const GeneratorVersion = 11
+const GeneratorVersion = 12
