@@ -51,10 +51,10 @@ def linkFlags (leanPrefix : FilePath) (flags : String) (withLean withStd : Bool)
 def LinkFlags.sharedFlags (flags : LinkFlags) : Array String :=
   #[s!"-L{flags.leanLibDir}", s!"-Wl,-rpath,{flags.leanLibDir}", "-lleanshared", "-pthread"]
 
-def writeLinkFiles (out : FilePath) (cPrefix lib version : String) (dependencies : Array String) :
-    IO Unit := do
-  let libs := #[(out / lib).toString] ++ dependencies
-  let cflags := #[s!"-I{out}"]
+def writeLinkFiles (out : FilePath) (cPrefix lib version : String) (dependencies : Array String)
+    (installDir : FilePath := out) : IO Unit := do
+  let libs := #[(installDir / lib).toString] ++ dependencies
+  let cflags := #[s!"-I{installDir}"]
   let pc := s!"Name: {cPrefix}\nDescription: Lean C bindings for {cPrefix}\nVersion: {version}\n" ++
     s!"Cflags: {pkgFlags cflags}\nLibs: {pkgFlags libs}\n"
   IO.FS.writeFile (out / s!"{cPrefix}.pc") pc
@@ -70,8 +70,8 @@ def writeLinkFiles (out : FilePath) (cPrefix lib version : String) (dependencies
   let cmakeArgs := fun (args : Array String) => " ".intercalate (args.toList.map cmakeQuote)
   let cmake := s!"if(NOT TARGET {target})\n  add_library({target} {kind} IMPORTED)\n" ++
     s!"  set_target_properties({target} PROPERTIES\n" ++
-    s!"    IMPORTED_LOCATION {cmakeQuote (out / lib).toString}\n" ++
-    s!"    INTERFACE_INCLUDE_DIRECTORIES {cmakeQuote out.toString})\n" ++
+    s!"    IMPORTED_LOCATION {cmakeQuote (installDir / lib).toString}\n" ++
+    s!"    INTERFACE_INCLUDE_DIRECTORIES {cmakeQuote installDir.toString})\n" ++
     s!"  target_link_options({target} INTERFACE {cmakeArgs options})\n" ++
     s!"  target_link_libraries({target} INTERFACE {cmakeArgs libraries})\nendif()\n"
   IO.FS.writeFile (out / s!"{cPrefix}-config.cmake") cmake
