@@ -323,15 +323,17 @@ On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs
 
 At 100 rows, the first-row handle benchmark took 0.73 µs with 6 allocations under the server mutex. Converting a Go command each time took 0.91 µs with 8 allocations. Finding a missing row walks the whole list in 3.1 ns per row at 1,000 rows and 4.6 ns per row at 10,000 rows without allocating. A handle command allocates 272 bytes, and a scoped command with Go conversions allocates 496 bytes.
 
-Passing an array by value converts every element on the way in and on the way out. The kernel fixture's `record (values : Array UInt64) (value : UInt64) := values.push value` generates `Record(values []uint64, value uint64) []uint64`. `doubled` pushes each doubled element into an array created with the input's size. `Handle.ReplaceLast` takes the array handle, replaces its last element in place, and returns it. On the same machine with a load average of 1.5 to 2.3, the median of five runs on one CPU was:
+Passing an array by value converts every element on the way in and on the way out. The kernel fixture's `record (values : Array UInt64) (value : UInt64) := values.push value` generates `Record(values []uint64, value uint64) []uint64`. `doubled` pushes each doubled element into an array created with the input's size. `Handle.ReplaceLast` takes the array handle, replaces its last element in place, and returns it. On the same machine with a load average of 1.2 to 1.9, the median of five runs on one CPU was:
 
 | Elements | `Record`, slice in and out | `Doubled`, slice in and out | `Handle.ReplaceLast` with `Take` |
 | ---: | ---: | ---: | ---: |
-| 10 | 0.40 µs, 4 allocs, 608 B | 0.51 µs, 5 allocs, 464 B | 75 ns, 1 alloc, 24 B |
-| 1,000 | 15.5 µs, 4 allocs, 49,184 B | 19.9 µs, 5 allocs, 41,025 B | 75 ns, 1 alloc, 24 B |
-| 100,000 | 1.86 ms, 4 allocs, 4,415,520 B | 2.48 ms, 6 allocs, 4,014,279 B | 79 ns, 1 alloc, 24 B |
+| 10 | 0.40 µs, 4 allocs, 608 B | 0.49 µs, 5 allocs, 464 B | 73 ns, 1 alloc, 24 B |
+| 1,000 | 15.6 µs, 4 allocs, 49,184 B | 18.9 µs, 5 allocs, 41,025 B | 74 ns, 1 alloc, 24 B |
+| 100,000 | 1.98 ms, 4 allocs, 4,415,520 B | 2.34 ms, 6 allocs, 4,014,279 B | 77 ns, 1 alloc, 24 B |
 
-`make test-array-cost` times `Record` and the Lean loop of `doubled` with 1,000 elements against Go code that allocates the same slices. It runs on one P, so the cost of the garbage collector's write barriers shows, and it takes the median of nine rounds. `Record` must stay within 2.0 times its Go control and the Lean loop within 2.5 times. On the machine above they took 1.6 and 2.0 times. Set `LEANFRAN_ARRAY_COST_SCALE` to multiply both limits.
+Generated Lean code calls the runtime through one-line wrappers such as `l_Array_push` and `l_String_getUTF8Byte`. Go inlines a function whose cost is at most 80, so each wrapper of a small runtime function inlines, and a byte read or a push costs no extra call. lean-leanharbor's token parser, JSON writer and notes list, which build `Array UInt8` values from strings, ran 4 to 9% fewer instructions per call with the wrappers inlined, at 196,000 token checks, 261,000 splits, 1.23 million calculator replies and 5,550 notes lists of 20 per second on the machine above.
+
+`make test-array-cost` times `Record` and the Lean loop of `doubled` with 1,000 elements against Go code that allocates the same slices, and `BytesOf`, which copies a 1,000-byte string into an `Array UInt8` with `String.getUTF8Byte` and `Array.push`. It runs on one P, so the cost of the garbage collector's write barriers shows, and it takes the median of nine rounds. `Record` must stay within 2.0 times its Go control, the Lean loop within 2.5 times and `BytesOf` within 4.1 times. On the machine above they took 1.6, 1.8 and 3.3 times. Set `LEANFRAN_ARRAY_COST_SCALE` to multiply the limits. The same target builds the generated kernel with `-gcflags=-m=2` and fails if a generated function whose body is one call of an `rt` function does not inline, naming the function and its cost.
 
 `make test-value-regions` runs a scoped command with Go conversions on a one-row snapshot. On the Linux amd64 CI runner (4 CPUs, Go 1.27.3), one goroutine in one region completed 2.0 to 2.1 million commands per second, and eight goroutines in eight regions completed 3.3 to 3.9 million, 1.7 to 2.0 times as many. The same Lean functions without a handle lock scaled by 1.6 to 1.9 times, so allocation and garbage collection, not the region mutex, bound the speedup.
 
