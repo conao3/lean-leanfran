@@ -1,0 +1,10 @@
+sources = [
+  "src/**/*.c",
+  "src/**/*.h",
+]
+lean-files = ["lean/*.lean"]
+out-dir = "generated bindings"
+
+[[require]]
+name = "embed_dependency"
+path = "../dependency"
