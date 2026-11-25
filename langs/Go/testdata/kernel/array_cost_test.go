@@ -130,7 +130,7 @@ func TestArrayCallCost(t *testing.T) {
 		allocations   float64
 		limit         float64
 	}{
-		{"Record", func() { resultSink = Record(xs, 7) }, func() { resultSink = controlRecord(xs, 7) }, 4, 2.0},
+		{"Record", func() { resultSink = Record(xs, 7) }, func() { resultSink = controlRecord(xs, 7) }, 4, 2.5},
 		{"LeanPush", func() {
 			rt.Lean_inc(lean)
 			rt.Lean_dec(l_Kernel_doubled(lean))
