@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/conao3/leanfran-go"
+	"github.com/conao3/leanfran-go/rt"
 )
 
 func TestCommandAllocations(t *testing.T) {
@@ -21,8 +22,8 @@ func TestCommandAllocations(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if allocations > 8 {
-		t.Fatalf("100 rows: %g allocations per command, want at most 8", allocations)
+	if allocations > 6 {
+		t.Fatalf("100 rows: %g allocations per command, want at most 6", allocations)
 	}
 	t.Logf("100 rows: %g allocations per command", allocations)
 }
@@ -123,8 +124,8 @@ func TestLastRowCommandAllocations(t *testing.T) {
 					t.Fatalf("reply = %d, err = %v", reply, err)
 				}
 			})
-			if allocations > 10 {
-				t.Fatalf("%d rows: %g allocations per command, want at most 10", rows, allocations)
+			if allocations > 6 {
+				t.Fatalf("%d rows: %g allocations per command, want at most 6", rows, allocations)
 			}
 			result := Value.ReadSnapshot(snapshot)
 			if result.Rows[rows-1].Amount != 7 || result.Revision != 101 {
@@ -156,6 +157,96 @@ func BenchmarkScopedLastRowCommand(b *testing.B) {
 					snapshot = Handle.In(scope).Apply(snapshot.Take(), writes.Take())
 				})
 			}
+		})
+	}
+}
+
+func scopedCommand(snapshot *leanfran.Value[Snapshot], actor Actor, command Command) (uint64, error) {
+	var reply uint64
+	var err error
+	leanfran.WithValues(func(scope *leanfran.ValueScope) {
+		values, handle := Value.In(scope), Handle.In(scope)
+		who := values.NewActor(actor)
+		what, checkErr := values.NewCommand(command)
+		if checkErr != nil {
+			err = checkErr
+			return
+		}
+		writes, result, callErr := handle.Transition(who.Take(), snapshot.Borrow(), what.Take())
+		if callErr != nil {
+			err = callErr
+			return
+		}
+		reply = values.ReadUInt64(result)
+		result.CloseIn(scope)
+		*snapshot = handle.Apply(snapshot.Take(), writes.Take())
+	})
+	return reply, err
+}
+
+func TestScopedCommandAllocations(t *testing.T) {
+	snapshot := initialValue(1)
+	defer func() { snapshot.Close() }()
+	var command Command = CommandSet{Amount: 7}
+	actor := Actor{CanWrite: true}
+	allocations := testing.AllocsPerRun(1_000, func() {
+		if reply, err := scopedCommand(&snapshot, actor, command); err != nil || reply != 7 {
+			t.Fatalf("reply = %d, err = %v", reply, err)
+		}
+	})
+	if allocations > 7 {
+		t.Fatalf("%g allocations per scoped command, want at most 7", allocations)
+	}
+	t.Logf("%g allocations per scoped command", allocations)
+}
+
+func BenchmarkScopedCommand(b *testing.B) {
+	snapshot := initialValue(1)
+	defer func() { snapshot.Close() }()
+	var command Command = CommandSet{Amount: 7}
+	actor := Actor{CanWrite: true}
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := scopedCommand(&snapshot, actor, command); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func rawSnapshot(rows int64) (leanfran.Value[Snapshot], rt.V) {
+	snapshot := initialValue(rows)
+	inputs := [1]leanfran.ValueUse{snapshot.Borrow().Use()}
+	leanfran.AcquireValueInputs(inputs[:])
+	return snapshot, inputs[0].Lean()
+}
+
+func TestWalkAllocations(t *testing.T) {
+	snapshot, raw := rawSnapshot(10_000)
+	defer snapshot.Close()
+	defer rt.Lean_dec(raw)
+	allocations := testing.AllocsPerRun(100, func() {
+		if l_Kernel_hasRow(raw, 10_000) != 0 || l_Kernel_hasRow(raw, 9_999) != 1 {
+			t.Fatal("hasRow")
+		}
+	})
+	if allocations != 0 {
+		t.Fatalf("%g allocations per walk of 10,000 rows, want 0", allocations)
+	}
+}
+
+func BenchmarkWalk(b *testing.B) {
+	for _, rows := range []int64{1_000, 10_000} {
+		b.Run(fmt.Sprint(rows), func(b *testing.B) {
+			snapshot, raw := rawSnapshot(rows)
+			defer snapshot.Close()
+			defer rt.Lean_dec(raw)
+			b.ReportAllocs()
+			for b.Loop() {
+				if l_Kernel_hasRow(raw, uint64(rows)) != 0 {
+					b.Fatal("hasRow")
+				}
+			}
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(rows), "ns/row")
 		})
 	}
 }
