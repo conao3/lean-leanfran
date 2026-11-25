@@ -61,6 +61,8 @@ lf_status lf_int_to_dec(const lf_int *value, lf_str *out, lf_error *err);
 void lf_int_free(lf_int *value);
 
 void lf_byte_array_free(lf_byte_array *value);
+void lf_thread_attach(void);
+void lf_thread_detach(void);
 void lf_error_clear(lf_error *err);
 void lf_free(void *ptr);
 

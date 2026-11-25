@@ -1,5 +1,6 @@
 import LeanC.Export
 import LeanC.Except
+import LeanC.Ref
 
 open Lean
 
@@ -19,8 +20,10 @@ def emitHeader (cPrefix : String) (exports : Array Export) (descs : Array Desc) 
   s!"#ifndef {guard}\n#define {guard}\n\n#include \"leanfran.h\"\n\n" ++
     "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n" ++
     emitTypeDeclarations descs ++
+    String.join ((refTypes exports descs).map (emitRefDeclaration cPrefix)) ++
     s!"lf_status {cPrefix}_init(lf_error *err);\n" ++
-    String.join (exports.toList.map fun entry => entry.prototype ++ ";\n") ++
+    String.join (exports.toList.map fun entry => entry.prototype ++ ";\n" ++
+      entry.refPrototype cPrefix false ++ ";\n" ++ entry.refPrototype cPrefix true ++ ";\n") ++
     "\n#ifdef __cplusplus\n}\n#endif\n\n#endif\n"
 
 def emitScalarWrapper (entry : Export) : String := Id.run do
@@ -147,13 +150,16 @@ def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs :
     s!"    lf_initialize(lf_{cPrefix}_initialize, &init_error);\n" ++
     "    atomic_store(&initialized, init_error.status == LF_OK);\n}\n\n" ++
     s!"lf_status {cPrefix}_init(lf_error *err) \{\n" ++
+    "    lf_thread_attach();\n" ++
     "    pthread_once(&once, initialize_once);\n" ++
     "    if (init_error.status != LF_OK) {\n" ++
     "        const char *message = init_error.message == NULL ? \"Lean initialization failed\" : init_error.message;\n" ++
     "        return lf_set_error(err, init_error.status, message);\n" ++
     "    }\n    return LF_OK;\n}\n\n" ++
-    (if exports.any Export.usesMarshalling then emitMarshalling cPrefix descs else "") ++
+    (if exports.isEmpty then "" else emitMarshalling cPrefix descs) ++
     (if exports.any (·.exception.isSome) then emitExceptSupport descs else "") ++
-    String.intercalate "\n" (exports.toList.map emitWrapper)
+    String.join ((refTypes exports descs).map (emitRefType cPrefix)) ++
+    String.intercalate "\n" (exports.toList.map fun entry =>
+      emitWrapper entry ++ emitRefWrapper cPrefix entry false ++ emitRefWrapper cPrefix entry true)
 
 end LeanC

@@ -103,8 +103,8 @@ private def selectExports (env : Environment) (moduleName : Name) (cPrefix : Str
     "lf_int_from_i64", "lf_int_to_i64", "lf_int_from_lean_i64"] ++
     ["lf_nat", "lf_int"].flatMap fun name =>
       ["free", "from_dec", "to_dec", "from_lean", "to_lean"].map fun suffix => s!"{name}_{suffix}"
-  let typeNames := descs.toList.flatMap Desc.names
-  let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}"]
+  let typeNames := descs.toList.flatMap Desc.names ++ (refTypes exports descs).flatMap (refNames cPrefix)
+  let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}", e.refSymbol false, e.refSymbol true]
   for name in reserved ++ supportNames ++ integerNames ++ typeNames ++ functionNames do
     if claimed.contains name then throw s!"C name collision: {name}"
     claimed := claimed.insert name

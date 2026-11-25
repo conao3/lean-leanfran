@@ -9,6 +9,25 @@
 
 extern lean_object *lean_io_error_to_string(lean_object *error);
 
+extern void lean_initialize_thread(void);
+extern void lean_finalize_thread(void);
+
+static _Thread_local bool thread_attached;
+
+void lf_thread_attach(void) {
+    if (!thread_attached) {
+        lean_initialize_thread();
+        thread_attached = true;
+    }
+}
+
+void lf_thread_detach(void) {
+    if (thread_attached) {
+        lean_finalize_thread();
+        thread_attached = false;
+    }
+}
+
 static pthread_mutex_t initialization_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool task_manager_started;
 

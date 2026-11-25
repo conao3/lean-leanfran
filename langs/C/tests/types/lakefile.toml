@@ -3,3 +3,6 @@ defaultTargets = ["PublicTypes"]
 
 [[lean_lib]]
 name = "PublicTypes"
+
+[[lean_lib]]
+name = "ValueHandles"
