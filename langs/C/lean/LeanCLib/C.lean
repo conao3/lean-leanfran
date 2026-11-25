@@ -143,6 +143,9 @@ def index (values : Array α) (i : Int) : M α :=
     | some value => .ok value
     | none => .error .indexOutOfRange
 
+def arrayPrefix (values : Array α) (n : Int) : M (Array α) :=
+  if 0 ≤ n ∧ n ≤ values.size then .ok (values.extract 0 n.toNat) else .error .indexOutOfRange
+
 inductive Loop where
   | forever
 

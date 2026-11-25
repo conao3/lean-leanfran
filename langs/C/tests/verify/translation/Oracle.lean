@@ -59,6 +59,10 @@ def status : C.Status → Nat
   | .io => 3
   | .notInitialized => 4
 
+def outcome (fmt : α → String) : C.Status × Option α → String
+  | (.ok, some v) => s!"0 {fmt v}"
+  | (s, _) => s!"{status s} -"
+
 def evaluate (name : String) : P String := do
   match name with
   | "clamp" => return toString («clamp» (← i32) (← i32) (← i32))
@@ -95,6 +99,16 @@ def evaluate (name : String) : P String := do
   | "safe_div" =>
     return result (fun (s, out) => s!"{status s} {(out.map toString).getD "-"}")
       («safe_div» (← i32) (← i32))
+  | "sum_twice" => return result toString («sum_twice» (← array i64))
+  | "sum_prefix" => return result toString («sum_prefix» (← array i64) (← u32))
+  | "div_sum" => return result (outcome toString) («div_sum» (← i32) (← i32) (← i32))
+  | "forward" => return result (outcome toString) («forward» (← i32) (← i32))
+  | "div_or" => return result toString («div_or» (← i32) (← i32) (← i32))
+  | "countdown" => return result toString («countdown» (← i32) (← i32))
+  | "checked_sum" => return result (outcome toString) («checked_sum» (← array i64))
+  | "total_or" => return result toString («total_or» (← array i64))
+  | "count_pos" => return result (outcome toString) («count_pos» (← array i32))
+  | "count_or" => return result toString («count_or» (← array i32))
   | "size_ops" => return toString («size_ops» (← usize) (← u64))
   | "use_helper" => return result toString («use_helper» (← i32))
   | "uneg" => return toString («uneg» (← u32))
