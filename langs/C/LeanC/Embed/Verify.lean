@@ -38,6 +38,7 @@ structure ModelFunction where
   closure : Array Verify.Function := #[]
   callees : Std.HashMap String (Array String) := {}
   declaration : Bool := false
+  isStatic : Bool := false
 
 def ModelFunction.model (m : ModelFunction) : String :=
   if m.block.isEmpty then s!"LeanCModel.{m.name}" else s!"LeanCModel.{m.block}.{m.name}"
@@ -201,7 +202,8 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
     let line := lineOf source node.location.offset
     let column := node.location.column
     let place := s!"{relative}:{line}:{column}"
-    let base : ModelFunction := {name, block := "", file := relative, line, column}
+    let base : ModelFunction := {
+      name, block := "", file := relative, line, column, isStatic := node.string "storageClass" == "static"}
     let parsed : Except String _ := do
       if attrs.size != 1 then throw "expected one LF_MODEL on the function definition"
       let (spec, requires, checks) ← parseModel attrs[0]!

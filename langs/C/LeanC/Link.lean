@@ -10,7 +10,7 @@ def sharedLibrary (cPrefix : String) : String :=
 private def shellQuote (arg : String) : String :=
   "'" ++ arg.replace "'" "'\\''" ++ "'"
 
-private def shellFlags (args : Array String) : String :=
+def shellFlags (args : Array String) : String :=
   " ".intercalate (args.toList.map shellQuote)
 
 private def pkgFlags (args : Array String) : String :=

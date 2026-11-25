@@ -42,3 +42,11 @@ check: check-verify
 
 check-verify: build
 	../../maint/C/test-verify.sh
+
+c_sources += $(wildcard tests/verify/random/src/*.c)
+
+.PHONY: check-random
+check: check-random
+
+check-random: build
+	../../maint/C/test-random.sh
