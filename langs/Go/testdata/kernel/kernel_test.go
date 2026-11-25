@@ -285,10 +285,10 @@ func TestOpaqueValues(t *testing.T) {
 }
 
 func rawValue[T any](v leanfran.Value[T]) rt.V {
-	leanfran.LockValues()
-	defer leanfran.UnlockValues()
 	inputs := [1]leanfran.ValueUse{v.Borrow().Use()}
-	leanfran.AcquireValueInputs(inputs[:])
+	op := leanfran.BeginValueOperation(nil, inputs[:])
+	defer op.End()
+	op.Acquire(inputs[:])
 	raw := inputs[0].Lean()
 	rt.Lean_dec(raw)
 	return raw

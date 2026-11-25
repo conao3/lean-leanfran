@@ -571,8 +571,10 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
         args := args.push (unbox p.ty input)
   unless args.size == (f.target.params.filter liveParam).size do
     throw s!"incompatible IR parameters for {f.target.name}"
-  let prepare := if inputs.isEmpty then "" else
-    s!"\tinputs := [{inputs.size}]leanfran.ValueUse\{{joinArgs inputs}}\n\tleanfran.AcquireValueInputs(inputs[:])\n"
+  let prepare := if inputs.isEmpty then
+      "\top := leanfran.BeginValueOperation(api.scope, nil)\n\tdefer op.End()\n"
+    else
+      s!"\tinputs := [{inputs.size}]leanfran.ValueUse\{{joinArgs inputs}}\n\top := leanfran.BeginValueOperation(api.scope, inputs[:])\n\tdefer op.End()\n\top.Acquire(inputs[:])\n"
   let call := s!"{methodName false f.target.name}({joinArgs args})"
   let ty := f.target.resultType
   let keepResult := ret != .unit || f.sig.io
@@ -586,7 +588,7 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   | .except e _ =>
     let errType := if e.convertible then e.go cfg else e.value cfg
     let errValue := if e.convertible then s!"{e.codec cfg}.FromLean(rt.Lean_ctor_get(raw, 0))" else
-      s!"leanfran.WrapValueIn[{e.valueType cfg}](scope, leanfran.OwnValueField(raw, 0))"
+      s!"leanfran.WrapValueIn[{e.valueType cfg}](op, leanfran.OwnValueField(raw, 0))"
     let ready := if e.convertible then "\t\t_lfCodecsOnce.Do(_lfBuildCodecs)\n" else ""
     body := body ++ s!"\tdefer rt.Lean_dec(raw)\n\tif rt.Lean_obj_tag(raw) == 0 \{\n{ready}\t\terr := &leanfran.ExceptError[{errType}]\{Value: {errValue}}\n\t\treturn {fail}\n\t}\n"
     raw := "rt.Lean_ctor_get(raw, 0)"
@@ -596,14 +598,14 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
     | .prod .. => #["first", "second"]
     | d =>
       let owned := if raw == "raw" then raw else "leanfran.OwnValueField(raw, 0)"
-      #[s!"leanfran.WrapValueIn[{d.valueType cfg}](scope, {owned})"]
+      #[s!"leanfran.WrapValueIn[{d.valueType cfg}](op, {owned})"]
   if raw == "raw" && (match result with | .prod .. => true | .unit => ty.isPossibleRef | _ => false) then
     body := body ++ "\tdefer rt.Lean_dec(raw)\n"
   if let .prod a b := result then
-    body := body ++ s!"\tfirst, second := leanfran.WrapFieldsIn[{a.valueType cfg}, {b.valueType cfg}](scope, {raw})\n"
+    body := body ++ s!"\tfirst, second := leanfran.WrapFieldsIn[{a.valueType cfg}, {b.valueType cfg}](op, {raw})\n"
   let forward := if signature.isEmpty then "" else "return "
   let wrapper := s!"func (lfHandle) {f.ident}({joinArgs binders}) {signature}\{\n\t{forward}lfScopedHandle\{}.{f.ident}({joinArgs forwarded})\n}\n\n"
-  return wrapper ++ s!"func (api lfScopedHandle) {f.ident}({joinArgs binders}) {signature}\{\n\tscope := api.scope\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}{returnValues output canFail}}\n\n"
+  return wrapper ++ s!"func (api lfScopedHandle) {f.ident}({joinArgs binders}) {signature}\{\n{prepare}{ownership}{run}{io}{body}{returnValues output canFail}}\n\n"
 
 def usesQualifier (source qualifier : String) : Bool := Id.run do
   let mut plain := ""
