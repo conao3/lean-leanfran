@@ -24,9 +24,11 @@ single 98:7 unsupported result type 'float'
 character 100:6 unsupported result type 'char'
 mutable_array 102:32 LF_ARRAY parameter 'xs' must point to const
 pass_array 105:12 call to unextracted function 'mutable_array'
-address 115:12 call to 'out_value', which takes arrays or an out parameter
+address 115:12 call to 'out_value', which returns lf_status, inside an expression
 odd 120:9 recursion
 even 122:9 recursion
-to_color 124:47 conversion from an integer to enum 'shapes_geo_color'
-far_color 126:43 value 7 has no constructor in enum 'shapes_geo_color'
-rect_of 128:30 unsupported result type 'shapes_geo_shape_rect_fields'
+short_circuit 126:21 call to 'out_value', which returns lf_status, inside an expression
+local_array 135:17 array argument other than an LF_ARRAY parameter
+to_color 138:47 conversion from an integer to enum 'shapes_geo_color'
+far_color 140:43 value 7 has no constructor in enum 'shapes_geo_color'
+rect_of 142:30 unsupported result type 'shapes_geo_shape_rect_fields'

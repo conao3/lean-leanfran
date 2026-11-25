@@ -11,23 +11,26 @@ typedef struct {
 } spec;
 
 static const spec specs[] = {
-    {"clamp", "iii"},      {"add_i32", "ii"},    {"twice", "i"},
-    {"clamp_plus", "i"},   {"arith_u32", "uu"},  {"div_mod", "ii"},
-    {"shifts", "ii"},      {"ushift", "Li"},     {"narrow", "cw"},
-    {"conv", "l"},         {"logic", "ii"},      {"ternary", "ii"},
-    {"bools", "bbi"},      {"doubles", "dd"},    {"d2i", "d"},
-    {"i2d", "lL"},         {"dcmp", "dd"},       {"loop_while", "u"},
-    {"loop_do", "i"},      {"loop_for", "i"},    {"nested_loops", "i"},
-    {"choose", "i"},       {"switch_loop", "i"}, {"sum", "A"},
-    {"at", "Bi"},          {"total", "I"},       {"item_value", "T"},
-    {"dot", "PP"},         {"pick", "PPb"},      {"safe_div", "ii"},
-    {"size_ops", "zL"},    {"use_helper", "i"},  {"uneg", "u"},
-    {"lmix", "lu"},        {"lits", ""},         {"compare", "ii"},
-    {"negate", "id"},      {"compound", "ii"},   {"nested_ternary", "ii"},
-    {"and_ternary", "ii"}, {"bool_literal", ""}, {"shadow", "i"},
-    {"lit_pick", "i"},     {"color_code", "K"},  {"next_color", "K"},
-    {"keep_color", "Kb"},  {"shape_area", "S"},  {"circle_radius", "S"},
-    {"shape_tag", "S"},    {"bigger", "SS"},
+    {"clamp", "iii"},       {"add_i32", "ii"},    {"twice", "i"},
+    {"clamp_plus", "i"},    {"arith_u32", "uu"},  {"div_mod", "ii"},
+    {"shifts", "ii"},       {"ushift", "Li"},     {"narrow", "cw"},
+    {"conv", "l"},          {"logic", "ii"},      {"ternary", "ii"},
+    {"bools", "bbi"},       {"doubles", "dd"},    {"d2i", "d"},
+    {"i2d", "lL"},          {"dcmp", "dd"},       {"loop_while", "u"},
+    {"loop_do", "i"},       {"loop_for", "i"},    {"nested_loops", "i"},
+    {"choose", "i"},        {"switch_loop", "i"}, {"sum", "A"},
+    {"at", "Bi"},           {"total", "I"},       {"item_value", "T"},
+    {"dot", "PP"},          {"pick", "PPb"},      {"safe_div", "ii"},
+    {"size_ops", "zL"},     {"use_helper", "i"},  {"uneg", "u"},
+    {"lmix", "lu"},         {"lits", ""},         {"compare", "ii"},
+    {"negate", "id"},       {"compound", "ii"},   {"nested_ternary", "ii"},
+    {"and_ternary", "ii"},  {"bool_literal", ""}, {"shadow", "i"},
+    {"lit_pick", "i"},      {"sum_twice", "A"},   {"sum_prefix", "Au"},
+    {"div_sum", "iii"},     {"forward", "ii"},    {"div_or", "iii"},
+    {"countdown", "ii"},    {"checked_sum", "A"}, {"total_or", "A"},
+    {"count_pos", "B"},     {"count_or", "B"},    {"color_code", "K"},
+    {"next_color", "K"},    {"keep_color", "Kb"}, {"shape_area", "S"},
+    {"circle_radius", "S"}, {"shape_tag", "S"},   {"bigger", "SS"},
 };
 
 static uint64_t state = 1;
@@ -240,6 +243,20 @@ static void print_double(double value) {
         printf("%" PRIu64, bits(value));
 }
 
+static size_t read_array(int64_t *xs) {
+    size_t n = read_uint();
+    for (size_t i = 0; i < n; i++)
+        xs[i] = read_int();
+    return n;
+}
+
+static void print_status(lf_status status, int32_t out) {
+    if (status == LF_OK)
+        printf("%d %" PRId32, (int)status, out);
+    else
+        printf("%d -", (int)status);
+}
+
 #define NAME(s) (strcmp(name, s) == 0)
 
 static void evaluate(char *line) {
@@ -344,6 +361,57 @@ static void evaluate(char *line) {
             printf("%d %" PRId32, (int)status, out);
         else
             printf("%d -", (int)status);
+    } else if (NAME("sum_twice")) {
+        int64_t xs[8];
+        size_t n = read_array(xs);
+        printf("%" PRId64, sum_twice(xs, n));
+    } else if (NAME("sum_prefix")) {
+        int64_t xs[8];
+        size_t n = read_array(xs);
+        uint32_t k = read_uint();
+        printf("%" PRId64, sum_prefix(xs, n, k));
+    } else if (NAME("div_sum")) {
+        int32_t a = read_int(), b = read_int(), c = read_int(), out = 0;
+        lf_status status = div_sum(a, b, c, &out);
+        print_status(status, out);
+    } else if (NAME("forward")) {
+        int32_t a = read_int(), b = read_int(), out = 0;
+        lf_status status = forward(a, b, &out);
+        print_status(status, out);
+    } else if (NAME("div_or")) {
+        int32_t a = read_int(), b = read_int(), c = read_int();
+        printf("%" PRId32, div_or(a, b, c));
+    } else if (NAME("countdown")) {
+        int32_t a = read_int(), b = read_int();
+        printf("%" PRId32, countdown(a, b));
+    } else if (NAME("checked_sum")) {
+        int64_t xs[8], out = 0;
+        size_t n = read_array(xs);
+        lf_status status = checked_sum(xs, n, &out);
+        if (status == LF_OK)
+            printf("%d %" PRId64, (int)status, out);
+        else
+            printf("%d -", (int)status);
+    } else if (NAME("total_or")) {
+        int64_t xs[8];
+        size_t n = read_array(xs);
+        printf("%" PRId64, total_or(xs, n));
+    } else if (NAME("count_pos")) {
+        int32_t xs[8];
+        size_t n = read_uint(), out = 0;
+        for (size_t i = 0; i < n; i++)
+            xs[i] = read_int();
+        lf_status status = count_pos(xs, n, &out);
+        if (status == LF_OK)
+            printf("%d %zu", (int)status, out);
+        else
+            printf("%d -", (int)status);
+    } else if (NAME("count_or")) {
+        int32_t xs[8];
+        size_t n = read_uint();
+        for (size_t i = 0; i < n; i++)
+            xs[i] = read_int();
+        printf("%zu", count_or(xs, n));
     } else if (NAME("size_ops")) {
         size_t n = read_uint();
         unsigned long m = read_uint();

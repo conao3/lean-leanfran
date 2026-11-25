@@ -191,6 +191,79 @@ lf_status safe_div(int32_t a, int32_t b, int32_t *out) {
     return LF_OK;
 }
 
+int64_t sum_twice(const int64_t *xs LF_ARRAY(n), size_t n) {
+    return sum(xs, n) - sum(xs, n) + sum(xs, n);
+}
+
+int64_t sum_prefix(const int64_t *xs LF_ARRAY(n), size_t n, uint32_t k) {
+    return sum(xs, k) - (int64_t)n;
+}
+
+lf_status div_sum(int32_t a, int32_t b, int32_t c, int32_t *out) {
+    int32_t q = 0;
+    lf_status st = safe_div(a, b, &q);
+    if (st != LF_OK)
+        return st;
+    int32_t r = 0;
+    st = safe_div(a, c, &r);
+    if (st == LF_INVALID)
+        return LF_INVALID;
+    *out = q + r;
+    return LF_OK;
+}
+
+lf_status forward(int32_t a, int32_t b, int32_t *out) {
+    *out = -1;
+    return safe_div(a, b, out);
+}
+
+int32_t div_or(int32_t a, int32_t b, int32_t fallback) {
+    int32_t q = fallback;
+    safe_div(a, b, &q);
+    return q;
+}
+
+int32_t countdown(int32_t a, int32_t b) {
+    int32_t q = a;
+    int32_t steps = 0;
+    while (safe_div(q, b, &q) == LF_OK) {
+        steps++;
+        if (q == 0 || steps > 64)
+            break;
+    }
+    return steps;
+}
+
+lf_status checked_sum(const int64_t *xs LF_ARRAY(n), size_t n, int64_t *out) {
+    if (n == 0)
+        return LF_INVALID;
+    *out = sum(xs, n);
+    return LF_OK;
+}
+
+int64_t total_or(const int64_t *xs LF_ARRAY(n), size_t n) {
+    int64_t t = -1;
+    if (checked_sum(xs, n, &t) == LF_OK)
+        return t;
+    return t - 1;
+}
+
+lf_status count_pos(const int32_t *xs LF_ARRAY(n), size_t n, size_t *out) {
+    size_t c = 0;
+    for (size_t i = 0; i < n; i++)
+        if (xs[i] > 0)
+            c++;
+    *out = c;
+    return LF_OK;
+}
+
+size_t count_or(const int32_t *xs LF_ARRAY(n), size_t n) {
+    size_t c = 99;
+    if (count_pos(xs, n, &c) != LF_OK)
+        return 0;
+    return c + n;
+}
+
 size_t size_ops(size_t n, unsigned long m) {
     size_t k = n + m;
     return k * 2;

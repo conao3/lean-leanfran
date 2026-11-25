@@ -121,6 +121,20 @@ int32_t odd(int32_t n) { return n == 0 ? 0 : even(n - 1); }
 
 int32_t even(int32_t n) { return n == 0 ? 1 : odd(n - 1); }
 
+int32_t short_circuit(int32_t a) {
+    int32_t b = 0;
+    return a > 0 && out_value(&b) == LF_OK;
+}
+
+int32_t head(const int32_t *xs LF_ARRAY(n), size_t n) {
+    return n > 0 ? xs[0] : 0;
+}
+
+int32_t local_array(void) {
+    int32_t b = 0;
+    return head(&b, 1);
+}
+
 shapes_geo_color to_color(int32_t x) { return x; }
 
 shapes_geo_color far_color(void) { return 7; }

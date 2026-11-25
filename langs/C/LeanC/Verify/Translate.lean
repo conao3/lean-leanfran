@@ -12,6 +12,7 @@ inductive Ty where
   | double
   | unit
   | record (key : String)
+  | status
   | enum (key : String)
   | variant (key : String)
   | members (key : String)
@@ -127,6 +128,7 @@ def Env.lean (env : Env) : Ty → String
   | .bool => "Bool"
   | .double => "Float"
   | .unit => "Unit"
+  | .status => "C.Status"
   | .record key => (env.records[key]?.map (·.lean)).getD "Unit"
   | .enum key => (env.enums[key]?.map (·.lean)).getD "Unit"
   | .variant key => (env.variants[key]?.map (·.lean)).getD "Unit"
@@ -277,6 +279,7 @@ structure Local where
   lean : String
   ty : Ty
   array : Option (Ty × String) := none
+  length : Option String := none
   deriving Inhabited
 
 structure State where
@@ -288,6 +291,7 @@ structure State where
   counter : Nat := 0
   contexts : List Context := []
   out : Option Local := none
+  outCall : Bool := false
   assigned : Std.HashSet String := {}
   lastLet : Bool := false
   result : Result := .value .unit "Unit"
@@ -330,6 +334,7 @@ private def child (node : Node) (i : Nat) : M Node := do
   return c
 
 private def resolve (node : Node) (qual : String) (desugared : String := "") : M Ty := do
+  if strip qual == "lf_status" then return .status
   let some ty := (← read).resolve qual desugared | fail node s!"unsupported type '{qual}'"
   if ty == .unit then fail node "unsupported type 'void'"
   return ty
@@ -341,6 +346,7 @@ private def leanOf (ty : Ty) : M String := return (← read).lean ty
 
 private def castCode (node : Node) (code : Code) (to : Ty) : M Code := do
   if code.ty == to then return code
+  if code.ty == .status || to == .status then fail node "lf_status used as an integer"
   let target ← leanOf to
   match code.ty, to with
   | .int .., .int _ signed width =>
@@ -416,6 +422,15 @@ private def referenced (node : Node) : Option (String × String × String) := do
   let name := ((decl.getObjValAs? String "name").toOption).getD ""
   return (id, kind, name)
 
+private def statusName (node : Node) : Option String := do
+  let (_, kind, name) ← referenced (stripCasts node)
+  guard (kind == "EnumConstantDecl")
+  [("LF_OK", "ok"), ("LF_INVALID", "invalid"), ("LF_EXCEPT", "except"), ("LF_IO", "io"),
+    ("LF_NOT_INITIALIZED", "notInitialized")].lookup name
+
+private def isStatus (node : Node) : Bool :=
+  (statusName node).isSome || strip node.typeName == "lf_status"
+
 private def arith (node : Node) (op : String) (ty : Ty) (a b : Code) : M Code := do
   let lifted := a.lifts || b.lifts
   let pure' (text : String) : Code := {text, ty, lifts := lifted}
@@ -465,6 +480,7 @@ private partial def expr (node : Node) : M Code := do
     return {text := s!"({value} : Float)", ty}
   | "DeclRefExpr" =>
     let some (id, kind, name) := referenced node | fail node "malformed reference"
+    if let some status := statusName node then return {text := s!"C.Status.{status}", ty := .status}
     if kind == "EnumConstantDecl" then
       let some value := (← read).enumerators[id]? | fail node s!"enumerator '{name}' without a value"
       let ty ← nodeTy node
@@ -560,6 +576,15 @@ private partial def binary (node : Node) : M Code := do
       | some pa, some pb => some (if op == "&&" then s!"({pa} ∧ {pb})" else s!"({pa} ∨ {pb})")
       | _, _ => none
     return {truth bool prop with lifts := a.lifts}
+  if op == "==" || op == "!=" then
+    let sa := stripCasts (← child node 0)
+    let sb := stripCasts (← child node 1)
+    if isStatus sa || isStatus sb then
+      let a ← expr sa
+      let b ← expr sb
+      unless a.ty == .status && b.ty == .status do fail node "lf_status compared with an integer"
+      let prop := if op == "==" then s!"({a.text} = {b.text})" else s!"({a.text} ≠ {b.text})"
+      return {truth s!"(decide {prop})" (some prop) with lifts := a.lifts || b.lifts}
   let a ← expr (← child node 0)
   let b ← expr (← child node 1)
   if ["<", "<=", ">", ">=", "==", "!="].contains op then
@@ -606,29 +631,106 @@ private partial def unary (node : Node) : M Code := do
   | "*" => fail node "pointer dereference"
   | _ => fail node s!"unsupported operator '{op}'"
 
+private partial def arrayArg (node : Node) (elem : Ty) (boundary : String) : M Local := do
+  let arg := stripCasts node
+  let some (id, _, name) := referenced arg | fail node "array argument other than an LF_ARRAY parameter"
+  let some var := (← get).locals[id]? | fail node s!"array argument '{name}' is a global variable"
+  let some (elem', boundary') := var.array
+    | fail node s!"array argument '{name}', which is not an LF_ARRAY parameter"
+  unless elem' == elem && boundary' == boundary do
+    fail node s!"array argument '{name}' of a different element type"
+  return var
+
+private partial def lengthArg (node : Node) (array : Local) (param : Param) : M String := do
+  if let some (id, _, _) := referenced (stripCasts node) then
+    if let some var := (← get).locals[id]? then
+      if var.length == some array.lean && !(← get).assigned.contains id then return array.lean
+  let n ← castCode node (← expr node) param.ty
+  lift s!"C.arrayPrefix {array.lean} (C.IntType.toInt {n.text})"
+
+private partial def outArg (node : Node) (ty : Ty) : M Local := do
+  let arg := stripCasts node
+  if let some (id, _, _) := referenced arg then
+    if let some out := (← get).out then
+      if (← get).locals[id]?.any (·.lean == out.lean) then
+        unless out.ty == ty do fail node "out argument of a different type"
+        return out
+    fail node "out argument other than the address of a local variable"
+  unless arg.kind == "UnaryOperator" && arg.string "opcode" == "&" do
+    fail node "out argument other than the address of a local variable"
+  let some (id, _, name) := referenced (stripCasts (← child arg 0))
+    | fail node "out argument other than the address of a local variable"
+  let some var := (← get).locals[id]? | fail node s!"out argument '{name}' is a global variable"
+  if var.array.isSome || (← get).out.any (·.lean == var.lean) then
+    fail node "out argument other than the address of a local variable"
+  unless var.ty == ty do fail node s!"out argument '{name}' of a different type"
+  return var
+
 private partial def call (node : Node) : M Code := do
   let callee := stripCasts (← child node 0)
   let some (_, "FunctionDecl", name) := referenced callee | fail node "indirect call"
   let some fn := (← read).functions[name]?
     | fail node (if (← read).defined.contains name then s!"call to unextracted function '{name}'"
         else s!"call to '{name}', which has no definition in this file")
-  if fn.params.any (fun p => match p.kind with | .value => false | _ => true) then
-    fail node s!"call to '{name}', which takes arrays or an out parameter"
+  let outCall := (← get).outCall
+  modify fun s => {s with outCall := false}
+  if let .status .. := fn.result then
+    unless outCall do fail node s!"call to '{name}', which returns lf_status, inside an expression"
   let mut args := #[]
   let mut lifts := false
+  let mut out : Option Local := none
   for (param, i) in fn.params.zipIdx do
-    let arg ← expr (← child node (i + 1))
-    lifts := lifts || arg.lifts
-    args := args.push (← boundaryOut arg.text param.boundary param.ty)
-  let .value ty boundary := fn.result | fail node s!"call to '{name}', which returns lf_status"
+    let argNode ← child node (i + 1)
+    match param.kind with
+    | .value =>
+      let arg ← expr argNode
+      lifts := lifts || arg.lifts
+      args := args.push (← boundaryOut arg.text param.boundary param.ty)
+    | .array elem boundary length =>
+      let array ← arrayArg argNode elem boundary
+      let some j := fn.params.findIdx? (·.name == length) | fail node s!"malformed call to '{name}'"
+      let text ← lengthArg (← child node (j + 1)) array fn.params[j]!
+      lifts := lifts || text != array.lean
+      args := args.push text
+    | .length _ => pure ()
+    | .out => out := some (← outArg argNode param.ty)
   let applied := if args.isEmpty then fn.lean else s!"{fn.lean} {" ".intercalate args.toList}"
-  if fn.fallible then
-    let text ← boundaryIn (← lift applied) boundary ty
-    return {text, ty, lifts := true}
-  let text ← boundaryIn s!"({applied})" boundary ty
-  return {text, ty, lifts}
+  match fn.result with
+  | .value ty boundary =>
+    if fn.fallible then
+      let text ← boundaryIn (← lift applied) boundary ty
+      return {text, ty, lifts := true}
+    let text ← boundaryIn s!"({applied})" boundary ty
+    return {text, ty, lifts}
+  | .status ty boundary =>
+    let some var := out | fail node s!"malformed call to '{name}'"
+    let r ← fresh "call"
+    if fn.fallible then
+      modify fun s => {s with fallible := true}
+      emit s!"let {r} ← {applied}"
+    else emit s!"let {r} := {applied}"
+    let v ← fresh "out"
+    let value ← boundaryIn v boundary ty
+    let callerOut := (← get).out.any (·.lean == var.lean)
+    let stored ← if callerOut then
+        match (← get).result with
+        | .status _ b => pure s!"some {← boundaryOut value b ty}"
+        | _ => fail node s!"malformed call to '{name}'"
+      else pure value
+    emit s!"if let some {v} := {r}.2 then {var.lean} := {stored}"
+    return {text := s!"{r}.1", ty := .status}
 
 end
+
+private def topExpr (node : Node) : M Code := do
+  let n := stripCasts node
+  let compared := n.kind == "BinaryOperator" && ["==", "!="].contains (n.string "opcode") &&
+    n.children.any (fun c => (statusName c).isSome) &&
+    n.children.any (fun c => (stripCasts c).kind == "CallExpr")
+  if n.kind == "CallExpr" || compared then modify fun s => {s with outCall := true}
+  let code ← expr node
+  modify fun s => {s with outCall := false}
+  return code
 
 private def target (node : Node) : M (Local × String) := do
   let node := stripCasts node
@@ -684,12 +786,6 @@ private partial def alwaysReturns (node : Node) : Bool :=
     | none => false
   | _ => false
 
-private def statusName (node : Node) : Option String := do
-  let (_, kind, name) ← referenced (stripCasts node)
-  guard (kind == "EnumConstantDecl")
-  [("LF_OK", "ok"), ("LF_INVALID", "invalid"), ("LF_EXCEPT", "except"), ("LF_IO", "io"),
-    ("LF_NOT_INITIALIZED", "notInitialized")].lookup name
-
 mutual
 
 private partial def block (nodes : Array Node) : M Unit := do
@@ -723,7 +819,7 @@ private partial def stmt (node : Node) : M Unit := do
       let some init := decl.children.find? (·.kind != "AnnotateAttr")
         | fail decl s!"local variable '{name}' without an initializer"
       let ty ← resolve decl decl.typeName (decl.typeName "desugaredQualType")
-      let value ← castCode init (← expr init) ty
+      let value ← castCode init (← topExpr init) ty
       let lean ← localName name
       let id := decl.string "id"
       modify fun s => {s with locals := s.locals.insert id {lean, ty}}
@@ -733,8 +829,9 @@ private partial def stmt (node : Node) : M Unit := do
   | "ReturnStmt" =>
     if let some out := (← get).out then
       let some value := node.children[0]? | fail node "return without a status"
-      let some status := statusName value | fail value "lf_status return other than an LF_ constant"
-      emit s!"return (C.Status.{status}, {out.lean})"
+      let code ← topExpr value
+      unless code.ty == .status do fail value "lf_status return other than an lf_status value"
+      emit s!"return ({code.text}, {out.lean})"
     else
       match node.children[0]? with
       | none => emit "return ()"
@@ -743,7 +840,7 @@ private partial def stmt (node : Node) : M Unit := do
         let code ← castCode value (← expr value) ty
         emit s!"return {← boundaryOut code.text boundary ty}"
   | "IfStmt" =>
-    let c ← condition node (← expr (← child node 0))
+    let c ← condition node (← topExpr (← child node 0))
     emit s!"if {c} then"
     body (← child node 1)
     if let some other := node.children[2]? then
@@ -751,7 +848,7 @@ private partial def stmt (node : Node) : M Unit := do
       body other
   | "WhileStmt" =>
     let cond ← child node 0
-    loop (do emit s!"unless {← condition cond (← expr cond)} do break") (← child node 1)
+    loop (do emit s!"unless {← condition cond (← topExpr cond)} do break") (← child node 1)
   | "DoStmt" =>
     let cond ← child node 1
     let first ← fresh "first"
@@ -760,7 +857,7 @@ private partial def stmt (node : Node) : M Unit := do
       emit s!"if {first} then"
       indented (emit s!"{first} := false")
       emit "else"
-      indented (emit s!"unless {← condition cond (← expr cond)} do break")) (← child node 0)
+      indented (emit s!"unless {← condition cond (← topExpr cond)} do break")) (← child node 0)
   | "ForStmt" =>
     let parts := node.children
     unless parts.size == 5 do fail node "malformed for statement"
@@ -780,7 +877,7 @@ private partial def stmt (node : Node) : M Unit := do
         indented (stmt inc)
       if parts[2]!.kind != "" then
         let cond := parts[2]!
-        emit s!"unless {← condition cond (← expr cond)} do break") parts[4]!
+        emit s!"unless {← condition cond (← topExpr cond)} do break") parts[4]!
   | "SwitchStmt" => switch node
   | "BreakStmt" =>
     match (← get).contexts with
@@ -797,7 +894,7 @@ private partial def stmt (node : Node) : M Unit := do
     let rhs ← child node 1
     if ← assignOut lhs rhs then return
     let (var, _) ← target lhs
-    let value ← castCode rhs (← expr rhs) var.ty
+    let value ← castCode rhs (← topExpr rhs) var.ty
     emit s!"{var.lean} := {value.text}"
   | "CompoundAssignOperator" =>
     let (var, _) ← target (← child node 0)
@@ -817,7 +914,7 @@ private partial def stmt (node : Node) : M Unit := do
       | _ => fail node s!"'{op}' on a non-arithmetic variable"
     update node var opTy (if op == "++" then "+" else "-") {text := one, ty := opTy}
   | "CallExpr" =>
-    let code ← expr node
+    let code ← topExpr node
     if code.lifts then emit s!"let _ := {code.text}"
   | "ParenExpr" => stmt (← child node 0)
   | kind => fail node s!"unsupported statement {kind}"
@@ -884,7 +981,7 @@ private def assignedIds (node : Node) : Std.HashSet String :=
       | "BinaryOperator" => if n.string "opcode" == "=" then n.children[0]? else none
       | "CompoundAssignOperator" => n.children[0]?
       | "UnaryOperator" =>
-        if ["++", "--"].contains (n.string "opcode") then n.children[0]? else none
+        if ["++", "--", "&"].contains (n.string "opcode") then n.children[0]? else none
       | _ => none
     match targetNode.bind (referenced ∘ stripCasts) with
     | some (id, _, _) => ids.insert id
@@ -951,7 +1048,7 @@ private def translateFunction (node : Node) : M Function := do
     | .array elem boundary _ =>
       modify fun s => {s with locals := s.locals.insert p.id {lean := p.lean, ty := elem, array := some (elem, boundary)}}
     | .length array =>
-      modify fun s => {s with locals := s.locals.insert p.id {lean := p.lean, ty := p.ty}}
+      modify fun s => {s with locals := s.locals.insert p.id {lean := p.lean, ty := p.ty, length := some array}}
       let keyword := if (← get).assigned.contains p.id then "let mut" else "let"
       emit s!"{keyword} {p.lean} : {← leanOf p.ty} := C.IntType.ofInt (Int.ofNat {array}.size)"
     | .out =>
