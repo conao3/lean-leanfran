@@ -113,6 +113,15 @@ def bump (counter : Counter) (value : UInt64) : Counter :=
 def replaceLast (values : Array UInt64) (value : UInt64) : Array UInt64 :=
   values.pop.push value
 
+def record (values : Array UInt64) (value : UInt64) : Array UInt64 :=
+  values.push value
+
+def doubled (values : Array UInt64) : Array UInt64 := Id.run do
+  let mut out := Array.mkEmpty values.size
+  for value in values do
+    out := out.push (value * 2)
+  return out
+
 structure Verified where
   value : UInt64
   proof : ∀ n : Nat, n = n
