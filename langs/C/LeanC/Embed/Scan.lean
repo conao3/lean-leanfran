@@ -183,13 +183,14 @@ structure ModelSource where
   line : Nat
   deriving Inhabited
 
-private def scanC (file : FilePath) (source : String) : IO (Array Block × Option Nat) := do
+private def scanC (file : FilePath) (source : String) : IO (Array Block × Option Nat × Bool) := do
   let source := (source.replace "\r\n" "\n").toList.toArray
   let chars := spliceLines source
   let charAt := fun i => chars[i]!.char
   let next := fun i c => i < chars.size && charAt i == c
   let mut blocks := #[]
   let mut modelLine := none
+  let mut verified := false
   let mut i := 0
   while i < chars.size do
     let char := charAt i
@@ -217,20 +218,24 @@ private def scanC (file : FilePath) (source : String) : IO (Array Block × Optio
     else if char.isAlphanum || char == '_' then
       let start := i
       while i < chars.size && ((charAt i).isAlphanum || charAt i == '_') do i := i + 1
-      if modelLine.isNone && String.ofList ((chars.extract start i).toList.map (·.char)) == "LF_STRUCT" then
+      let word := String.ofList ((chars.extract start i).toList.map (·.char))
+      if modelLine.isNone && word == "LF_STRUCT" then
         modelLine := some chars[start]!.line
+      if word == "LF_MODEL" then verified := true
     else
       i := i + 1
-  return (blocks, modelLine)
+  return (blocks, modelLine, verified)
 
-def scan (root : FilePath) (config : Config) : IO (Array Block × Array ModelSource) := do
+def scan (root : FilePath) (config : Config) : IO (Array Block × Array ModelSource × Array FilePath) := do
   let mut blocks := #[]
   let mut models := #[]
+  let mut verified := #[]
   for path in ← filesFor root config.out config.sources do
     let file := FilePath.mk ((path.toString.drop (root.toString.length + 1)).toString)
-    let (found, modelLine) ← scanC file (← IO.FS.readFile path)
+    let (found, modelLine, model) ← scanC file (← IO.FS.readFile path)
     blocks := blocks ++ found
     if let some line := modelLine then models := models.push {path, line}
+    if model then verified := verified.push path
   for path in ← filesFor root config.out config.leanFiles do
     let file := FilePath.mk ((path.toString.drop (root.toString.length + 1)).toString)
     let name := path.fileStem.getD ""
@@ -246,6 +251,6 @@ def scan (root : FilePath) (config : Config) : IO (Array Block × Array ModelSou
     for name in block.imports do
       unless seen.contains name do
         failAt block.file (block.bodyLine - 1) s!"unknown Lean block import '{name}'"
-  return (blocks.qsort (·.name < ·.name), models)
+  return (blocks.qsort (·.name < ·.name), models, verified)
 
 end LeanC.Embed

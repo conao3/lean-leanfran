@@ -1,6 +1,7 @@
 import LeanC
 import LeanC.Embed.Workspace
 import LeanC.Verify.Command
+import LeanC.Verify.Obligations
 
 open Lean LeanC System
 
@@ -12,17 +13,33 @@ inductive CliCommand where
 def usage : String :=
   "Usage: leanfran-c generate --module-name M [--roots name,...] [--prefix prefix] [--rename Lean.Name=c_name] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
   "       leanfran-c build [--shared] --out-dir dir\n" ++
-  "       leanfran-c {sync|status|check} [--dir dir]\n" ++
-  "       leanfran-c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]"
+  "       leanfran-c {sync|status} [--dir dir]\n" ++
+  "       leanfran-c check [--dir dir] [--require proved]\n" ++
+  "       leanfran-c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]\n" ++
+  "       leanfran-c obligations check --modules Module... --obligations file.json"
 
 def parse (command : String) (args : List String) : Except String CliCommand := do
-  if let some embed := ([("sync", Embed.Command.sync), ("status", .status), ("check", .check)].lookup command) then
-    match args with
-    | [] => return .embed embed "."
-    | ["--dir", dir] =>
-      unless !dir.isEmpty && !dir.startsWith "--" do throw "missing value for '--dir'"
-      return .embed embed ⟨dir⟩
-    | _ => throw s!"expected '{command} [--dir dir]'"
+  if ["sync", "status", "check"].contains command then
+    let mut dir := none
+    let mut require := false
+    let mut rest := args
+    while let key :: tail := rest do
+      match key, tail with
+      | "--dir", value :: tail =>
+        if dir.isSome then throw "duplicate option '--dir'"
+        unless !value.isEmpty && !value.startsWith "--" do throw "missing value for '--dir'"
+        dir := some value
+        rest := tail
+      | "--require", value :: tail =>
+        unless command == "check" && value == "proved" do
+          throw s!"expected '{command} [--dir dir]{if command == "check" then " [--require proved]" else ""}'"
+        if require then throw "duplicate option '--require'"
+        require := true
+        rest := tail
+      | _, _ => throw s!"expected '{command} [--dir dir]{if command == "check" then " [--require proved]" else ""}'"
+    let embed := if command == "sync" then Embed.Command.sync
+      else if command == "status" then .status else .check require
+    return .embed embed ⟨dir.getD "."⟩
   unless command == "generate" || command == "build" do throw s!"unknown command '{command}'"
   let mut remaining := args
   let mut renames : Renames := {}
@@ -71,6 +88,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     return 0
   let command :: rest := args | IO.eprintln usage; return 252
   if command == "translate" then return ← Verify.translateMain rest
+  if command == "obligations" then return ← Verify.obligationsMain rest
   let cmd ← match parse command rest with
     | .ok cmd => pure cmd
     | .error message => IO.eprintln s!"leanfran-c: {message}\n{usage}"; return 252

@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
+compiler="$backend/.lake/build/bin/leanfran-c"
+mkdir -p "$backend/test-out"
+scratch=$(mktemp -d "$backend/test-out/verify.XXXXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+cp -R "$backend/tests/verify/states" "$scratch/states"
+app="$scratch/states"
+source="$app/src/states.c"
+
+run() {
+    local expected=$1 status=0
+    shift
+    "$compiler" "$@" --dir "$app" >"$scratch/out" 2>"$scratch/err" || status=$?
+    cat "$scratch/out"
+    if [[ $status -ne $expected ]]; then
+        cat "$scratch/err" >&2
+        echo "expected exit $expected, got $status: $*" >&2
+        exit 1
+    fi
+}
+
+expect_state() {
+    grep -Fxq "states.$1 [$2]: $3" "$scratch/out" || {
+        echo "expected states.$1 [$2]: $3" >&2
+        exit 1
+    }
+}
+
+run 1 check --require proved
+for row in 'proved refines proved' 'proved changes proved' 'clamp refines proved' \
+    'sorry_case refines sorry' 'axioms_case refines axioms' 'missing_case refines missing' \
+    'mismatch_case refines mismatch' 'failed_case refines failed' 'unsupported refines unextracted'; do
+    read -r fn label state <<<"$row"
+    expect_state "$fn" "$label" "$state"
+done
+test "$(grep -c '^states\.' "$scratch/out")" -eq 9
+grep -Fxq "src/states.c:39:57: unextracted unsupported: global variable 'counter'" "$scratch/err"
+grep -Eq '^error: lean/Proofs/Failed\.lean:7:[0-9]+: Type mismatch' "$scratch/err"
+grep -F '"status": "proved"' "$app/leanfran.lock"
+
+run 1 check
+expect_state sorry_case refines sorry
+
+run 0 status
+expect_state proved refines proved
+expect_state sorry_case refines sorry
+
+cp "$source" "$scratch/states.c"
+perl -pe 's/^uint32_t proved\(uint32_t n\) \{ return n \+ 1; \}/uint32_t proved(uint32_t n) {\n    return n + 2;\n}/' \
+    "$scratch/states.c" >"$source"
+run 1 status
+expect_state proved refines stale
+expect_state proved changes stale
+expect_state clamp refines proved
+expect_state sorry_case refines sorry
+run 1 check
+expect_state proved refines failed
+expect_state clamp refines failed
+grep -Eq '^error: lean/Proofs/States\.lean:[0-9]+:[0-9]+:' "$scratch/err"
+cp "$scratch/states.c" "$source"
+
+sed 's/^uint32_t proved(uint32_t n) { return n + 1; }/uint32_t proved(uint32_t n)   {  return n + 1;  }/' \
+    "$scratch/states.c" >"$source"
+run 1 check
+run 0 status
+expect_state proved refines proved
+cp "$scratch/states.c" "$source"
+
+cp "$app/lean/Proofs/States.lean" "$scratch/States.lean"
+printf '\n-- edited\n' >>"$app/lean/Proofs/States.lean"
+run 1 status
+expect_state clamp refines stale
+cp "$scratch/States.lean" "$app/lean/Proofs/States.lean"
+
+sed 's/"refines=clampSpec", "requires=ordered"/"refines=clampSpec", "requires=nothing"/' \
+    "$scratch/states.c" >"$source"
+run 1 check
+expect_state clamp refines unextracted
+grep -Fq 'src/states.c:15:9: could not elaborate the translated definition of clamp or its obligations' \
+    "$scratch/err"
+expect_state missing_case refines missing
+sed 's/"refines=clampSpec", "requires=ordered"/"refines=clampSpec", "spec=missing"/' \
+    "$scratch/states.c" >"$source"
+run 1 check
+grep -Fq "src/states.c:15:9: unextracted clamp: LF_MODEL refers to unknown Lean block 'missing'" \
+    "$scratch/err"
+
+perl -0pe 's/LF_MODEL\("refines=incSpec"\)\nuint32_t (sorry|axioms|missing|mismatch|failed)_case\(uint32_t n\) \{ return n \+ 1; \}\n\n//g; s/LF_MODEL\("refines=incSpec"\)\nuint32_t unsupported[^\n]*\n//' \
+    "$scratch/states.c" >"$source"
+perl -0pe 's/theorem sorry_case.*?(?=end LeanCModel)//s' "$scratch/States.lean" >"$app/lean/Proofs/States.lean"
+rm "$app/lean/Proofs/Failed.lean"
+run 0 check --require proved
+test "$(grep -c ': proved$' "$scratch/out")" -eq 3
+test "$(grep -c '^states\.' "$scratch/out")" -eq 3
+run 0 status
+
+rm "$source"
+printf '/* leanfran:lean states\ndef unused : Nat := 0\n*/\n' >"$source"
+run 1 status
+run 0 check
+test "$(grep -c '^states\.' "$scratch/out")" -eq 0
+run 0 status
+echo "verify: obligation states, stale results and --require proved checked"

@@ -77,6 +77,7 @@
                   ++ pkgs.lib.optionals (backend == "C") [
                     ./langs/C/support
                     ./langs/C/lean/LeanfranC
+                    ./langs/C/lean/LeanCLib
                   ]
                 );
               };

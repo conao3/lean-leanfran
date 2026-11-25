@@ -34,3 +34,11 @@ check: check-translate
 
 check-translate: build
 	../../maint/C/test-translate.sh
+
+c_sources += $(wildcard tests/verify/states/src/*.c)
+
+.PHONY: check-verify
+check: check-verify
+
+check-verify: build
+	../../maint/C/test-verify.sh

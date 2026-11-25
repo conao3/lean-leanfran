@@ -17,11 +17,14 @@ extern "C" {
     __attribute__((annotate("leanfran", "field", __VA_ARGS__)))
 #define LF_ARRAY(len) __attribute__((annotate("leanfran", "array", #len)))
 #define LF_LEAN(name) __attribute__((annotate("leanfran", "lean", name)))
+#define LF_MODEL(...)                                                          \
+    __attribute__((annotate("leanfran", "model", __VA_ARGS__)))
 #else
 #define LF_STRUCT(name)
 #define LF_FIELD(...)
 #define LF_ARRAY(len)
 #define LF_LEAN(name)
+#define LF_MODEL(...)
 #endif
 
 typedef enum {
