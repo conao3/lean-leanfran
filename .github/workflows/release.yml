@@ -26,6 +26,9 @@ jobs:
       version: ${{ steps.next.outputs.version }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - id: next
         run: echo "version=$(maint/next-version.sh "$BUMP")" >> "$GITHUB_OUTPUT"
         env:
@@ -100,7 +103,7 @@ jobs:
       - run: make check BACKENDS=${{ matrix.dir }}
 
   tag:
-    name: Commit, tag and start the publish
+    name: Tag, start the publish and merge into the branch
     needs: [version, check]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -109,6 +112,8 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v8.0.2
         with:
           pattern: version-patch-*
@@ -120,7 +125,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "release v$VERSION"
-          maint/push-release.sh
+          maint/push-release.sh tag
         env:
           VERSION: ${{ needs.version.outputs.version }}
           BRANCH: ${{ github.ref_name }}
@@ -128,3 +133,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
+      - run: maint/push-release.sh land
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
