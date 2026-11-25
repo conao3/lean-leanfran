@@ -19,14 +19,17 @@ jobs:
         include:
           - dir: Rust
             build: false
+            nix-shells: rust
           - dir: Python
             build: true
           - dir: TypeScript
             build: true
           - dir: Clojure
             build: true
+            maven: true
           - dir: PHP
             build: true
+            nix-shells: php php85
           - dir: Go
             build: true
           - dir: C
@@ -34,6 +37,34 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v32.0.0
+      - if: matrix.nix-shells
+        id: nix-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ runner.temp }}/nix-cache
+          key: nix-store-${{ runner.os }}-${{ matrix.dir }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-keys: nix-store-${{ runner.os }}-${{ matrix.dir }}-
+      - if: matrix.nix-shells
+        run: maint/ci-nix-cache.sh restore "$RUNNER_TEMP/nix-cache" $SHELLS
+        env:
+          SHELLS: ${{ matrix.nix-shells }}
+      - if: matrix.nix-shells && steps.nix-cache.outputs.cache-hit != 'true'
+        run: maint/ci-nix-cache.sh save "$RUNNER_TEMP/nix-cache" $SHELLS
+        env:
+          SHELLS: ${{ matrix.nix-shells }}
+      - if: matrix.nix-shells && steps.nix-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ runner.temp }}/nix-cache
+          key: ${{ steps.nix-cache.outputs.cache-primary-key }}
+      - if: matrix.maven
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: maven-${{ runner.os }}-${{ hashFiles('langs/Clojure/**/deps.edn') }}
+          restore-keys: maven-${{ runner.os }}-
       - run: make check BACKENDS=${{ matrix.dir }}
       - if: matrix.dir == 'C'
         run: nix develop .#c -c maint/C/test-publish.sh
