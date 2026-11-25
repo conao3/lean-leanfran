@@ -33,6 +33,8 @@ private def relativeParts (path : String) : Except String (List String) := do
 
 def readConfig (root : FilePath) : IO Config := do
   let path := root / "leanfran.toml"
+  unless ← path.pathExists do
+    throw <| IO.userError s!"{path} not found; create leanfran.toml with at least `sources = [\"src/**/*.c\"]` in the project root"
   let source ← IO.FS.readFile path
   let table ← match ← (Toml.loadToml (Parser.mkInputContext source path.toString)).toBaseIO with
     | .ok table => pure table

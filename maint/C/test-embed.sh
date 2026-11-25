@@ -18,6 +18,10 @@ expect_status() {
     test "$status" -eq "$expected"
 }
 
+mv "$app/leanfran.toml" "$scratch/leanfran.toml.saved"
+expect_status 254 status
+grep -F 'leanfran.toml not found; create leanfran.toml' "$scratch/diagnostics"
+mv "$scratch/leanfran.toml.saved" "$app/leanfran.toml"
 expect_status 1 status
 "$compiler" check --dir "$app"
 expect_status 0 status

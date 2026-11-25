@@ -4,7 +4,7 @@
 
 ## Set up the compiler
 
-From the leanfran repository root, run `nix build .#c` and add `result/bin` to your PATH. To build with elan, run `lake build leanfran-c` in `langs/C` and add its `.lake/build/bin` to your PATH. Use Lean 4.35.0 and a C compiler in the consuming workspace. The linking examples use pkg-config, GNU Make, or CMake.
+From the leanfran repository root, run `nix build .#c` and add `result/bin` to your PATH. To build with elan, run `lake build leanfran-c` in `langs/C` and add its `.lake/build/bin` to your PATH. Use Lean 4.35.0 and a C compiler in the consuming workspace. The clang bundled with an elan toolchain does not find the system C headers on NixOS, so build there inside `nix develop .#c`. The linking examples use pkg-config, GNU Make, or CMake.
 
 ## Generate and build
 
@@ -151,7 +151,9 @@ theorem total_empty : total #[] = 0 := rfl
 #include "pricing.h"
 ```
 
-A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks. The block's Lean code can begin with `import` lines for modules of the `[[require]]` packages and for `LeanCLib.C`, which defines the C operations and `C.Status` used in [Verify a C function in Lean](#verify-a-c-function-in-lean). A Lean string that needs `*/` can write it as `"*" ++ "/"`.
+A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks, and the importing block uses their definitions by their unqualified names. The block's Lean code can begin with `import` lines for modules of the `[[require]]` packages and for `LeanCLib.C`, which defines the C operations and `C.Status` used in [Verify a C function in Lean](#verify-a-c-function-in-lean). A Lean string that needs `*/` can write it as `"*" ++ "/"`.
+
+Put `leanfran.toml` in the project root. The commands stop with status 254 when it is missing, and a file with only `sources` is enough.
 
 ```toml
 # leanfran.toml
