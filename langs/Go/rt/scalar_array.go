@@ -22,7 +22,7 @@ func byteData(v V) *scalarArray[byte]     { return v.p.ext().x.(*scalarArray[byt
 func floatData(v V) *scalarArray[float64] { return v.p.ext().x.(*scalarArray[float64]) }
 
 func Lean_sarray_size(v V) uint64 {
-	if v.p.kind == kindByteArray {
+	if v.p.kindOf() == kindByteArray {
 		return uint64(len(byteData(v).values))
 	}
 	return uint64(len(floatData(v).values))
@@ -32,7 +32,7 @@ func Lean_sarray_dec_eq(a, b V) uint8 {
 	if a.p == b.p {
 		return 1
 	}
-	if a.p.kind == kindByteArray {
+	if a.p.kindOf() == kindByteArray {
 		return Bool(bytes.Equal(byteData(a).values, byteData(b).values))
 	}
 	return Bool(slices.EqualFunc(floatData(a).values, floatData(b).values, func(a, b float64) bool {
@@ -52,8 +52,8 @@ func Lean_mk_empty_byte_array(capacity V) V {
 }
 
 func Lean_byte_array_mk(a V) V {
-	values := make([]byte, len(a.p.fs))
-	for i, v := range a.p.fs {
+	values := make([]byte, len(a.p.s().fs))
+	for i, v := range a.p.s().fs {
 		values[i] = byte(v.n)
 	}
 	Lean_dec(a)
@@ -117,8 +117,8 @@ func Lean_mk_empty_float_array(capacity V) V {
 }
 
 func Lean_float_array_mk(a V) V {
-	values := make([]float64, len(a.p.fs))
-	for i, v := range a.p.fs {
+	values := make([]float64, len(a.p.s().fs))
+	for i, v := range a.p.s().fs {
 		values[i] = math.Float64frombits(v.n)
 	}
 	Lean_dec(a)

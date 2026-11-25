@@ -136,7 +136,7 @@ func processEnv(args V) []string {
 	if Lean_ctor_get_uint8(args, 40) != 0 {
 		env = os.Environ()
 	}
-	for _, edit := range Lean_ctor_get(args, 4).p.fs {
+	for _, edit := range Lean_ctor_get(args, 4).p.s().fs {
 		key := cString(Lean_ctor_get(edit, 0))
 		if key == "" || strings.ContainsRune(key, '=') {
 			continue
@@ -229,7 +229,7 @@ func closeChildStreams(streams [3]*os.File) {
 func launchChild(args V, streams [3]*os.File) (*exec.Cmd, bool, error) {
 	cmdName := cString(Lean_ctor_get(args, 1))
 	argv := []string{cmdName}
-	for _, arg := range Lean_ctor_get(args, 2).p.fs {
+	for _, arg := range Lean_ctor_get(args, 2).p.s().fs {
 		argv = append(argv, cString(arg))
 	}
 	cwd := ""
@@ -295,7 +295,7 @@ func Lean_io_process_spawn(args V) V {
 		return ioResult(V{}, withoutPath(err))
 	}
 	state := &process{pid: command.Process.Pid, cmd: command, group: group, done: make(chan struct{})}
-	result := V{p: newObjX(kindCtor, make([]V, 3), state)}
+	result := newCtorX3(state)
 	if parent[0] != nil {
 		Lean_ctor_set(result, 0, newHandle(parent[0], true))
 	}
@@ -340,7 +340,9 @@ func Lean_io_process_child_pid(_, child V) uint32 {
 }
 
 func Lean_io_process_child_take_stdin(_, child V) V {
-	result := V{p: newObjX(kindCtor, []V{{}, own(Lean_ctor_get(child, 1)), own(Lean_ctor_get(child, 2))}, childProcess(child))}
+	result := newCtorX3(childProcess(child))
+	Lean_ctor_set(result, 1, own(Lean_ctor_get(child, 1)))
+	Lean_ctor_set(result, 2, own(Lean_ctor_get(child, 2)))
 	stdin := own(Lean_ctor_get(child, 0))
 	Lean_dec(child)
 	return Lean_io_result_mk_ok(ctor(0, stdin, result))

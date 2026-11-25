@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/conao3/leanfran-go/rt"
@@ -51,7 +52,9 @@ type ValueUse struct {
 }
 
 type Region struct {
-	mu sync.Mutex
+	mu    sync.Mutex
+	track atomic.Bool
+	leaks leakCounter
 }
 
 var defaultRegion Region
@@ -97,6 +100,9 @@ const mixedRegions = "leanfran: Values from different Regions in one call"
 
 func BeginValueOperation(scope *ValueScope, inputs []ValueUse) ValueOperation {
 	if scope == nil {
+		if len(inputs) == 0 {
+			return ValueOperation{}
+		}
 		var region *Region
 		for i := range inputs {
 			if owner := inputs[i].owner; owner != nil {
@@ -132,7 +138,9 @@ func (op ValueOperation) End() {
 		op.scope.mu.Unlock()
 		return
 	}
-	op.region.mu.Unlock()
+	if op.region != nil {
+		op.region.mu.Unlock()
+	}
 }
 
 func (op ValueOperation) join(o *valueOwner) {
@@ -219,14 +227,12 @@ func (op ValueOperation) Acquire(inputs []ValueUse) {
 			if r != nil {
 				panic(mixedRegions)
 			}
-			joining = joining || !inputs[i].take
+			joining = true
 		}
 	}
 	if joining {
 		for i := range inputs {
-			if !inputs[i].take {
-				op.join(inputs[i].owner)
-			}
+			op.join(inputs[i].owner)
 		}
 	}
 	for i, input := range inputs {
@@ -253,27 +259,68 @@ func (op ValueOperation) Acquire(inputs []ValueUse) {
 	}
 }
 
+type leakCounter struct {
+	leaked  atomic.Int64
+	pending atomic.Int64
+}
+
 var (
-	trackLeaks   atomic.Bool
-	leakedValues atomic.Int64
+	trackLeaks atomic.Bool
+	allLeaks   leakCounter
 )
 
 func TrackLeakedValues(enabled bool) { trackLeaks.Store(enabled) }
 
-func LeakedValues() int64 { return leakedValues.Load() }
+func LeakedValues() int64 { return allLeaks.leaked.Load() }
 
-func countLeakedValue(o *valueOwner) {
-	if !rt.IsHole(o.raw) {
-		leakedValues.Add(1)
+func CollectLeakedValues() int64 { return allLeaks.collect() }
+
+func (r *Region) TrackLeakedValues(enabled bool) { r.track.Store(enabled) }
+
+func (r *Region) LeakedValues() int64 { return r.leaks.leaked.Load() }
+
+func (r *Region) CollectLeakedValues() int64 { return r.leaks.collect() }
+
+func (c *leakCounter) collect() int64 {
+	previous := int64(-1)
+	for range 100 {
+		runtime.GC()
+		time.Sleep(time.Millisecond)
+		pending := c.pending.Load()
+		if pending == previous {
+			break
+		}
+		previous = pending
 	}
+	return c.leaked.Load()
+}
+
+func (c *leakCounter) watch(o *valueOwner) {
+	c.pending.Add(1)
+	runtime.SetFinalizer(o, func(o *valueOwner) {
+		if !rt.IsHole(o.raw) {
+			c.leaked.Add(1)
+		}
+		c.pending.Add(-1)
+	})
+}
+
+func leakCounterOf(region *Region) *leakCounter {
+	if trackLeaks.Load() {
+		return &allLeaks
+	}
+	if region != nil && region.track.Load() {
+		return &region.leaks
+	}
+	return nil
 }
 
 func newOwner(op ValueOperation, raw rt.V) *valueOwner {
 	var owner *valueOwner
-	switch {
-	case trackLeaks.Load():
+	switch counter := leakCounterOf(op.region); {
+	case counter != nil:
 		owner = &valueOwner{raw: raw, region: op.region}
-		runtime.SetFinalizer(owner, countLeakedValue)
+		counter.watch(owner)
 	case op.scope != nil && int(op.scope.used) < len(op.scope.slots):
 		owner = &op.scope.slots[op.scope.used]
 		op.scope.used++
@@ -292,7 +339,10 @@ func WrapValueIn[T any](op ValueOperation, raw rt.V) Value[T] {
 
 func WrapFieldsIn[A, B any](op ValueOperation, pair rt.V) (Value[A], Value[B]) {
 	a, b := OwnValueField(pair, 0), OwnValueField(pair, 1)
-	if op.scope == nil && !trackLeaks.Load() {
+	if op.region == nil {
+		op.region = &defaultRegion
+	}
+	if op.scope == nil && leakCounterOf(op.region) == nil {
 		owners := &[2]valueOwner{{raw: a, region: op.region}, {raw: b, region: op.region}}
 		return Value[A]{owner: &owners[0]}, Value[B]{owner: &owners[1]}
 	}

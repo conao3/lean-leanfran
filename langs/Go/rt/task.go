@@ -15,7 +15,7 @@ func taskResult(task V) (V, bool) {
 	state := task.p.ext().x.(*taskState)
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	return task.p.fs[0], state.finished
+	return task.p.s().fs[0], state.finished
 }
 
 func resolveTask(task, value V) {
@@ -29,7 +29,7 @@ func resolveTask(task, value V) {
 	if task.p.rc == 0 {
 		Lean_mark_persistent(value)
 	}
-	task.p.fs[0] = value
+	task.p.s().fs[0] = value
 	state.finished = true
 }
 
@@ -104,11 +104,11 @@ func Lean_io_promise_new() V {
 }
 
 func Lean_io_promise_resolve(value, promise V) V {
-	resolveTask(promise.p.fs[0], ctor(1, value))
+	resolveTask(promise.p.s().fs[0], ctor(1, value))
 	return V{}
 }
 
-func Lean_io_promise_result_opt(promise V) V { return own(promise.p.fs[0]) }
+func Lean_io_promise_result_opt(promise V) V { return own(promise.p.s().fs[0]) }
 
 func Lean_option_get_or_block(option V) V {
 	if option.p == nil {

@@ -1,7 +1,7 @@
 {
   "block": "example.com/embed-models/orders",
-  "hash": "acc4ca42611f300b12213f2e2b2f8e63a6782c3d2373a7b29959f6d33cf5a6c3",
-  "generator_version": 13,
+  "hash": "c339f21576219f40fe6cf61239ba208a0b8d9fa444ea6c64c2af509325b2bb39",
+  "generator_version": 14,
   "files": [
     "leanfran_types_gen.go",
     "leanfran_funcs_gen.go",

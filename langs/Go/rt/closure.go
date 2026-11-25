@@ -86,7 +86,7 @@ func Lean_apply(f V, args []V) V {
 
 func TailApply(t *Tail, f V, args []V) V {
 	c := f.p.ext().x.(closure)
-	fixed := f.p.fs
+	fixed := f.p.s().fs
 	missing := c.arity - len(fixed)
 	if len(args) < missing {
 		all := make([]V, 0, len(fixed)+len(args))
@@ -132,14 +132,14 @@ func Lean_thunk_get(v V) V {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if !state.forced {
-		result := Lean_apply(v.p.fs[0], []V{{}})
+		result := Lean_apply(v.p.s().fs[0], []V{{}})
 		if v.p.rc == 0 {
 			Lean_mark_persistent(result)
 		}
-		v.p.fs[0] = result
+		v.p.s().fs[0] = result
 		state.forced = true
 	}
-	return v.p.fs[0]
+	return v.p.s().fs[0]
 }
 
 func Lean_thunk_get_own(v V) V { return own(Lean_thunk_get(v)) }
@@ -160,7 +160,7 @@ func Lean_st_ref_get(v V) V {
 	if state.empty {
 		Lean_internal_panic("null reference read")
 	}
-	return own(v.p.fs[0])
+	return own(v.p.s().fs[0])
 }
 
 func Lean_st_ref_put(v, value V) V {
@@ -173,7 +173,7 @@ func Lean_st_ref_put(v, value V) V {
 	if v.p.rc == 0 {
 		Lean_mark_persistent(value)
 	}
-	v.p.fs[0] = value
+	v.p.s().fs[0] = value
 	state.empty = false
 	return V{}
 }
@@ -191,8 +191,8 @@ func swapRef(v, value V, empty bool) V {
 	if v.p.rc == 0 {
 		Lean_mark_persistent(value)
 	}
-	old := v.p.fs[0]
-	v.p.fs[0] = value
+	old := v.p.s().fs[0]
+	v.p.s().fs[0] = value
 	state.empty = empty
 	return old
 }
