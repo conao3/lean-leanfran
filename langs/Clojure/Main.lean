@@ -2,7 +2,7 @@ import LeanClj
 
 open Lean LeanClj
 
-def version : String := "0.12.0"
+def version : String := "0.13.0"
 
 def usage : String := "usage: leanfran [--version] <command> <subcommand> [parameters]
 
