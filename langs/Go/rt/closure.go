@@ -85,7 +85,7 @@ func Lean_apply(f V, args []V) V {
 }
 
 func TailApply(t *Tail, f V, args []V) V {
-	c := f.p.ext().x.(closure)
+	c := f.p.objExt().x.(closure)
 	fixed := f.p.s().fs
 	missing := c.arity - len(fixed)
 	if len(args) < missing {
@@ -128,7 +128,7 @@ func Lean_thunk_pure(v V) V {
 }
 
 func Lean_thunk_get(v V) V {
-	state := v.p.ext().x.(*thunk)
+	state := v.p.objExt().x.(*thunk)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if !state.forced {
@@ -154,7 +154,7 @@ func Lean_st_mk_ref(v V) V {
 }
 
 func Lean_st_ref_get(v V) V {
-	state := v.p.ext().x.(*ref)
+	state := v.p.objExt().x.(*ref)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.empty {
@@ -164,7 +164,7 @@ func Lean_st_ref_get(v V) V {
 }
 
 func Lean_st_ref_put(v, value V) V {
-	state := v.p.ext().x.(*ref)
+	state := v.p.objExt().x.(*ref)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if !state.empty {
@@ -182,7 +182,7 @@ func Lean_st_ref_take(v V) V        { return swapRef(v, V{}, true) }
 func Lean_st_ref_swap(v, value V) V { return swapRef(v, value, false) }
 
 func swapRef(v, value V, empty bool) V {
-	state := v.p.ext().x.(*ref)
+	state := v.p.objExt().x.(*ref)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.empty {

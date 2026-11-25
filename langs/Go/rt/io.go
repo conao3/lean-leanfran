@@ -332,7 +332,7 @@ func (h *fileHandle) close() {
 	}
 }
 
-func handle(v V) *fileHandle { return v.p.ext().x.(*fileHandle) }
+func handle(v V) *fileHandle { return v.p.objExt().x.(*fileHandle) }
 
 func Lean_io_prim_handle_mk(name V, mode uint8) V {
 	flags := [...]int{

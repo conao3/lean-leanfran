@@ -18,8 +18,8 @@ func floatArray(values []float64) V {
 	return V{p: newObjX(kindFloatArray, nil, &scalarArray[float64]{values})}
 }
 
-func byteData(v V) *scalarArray[byte]     { return v.p.ext().x.(*scalarArray[byte]) }
-func floatData(v V) *scalarArray[float64] { return v.p.ext().x.(*scalarArray[float64]) }
+func byteData(v V) *scalarArray[byte]     { return v.p.objExt().x.(*scalarArray[byte]) }
+func floatData(v V) *scalarArray[float64] { return v.p.objExt().x.(*scalarArray[float64]) }
 
 func Lean_sarray_size(v V) uint64 {
 	if v.p.kindOf() == kindByteArray {
@@ -70,7 +70,7 @@ func Lean_byte_array_data(a V) V {
 	return array(fields)
 }
 
-func Lean_byte_array_size(a V) V               { return Lean_box(Lean_sarray_size(a)) }
+func Lean_byte_array_size(a V) V               { return Lean_box(uint64(len(byteData(a).values))) }
 func Lean_byte_array_uget(a V, i uint64) uint8 { return byteData(a).values[i] }
 func Lean_byte_array_fget(a, i V) uint8        { return Lean_byte_array_uget(a, i.n) }
 
@@ -135,7 +135,7 @@ func Lean_float_array_data(a V) V {
 	return array(fields)
 }
 
-func Lean_float_array_size(a V) V                 { return Lean_box(Lean_sarray_size(a)) }
+func Lean_float_array_size(a V) V                 { return Lean_box(uint64(len(floatData(a).values))) }
 func Lean_float_array_uget(a V, i uint64) float64 { return floatData(a).values[i] }
 func Lean_float_array_fget(a, i V) float64        { return Lean_float_array_uget(a, i.n) }
 

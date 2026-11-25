@@ -308,7 +308,7 @@ func Lean_io_process_spawn(args V) V {
 	return Lean_io_result_mk_ok(result)
 }
 
-func childProcess(child V) *process { return child.p.ext().x.(*process) }
+func childProcess(child V) *process { return child.p.ctorExt().x.(*process) }
 
 func Lean_io_process_child_wait(_, child V) V { return childProcess(child).wait(false) }
 

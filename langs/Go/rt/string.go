@@ -17,7 +17,7 @@ func makeString(data []byte, count int) V {
 
 func Lean_mk_string(s string) V { return makeString([]byte(s), utf8.RuneCountInString(s)) }
 
-func stringData(v V) *leanString { return v.p.ext().x.(*leanString) }
+func stringData(v V) *leanString { return v.p.objExt().x.(*leanString) }
 
 func String(v V) string { return string(stringData(v).data) }
 

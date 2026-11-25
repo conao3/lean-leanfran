@@ -12,14 +12,14 @@ func newTask(value V, finished bool) V {
 }
 
 func taskResult(task V) (V, bool) {
-	state := task.p.ext().x.(*taskState)
+	state := task.p.objExt().x.(*taskState)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	return task.p.s().fs[0], state.finished
 }
 
 func resolveTask(task, value V) {
-	state := task.p.ext().x.(*taskState)
+	state := task.p.objExt().x.(*taskState)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.finished {
