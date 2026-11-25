@@ -4,7 +4,7 @@ defaultTargets = ["leanfran-c", "LeanCLib"]
 
 [[lean_lib]]
 name = "LeanC"
-needs = ["support", "jsonSupport"]
+needs = ["support", "jsonSupport", "cLib"]
 
 [[input_dir]]
 name = "support"
@@ -13,6 +13,11 @@ text = true
 [[input_dir]]
 name = "jsonSupport"
 path = "lean/LeanfranC"
+text = true
+
+[[input_dir]]
+name = "cLib"
+path = "lean/LeanCLib"
 text = true
 
 [[lean_exe]]

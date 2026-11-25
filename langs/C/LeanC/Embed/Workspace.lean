@@ -1,5 +1,6 @@
 import LeanC.Build
 import LeanC.Embed.Models
+import LeanC.Embed.Verify
 
 open Lean Lake System
 
@@ -8,16 +9,6 @@ namespace LeanC.Embed
 private def manifestName := "leanfran.manifest.json"
 private def supportHeader := include_str "../../support/leanfran.h"
 private def supportSource := include_str "../../support/leanfran.c"
-
-private def releaseVersion : String :=
-  ((supportHeader.splitOn "#define LEANFRAN_VERSION \"")[1]!.splitOn "\"").head!
-
-private def sha256 (text : String) : IO String := do
-  let args : IO.Process.SpawnArgs := if Platform.isOSX then
-    {cmd := "shasum", args := #["-a", "256"]}
-  else {cmd := "sha256sum"}
-  let output ← IO.Process.run args (some text)
-  return (output.splitOn " ").head!
 
 private structure BlockHash where
   name : String
@@ -145,7 +136,10 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
     "\n[[lean_lib]]\nname = \"LeanfranExport\"\nglobs = [\"LeanfranExport.+\"]\n" ++
     "\n[[lean_lib]]\nname = \"LeanfranModels\"\n" ++
     "\n[[lean_lib]]\nname = \"LeanfranProject\"\n" ++
-    "\n[[lean_lib]]\nname = \"LeanfranC\"\nglobs = [\"LeanfranC.+\"]\n")
+    "\n[[lean_lib]]\nname = \"LeanfranC\"\nglobs = [\"LeanfranC.+\"]\n" ++
+    "\n[[lean_lib]]\nname = \"LeanCLib\"\nglobs = [\"LeanCLib.+\"]\n" ++
+    "\n[[lean_lib]]\nname = \"LeanCModel\"\nglobs = [\"LeanCModel.+\"]\nmoreLeanArgs = [\"-DwarningAsError=false\"]\n" ++
+    "\n[[lean_lib]]\nname = \"Proofs\"\nglobs = [\"Proofs.+\"]\nmoreLeanArgs = [\"-DwarningAsError=false\"]\n")
   discard <| writeChanged (dir / "lean-toolchain") s!"leanprover/lean4:v{Lean.versionString}\n"
   if !(← manifest.pathExists) || installed.toOption != some requirements then
     runLake dir blocks models #["update", "--keep-toolchain"]
@@ -249,7 +243,14 @@ private unsafe def sync (state : FilePath) (config : Config) (blocks : Array Blo
 inductive Command where
   | sync
   | status
-  | check
+  | check (require : Bool)
+
+private def statusAll (root : FilePath) (config : Config) (blocks : Array Block) (models : Models)
+    (verified : Array FilePath) : IO UInt32 := do
+  let code ← status config blocks (← makeManifest config blocks models)
+  let functions ← (discoverModels root config blocks verified models.source).toBaseIO
+  let modelCode ← modelStatus root config (functions.mapError toString)
+  return max code modelCode
 
 unsafe def execute (command : Command) (dir : FilePath) : IO UInt32 := do
   let root ← IO.FS.realPath dir
@@ -258,31 +259,34 @@ unsafe def execute (command : Command) (dir : FilePath) : IO UInt32 := do
   if (command matches .status) && !(← state.isDir) then
     let config ← readConfig root
     checkDirectory root config.out
-    let (blocks, sources) ← scan root config
+    let (blocks, sources, verified) ← scan root config
     let models ← readModels root config blocks sources
-    return ← status config blocks (← makeManifest config blocks models)
+    return ← statusAll root config blocks models verified
   IO.FS.createDirAll state
   let lock ← IO.FS.Handle.mk (state / "lock") .append
   lock.lock (exclusive := !(command matches .status))
   try
     let config ← readConfig root
     checkDirectory root config.out
-    let (blocks, sources) ← scan root config
+    let (blocks, sources, verified) ← scan root config
     let models ← readModels root config blocks sources
     let manifest ← makeManifest config blocks models
     match command with
-    | .status => status config blocks manifest
-    | .sync | .check =>
+    | .status => statusAll root config blocks models verified
+    | .sync | .check _ =>
       checkDirectory root (state / "workspace")
       if (← config.out.isDir) && !(← (config.out / manifestName).pathExists) then
         unless (← config.out.readDir).isEmpty do
           throw <| IO.userError s!"output directory {config.out} is nonempty and has no {manifestName}"
       sync state config blocks models manifest
-      if command matches .check then
+      if let .check require := command then
+        let functions ← discoverModels root config blocks verified models.source
+        let modelCode ← checkModels root (state / "workspace") config functions (!models.source.isEmpty) require
         let config ← readConfig root
-        let (blocks, sources) ← scan root config
+        let (blocks, sources, _) ← scan root config
         let models ← readModels root config blocks sources
-        status config blocks (← makeManifest config blocks models)
+        let code ← status config blocks (← makeManifest config blocks models)
+        return max code modelCode
       else
         IO.println s!"synced {blocks.size} Lean blocks"
         return 0
