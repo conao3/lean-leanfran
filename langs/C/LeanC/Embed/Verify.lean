@@ -186,7 +186,8 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
   let translated : Std.HashMap String Verify.Function :=
     output.functions.foldl (init := {}) fun m fn => m.insert fn.name fn
   let records := ast.walk.filter fun n =>
-    n.kind == "RecordDecl" && (!(annotations n "lean").isEmpty || !(annotations n "struct").isEmpty)
+    (n.kind == "RecordDecl" || n.kind == "EnumDecl") &&
+      (!(annotations n "lean").isEmpty || !(annotations n "struct").isEmpty)
   let recordJson := records.map (normalize ·.json)
   let relativeTo := fun (path : FilePath) =>
     FilePath.mk ((path.toString.drop (root.toString.length + 1)).toString)

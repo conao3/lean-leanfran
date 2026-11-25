@@ -81,16 +81,22 @@ def Desc.declaration (desc : Desc) : String := Id.run do
   if desc.shape == .pair then
     let fields := desc.ctors[0]!.fields
     return s!"struct {desc.name} \{\n{String.join (fields.toList.map Field.declaration)}};\n"
+  let lean := fun (name : String) => s!"LF_LEAN({cStringLiteral name})"
   let tags := desc.ctors.toList.map fun ctor =>
-    s!"    {ctor.tag desc} = {ctor.layout.ctorInfo.cidx}"
-  let enumDecl := s!"typedef enum {desc.tagType} \{\n{String.intercalate ",\n" tags}\n} {desc.tagType};\n"
+    let annotation := if desc.shape == .enum then s!" {lean ctor.leanName}" else ""
+    s!"    {ctor.tag desc}{annotation} = {ctor.layout.ctorInfo.cidx}"
+  let enumName := if desc.shape == .enum then s!"{lean desc.sourceName.toString} {desc.tagType}" else desc.tagType
+  let enumDecl := s!"typedef enum {enumName} \{\n{String.intercalate ",\n" tags}\n} {desc.tagType};\n"
   if desc.shape == .enum then return enumDecl
   let payloads := desc.ctors.filter (!·.fields.isEmpty)
+  let payloadField := fun (ctor : Constructor) (field : Field) =>
+    let leanName := if ctor.positional then s!"#{field.index}" else field.leanName
+    s!"    {field.type.cName} {if field.indirect then "*" else ""}{field.name} {lean leanName};\n"
   let structs := payloads.toList.map fun ctor =>
-    s!"typedef struct {ctor.payload desc} \{\n{String.join (ctor.fields.toList.map Field.declaration)}} {ctor.payload desc};\n"
-  let members := payloads.toList.map fun ctor => s!"        {ctor.payload desc} {ctor.name};\n"
+    s!"typedef struct {ctor.payload desc} \{\n{String.join (ctor.fields.toList.map (payloadField ctor))}} {ctor.payload desc};\n"
+  let members := payloads.toList.map fun ctor => s!"        {ctor.payload desc} {ctor.name} {lean ctor.leanName};\n"
   return enumDecl ++ String.join structs ++
-    s!"struct {desc.name} \{\n    {desc.tagType} tag;\n    union \{\n{String.join members}    } as;\n};\n"
+    s!"struct {lean desc.sourceName.toString} {desc.name} \{\n    {desc.tagType} tag;\n    union \{\n{String.join members}    } as;\n};\n"
 
 def Desc.names (desc : Desc) : List String :=
   [desc.name, s!"{desc.name}_free", s!"{desc.name}_to_lean", s!"{desc.name}_from_lean"] ++

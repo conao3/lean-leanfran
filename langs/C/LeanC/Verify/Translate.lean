@@ -12,6 +12,10 @@ inductive Ty where
   | double
   | unit
   | record (key : String)
+  | enum (key : String)
+  | variant (key : String)
+  | members (key : String)
+  | payload (key : String) (member : String)
   deriving BEq, Inhabited
 
 structure Field where
@@ -23,6 +27,24 @@ structure Field where
 structure Record where
   lean : String
   fields : Std.HashMap String Field
+  deriving Inhabited
+
+structure Enum where
+  lean : String
+  ctors : Array String
+  count : Nat
+  underlying : Ty
+  deriving Inhabited
+
+structure Member where
+  ctor : String
+  fields : Std.HashMap String Field
+  deriving Inhabited
+
+structure Variant where
+  lean : String
+  ctors : Nat
+  members : Std.HashMap String Member
   deriving Inhabited
 
 structure Problem where
@@ -62,6 +84,9 @@ structure Function where
 
 structure Env where
   records : Std.HashMap String Record := {}
+  enums : Std.HashMap String Enum := {}
+  enumerators : Std.HashMap String Int := {}
+  variants : Std.HashMap String Variant := {}
   names : Std.HashMap String String := {}
   functions : Std.HashMap String Function := {}
   defined : Std.HashSet String := {}
@@ -92,7 +117,10 @@ def Env.resolve (env : Env) (qual : String) (desugared : String := "") : Option 
   if qual.contains "volatile" || desugared.contains "volatile" then none
   let names := [strip qual] ++ (if desugared.isEmpty then [] else [strip desugared])
   names.findSome? fun name =>
-    sugarTypes.lookup name <|> (env.names[name]?.filter env.records.contains |>.map Ty.record)
+    sugarTypes.lookup name <|> (env.names[name]? >>= fun id =>
+      if env.records.contains id then some (Ty.record id)
+      else if env.variants.contains id then some (Ty.variant id)
+      else env.enums[id]?.map fun e => if e.lean.isEmpty then e.underlying else Ty.enum id)
 
 def Env.lean (env : Env) : Ty → String
   | .int lean _ _ => lean
@@ -100,6 +128,9 @@ def Env.lean (env : Env) : Ty → String
   | .double => "Float"
   | .unit => "Unit"
   | .record key => (env.records[key]?.map (·.lean)).getD "Unit"
+  | .enum key => (env.enums[key]?.map (·.lean)).getD "Unit"
+  | .variant key => (env.variants[key]?.map (·.lean)).getD "Unit"
+  | .members _ | .payload .. => "Unit"
 
 private def boundaryOf (env : Env) (qual : String) (ty : Ty) : String :=
   if strip qual == "size_t" then "USize" else env.lean ty
@@ -119,22 +150,63 @@ private def annotations (node : Node) (kind : String) : Array (Array String) :=
 
 private def tagId (node : Node) : Option String := do
   let info ← node.get? "ownedTagDecl" <|> node.get? "decl"
-  guard ((info.getObjValAs? String "kind").toOption == some "RecordDecl")
+  guard ((info.getObjValAs? String "kind").toOption |>.any (["RecordDecl", "EnumDecl"].contains ·))
   (info.getObjValAs? String "id").toOption
 
 private def leanPath (name : String) : String :=
   if name.contains '«' then name else ".".intercalate ((name.splitOn ".").map leanIdent)
 
+private def leanName (node : Node) : Option String :=
+  (annotations node "lean")[0]? >>= (·[0]?)
+
+private def readEnum (node : Node) : Option Enum := do
+  let constants := node.children.filter (·.kind == "EnumConstantDecl")
+  let mut values := #[]
+  let mut next : Int := 0
+  for c in constants do
+    let value ← match c.children.find? (·.kind == "ConstantExpr") with
+      | some init => (init.string "value").toInt?
+      | none => some next
+    values := values.push value
+    next := value + 1
+  let underlying ← if values.all (fun v => 0 ≤ v ∧ v < 2 ^ 32) then some (intTy "UInt32")
+    else if values.all (fun v => -(2 ^ 31) ≤ v ∧ v < 2 ^ 31) then some (intTy "Int32") else none
+  let lean := (leanName node).map leanPath |>.getD ""
+  let ctors := constants.filterMap leanName
+  if !lean.isEmpty then
+    guard (ctors.size == constants.size && values == (Array.range values.size).map Int.ofNat)
+  return {lean, ctors, count := constants.size, underlying}
+
 def readRecords (nodes : Array Node) : Env := Id.run do
   let mut env : Env := {}
+  for node in nodes do
+    if node.kind != "EnumDecl" then continue
+    let some info := readEnum node | continue
+    let id := node.string "id"
+    let tag := node.string "name"
+    unless tag.isEmpty do env := {env with names := env.names.insert s!"enum {tag}" id}
+    env := {env with enums := env.enums.insert id info}
+    let mut next : Int := 0
+    for c in node.children.filter (·.kind == "EnumConstantDecl") do
+      let value := ((c.children.find? (·.kind == "ConstantExpr")).bind fun (e : Node) => (e.string "value").toInt?).getD next
+      env := {env with enumerators := env.enumerators.insert (c.string "id") value}
+      next := value + 1
   let mut tagged : Array (String × Node × String) := #[]
+  let mut variants : Array (String × Node) := #[]
+  let mut structs : Std.HashMap String Node := {}
   for node in nodes do
     if node.kind != "RecordDecl" || (node.get? "completeDefinition") != some (.bool true) ||
         node.string "tagUsed" != "struct" then continue
     let id := node.string "id"
     let tag := node.string "name"
+    structs := structs.insert id node
     unless tag.isEmpty do env := {env with names := env.names.insert s!"struct {tag}" id}
-    if let some #[name] := (annotations node "lean")[0]? then
+    let isVariant := node.children.any (fun c => c.kind == "RecordDecl" && c.string "tagUsed" == "union") &&
+      node.children.any (fun c => c.kind == "FieldDecl" && c.string "name" == "tag")
+    if let (some name, true) := (leanName node, isVariant) then
+      variants := variants.push (id, node)
+      env := {env with variants := env.variants.insert id {lean := leanPath name, ctors := 0, members := {}}}
+    else if let some #[name] := (annotations node "lean")[0]? then
       tagged := tagged.push (id, node, leanPath name)
     else if (annotations node "struct").size == 1 then
       tagged := tagged.push (id, node, if cIdentifier tag then leanIdent tag else "")
@@ -143,7 +215,7 @@ def readRecords (nodes : Array Node) : Env := Id.run do
     if node.kind != "TypedefDecl" then continue
     let byTag := env.names[strip node.typeName]?
     let some id := byTag <|> (node.walk.filterMap tagId).findSome? fun id =>
-      if tagged.any (·.1 == id) then some id else none | continue
+      if tagged.any (·.1 == id) || env.enums.contains id || structs.contains id then some id else none | continue
     let name := node.string "name"
     env := {env with names := env.names.insert name id}
     aliases := aliases.insert id ((aliases[id]?.getD #[]).push name)
@@ -164,6 +236,27 @@ def readRecords (nodes : Array Node) : Env := Id.run do
       let boundary := ty.map (boundaryOf env qual) |>.getD ""
       fields := fields.insert name {lean := leanIdent leanName, ty, boundary}
     env := {env with records := env.records.insert id {record with fields}}
+  for (id, node) in variants do
+    let some variant := env.variants[id]? | continue
+    let tagEnum := (node.children.find? fun c => c.kind == "FieldDecl" && c.string "name" == "tag").bind fun f =>
+      env.names[strip (f.typeName "desugaredQualType")]? <|> env.names[strip f.typeName]?
+    let ctors := (tagEnum.bind (env.enums[·]?)).map (·.count) |>.getD 0
+    let mut members := {}
+    for union in node.children.filter (fun c => c.kind == "RecordDecl" && c.string "tagUsed" == "union") do
+      for member in union.children.filter (·.kind == "FieldDecl") do
+        let some ctor := leanName member | continue
+        let some payload := env.names[strip (member.typeName "desugaredQualType")]? <|>
+          env.names[strip member.typeName]? | continue
+        let some payloadNode := structs[payload]? | continue
+        let mut fields := {}
+        for field in payloadNode.children.filter (·.kind == "FieldDecl") do
+          let some key := leanName field | continue
+          let qual := field.typeName
+          let ty := env.resolve qual (field.typeName "desugaredQualType")
+          let boundary := ty.map (boundaryOf env qual) |>.getD ""
+          fields := fields.insert (field.string "name") {lean := key, ty, boundary}
+        members := members.insert (member.string "name") {ctor, fields}
+    env := {env with variants := env.variants.insert id {variant with ctors, members}}
   return env
 
 structure Code where
@@ -267,6 +360,17 @@ private def castCode (node : Node) (code : Code) (to : Ty) : M Code := do
     return {code with text := s!"(C.cast {code.text} : Float)", ty := to, bool := none, prop := none, literal := none}
   | .double, .int .. =>
     return {text := ← lift s!"(C.floatToInt {code.text} : C.M {target})", ty := to, lifts := true}
+  | .enum _, .int .. =>
+    return {code with text := s!"(C.IntType.ofInt (Int.ofNat {code.text}.ctorIdx) : {target})", ty := to, literal := none}
+  | .enum _, .bool =>
+    let text := s!"({code.text}.ctorIdx != 0)"
+    return {code with text, ty := .bool, bool := some text, literal := none}
+  | .int .., .enum key =>
+    let some info := (← read).enums[key]? | fail node "unknown enum"
+    let some value := code.literal | fail node s!"conversion from an integer to enum '{node.typeName}'"
+    let some ctor := (if value < 0 then none else info.ctors[value.toNat]?)
+      | fail node s!"value {value} has no constructor in enum '{node.typeName}'"
+    return {text := s!"{info.lean}.{leanIdent ctor}", ty := to, lifts := code.lifts}
   | _, _ => fail node "unsupported conversion"
 
 private def boolOf (node : Node) (code : Code) : M String := do
@@ -361,6 +465,10 @@ private partial def expr (node : Node) : M Code := do
     return {text := s!"({value} : Float)", ty}
   | "DeclRefExpr" =>
     let some (id, kind, name) := referenced node | fail node "malformed reference"
+    if kind == "EnumConstantDecl" then
+      let some value := (← read).enumerators[id]? | fail node s!"enumerator '{name}' without a value"
+      let ty ← nodeTy node
+      return {text := s!"({value} : {← leanOf ty})", ty, literal := some value}
     if kind == "ParmVarDecl" || kind == "VarDecl" then
       let some var := (← get).locals[id]? | fail node s!"global variable '{name}'"
       if var.array.isSome then fail node s!"array '{name}' used as a value"
@@ -391,6 +499,28 @@ private partial def expr (node : Node) : M Code := do
   | "MemberExpr" =>
     if (node.get? "isArrow") == some (.bool true) then fail node "member access through a pointer"
     let base ← expr (← child node 0)
+    let member := node.string "name"
+    match base.ty with
+    | .variant key =>
+      if member == "tag" then
+        let ty ← nodeTy node
+        return {text := s!"(C.IntType.ofInt (Int.ofNat {base.text}.ctorIdx) : {← leanOf ty})", ty, lifts := base.lifts}
+      if member == "as" then return {base with ty := .members key}
+      fail node s!"unknown member '{member}' of a tagged union"
+    | .members key => return {base with ty := .payload key member}
+    | .payload key m =>
+      let some variant := (← read).variants[key]? | fail node "unknown tagged union"
+      let some info := variant.members[m]? | fail node s!"unknown constructor member '{m}'"
+      let some field := info.fields[member]? | fail node s!"unknown field '{member}'"
+      let some ty := field.ty | fail node s!"unsupported type of field '{member}'"
+      let var ← fresh "field"
+      let args := if field.lean.startsWith "#" then
+          String.join (List.replicate (field.lean.drop 1).toString.toNat! "_ ") ++ var
+        else s!"({leanIdent field.lean} := {var})"
+      let other := if variant.ctors > 1 then " | _ => throw C.Exc.inactiveMember" else ""
+      let read' ← lift s!"(match {base.text} with | {variant.lean}.{leanIdent info.ctor} {args} .. => pure {var}{other} : C.M {field.boundary})"
+      return {text := ← boundaryIn read' field.boundary ty, ty, lifts := true}
+    | _ => pure ()
     let .record key := base.ty | fail node "member access on a non-struct value"
     let some record := (← read).records[key]? | fail node "unknown struct"
     let some field := record.fields[node.string "name"]?
@@ -728,7 +858,11 @@ private partial def switch (node : Node) : M Unit := do
   for (labels, stmts) in cases do
     let mut tests := #[]
     for label in labels do
-      let some value := label.bind literalValue | fail node "case label that is not an integer literal"
+      let env ← read
+      let enumerator := (label.map stripCasts).bind fun n =>
+        (referenced n).bind fun (id, _, _) => env.enumerators[id]?
+      let some value := (label.bind literalValue) <|> enumerator
+        | fail node "case label that is not an integer literal"
       tests := tests.push s!"{name} = ({value} : {← leanOf scrutinee.ty})"
     emit s!"{if first then "if" else "else if"} {" ∨ ".intercalate tests.toList} then"
     emitGroup stmts

@@ -120,3 +120,9 @@ int32_t even(int32_t n);
 int32_t odd(int32_t n) { return n == 0 ? 0 : even(n - 1); }
 
 int32_t even(int32_t n) { return n == 0 ? 1 : odd(n - 1); }
+
+shapes_geo_color to_color(int32_t x) { return x; }
+
+shapes_geo_color far_color(void) { return 7; }
+
+shapes_geo_shape_rect_fields rect_of(shapes_geo_shape s) { return s.as.rect; }

@@ -22,6 +22,31 @@ def flagArg : P Bool := return (← nat) != 0
 def double : P Float := return Float.ofBits (← u64)
 def point : P Geo.Point := return {x := ← i32, y := ← i32}
 
+def color : P Geo.Color := do
+  match ← nat with
+  | 0 => return .red
+  | 1 => return .green
+  | _ => return .blue
+
+def shape : P Geo.Shape := do
+  let tag ← nat
+  let a ← i32
+  let b ← i64
+  let c ← color
+  match tag with
+  | 0 => return .circle a
+  | 1 => return .rect a b.toInt32
+  | 2 => return .pair a b
+  | 3 => if h : 0 ≤ a then return .tinted c a h else return .dot
+  | _ => return .dot
+
+def showShape : Geo.Shape → String
+  | .circle r => s!"0 {r}"
+  | .rect w h => s!"1 {w} {h}"
+  | .pair a b => s!"2 {a} {b}"
+  | .tinted c r _ => s!"3 {c.ctorIdx} {r}"
+  | .dot => "4"
+
 def itemArg : P «item» := do
   let qty ← u32
   let price ← i64
@@ -43,6 +68,7 @@ def exc : C.Exc → String
   | .indexOutOfRange => "indexOutOfRange"
   | .diverged => "diverged"
   | .missingReturn => "missingReturn"
+  | .inactiveMember => "inactiveMember"
 
 def result (fmt : α → String) : C.M α → String
   | .ok value => fmt value
@@ -108,6 +134,13 @@ def evaluate (name : String) : P String := do
   | "bool_literal" => return result toString «bool_literal»
   | "shadow" => return result toString («shadow» (← i32))
   | "lit_pick" => return bits («lit_pick» (← i32))
+  | "color_code" => return toString («color_code» (← color))
+  | "next_color" => return toString («next_color» (← color)).ctorIdx
+  | "keep_color" => return toString («keep_color» (← color) (← flagArg)).ctorIdx
+  | "shape_area" => return result toString («shape_area» (← shape))
+  | "circle_radius" => return result toString («circle_radius» (← shape))
+  | "shape_tag" => return toString («shape_tag» (← shape))
+  | "bigger" => return result showShape («bigger» (← shape) (← shape))
   | _ => return s!"unknown function {name}"
 
 partial def main : IO Unit := do
