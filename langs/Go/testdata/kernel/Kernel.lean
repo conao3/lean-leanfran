@@ -122,6 +122,13 @@ def doubled (values : Array UInt64) : Array UInt64 := Id.run do
     out := out.push (value * 2)
   return out
 
+def copyBytes (s : String) (i : Nat) (acc : Array UInt8) : Array UInt8 :=
+  if h : i < s.utf8ByteSize then copyBytes s (i + 1) (acc.push (s.getUTF8Byte ⟨i⟩ h)) else acc
+termination_by s.utf8ByteSize - i
+
+def bytesOf (s : String) : Array UInt8 :=
+  copyBytes s 0 (.emptyWithCapacity s.utf8ByteSize)
+
 structure Verified where
   value : UInt64
   proof : ∀ n : Nat, n = n

@@ -6,8 +6,10 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/conao3/leanfran-go/rt"
 )
@@ -24,6 +26,8 @@ type controlArray struct {
 var (
 	controlSink *controlArray
 	resultSink  []uint64
+	bytesSink   []uint8
+	countSink   int
 )
 
 func controlRead(a *controlArray) []uint64 {
@@ -54,6 +58,21 @@ func controlDoubled(in *controlArray) *controlArray {
 	out := &controlArray{fields: make([]controlField, 0, len(in.fields))}
 	for _, f := range in.fields {
 		out.fields = append(out.fields, controlField{n: f.n * 2})
+	}
+	return out
+}
+
+func controlBytesOf(s string) []uint8 {
+	data := []byte(s)
+	countSink = utf8.RuneCount(data)
+	a := &controlArray{fields: make([]controlField, 0, len(data))}
+	for i := range data {
+		a.fields = append(a.fields, controlField{n: uint64(data[i])})
+	}
+	controlSink = a
+	out := make([]uint8, len(a.fields))
+	for i, f := range a.fields {
+		out[i] = uint8(f.n)
 	}
 	return out
 }
@@ -94,8 +113,15 @@ func TestArrayCallCost(t *testing.T) {
 	if got := Doubled(xs); len(got) != len(xs) || got[999] != 1998 {
 		t.Fatal("Doubled returned the wrong array")
 	}
-	_lfCodecsOnce.Do(_lfBuildCodecs)
-	lean := _lfCodec4.ToLean(xs)
+	text := strings.Repeat("leanfran", 125)
+	if got := checked(BytesOf(text)); string(got) != text {
+		t.Fatal("BytesOf returned the wrong bytes")
+	}
+	fields := make([]rt.V, len(xs))
+	for i, x := range xs {
+		fields[i] = rt.Lean_box(x)
+	}
+	lean := rt.Array(fields)
 	defer rt.Lean_dec(lean)
 	control := controlFrom(xs)
 	cases := []struct {
@@ -109,6 +135,7 @@ func TestArrayCallCost(t *testing.T) {
 			rt.Lean_inc(lean)
 			rt.Lean_dec(l_Kernel_doubled(lean))
 		}, func() { controlSink = controlDoubled(control) }, 2, 2.5},
+		{"BytesOf", func() { bytesSink = checked(BytesOf(text)) }, func() { bytesSink = controlBytesOf(text) }, 7, 4.6},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

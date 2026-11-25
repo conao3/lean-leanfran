@@ -91,7 +91,9 @@ func Lean_ensure_exclusive_array(a V) V {
 }
 
 func Lean_array_push(a, v V) V {
-	a = Lean_ensure_exclusive_array(a)
+	if !Lean_is_exclusive(a) {
+		a = Lean_ensure_exclusive_array(a)
+	}
 	o := a.p.s()
 	o.fs = append(o.fs, v)
 	return a

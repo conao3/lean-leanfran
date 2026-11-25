@@ -29,14 +29,14 @@ func natBig(v V) *big.Int {
 	if v.p == nil {
 		return new(big.Int).SetUint64(v.n)
 	}
-	return v.p.ext().x.(*big.Int)
+	return v.p.objExt().x.(*big.Int)
 }
 
 func intBig(v V) *big.Int {
 	if v.p == nil {
 		return big.NewInt(int64(v.n))
 	}
-	return v.p.ext().x.(*big.Int)
+	return v.p.objExt().x.(*big.Int)
 }
 
 func NatFromUint64(n uint64) V {

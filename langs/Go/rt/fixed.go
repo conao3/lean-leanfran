@@ -31,8 +31,11 @@ func fixedNatBits(a V) uint64 {
 	if a.p == nil {
 		return a.n
 	}
-	return uint64(natBig(a).Bits()[0])
+	return bigNatBits(a)
 }
+
+//go:noinline
+func bigNatBits(a V) uint64 { return uint64(natBig(a).Bits()[0]) }
 
 func fixedIntBits(a V) uint64 {
 	if a.p == nil {

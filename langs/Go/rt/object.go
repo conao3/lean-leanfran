@@ -74,17 +74,18 @@ func (o *Obj) children() []V {
 	return unsafe.Slice(o.field(0), o.nfs)
 }
 
-func (o *Obj) ext() *extSlot {
-	switch o.kind {
-	case kindCtor | hasX:
-		return (*extSlot)(unsafe.Add(unsafe.Pointer(o), headerSize+uintptr(o.nfs)*fieldSize))
-	case kindCtor:
+func (o *Obj) objExt() *objX {
+	if o.kind <= kindCtor|hasX {
 		Lean_internal_panic("object without a Go value")
 	}
-	if o.kind&hasX == 0 {
+	return (*objX)(unsafe.Pointer(o))
+}
+
+func (o *Obj) ctorExt() *extSlot {
+	if o.kind != kindCtor|hasX {
 		Lean_internal_panic("object without a Go value")
 	}
-	return &(*objX)(unsafe.Pointer(o)).extSlot
+	return (*extSlot)(unsafe.Add(unsafe.Pointer(o), headerSize+uintptr(o.nfs)*fieldSize))
 }
 
 const (
@@ -197,7 +198,7 @@ func freeObj(root *Obj) {
 			}
 		}
 		if kind == kindHandle {
-			o.ext().x.(*fileHandle).close()
+			o.objExt().x.(*fileHandle).close()
 		}
 		o.rc = -1
 	}
