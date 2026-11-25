@@ -12,8 +12,9 @@ func Lean_mk_empty_array_with_capacity(n V) V {
 
 func Lean_mk_array(n, value V) V {
 	a := Lean_mk_empty_array_with_capacity(n)
+	o := a.p.s()
 	for range n.n {
-		a.p.s().fs = append(a.p.s().fs, own(value))
+		o.fs = append(o.fs, own(value))
 	}
 	Lean_dec(value)
 	return a
@@ -21,8 +22,9 @@ func Lean_mk_array(n, value V) V {
 
 func Lean_array_mk(list V) V {
 	a := Lean_mk_empty_array()
+	o := a.p.s()
 	for l := list; l.p != nil; l = Lean_ctor_get(l, 1) {
-		a.p.s().fs = append(a.p.s().fs, own(Lean_ctor_get(l, 0)))
+		o.fs = append(o.fs, own(Lean_ctor_get(l, 0)))
 	}
 	Lean_dec(list)
 	return a
@@ -88,7 +90,8 @@ func Lean_ensure_exclusive_array(a V) V {
 
 func Lean_array_push(a, v V) V {
 	a = Lean_ensure_exclusive_array(a)
-	a.p.s().fs = append(a.p.s().fs, v)
+	o := a.p.s()
+	o.fs = append(o.fs, v)
 	return a
 }
 
@@ -117,9 +120,10 @@ func Lean_array_pop(a V) V {
 	n := len(a.p.s().fs)
 	if n > 0 {
 		a = Lean_ensure_exclusive_array(a)
-		Lean_dec(a.p.s().fs[n-1])
-		a.p.s().fs[n-1] = V{}
-		a.p.s().fs = a.p.s().fs[:n-1]
+		o := a.p.s()
+		Lean_dec(o.fs[n-1])
+		o.fs[n-1] = V{}
+		o.fs = o.fs[:n-1]
 	}
 	return a
 }
