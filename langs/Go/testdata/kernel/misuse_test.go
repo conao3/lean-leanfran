@@ -80,3 +80,23 @@ func TestUnscopedZeroInputCallInRegion(t *testing.T) {
 	})
 	made.Close()
 }
+
+func TestRegionLeakedValues(t *testing.T) {
+	t.Parallel()
+	tracked, other := leanfran.NewRegion(), leanfran.NewRegion()
+	tracked.TrackLeakedValues(true)
+	for range 2 {
+		for _, region := range []*leanfran.Region{tracked, other} {
+			region.WithValues(func(scope *leanfran.ValueScope) {
+				_ = Value.In(scope).NewActor(Actor{CanWrite: true})
+				Value.In(scope).NewActor(Actor{}).CloseIn(scope)
+			})
+		}
+	}
+	if got := tracked.CollectLeakedValues(); got != 2 {
+		t.Fatalf("%d leaked Values in the tracked Region, want 2", got)
+	}
+	if got := other.CollectLeakedValues(); got != 0 {
+		t.Fatalf("%d leaked Values in an untracked Region, want 0", got)
+	}
+}

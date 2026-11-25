@@ -13,4 +13,4 @@ test-value-regions: test-kernel
 	go test -count=1 -v -run TestRegionThroughput ./test-out/_generated/kernel
 
 test-value-misuse: test-kernel
-	CGO_ENABLED=1 go test -race -count=1 -v -run 'TestTakeUnaffiliatedFromTwoRegions|TestUnscopedZeroInputCallInRegion' ./test-out/_generated/kernel
+	CGO_ENABLED=1 go test -race -count=1 -v -run 'TestTakeUnaffiliatedFromTwoRegions|TestUnscopedZeroInputCallInRegion|TestRegionLeakedValues' ./test-out/_generated/kernel
