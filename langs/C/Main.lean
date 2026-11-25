@@ -1,16 +1,26 @@
 import LeanC
+import LeanC.Embed.Workspace
 
 open Lean LeanC System
 
 inductive CliCommand where
   | generate (target : Target) (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames)
   | build (out : FilePath) (shared : Bool)
+  | embed (command : Embed.Command) (dir : FilePath)
 
 def usage : String :=
   "Usage: leanfran-c generate --module-name M [--roots name,...] [--prefix prefix] [--rename Lean.Name=c_name] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
-  "       leanfran-c build [--shared] --out-dir dir"
+  "       leanfran-c build [--shared] --out-dir dir\n" ++
+  "       leanfran-c {sync|status|check} [--dir dir]"
 
 def parse (command : String) (args : List String) : Except String CliCommand := do
+  if let some embed := ([("sync", Embed.Command.sync), ("status", .status), ("check", .check)].lookup command) then
+    match args with
+    | [] => return .embed embed "."
+    | ["--dir", dir] =>
+      unless !dir.isEmpty && !dir.startsWith "--" do throw "missing value for '--dir'"
+      return .embed embed ⟨dir⟩
+    | _ => throw s!"expected '{command} [--dir dir]'"
   unless command == "generate" || command == "build" do throw s!"unknown command '{command}'"
   let mut remaining := args
   let mut renames : Renames := {}
@@ -62,11 +72,13 @@ unsafe def main (args : List String) : IO UInt32 := do
     | .ok cmd => pure cmd
     | .error message => IO.eprintln s!"leanfran-c: {message}\n{usage}"; return 252
   try
-    let ws ← loadWorkspace
     match cmd with
-    | .build out shared => build ws out shared
+    | .embed command dir =>
+      try return ← Embed.execute command dir
+      catch error => IO.eprintln error; return 254
+    | .build out shared => build (← loadWorkspace (← IO.Process.getCurrentDir)) out shared
     | .generate target out roots checks renames =>
-      if let .error message ← generate ws target out roots checks renames then
+      if let .error message ← generate (← loadWorkspace (← IO.Process.getCurrentDir)) target out roots checks renames then
         IO.eprintln s!"leanfran-c: {message}"
         return 254
     return 0

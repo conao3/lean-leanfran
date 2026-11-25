@@ -1,0 +1,4 @@
+name = "embed_dependency"
+
+[[lean_lib]]
+name = "EmbedDependency"

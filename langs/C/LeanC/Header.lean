@@ -130,28 +130,41 @@ def emitWrapper (entry : Export) : String := Id.run do
       String.join (owned.toList.map fun (_, i) => s!"if (arg{i} != NULL) lean_dec(arg{i});\n") ++ "return status;\n"
   return code ++ "}\n"
 
-def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc) : String :=
-  let init := Lean.mkModuleInitializationFunctionName (exportModule mod)
-  s!"#include \"{cPrefix}.h\"\n" ++
-    "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <stdlib.h>\n#include <string.h>\n\n" ++
-    "extern lf_status lf_set_error(lf_error *, lf_status, const char *);\n" ++
-    "extern lf_status lf_copy_string(b_lean_obj_arg, lf_str *, lf_error *);\n" ++
-    "extern lf_status lf_copy_io_error(b_lean_obj_arg, lf_error *);\n" ++
-    "extern void lf_initialize(lean_object *(*)(void), lf_error *);\n" ++
+private def emitInitializer (cPrefix init : String) : String :=
+  "extern void lf_initialize(lean_object *(*)(void), lf_error *);\n" ++
     s!"extern lean_object *{init}(uint8_t);\n\n" ++
     "static pthread_once_t once = PTHREAD_ONCE_INIT;\n" ++
-    "static atomic_bool initialized;\n" ++
+    (if cPrefix == "leanfran" then "atomic_bool lf_project_initialized;\n"
+      else "static atomic_bool initialized;\n") ++
     "static lf_error init_error;\n\n" ++
     s!"lean_object *lf_{cPrefix}_initialize(void) \{\n    return {init}(1);\n}\n\n" ++
     "static void initialize_once(void) {\n" ++
     s!"    lf_initialize(lf_{cPrefix}_initialize, &init_error);\n" ++
-    "    atomic_store(&initialized, init_error.status == LF_OK);\n}\n\n" ++
+    s!"    atomic_store(&{if cPrefix == "leanfran" then "lf_project_initialized" else "initialized"}, init_error.status == LF_OK);\n}\n\n" ++
     s!"lf_status {cPrefix}_init(lf_error *err) \{\n" ++
     "    pthread_once(&once, initialize_once);\n" ++
     "    if (init_error.status != LF_OK) {\n" ++
     "        const char *message = init_error.message == NULL ? \"Lean initialization failed\" : init_error.message;\n" ++
     "        return lf_set_error(err, init_error.status, message);\n" ++
-    "    }\n    return LF_OK;\n}\n\n" ++
+    "    }\n    return LF_OK;\n}\n\n"
+
+def emitProjectInitializer (init : String) : String :=
+  "#include \"leanfran.h\"\n#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n\n" ++
+    "extern lf_status lf_set_error(lf_error *, lf_status, const char *);\n" ++
+    emitInitializer "leanfran" init
+
+def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc)
+    (projectInit : Bool := false) : String :=
+  s!"#include \"{cPrefix}.h\"\n" ++
+    "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <stdlib.h>\n#include <string.h>\n\n" ++
+    "extern lf_status lf_set_error(lf_error *, lf_status, const char *);\n" ++
+    "extern lf_status lf_copy_string(b_lean_obj_arg, lf_str *, lf_error *);\n" ++
+    "extern lf_status lf_copy_io_error(b_lean_obj_arg, lf_error *);\n" ++
+    (if projectInit then
+      "extern atomic_bool lf_project_initialized;\n" ++
+        "#define initialized lf_project_initialized\n\n" ++
+        s!"lf_status {cPrefix}_init(lf_error *err) \{\n    return leanfran_init(err);\n}\n\n"
+    else emitInitializer cPrefix (Lean.mkModuleInitializationFunctionName (exportModule mod))) ++
     (if exports.any Export.usesMarshalling then emitMarshalling cPrefix descs else "") ++
     (if exports.any (·.exception.isSome) then emitExceptSupport descs else "") ++
     String.intercalate "\n" (exports.toList.map emitWrapper)

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+project(leanfran_embed C)
+find_package(leanfran CONFIG REQUIRED)
+add_executable(consumer src/main.c)
+target_link_libraries(consumer PRIVATE leanfran::leanfran)
