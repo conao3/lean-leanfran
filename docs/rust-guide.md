@@ -215,7 +215,7 @@ library.
 Generated code builds for `wasm32-unknown-unknown` (for a browser through `wasm-bindgen`) with
 
 ```toml
-leanfran = { version = "0.11.0", default-features = false }
+leanfran = { version = "0.11.1", default-features = false }
 ```
 
 Pure functions behave as on Unix. The `IO` actions that need an operating system (files,

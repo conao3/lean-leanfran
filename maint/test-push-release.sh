@@ -9,7 +9,20 @@ export BRANCH=master VERSION=1.2.3
 export GIT_AUTHOR_NAME=Test GIT_COMMITTER_NAME=Test
 export GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_EMAIL=test@example.invalid
 
-for scenario in unchanged advance-1 advance-3 conflict existing-tag; do
+export TEST_GIT
+TEST_GIT=$(command -v git)
+mkdir "$tmp/bin"
+cat > "$tmp/bin/git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $1 == push ]]; then
+    "$TEST_GIT" -C ../writer push -q origin +HEAD^:refs/heads/master
+fi
+exec "$TEST_GIT" "$@"
+EOF
+chmod +x "$tmp/bin/git"
+
+for scenario in unchanged advance-1 advance-3 conflict rewind rewind-during-push existing-tag; do
     mkdir "$tmp/$scenario"
     cd "$tmp/$scenario"
     git init -q --bare --initial-branch=master remote
@@ -18,6 +31,7 @@ for scenario in unchanged advance-1 advance-3 conflict existing-tag; do
     echo old > writer/version
     git -C writer add version
     git -C writer commit -qm base
+    git -C writer commit -qm second-base --allow-empty
     git -C writer push -q origin master
     git clone -q --depth=1 "file://$PWD/remote" release
     echo "$VERSION" > release/version
@@ -35,29 +49,41 @@ for scenario in unchanged advance-1 advance-3 conflict existing-tag; do
             echo conflict > writer/version
             git -C writer commit -qam conflict
             ;;
+        rewind)
+            git -C writer push -q origin +HEAD^:refs/heads/master
+            ;;
         existing-tag)
             git -C writer tag -a "v$VERSION" -m existing
             git -C writer push -q origin "refs/tags/v$VERSION"
             ;;
     esac
-    git -C writer push -q origin master
+    if [[ $scenario != rewind ]]; then
+        git -C writer push -q origin master
+    fi
     before=$(git -C remote show-ref)
-    export GITHUB_STEP_SUMMARY="$PWD/summary"
-    touch "$GITHUB_STEP_SUMMARY"
 
     case $scenario in
-        conflict|existing-tag)
-            if (cd release && "$push_release") > output 2>&1; then
+        advance-*|conflict|rewind|rewind-during-push|existing-tag)
+            release_path=$PATH
+            if [[ $scenario == rewind-during-push ]]; then
+                release_path="$tmp/bin:$PATH"
+                before="$(git -C writer rev-parse HEAD^) refs/heads/master"
+            fi
+            if (cd release && PATH="$release_path" "$push_release") > output 2>&1; then
                 cat output
                 echo "$scenario unexpectedly succeeded" >&2
                 exit 1
             fi
-            [[ $(git -C remote show-ref) == "$before" ]]
-            if [[ $scenario == conflict ]]; then
-                grep -F 'could not be rebased' output
-            else
+            if [[ $(git -C remote show-ref) != "$before" ]]; then
+                cat output
+                git -C remote show-ref
+                echo "$scenario changed remote refs unexpectedly" >&2
+                exit 1
+            fi
+            if [[ $scenario == existing-tag ]]; then
                 grep -F 'already exists' output
-                [[ ! -s $GITHUB_STEP_SUMMARY ]]
+            else
+                grep -F 'Start a new Release run' output
             fi
             echo "$scenario: failed as expected and remote refs are unchanged"
             ;;
@@ -66,14 +92,6 @@ for scenario in unchanged advance-1 advance-3 conflict existing-tag; do
             [[ $(git -C remote rev-parse "v$VERSION^{}") == "$(git -C remote rev-parse master)" ]]
             [[ $(git -C remote rev-parse master^) == "$(git -C writer rev-parse master)" ]]
             [[ $(git -C remote show master:version) == "$VERSION" ]]
-            if [[ $scenario == advance-* ]]; then
-                grep -F "advanced by ${scenario#advance-} commit(s)" "$GITHUB_STEP_SUMMARY"
-                for ((i = 1; i <= ${scenario#advance-}; i++)); do
-                    grep -F "advance $i" "$GITHUB_STEP_SUMMARY"
-                done
-            else
-                [[ ! -s $GITHUB_STEP_SUMMARY ]]
-            fi
             echo "$scenario: release commit and tag pushed"
             ;;
     esac

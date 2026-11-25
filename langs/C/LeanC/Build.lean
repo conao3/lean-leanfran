@@ -27,17 +27,17 @@ def run (args : IO.Process.SpawnArgs) : IO String := do
   unless output.stderr.isEmpty do IO.eprint output.stderr
   return output.stdout
 
-def loadWorkspace : IO Workspace := do
-  let version ← run {cmd := "lean", args := #["--version"]}
+def loadWorkspace (dir : FilePath) : IO Workspace := do
+  let version ← run {cmd := "lean", cwd := some dir, args := #["--version"]}
   let some actual := (version.splitOn "version ")[1]?.map (fun s => (s.splitOn ",").head!)
     | throw <| IO.userError s!"could not read Lean version: {version.trimAscii}"
   unless actual == Lean.versionString do
     throw <| IO.userError s!"leanfran-c was built with Lean {Lean.versionString}, found Lean {actual}"
-  let some lean ← Lake.findLeanCmdInstall?
-    | throw <| IO.userError "could not locate the Lean installation"
+  let sysroot ← run {cmd := "lean", cwd := some dir, args := #["--print-prefix"]}
+  let lean ← Lake.LeanInstall.get ⟨sysroot.trimAscii.toString⟩
   let lakeEnv ← (Lake.Env.compute (Lake.LakeInstall.ofLean lean) lean (← Lake.findElanInstall?))
     |>.adapt IO.userError
-  let some ws ← (Lake.loadWorkspace {lakeEnv, wsDir := ← IO.Process.getCurrentDir}).toBaseIO
+  let some ws ← (Lake.loadWorkspace {lakeEnv, wsDir := dir}).toBaseIO
     | throw <| IO.userError "could not load Lake workspace"
   return ws
 
@@ -127,8 +127,16 @@ private def checkSorry (env : Environment) (checks : Checks) (roots : Array Name
     if checks.allowSorry then IO.eprintln s!"leanfran-c: warning: {message}"
     else throw s!"{message} (use --allow-sorry to allow)"
 
+def jsonSupportSource : String := include_str "../lean/LeanfranC/Json.lean"
+
 private def generateFiles (env : Environment) (lean : LeanInstall) (target : Target)
-    (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames) : ExceptT String IO Unit := do
+    (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames)
+    (projectInit : Bool) : ExceptT String IO (Array String) := do
+  if projectInit then
+    if let some idx := env.getModuleIdx? target.moduleName.toName then
+      for info in env.header.moduleData[idx.toNat]!.constants do
+        if info.type.hasSorry || (info.value? (allowOpaque := true)).any Expr.hasSorry then
+          throw s!"'{info.name}' uses sorryAx"
   let (exports, descs) ← selectExports env target.moduleName.toName target.cPrefix roots checks renames
   let reachable := reachableRoots exports descs
   checkSorry env checks reachable
@@ -140,7 +148,7 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
   IO.FS.createDirAll file.parent.get!
   IO.FS.writeFile file (emitExportModule target.moduleName.toName target.cPrefix exports descs apis)
   IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports descs apis)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource target.moduleName.toName target.cPrefix exports descs apis)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource target.moduleName.toName target.cPrefix exports descs apis projectInit)
   IO.FS.writeFile (out / s!"{target.cPrefix}.schema.json") (emitSchema target.moduleName.toName target.cPrefix descs exports)
   IO.FS.writeFile (out / "leanfran.h") (include_str "../support/leanfran.h")
   IO.FS.writeFile (out / "leanfran.c") (include_str "../support/leanfran.c")
@@ -152,17 +160,48 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
   let jsonSupport := !apis.isEmpty
   if jsonSupport then
     IO.FS.createDirAll (out / "LeanfranC")
-    IO.FS.writeFile (out / "LeanfranC" / "Json.lean") (include_str "../lean/LeanfranC/Json.lean")
+    IO.FS.writeFile (out / "LeanfranC" / "Json.lean") jsonSupportSource
   IO.FS.writeFile (out / "leanfran.json") ((toJson {target with jsonSupport}).compress ++ "\n")
+  return #[s!"{target.cPrefix}_init", s!"lf_{target.cPrefix}_nat_decimal",
+    s!"lf_{target.cPrefix}_int_decimal"] ++ (descs.toList.flatMap fun d => d.names ++ d.deciderNames).toArray ++
+    (apis.toList.flatMap JsonApi.names).toArray ++
+    exports.flatMap (fun entry => #[entry.symbol, s!"lf_{entry.symbol}"])
 
 unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name)
-    (checks : Checks := {}) (renames : Renames := {}) : IO (Except String Unit) := do
+    (checks : Checks := {}) (renames : Renames := {}) (projectInit : Bool := false) :
+    IO (Except String (Array String)) := do
   let mod ← findModule ws target
   discard <| ws.runBuild mod.olean.fetch
   Lean.initSearchPath ws.lakeEnv.lean.sysroot ws.leanPath
   Lean.enableInitializersExecution
   let env ← Lean.importModules #[{module := mod.name}] {} (loadExts := true)
-  (generateFiles env ws.lakeEnv.lean target out roots checks renames).run
+  (generateFiles env ws.lakeEnv.lean target out roots checks renames projectInit).run
+
+def moduleObjects (ws : Workspace) (mod : Lake.Module) : IO (Array FilePath) := do
+  let imports ← ws.runBuild mod.transImports.fetch
+  ws.runBuild (Job.collectArray <$> (imports.push mod).mapM (·.oExport.fetch))
+
+def moduleLinkFlags (ws : Workspace) (mod : Lake.Module) : IO LinkFlags := do
+  let lean := ws.lakeEnv.lean
+  Lean.initSearchPath lean.sysroot ws.leanPath
+  let env ← Lean.importModules #[{module := mod.name}] {}
+  let leanPrefix ← run {cmd := lean.lean.toString, args := #["--print-prefix"]}
+  let ldflags ← run {cmd := lean.leanc.toString, args := #["--print-ldflags"]}
+  IO.ofExcept <| linkFlags ⟨leanPrefix.trimAscii.toString⟩ ldflags
+    (leanImportChain env mod.name).isSome (importsStd env mod.name)
+
+private def cCompiler (lean : LeanInstall) : FilePath :=
+  if lean.customCc then lean.cc else "cc"
+
+def compileCObjects (lean : LeanInstall) (tmp : FilePath)
+    (sources : Array (FilePath × String × Bool)) : IO (Array FilePath) := do
+  let cFlags := #["-I", lean.includeDir.toString] ++ lean.cFlags ++ #["-fPIC"]
+  sources.mapM fun (source, name, publicSymbols) => do
+    let obj := tmp / s!"{name}.o"
+    let args := if publicSymbols then cFlags.push "-fvisibility=default" else cFlags
+    let some () ← (Lake.compileO obj source args (cCompiler lean)).toBaseIO
+      | throw <| IO.userError s!"could not compile {source}"
+    return obj
 
 def build (ws : Workspace) (out : FilePath) (shared : Bool := false) : IO Unit := do
   let out ← IO.FS.realPath out
@@ -172,15 +211,9 @@ def build (ws : Workspace) (out : FilePath) (shared : Bool := false) : IO Unit :
   unless validPrefix target.cPrefix && validModule target.moduleName do
     throw <| IO.userError "invalid prefix or module in leanfran.json"
   let mod ← findModule ws target
-  let imports ← ws.runBuild mod.transImports.fetch
-  let objects ← ws.runBuild (Job.collectArray <$> (imports.push mod).mapM (·.oExport.fetch))
+  let objects ← moduleObjects ws mod
   let lean := ws.lakeEnv.lean
-  Lean.initSearchPath lean.sysroot ws.leanPath
-  let env ← Lean.importModules #[{module := mod.name}] {}
-  let leanPrefix ← run {cmd := lean.lean.toString, args := #["--print-prefix"]}
-  let ldflags ← run {cmd := lean.leanc.toString, args := #["--print-ldflags"]}
-  let flags ← IO.ofExcept <| linkFlags ⟨leanPrefix.trimAscii.toString⟩ ldflags
-    (leanImportChain env mod.name).isSome (importsStd env mod.name)
+  let flags ← moduleLinkFlags ws mod
   IO.FS.withTempDir fun tmp => do
     let generated := tmp / "export.c"
     let mut envVars := ws.augmentedEnvVars
@@ -196,21 +229,15 @@ def build (ws : Workspace) (out : FilePath) (shared : Bool := false) : IO Unit :
           "-c", jsonC.toString, (out / "LeanfranC" / "Json.lean").toString]}
       envVars := envVars.filter (·.1 != "LEAN_PATH") |>.push
         ("LEAN_PATH", some (SearchPath.toString (tmp :: ws.augmentedLeanPath)))
-      runtimeSources := #[(jsonC, "json")]
-    let cc : FilePath := if lean.customCc then lean.cc else "cc"
-    let cFlags := #["-I", lean.includeDir.toString] ++ lean.cFlags ++ #["-fPIC"]
+      runtimeSources := #[(jsonC, s!"leanfran_{target.cPrefix}_json", false)]
     discard <| run {
       cmd := lean.lean.toString
       env := envVars
       args := #["-R", out.toString, "-c", generated.toString, (exportPath target out).toString]}
-    let mut native := #[]
-    for (source, name) in runtimeSources ++ #[(generated, "export"), (out / s!"{target.cPrefix}.c", "wrapper"),
-        (out / "leanfran.c", "support")] do
-      let obj := tmp / s!"leanfran_{target.cPrefix}_{name}.o"
-      let args := if name == "export" || name == "json" then cFlags else cFlags.push "-fvisibility=default"
-      let some () ← (Lake.compileO obj source args cc).toBaseIO
-        | throw <| IO.userError s!"could not compile {source}"
-      native := native.push obj
+    let native ← compileCObjects lean tmp (runtimeSources ++ #[
+      (generated, s!"leanfran_{target.cPrefix}_export", false),
+      (out / s!"{target.cPrefix}.c", s!"leanfran_{target.cPrefix}_wrapper", true),
+      (out / "leanfran.c", s!"leanfran_{target.cPrefix}_support", true)])
     let file := if shared then sharedLibrary target.cPrefix else s!"lib{target.cPrefix}.a"
     let library := tmp / file
     if shared then
@@ -218,7 +245,7 @@ def build (ws : Workspace) (out : FilePath) (shared : Bool := false) : IO Unit :
           #["-dynamiclib", s!"-Wl,-install_name,@rpath/{file}", "-Wl,-undefined,dynamic_lookup"]
         else #["-shared", s!"-Wl,-soname,{file}"]
       discard <| run {
-        cmd := cc.toString
+        cmd := (cCompiler lean).toString
         args := mode ++ #["-o", library.toString] ++ (native ++ objects).map FilePath.toString ++
           flags.sharedFlags}
     else

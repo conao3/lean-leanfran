@@ -155,7 +155,7 @@ private def Desc.emitDecoder (desc : Desc) (descs : Array Desc) : String := Id.r
     | .option =>
       s!"  match json with\n  | .null => pure none\n  | _ => some <$> ({desc.ctors[1]!.fields[0]!.type.decodeJson "json"})\n"
     | .variant | .enum =>
-      "  let (tag, payload) ← Json.getTag json\n  match tag with\n" ++
+      s!"  let (tag, {if desc.shape == .enum then "_" else "payload"}) ← Json.getTag json\n  match tag with\n" ++
       String.join (desc.ctors.toList.map fun (ctor : Constructor) =>
         let branch := if ctor.fields.isEmpty then
             s!"    discard (Json.getString json)\n" ++
@@ -170,6 +170,7 @@ private def Desc.emitDecoder (desc : Desc) (descs : Array Desc) : String := Id.r
 
 private def Desc.emitDecider (desc : Desc) : String :=
   if !desc.hasInvariants then "" else
+    "set_option linter.unusedVariables false in\n" ++
     s!"@[export lf_{desc.name}_decide]\ndef check_{desc.name} (value : Prod ({desc.typeSource}) Bool) : Option String :=\n" ++
     "  match value.1 with\n" ++
     String.join (desc.ctors.toList.map fun (ctor : Constructor) =>

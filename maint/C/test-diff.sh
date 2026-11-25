@@ -127,6 +127,8 @@ leanc "${types_args[@]}" "$types/libpublic_types.a" -o "$scratch/roundtrip"
 "$scratch/roundtrip" </dev/null
 mkdir -p "$scratch/oracle/LeanfranC"
 lean -R "$types" -o "$scratch/oracle/LeanfranC/Json.olean" "$types/LeanfranC/Json.lean"
+LEAN_PATH="$scratch/oracle:$PWD/.lake/build/lib/lean" \
+    lean -DwarningAsError=true -R "$types" "$types/LeanfranExport/PublicTypes.lean"
 LEAN_PATH="$scratch/oracle:$PWD/.lake/build/lib/lean" lean --run JsonOracle.lean >"$scratch/lean.json"
 json_args=(-I"$types" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/json.c")
 leanc "${json_args[@]}" "$types/libpublic_types.a" -o "$scratch/json"
