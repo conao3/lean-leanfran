@@ -294,3 +294,22 @@ jobs:
       - run: nix develop .#c -c maint/C/test-publish.sh "$TAG"
         env:
           TAG: ${{ inputs.tag }}
+
+  release:
+    name: Mark the tag as published
+    needs: [rust, python, typescript, clojure, php, go, c]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - run: |
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists"
+          else
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
+              --notes "Published to crates.io, PyPI, npm, Clojars, Packagist and the Go module mirror; the C compiler was verified from the tag."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}

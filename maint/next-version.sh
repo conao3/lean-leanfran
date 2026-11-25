@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Print the version that follows the highest version of the backends: next-version.sh patch|minor|major
+# Print the version that follows the highest version of the backends and the vX.Y.Z tags: next-version.sh patch|minor|major
 set -euo pipefail
 cd "$(dirname "$0")/.."
+tag=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
 current=$(
   {
+    echo "${tag#v}"
     sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' langs/Rust/Cargo.toml
     sed -n 's/^version = "\(.*\)"/\1/p' langs/Python/pyproject.toml
     sed -n 's/^  "version": "\(.*\)",$/\1/p' langs/TypeScript/package.json
