@@ -23,11 +23,11 @@
 </p>
 
 <p align="center">
-  <a href="#quick-look">Quick look</a> ·
-  <a href="#get-started">Get started</a> ·
-  <a href="#lean-at-the-core">Languages</a> ·
-  <a href="#what-you-can-build">Features</a> ·
-  <a href="#documentation">Documentation &amp; examples</a> ·
+  <a href="#quick-look">Quick look</a> |
+  <a href="#get-started">Get started</a> |
+  <a href="#lean-at-the-core">Languages</a> |
+  <a href="#what-you-can-build">Features</a> |
+  <a href="#documentation">Documentation &amp; examples</a> |
   <a href="#contribution">Contribution</a>
 </p>
 

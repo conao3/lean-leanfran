@@ -1,6 +1,6 @@
 # Clojure guide
 
-[leanfran](../README.md) · [Clojure quick start](../langs/Clojure/README.md)
+[leanfran](../README.md) | [Clojure quick start](../langs/Clojure/README.md)
 
 Commands and source paths below are relative to `langs/Clojure/`.
 

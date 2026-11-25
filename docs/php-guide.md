@@ -1,6 +1,6 @@
 # PHP guide
 
-[leanfran](../README.md) · [PHP quick start](../langs/PHP/README.md) · [Samples](../langs/PHP/samples/README.md)
+[leanfran](../README.md) | [PHP quick start](../langs/PHP/README.md) | [Samples](../langs/PHP/samples/README.md)
 
 ## Installation
 

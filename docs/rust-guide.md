@@ -1,6 +1,6 @@
 # Rust guide
 
-[leanfran](../README.md) · [Rust quick start](../langs/Rust/README.md)
+[leanfran](../README.md) | [Rust quick start](../langs/Rust/README.md)
 
 Commands and source paths below are relative to `langs/Rust/`.
 

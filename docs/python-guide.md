@@ -1,6 +1,6 @@
 # Python guide
 
-[leanfran](../README.md) · [Python quick start](../langs/Python/README.md)
+[leanfran](../README.md) | [Python quick start](../langs/Python/README.md)
 
 Commands and source paths below are relative to `langs/Python/`.
 

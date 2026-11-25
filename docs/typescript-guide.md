@@ -1,6 +1,6 @@
 # TypeScript guide
 
-[leanfran](../README.md) · [TypeScript quick start](../langs/TypeScript/README.md)
+[leanfran](../README.md) | [TypeScript quick start](../langs/TypeScript/README.md)
 
 Commands and source paths below are relative to `langs/TypeScript/`.
 
