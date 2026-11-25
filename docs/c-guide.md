@@ -116,6 +116,88 @@ Call `<type>_ref_share(handle)` on the owning thread before publishing a handle 
 On an Intel Core i5-8400 with the standard Nix C development shell and Lean 4.35.0, summing an array of 100 line items took 7.485 µs per call through the ordinary public function and 0.078 µs per call through the value handle function. Each timing averages 100,000 calls. Each row contains a string, a quantity, and a price. The handle timing reuses an input handle created before the timed loop and includes reading and releasing each result handle. Run `nix shell nixpkgs#gnumake -c make check BACKENDS=C` from the repository root to run the same benchmark.
 
 
+## Embed Lean in C sources
+
+`leanfran-c sync` reads Lean from block comments in C files, builds them in a Lake workspace under `.leanfran/workspace`, and writes the headers, one static library, and link settings to an output directory. The C project does not need to be a Lake project. Add `.leanfran/` to `.gitignore`.
+
+```c
+/* leanfran:lean pricing
+def total (items : Array (UInt32 × UInt32)) : Nat :=
+  items.foldl (fun acc (qty, price) => acc + qty.toNat * price.toNat) 0
+
+theorem total_empty : total #[] = 0 := rfl
+*/
+#include "pricing.h"
+```
+
+A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks. A Lean string that needs `*/` can write it as `"*" ++ "/"`.
+
+```toml
+# leanfran.toml
+sources = ["src/**/*.c", "src/**/*.h"]
+lean-files = ["lean/*.lean"]
+out-dir = "leanfran"
+cflags = ["-Isrc/include"]
+
+[[require]]
+name = "pricing_rules"
+path = "../pricing-rules"
+```
+
+| Key | Meaning |
+| --- | --- |
+| `sources` | Glob patterns for C files to scan. `**` matches any number of directories. |
+| `lean-files` | Lean files added as blocks. The file name is the block name. |
+| `out-dir` | Output directory inside the project. The default is `leanfran`. |
+| `cflags` | Compiler flags clang uses to read `LF_STRUCT` files that `compile_commands.json` does not cover. |
+| `[[require]]` | Lake dependencies, copied to the workspace. A relative `path` is resolved from the project root. |
+
+The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, `leanfran-config.cmake`, and `leanfran.manifest.json`. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
+
+- `leanfran-c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: …`. A failure leaves the previous output directory unchanged.
+- `leanfran-c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, the compiler version, or a missing output file. It exits with status 0 when the output is current.
+- `leanfran-c check` runs `sync` and then `status`.
+
+### Use C structs in Lean
+
+Mark a struct with `LF_STRUCT(<block>)` and its fields with `LF_FIELD("<constraint>", …)` from `leanfran.h`. `sync` adds a Lean structure with the same name before the block. Each constraint becomes a proof field named `<field>_<key>`.
+
+```c
+#include "leanfran.h"
+
+typedef struct LF_STRUCT(pricing) order {
+    uint32_t qty LF_FIELD("ge=1", "le=1000");
+    int64_t price_cents LF_FIELD("ge=0");
+    lf_str sku LF_FIELD("min_len=1", "max_len=8");
+} order;
+
+typedef struct {
+    order *items;
+    size_t len;
+} order_list;
+
+typedef struct LF_STRUCT(pricing) {
+    order_list orders LF_FIELD("max_len=4");
+    bool express;
+} cart;
+```
+
+```lean
+def cartTotal (c : cart) : Int :=
+  c.orders.foldl (fun acc o => acc + Int.ofNat o.qty.toNat * o.price_cents.toInt) 0
+```
+
+| Constraint | Field types | Lean proposition |
+| --- | --- | --- |
+| `ge=n`, `gt=n`, `le=n`, `lt=n` | Integer scalars, `lf_nat`, `lf_int` | The field's integer value compared with `n` |
+| `min_len=n`, `max_len=n` | `lf_str`, `lf_byte_array`, arrays | `String.length` or `size` compared with `n` |
+
+Fields use `bool`, the fixed-width integer types, `size_t`, `float`, `double`, `lf_str`, `lf_nat`, `lf_int`, `lf_byte_array`, another `LF_STRUCT` struct, or a struct with exactly `T *items` and `size_t len` for `Array T`. Any other field type, an unknown block, or a constraint that does not fit the field type stops `sync` with status 254 at the field's position.
+
+Declare `LF_STRUCT` structs in a header that includes `leanfran.h`. The block's generated header includes that header by a path relative to the output directory and defines `<prefix>_<name>` as an alias, so the C program passes its own struct to the generated functions. The wrappers check each constraint and return `LF_INVALID` with the type and proof field, as in `Invalid order.qty_ge`.
+
+`LF_STRUCT` and `LF_FIELD` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads the marked files with `clang -Xclang -ast-dump=json`, so clang must be on `PATH` only for projects that use `LF_STRUCT`. clang takes each file's flags from `compile_commands.json` in the project root. A header uses the flags of the first entry that includes it. Files without an entry use `cflags`.
+
 ## Generation checks
 
 - If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning.

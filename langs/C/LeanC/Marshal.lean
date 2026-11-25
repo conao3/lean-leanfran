@@ -57,6 +57,8 @@ def Desc.tagType (desc : Desc) : String :=
   if desc.shape == .enum then desc.name else s!"{desc.name}_tag"
 
 def Desc.declaration (desc : Desc) : String := Id.run do
+  if let some external := desc.externalType then
+    return s!"typedef {external.cType} {desc.name};\n"
   if desc.shape == .subtype then
     return s!"typedef {desc.ctors[0]!.fields[0]!.type.cName} {desc.name};\n"
   if desc.shape == .array || desc.shape == .list then
@@ -88,7 +90,7 @@ def Desc.names (desc : Desc) : List String :=
       desc.tagType :: (desc.ctors.filter (!·.fields.isEmpty)).toList.map (·.payload desc) else [])
 
 def emitTypeDeclarations (descs : Array Desc) : String :=
-  let forwards := descs.toList.filter (fun d => d.shape != .enum && d.shape != .subtype) |>.map fun desc =>
+  let forwards := descs.toList.filter (fun d => d.externalType.isNone && d.shape != .enum && d.shape != .subtype) |>.map fun desc =>
     s!"typedef struct {desc.name} {desc.name};\n"
   String.join forwards ++ "\n" ++
     String.join (descs.toList.map fun desc => desc.declaration ++ desc.freePrototype ++ ";\n\n")
