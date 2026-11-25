@@ -91,6 +91,7 @@ cd "$backend/tests/types"
 types="$scratch/types"
 roots=Typed.mixed,Typed.checkMixed,Typed.tree,Typed.checkTree,Typed.color,Typed.single
 roots+=,Typed.arrays,Typed.lists,Typed.bytes,Typed.naturals,Typed.integers,Typed.options
+roots+=,Checked.echo,Checked.batch,Schema.sample
 roots+=,Typed.multiple,Typed.checked,Typed.checkUnit,Typed.sampleArray,Typed.empty,Typed.positional
 "$compiler" generate --module-name PublicTypes --roots "$roots" --out-dir "$types"
 "$compiler" build --out-dir "$types"
@@ -109,6 +110,7 @@ rejected() {
 rejected 'C name collision: public_types_foo_bar' --roots Collision.fooBar,Collision.foo_bar
 rejected 'C name collision: public_types_collision_fields.foo_bar' --roots Collision.echo
 rejected 'unsupported parameter type' --roots Typed.unsupported
+rejected 'Checked.Undecidable.proof has no Decidable instance' --roots Checked.bad
 
 renamed="$scratch/renamed"
 "$compiler" generate --module-name PublicTypes --out-dir "$renamed" \
@@ -123,6 +125,15 @@ grep -F 'typedef struct public_types_renamed_fields' "$renamed/public_types.h"
 types_args=(-I"$types" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/roundtrip.c")
 leanc "${types_args[@]}" "$types/libpublic_types.a" -o "$scratch/roundtrip"
 "$scratch/roundtrip" </dev/null
+mkdir -p "$scratch/oracle/LeanfranC"
+lean -R "$types" -o "$scratch/oracle/LeanfranC/Json.olean" "$types/LeanfranC/Json.lean"
+LEAN_PATH="$scratch/oracle:$PWD/.lake/build/lib/lean" \
+    lean -DwarningAsError=true -R "$types" "$types/LeanfranExport/PublicTypes.lean"
+LEAN_PATH="$scratch/oracle:$PWD/.lake/build/lib/lean" lean --run JsonOracle.lean >"$scratch/lean.json"
+json_args=(-I"$types" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/json.c")
+leanc "${json_args[@]}" "$types/libpublic_types.a" -o "$scratch/json"
+"$scratch/json" </dev/null >"$scratch/c.json"
+cmp "$scratch/lean.json" "$scratch/c.json"
 if [[ $(uname -s) == Linux ]]; then
     lean_include="$(lean --print-prefix)/include"
     strict=(-std=c11 -O2 -Wall -Wextra -Werror -pedantic -isystem "$lean_include")
@@ -134,6 +145,10 @@ if [[ $(uname -s) == Linux ]]; then
     leanc "${types_args[@]}" "${sanitizer[@]}" "$types/public_types.c" "$types/leanfran.c" \
         "$types/libpublic_types.a" -o "$scratch/roundtrip_sanitized"
     "$scratch/roundtrip_sanitized" </dev/null
+    leanc "${json_args[@]}" "${sanitizer[@]}" "$types/public_types.c" "$types/leanfran.c" \
+        "$types/libpublic_types.a" -o "$scratch/json_sanitized"
+    "$scratch/json_sanitized" </dev/null >"$scratch/c-sanitized.json"
+    cmp "$scratch/lean.json" "$scratch/c-sanitized.json"
 fi
 
 handles="$scratch/handles"

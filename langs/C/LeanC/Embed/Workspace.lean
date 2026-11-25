@@ -115,6 +115,8 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
             IO.FS.removeFile artifact.path
   for block in blocks do
     discard <| writeChanged (blockPath dir block) (imports (block.imports.map Block.moduleName) ++ block.source)
+  IO.FS.createDirAll (dir / "LeanfranC")
+  discard <| writeChanged (dir / "LeanfranC" / "Json.lean") jsonSupportSource
   let lakefile := dir / "lakefile.toml"
   let requirements := Toml.ppTable config.requirements
   let manifest := dir / "lake-manifest.json"
@@ -126,7 +128,8 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
     "defaultTargets = [\"LeanfranBlocks\"]\n\n" ++ requirements ++
     "\n[[lean_lib]]\nname = \"LeanfranBlocks\"\nglobs = [\"LeanfranBlocks.+\"]\n" ++
     "\n[[lean_lib]]\nname = \"LeanfranExport\"\nglobs = [\"LeanfranExport.+\"]\n" ++
-    "\n[[lean_lib]]\nname = \"LeanfranProject\"\n")
+    "\n[[lean_lib]]\nname = \"LeanfranProject\"\n" ++
+    "\n[[lean_lib]]\nname = \"LeanfranC\"\nglobs = [\"LeanfranC.+\"]\n")
   discard <| writeChanged (dir / "lean-toolchain") s!"leanprover/lean4:v{Lean.versionString}\n"
   if !(← manifest.pathExists) || installed.toOption != some requirements then
     runLake dir blocks #["update", "--keep-toolchain"]

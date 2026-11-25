@@ -1,5 +1,5 @@
 import Lean
-import LeanC.Desc
+import LeanC.Json
 
 open Lean
 
@@ -44,7 +44,8 @@ def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM 
   while let .forallE _ domain body _ := type do
     let domain := domain.consumeMData
     let arg ← try readType cPrefix renames domain catch e =>
-      if (← e.toMessageData.toString).startsWith "C name collision:" then throw e
+      let message ← e.toMessageData.toString
+      if message.startsWith "C name collision:" || message.startsWith "C invariant:" then throw e
       throwError "'{name}' has an unsupported parameter type: {e.toMessageData}"
     if arg == .unit then throwError "'{name}' has an unsupported parameter type"
     args := args.push arg
@@ -57,7 +58,8 @@ def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM 
     else pure none
   let value := if exception.isSome then result.appArg! else result
   let resultC ← try readType cPrefix renames value catch e =>
-    if (← e.toMessageData.toString).startsWith "C name collision:" then throw e
+    let message ← e.toMessageData.toString
+    if message.startsWith "C name collision:" || message.startsWith "C invariant:" then throw e
     throwError "'{name}' has an unsupported result type: {e.toMessageData}"
   if resultC == .unit && !io && exception.isNone then
     throwError "'{name}' has an unsupported result type"
@@ -68,8 +70,18 @@ def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM 
 def Export.boxResult (entry : Export) : Bool :=
   !entry.io && entry.exception.isNone && entry.result.byPointer
 
-def emitExportModule (mod : Name) (cPrefix : String) (exports : Array Export) : String :=
-  s!"import {mod}\n\n" ++
+def apiTypes (exports : Array Export) : Array CType :=
+  exports.foldl (init := #[]) fun types entry =>
+    let result := if entry.result == .unit then #[] else #[entry.result]
+    (entry.args ++ result ++ entry.exception.toArray).foldl (init := types) fun types ty =>
+      if types.contains ty then types else types.push ty
+
+def exportJsonApis (cPrefix : String) (exports : Array Export) (descs : Array Desc) : Array JsonApi :=
+  jsonApis cPrefix descs ((apiTypes exports).filter fun ty => if let .named _ := ty then false else true)
+
+def emitExportModule (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc) (apis : Array JsonApi) : String :=
+  s!"import {mod}\n" ++
+  (if apis.isEmpty then "\n" else "import LeanfranC.Json\n\n") ++
   s!"@[export lf_{cPrefix}_nat_decimal]\ndef lf_{cPrefix}_nat_decimal (n : Nat) : String := toString n\n\n" ++
   s!"@[export lf_{cPrefix}_int_decimal]\ndef lf_{cPrefix}_int_decimal (n : Int) : String := toString n\n\n" ++
   String.join (exports.toList.map fun entry =>
@@ -84,6 +96,7 @@ def emitExportModule (mod : Name) (cPrefix : String) (exports : Array Export) : 
     let call := s!"@_root_.{entry.name}{String.join names}"
     let body := if entry.boxResult then s!"({call}, false)" else call
     s!"@[export lf_{entry.symbol}]\ndef lf_{entry.symbol}{dummy}{String.join args} : {result} :=\n" ++
-      s!"  {body}\n\n")
+      s!"  {body}\n\n") ++
+  (if apis.isEmpty then "" else emitJsonExports descs apis)
 
 end LeanC

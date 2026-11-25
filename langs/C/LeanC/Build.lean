@@ -3,6 +3,7 @@ import Lake.Load.Workspace
 import LeanC.Header
 import LeanC.Check
 import LeanC.Link
+import LeanC.Schema
 
 open Lean Lake System
 
@@ -11,6 +12,7 @@ namespace LeanC
 structure Target where
   moduleName : String
   cPrefix : String
+  jsonSupport : Bool := false
   deriving FromJson, ToJson
 
 def validModule (name : String) : Bool :=
@@ -89,7 +91,7 @@ private def selectExports (env : Environment) (moduleName : Name) (cPrefix : Str
     let described ← ExceptT.lift <| read.run'.toIO' {fileName := "<C exports>", fileMap := default} {env}
     match described with
     | .error message =>
-      if !roots.isEmpty || message.startsWith "C name collision:" then throw message
+      if !roots.isEmpty || message.startsWith "C name collision:" || message.startsWith "C invariant:" then throw message
       IO.eprintln s!"leanfran-c: skipping {message}"
     | .ok (entry, types) =>
       exports := exports.push entry
@@ -103,18 +105,30 @@ private def selectExports (env : Environment) (moduleName : Name) (cPrefix : Str
     "lf_int_from_i64", "lf_int_to_i64", "lf_int_from_lean_i64"] ++
     ["lf_nat", "lf_int"].flatMap fun name =>
       ["free", "from_dec", "to_dec", "from_lean", "to_lean"].map fun suffix => s!"{name}_{suffix}"
-  let typeNames := descs.toList.flatMap Desc.names ++ (refTypes exports descs).flatMap (refNames cPrefix)
+  let typeNames := (descs.toList.flatMap fun d => d.names ++ d.deciderNames) ++
+    (exportJsonApis cPrefix exports descs).toList.flatMap JsonApi.names ++
+    (refTypes exports descs).flatMap (refNames cPrefix)
   let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}", e.refSymbol false, e.refSymbol true]
   for name in reserved ++ supportNames ++ integerNames ++ typeNames ++ functionNames do
     if claimed.contains name then throw s!"C name collision: {name}"
     claimed := claimed.insert name
-  let sorryRoots ← exports.filterM fun entry => usesSorry env entry.name
+  return (exports, descs)
+
+private def reachableRoots (exports : Array Export) (descs : Array Desc) : Array Name :=
+  let deciders := descs.flatMap (fun d => d.ctors.flatMap (·.invariants.flatMap (·.dependencies)))
+  (deciders.foldl (init := ({} : Std.HashSet Name)) (·.insert ·)).toArray.qsort Name.lt ++
+    exports.map (·.name)
+
+private def checkSorry (env : Environment) (checks : Checks) (roots : Array Name) :
+    ExceptT String IO Unit := do
+  let sorryRoots ← roots.filterM (fun name => ExceptT.lift (usesSorry env name))
   if !sorryRoots.isEmpty then
-    let names := ", ".intercalate (sorryRoots.toList.map fun entry => s!"'{entry.name}'")
+    let names := ", ".intercalate (sorryRoots.toList.map fun name => s!"'{name}'")
     let message := s!"{names} depends on sorryAx"
     if checks.allowSorry then IO.eprintln s!"leanfran-c: warning: {message}"
     else throw s!"{message} (use --allow-sorry to allow)"
-  return (exports, descs)
+
+def jsonSupportSource : String := include_str "../lean/LeanfranC/Json.lean"
 
 private def generateFiles (env : Environment) (lean : LeanInstall) (target : Target)
     (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames)
@@ -125,14 +139,18 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
         if info.type.hasSorry || (info.value? (allowOpaque := true)).any Expr.hasSorry then
           throw s!"'{info.name}' uses sorryAx"
   let (exports, descs) ← selectExports env target.moduleName.toName target.cPrefix roots checks renames
-  let calls ← foreignCalls env (exports.map (·.name))
+  let reachable := reachableRoots exports descs
+  checkSorry env checks reachable
+  let calls ← foreignCalls env reachable
   let externs ← missingExterns lean calls.externs
   let implementations := calls.implementations.map fun pair => s!"{pair.1} -> {pair.2}"
+  let apis := exportJsonApis target.cPrefix exports descs
   let file := exportPath target out
   IO.FS.createDirAll file.parent.get!
-  IO.FS.writeFile file (emitExportModule target.moduleName.toName target.cPrefix exports)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports descs)
-  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource target.moduleName.toName target.cPrefix exports descs projectInit)
+  IO.FS.writeFile file (emitExportModule target.moduleName.toName target.cPrefix exports descs apis)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.h") (emitHeader target.cPrefix exports descs apis)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.c") (emitSource target.moduleName.toName target.cPrefix exports descs apis projectInit)
+  IO.FS.writeFile (out / s!"{target.cPrefix}.schema.json") (emitSchema target.moduleName.toName target.cPrefix descs exports)
   IO.FS.writeFile (out / "leanfran.h") (include_str "../support/leanfran.h")
   IO.FS.writeFile (out / "leanfran.c") (include_str "../support/leanfran.c")
   let writeReport := fun suffix (lines : Array String) =>
@@ -140,10 +158,16 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
       (String.join (lines.toList.map (· ++ "\n")))
   writeReport "externs" externs
   writeReport "implemented-by" (implementations.qsort (· < ·))
-  IO.FS.writeFile (out / "leanfran.json") ((toJson target).compress ++ "\n")
+  let jsonSupport := !apis.isEmpty
+  if jsonSupport then
+    IO.FS.createDirAll (out / "LeanfranC")
+    IO.FS.writeFile (out / "LeanfranC" / "Json.lean") jsonSupportSource
+  IO.FS.writeFile (out / "leanfran.json") ((toJson {target with jsonSupport}).compress ++ "\n")
   return #[s!"{target.cPrefix}_init", s!"lf_{target.cPrefix}_nat_decimal",
-    s!"lf_{target.cPrefix}_int_decimal"] ++ (descs.toList.flatMap Desc.names).toArray ++
-    exports.flatMap (fun entry => #[entry.symbol, s!"lf_{entry.symbol}"])
+    s!"lf_{target.cPrefix}_int_decimal"] ++ (descs.toList.flatMap fun d => d.names ++ d.deciderNames).toArray ++
+    (apis.toList.flatMap JsonApi.names).toArray ++
+    ((refTypes exports descs).flatMap (refNames target.cPrefix)).toArray ++
+    exports.flatMap (fun entry => #[entry.symbol, s!"lf_{entry.symbol}", entry.refSymbol false, entry.refSymbol true])
 
 unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name)
     (checks : Checks := {}) (renames : Renames := {}) (projectInit : Bool := false) :
@@ -194,15 +218,28 @@ def build (ws : Workspace) (out : FilePath) (shared : Bool := false) : IO Unit :
   let flags ← moduleLinkFlags ws mod
   IO.FS.withTempDir fun tmp => do
     let generated := tmp / "export.c"
-    let env := ws.augmentedEnvVars
+    let mut envVars := ws.augmentedEnvVars
+    let mut runtimeSources := #[]
+    if target.jsonSupport then
+      let dir := tmp / "LeanfranC"
+      IO.FS.createDirAll dir
+      let jsonC := tmp / "json.c"
+      discard <| run {
+        cmd := lean.lean.toString
+        env := envVars
+        args := #["-R", out.toString, "-o", (dir / "Json.olean").toString,
+          "-c", jsonC.toString, (out / "LeanfranC" / "Json.lean").toString]}
+      envVars := envVars.filter (·.1 != "LEAN_PATH") |>.push
+        ("LEAN_PATH", some (SearchPath.toString (tmp :: ws.augmentedLeanPath)))
+      runtimeSources := #[(jsonC, s!"leanfran_{target.cPrefix}_json", false)]
     discard <| run {
       cmd := lean.lean.toString
-      env := env
+      env := envVars
       args := #["-R", out.toString, "-c", generated.toString, (exportPath target out).toString]}
-    let native ← compileCObjects lean tmp #[
+    let native ← compileCObjects lean tmp (runtimeSources ++ #[
       (generated, s!"leanfran_{target.cPrefix}_export", false),
       (out / s!"{target.cPrefix}.c", s!"leanfran_{target.cPrefix}_wrapper", true),
-      (out / "leanfran.c", s!"leanfran_{target.cPrefix}_support", true)]
+      (out / "leanfran.c", s!"leanfran_{target.cPrefix}_support", true)])
     let file := if shared then sharedLibrary target.cPrefix else s!"lib{target.cPrefix}.a"
     let library := tmp / file
     if shared then

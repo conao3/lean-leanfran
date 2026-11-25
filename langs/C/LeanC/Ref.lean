@@ -1,5 +1,4 @@
 import LeanC.Export
-import LeanC.Except
 
 namespace LeanC
 
@@ -15,7 +14,7 @@ def refTypes (exports : Array Export) (descs : Array Desc) : List CType :=
 def CType.refName (ty : CType) (cPrefix : String) : String :=
   match ty with
   | .named name => s!"{name}_ref"
-  | _ => s!"{cPrefix}_type_{typeStem cPrefix ty}_ref"
+  | _ => s!"{cPrefix}_type_{ty.typeStem cPrefix}_ref"
 
 def refNames (cPrefix : String) (ty : CType) : List String :=
   let name := ty.refName cPrefix
@@ -90,7 +89,7 @@ def emitRefWrapper (cPrefix : String) (entry : Export) (take : Bool) : String :=
   let value := if entry.io then "lean_io_result_get_value(result)"
     else if entry.boxResult then "lean_ctor_get(result, 0)" else "result"
   if let some ty := entry.exception then
-    code := code ++ s!"if (lean_obj_tag({value}) == 0) \{\n{emitExcept ty value}}\n"
+    code := code ++ s!"if (lean_obj_tag({value}) == 0) \{\n{emitExcept (ty.jsonName cPrefix) value}}\n"
   let value := if entry.exception.isSome then s!"lean_ctor_get({value}, 0)" else value
   let container := hasError || entry.boxResult
   if entry.result != .unit then

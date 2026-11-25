@@ -74,7 +74,10 @@
                     (./. + "/langs/${backend}/${library}")
                   ]
                   ++ pkgs.lib.optional (backend == "Go") ./langs/Go/lean/LeanGoLib
-                  ++ pkgs.lib.optional (backend == "C") ./langs/C/support
+                  ++ pkgs.lib.optionals (backend == "C") [
+                    ./langs/C/support
+                    ./langs/C/lean/LeanfranC
+                  ]
                 );
               };
               postUnpack = ''sourceRoot="$sourceRoot/langs/${backend}"'';
@@ -158,6 +161,7 @@
             ]
             ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.gcc;
           cTools = [
+            pkgs.go
             pkgs.clang-tools
             pkgs.cmake
             pkgs.pkg-config
