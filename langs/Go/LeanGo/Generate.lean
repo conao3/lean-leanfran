@@ -240,9 +240,12 @@ def boundsCode (bs : Array (String × Int)) : String :=
         v (prev.getD v))) {}
     s!"map[string]string\{{joinArgs (entries.toArray.map fun (k, v) => s!"{quoteGo k}: \"{v}\"")}}"
 
-def fieldCode (cfg : RenderCfg) (f : FieldInfo) (v : VariantInfo) : String :=
-  let pos := if f.slot.startsWith "u" && f.slot != "usize" || f.slot.startsWith "f" then
+def scalarOffset (v : VariantInfo) (f : FieldInfo) : Nat :=
+  if f.slot.startsWith "u" && f.slot != "usize" || f.slot.startsWith "f" then
     f.pos + 8 * (v.size + v.usize) else f.pos
+
+def fieldCode (cfg : RenderCfg) (f : FieldInfo) (v : VariantInfo) : String :=
+  let pos := scalarOffset v f
   s!"\{Key: {quoteGo f.key}, Desc: {f.desc.codec cfg}.Desc, Slot: {quoteGo f.slot}, Offset: {pos}, Flat: {f.flat}, OmitNone: {f.omitNone}, Bounds: {boundsCode f.bounds}}"
 
 def variantCode (cfg : RenderCfg) (v : VariantInfo) (trivial : Bool) : String :=
@@ -324,7 +327,39 @@ def variantDecl (cfg : RenderCfg) (ty : String) (fs : Array FieldInfo) (ctor : O
   let members := joinArgs (fs.zipIdx.map fun (f, i) => s!"{f.property}: a{i}")
   return defn ++ s!"func {ctor}({args}) ({ty}, error) \{\n\tv := {ty}\{{members}}\n\tif err := v.Validate(); err != nil \{ return {ty}\{}, err }\n\treturn v, nil\n}\n\n"
 
-def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (layout : String)
+def directScalar : Desc → String → Option (String × String)
+  | .uint b, slot => if slot == s!"u{b}" then some (s!"uint{b}", s!"uint{b}") else none
+  | .sint b, slot => if slot == s!"u{b}" then some (s!"uint{b}", s!"int{b}") else none
+  | .bool, "u8" => some ("bool", "bool")
+  | _, _ => none
+
+def setFieldCode (cfg : RenderCfg) (v : VariantInfo) (f : FieldInfo) (val : String) : String :=
+  let pos := scalarOffset v f
+  let lean := s!"{f.desc.codec cfg}.ToLean({val})"
+  match f.slot, directScalar f.desc f.slot with
+  | "obj", _ => s!"\trt.Lean_ctor_set(r, {pos}, {lean})\n"
+  | _, some ("bool", _) => s!"\trt.Lean_ctor_set_uint8(r, {pos}, rt.Bool({val}))\n"
+  | slot, some (setter, _) => s!"\trt.Lean_ctor_set_{slot.replace "u" "uint"}(r, {pos}, {setter}({val}))\n"
+  | "usize", _ => s!"\trt.Lean_ctor_set_usize(r, {pos}, rt.Lean_unbox({lean}))\n"
+  | "u8", _ => s!"\trt.Lean_ctor_set_uint8(r, {pos}, uint8(rt.Lean_unbox({lean})))\n"
+  | "u16", _ => s!"\trt.Lean_ctor_set_uint16(r, {pos}, uint16(rt.Lean_unbox({lean})))\n"
+  | "u32", _ | "f32", _ => s!"\trt.Lean_ctor_set_uint32(r, {pos}, uint32(rt.Lean_unbox({lean})))\n"
+  | _, _ => s!"\trt.Lean_ctor_set_uint64(r, {pos}, rt.Lean_unbox({lean}))\n"
+
+def getFieldCode (cfg : RenderCfg) (v : VariantInfo) (f : FieldInfo) : String :=
+  let pos := scalarOffset v f
+  let c := f.desc.codec cfg
+  match f.slot, directScalar f.desc f.slot with
+  | "obj", _ => s!"{c}.FromLean(rt.Lean_ctor_get(v, {pos}))"
+  | _, some ("bool", _) => s!"rt.Lean_ctor_get_uint8(v, {pos}) != 0"
+  | slot, some (_, goTy) => s!"{goTy}(rt.Lean_ctor_get_{slot.replace "u" "uint"}(v, {pos}))"
+  | "usize", _ => s!"{c}.FromLean(rt.Lean_box(rt.Lean_ctor_get_usize(v, {pos})))"
+  | "u8", _ => s!"{c}.FromLean(rt.Lean_box(uint64(rt.Lean_ctor_get_uint8(v, {pos}))))"
+  | "u16", _ => s!"{c}.FromLean(rt.Lean_box(uint64(rt.Lean_ctor_get_uint16(v, {pos}))))"
+  | "u32", _ | "f32", _ => s!"{c}.FromLean(rt.Lean_box(uint64(rt.Lean_ctor_get_uint32(v, {pos}))))"
+  | _, _ => s!"{c}.FromLean(rt.Lean_box(rt.Lean_ctor_get_uint64(v, {pos})))"
+
+def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (trivial : Bool)
     (path : String) : Except String (String × Array FieldInfo) := do
   let mut flat := #[]
   let mut toFields := #[]
@@ -332,6 +367,7 @@ def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (layout 
   let mut prelude := ""
   let mut check := ""
   let mut invArgs := #[]
+  let mut setters := ""
   for (f, i) in v.fields.zipIdx do
     let fs ← flattenFields cfg #[f]
     flat := flat ++ fs
@@ -339,12 +375,14 @@ def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (layout 
     let val := if !f.flat then s!"v.{f.property}" else
       s!"{f.desc.go cfg}\{{joinArgs (fs.map fun p => s!"{p.property}: v.{p.property}")}}"
     toFields := toFields.push s!"{c}.ToLean({val})"
+    setters := setters ++ setFieldCode cfg v f val
     invArgs := invArgs.push (f.desc, val)
+    let get := if trivial then s!"{c}.FromLean(v)" else getFieldCode cfg v f
     if f.flat then
-      prelude := prelude ++ s!"\tp{i} := {c}.FromLean(layout.Get(v, {i}))\n"
+      prelude := prelude ++ s!"\tp{i} := {get}\n"
       fromFields := fromFields ++ fs.map (fun p => s!"{p.property}: p{i}.{p.property}")
     else
-      fromFields := fromFields.push s!"{f.property}: {c}.FromLean(layout.Get(v, {i}))"
+      fromFields := fromFields.push s!"{f.property}: {get}"
     let key := if f.flat then "" else if v.positional then s!", {i}" else s!", {quoteGo f.key}"
     check := check ++ s!"\tleanfran.CheckAt(e, {c}, {val}{path}{key})\n"
   let mut used : Std.HashSet String := {}
@@ -355,9 +393,13 @@ def variantFuncs (cfg : RenderCfg) (stem ty : String) (v : VariantInfo) (layout 
   let checkBody := if v.invariants.isEmpty then check else
     "\tstart := len(e.Issues)\n" ++ check ++ "\tif len(e.Issues) != start { return }\n" ++
       invariants
-  let fromLayout := if fromFields.isEmpty then "" else s!"\tlayout := {layout}\n"
-  let code := s!"func to{stem}(v {ty}) rt.V \{\n\treturn {layout}.Build([]rt.V\{{joinArgs toFields}})\n}\n\n" ++
-    s!"func from{stem}(v rt.V) {ty} \{\n{fromLayout}{prelude}\treturn {ty}\{{joinArgs fromFields}}\n}\n\n" ++
+  let toBody :=
+    if trivial then s!"\treturn {toFields[0]!}\n"
+    else if v.size == 0 && v.usize == 0 && v.ssize == 0 then s!"\treturn rt.Lean_box({v.cidx})\n"
+    else s!"\tr := rt.Lean_alloc_ctor({v.cidx}, {v.size}, {8 * v.usize + v.ssize})\n{setters}\treturn r\n"
+  let fromParam := if fromFields.isEmpty then "_" else "v"
+  let code := s!"func to{stem}(v {ty}) rt.V \{\n{toBody}}\n\n" ++
+    s!"func from{stem}({fromParam} rt.V) {ty} \{\n{prelude}\treturn {ty}\{{joinArgs fromFields}}\n}\n\n" ++
     s!"func check{stem}(e *leanfran.ValidationError, v {ty}) \{\n{checkBody}}\n\n"
   return (code, flat)
 
@@ -396,7 +438,7 @@ def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (decoder 
   let mut checks := ""
   for (v, i) in vs.zipIdx do
     let ty := v.ident
-    let (code, fields) ← variantFuncs cfg ty ty v s!"desc{name}().Variants[{i}]" s!", {quoteGo v.name}"
+    let (code, fields) ← variantFuncs cfg ty ty v false s!", {quoteGo v.name}"
     out := out ++ variantDecl cfg ty fields v.constructor ++
       s!"func ({ty}) is{name}() \{}\n\n" ++ valueMethods ty name true ++ code
     toCases := toCases ++ s!"\tcase {ty}: return to{ty}(x)\n\tcase *{ty}: return to{ty}(*x)\n"
@@ -414,14 +456,14 @@ def emitType (cfg : RenderCfg) (t : TypeDef) : Except String String := do
   let ty := (Desc.named name).go cfg
   let (body, methods) ← match t.kind with
     | .enum cases => pure (emitEnum name ty (t.model.map (·.name) |>.getD name) cases t.model.isSome, t.model.isNone)
-    | .struct v _ =>
-      let (code, fields) ← variantFuncs cfg name ty v s!"desc{name}().Variants[0]" ""
+    | .struct v trivial =>
+      let (code, fields) ← variantFuncs cfg name ty v trivial.isSome ""
       pure ((if t.model.isSome then "" else variantDecl cfg name fields v.constructor) ++ code, t.model.isNone)
     | .subtype base inv _ => pure (← emitSubtype cfg t base inv, !t.anonymous)
-    | .sum vs _ =>
+    | .sum vs trivial =>
       if vs.size == 1 then
         let v := vs[0]!
-        let (code, fields) ← variantFuncs cfg name ty v s!"desc{name}().Variants[0]" s!", {quoteGo v.name}"
+        let (code, fields) ← variantFuncs cfg name ty v trivial.isSome s!", {quoteGo v.name}"
         pure (variantDecl cfg name fields v.constructor ++ code, true)
       else
         pure (← emitSum cfg name vs t.decoder.get!, false)
