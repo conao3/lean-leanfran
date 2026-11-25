@@ -56,7 +56,7 @@ jobs:
 
   check:
     name: make check (${{ matrix.dir }})
-    needs: set
+    needs: [version, set]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -69,7 +69,9 @@ jobs:
         with:
           pattern: version-patch-*
           merge-multiple: true
-      - run: maint/apply-version.sh
+      - run: maint/apply-version.sh "$VERSION"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
       - run: make check BACKENDS=${{ matrix.dir }}
 
   tag:
@@ -86,7 +88,9 @@ jobs:
         with:
           pattern: version-patch-*
           merge-multiple: true
-      - run: maint/apply-version.sh
+      - run: maint/apply-version.sh "$VERSION"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
