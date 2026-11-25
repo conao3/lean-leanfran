@@ -1,6 +1,6 @@
 import LeanC.Build
 import LeanC.Embed.Models
-import LeanC.Embed.Verify
+import LeanC.Embed.ModelTest
 
 open Lean Lake System
 
@@ -35,7 +35,7 @@ private def makeManifest (config : Config) (blocks : Array Block) (models : Mode
     inputs := inputs.push s!"{path}:{← sha256 (← IO.FS.readFile path)}"
   let modelHash ← sha256 (Json.compress (toJson inputs))
   let configHash ← sha256 config.source
-  return {schema := 2, compiler, config := configHash, blocks := hashes, models := modelHash}
+  return {schema := 3, compiler, config := configHash, blocks := hashes, models := modelHash}
 
 private def outputFiles (blocks : Array Block) : Array String :=
   #["leanfran.h", "leanfran.pc", "leanfran.mk", "leanfran-config.cmake", "libleanfran.a"] ++
@@ -148,8 +148,9 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
 
 private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models : Models)
     (scratch stage out : FilePath) :
-    IO Unit := do
+    IO (Std.HashMap String (Array Export)) := do
   let ws ← loadWorkspace dir
+  let mut exports : Std.HashMap String (Array Export) := {}
   let mut symbols : Std.HashSet String := .ofList ["leanfran_init", "lf_project_initialized"]
   let mut modules := #[]
   let mut sources := #[]
@@ -158,7 +159,7 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models 
   for block in blocks do
     let target := {moduleName := Block.moduleName block.name, cPrefix := block.name : Target}
     let names ← match ← generate ws target scratch #[] {} {} true models.types with
-      | .ok names => pure names
+      | .ok (names, entries) => exports := exports.insert block.name entries; pure names
       | .error error => throw <| IO.userError s!"{block.file}:{block.line}:1: error: {error}"
     for name in names do
       if symbols.contains name then
@@ -200,6 +201,7 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models 
     | throw <| IO.userError s!"could not create {archive}"
   IO.FS.rename library (stage / archive)
   writeLinkFiles stage "leanfran" archive releaseVersion flags.staticFlags out
+  return exports
 
 private def checkDirectory (root path : FilePath) : IO Unit := do
   let mut parent := path
@@ -222,8 +224,18 @@ private def publish (stage out backup : FilePath) : IO Unit := do
     throw error
   if hadOutput then IO.FS.removeDirAll backup
 
-private unsafe def sync (state : FilePath) (config : Config) (blocks : Array Block) (models : Models)
-    (manifest : Manifest) :
+private def writeModelTest (root stage out : FilePath) (config : Config) (blocks : Array Block)
+    (models : Models) (verified : Array FilePath) (exports : Std.HashMap String (Array Export)) : IO Unit := do
+  let functions ← discoverModels root config blocks verified models.source
+  if functions.isEmpty then return
+  let (source, files) := modelTest functions blocks exports
+  IO.FS.writeFile (stage / modelTestSource) source
+  IO.FS.writeFile (stage / "leanfran_model_test.h") modelTestSupport
+  let mk := stage / "leanfran.mk"
+  IO.FS.writeFile mk ((← IO.FS.readFile mk) ++ modelTestMake out config (files.map (root / ·)))
+
+private unsafe def sync (root state : FilePath) (config : Config) (blocks : Array Block) (models : Models)
+    (verified : Array FilePath) (manifest : Manifest) :
     IO Unit := do
   let out := config.out
   let dir := state / "workspace"
@@ -234,7 +246,8 @@ private unsafe def sync (state : FilePath) (config : Config) (blocks : Array Blo
   let backup := transaction / "previous"
   try
     workspace dir config blocks models
-    buildProject dir blocks models (transaction / "build") stage out
+    let exports ← buildProject dir blocks models (transaction / "build") stage out
+    writeModelTest root stage out config blocks models verified exports
     IO.FS.writeFile (stage / manifestName) ((toJson manifest).pretty ++ "\n")
     publish stage out backup
   finally
@@ -278,7 +291,7 @@ unsafe def execute (command : Command) (dir : FilePath) : IO UInt32 := do
       if (← config.out.isDir) && !(← (config.out / manifestName).pathExists) then
         unless (← config.out.readDir).isEmpty do
           throw <| IO.userError s!"output directory {config.out} is nonempty and has no {manifestName}"
-      sync state config blocks models manifest
+      sync root state config blocks models verified manifest
       if let .check require := command then
         let functions ← discoverModels root config blocks verified models.source
         let modelCode ← checkModels root (state / "workspace") config functions (!models.source.isEmpty) require
