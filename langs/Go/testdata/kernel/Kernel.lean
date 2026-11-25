@@ -56,6 +56,8 @@ def initial (size : Nat) : Snapshot :=
     ⟨n.toUInt64, (18446744073709551615 : UInt64) - n.toUInt64, if n % 2 == 0 then some (18446744073709551615 : UInt64) else none,
       if n % 3 == 0 then .active else .paused⟩, 0⟩
 
+def starting : Snapshot := initial 3
+
 def transition (actor : Actor) (snapshot : Snapshot) (command : Command) :
     Except Error (Writes × UInt64) := do
   let row ← match snapshot.rows.find? (·.id == actor.tenant) with

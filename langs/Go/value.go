@@ -97,6 +97,9 @@ const mixedRegions = "leanfran: Values from different Regions in one call"
 
 func BeginValueOperation(scope *ValueScope, inputs []ValueUse) ValueOperation {
 	if scope == nil {
+		if len(inputs) == 0 {
+			return ValueOperation{}
+		}
 		var region *Region
 		for i := range inputs {
 			if owner := inputs[i].owner; owner != nil {
@@ -132,7 +135,9 @@ func (op ValueOperation) End() {
 		op.scope.mu.Unlock()
 		return
 	}
-	op.region.mu.Unlock()
+	if op.region != nil {
+		op.region.mu.Unlock()
+	}
 }
 
 func (op ValueOperation) join(o *valueOwner) {
@@ -219,14 +224,12 @@ func (op ValueOperation) Acquire(inputs []ValueUse) {
 			if r != nil {
 				panic(mixedRegions)
 			}
-			joining = joining || !inputs[i].take
+			joining = true
 		}
 	}
 	if joining {
 		for i := range inputs {
-			if !inputs[i].take {
-				op.join(inputs[i].owner)
-			}
+			op.join(inputs[i].owner)
 		}
 	}
 	for i, input := range inputs {
@@ -292,6 +295,9 @@ func WrapValueIn[T any](op ValueOperation, raw rt.V) Value[T] {
 
 func WrapFieldsIn[A, B any](op ValueOperation, pair rt.V) (Value[A], Value[B]) {
 	a, b := OwnValueField(pair, 0), OwnValueField(pair, 1)
+	if op.region == nil {
+		op.region = &defaultRegion
+	}
 	if op.scope == nil && !trackLeaks.Load() {
 		owners := &[2]valueOwner{{raw: a, region: op.region}, {raw: b, region: op.region}}
 		return Value[A]{owner: &owners[0]}, Value[B]{owner: &owners[1]}

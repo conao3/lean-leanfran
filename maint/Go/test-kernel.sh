@@ -12,8 +12,8 @@ leanc -O2 -o "$out/oracle" "$out/Kernel.c" "$out/Oracle.c"
 .lake/build/bin/leanfran-go module generate --module-name Kernel --search-path "$out" --output-dir "$generated"
 cp testdata/kernel/*_test.go "$generated/"
 go vet "./$generated"
-LEANFRAN_KERNEL_ORACLE="$out/oracle" go test -count=1 "./$generated" -skip TestRegionThroughput
-LEANFRAN_KERNEL_ORACLE="$out/oracle" CGO_ENABLED=1 go test -race -count=1 "./$generated" -run 'TestConcurrentValues|TestSharedValues|TestValueScope|TestRegionsConcurrent|TestRegionSharedValue|TestMixedRegions|TestRegionsRunTogether|TestRegionHoldsItsHandles'
+LEANFRAN_KERNEL_ORACLE="$out/oracle" go test -count=1 "./$generated" -skip 'TestRegionThroughput|TestTakeUnaffiliatedFromTwoRegions|TestUnscopedZeroInputCallInRegion'
+LEANFRAN_KERNEL_ORACLE="$out/oracle" CGO_ENABLED=1 go test -race -count=1 "./$generated" -run 'TestConcurrentValues|TestSharedValues|TestValueScope|TestRegionsConcurrent|TestRegionSharedValue|TestMixedRegions|TestRegionsRunTogether|TestRegionHoldsItsHandles|TestTakeUnaffiliatedFromTwoRegions|TestUnscopedZeroInputCallInRegion'
 
 typecheck="$out/_typecheck"
 mkdir -p "$typecheck"
