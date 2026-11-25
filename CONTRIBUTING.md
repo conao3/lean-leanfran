@@ -27,6 +27,8 @@ Build compiler packages with `nix build .#python` or select the `.#typescript`, 
 
 Keep native-oracle differential tests, host-language tests, and sample verification in the backend's `make check`. CI executes that command for all backends, checks PHP with PHP 8.4 and 8.5 and Go with Go 1.27 and 1.26, and builds the Python, TypeScript, Clojure, PHP, Go, and C Nix packages. CI also checks Go and C on macOS arm64. The PHP check also covers embedded models, PHP-to-Lean translation and proof states, and seeded tests against generated Lean specifications.
 
+The Rust and PHP environments contain store paths that cache.nixos.org lacks: Aeneas with Charon, and PHPStan built for the selected PHP. `maint/ci-nix-cache.sh save` exports those paths from the realised shells, and `maint/ci-nix-cache.sh restore` imports them before the CI and Release checks enter the shells. The GitHub Actions cache keeps the export under a key derived from `flake.nix` and `flake.lock`. Paths over 500 MB, the unpacked Rust toolchain parts, are rebuilt from their downloads instead of exported. The checks themselves start from clean build outputs. The version step and the crates.io and Packagist publish jobs use only the tools they need, through `nix shell --inputs-from`, without entering the development environments.
+
 ## Packaging
 
 [LICENSE](LICENSE) applies to all backends. Cargo inherits its path from the Rust workspace. Hatch includes it in Python wheels and source distributions. The TypeScript `make pack` target copies it into `dist/LICENSE`, and the Clojure JAR builder includes it as `META-INF/LICENSE`. The PHP runtime declares the repository's Apache-2.0 license in its Composer manifest.

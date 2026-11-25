@@ -30,7 +30,7 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
       - uses: cachix/install-nix-action@v32.0.0
-      - run: nix develop ../..#rust -c cargo publish --workspace --dry-run
+      - run: nix shell --inputs-from ../.. nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c cargo publish --workspace --dry-run
       - uses: rust-lang/crates-io-auth-action@v1.0.6
         id: auth
       - run: |
@@ -39,7 +39,7 @@ jobs:
             if curl -sf -A "lean-leanfran publish (github.com/conao3/lean-leanfran)" "https://crates.io/api/v1/crates/$crate/$version" > /dev/null; then
               echo "$crate $version is already on crates.io"
             else
-              nix develop ../..#rust -c cargo publish -p "$crate"
+              nix shell --inputs-from ../.. nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c cargo publish -p "$crate"
             fi
           done
         env:
@@ -179,7 +179,7 @@ jobs:
         if: steps.packagist.outputs.published == 'false'
         run: |
           : "${TAG:?TAG is required}" "${RUNNER_TEMP:?RUNNER_TEMP is required}"
-          nix develop .#php -c bash maint/PHP/mirror-snapshot.sh "$TAG" "$RUNNER_TEMP/php-mirror-snapshot"
+          nix shell --inputs-from . nixpkgs#php84 nixpkgs#php84Packages.composer -c bash maint/PHP/mirror-snapshot.sh "$TAG" "$RUNNER_TEMP/php-mirror-snapshot"
       - name: Push the snapshot and tag to the mirror
         if: steps.packagist.outputs.published == 'false'
         env:
@@ -198,7 +198,7 @@ jobs:
           github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
           EOF
           export GIT_SSH_COMMAND="ssh -F /dev/null -i \"$ssh_dir/deploy-key\" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=\"$ssh_dir/known_hosts\" -o HostKeyAlgorithms=ssh-ed25519"
-          nix develop .#php -c bash maint/PHP/mirror-push.sh "$TAG" "$RUNNER_TEMP/php-mirror-snapshot" git@github.com:conao3/leanfran-php.git
+          nix shell --inputs-from . nixpkgs#php84 nixpkgs#php84Packages.composer -c bash maint/PHP/mirror-push.sh "$TAG" "$RUNNER_TEMP/php-mirror-snapshot" git@github.com:conao3/leanfran-php.git
       - name: Request a Packagist update
         if: steps.packagist.outputs.published == 'false'
         env:
