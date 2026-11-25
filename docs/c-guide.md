@@ -115,6 +115,27 @@ Call `<type>_ref_share(handle)` on the owning thread before publishing a handle 
 
 On an Intel Core i5-8400 with the standard Nix C development shell and Lean 4.35.0, summing an array of 100 line items took 7.485 µs per call through the ordinary public function and 0.078 µs per call through the value handle function. Each timing averages 100,000 calls. Each row contains a string, a quantity, and a price. The handle timing reuses an input handle created before the timed loop and includes reading and releasing each result handle. Run `nix shell nixpkgs#gnumake -c make check BACKENDS=C` from the repository root to run the same benchmark.
 
+## Generation checks
+
+- If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning.
+- If the module imports the Lean compiler directly or indirectly, generation reports the import chain and exits with status 254. `--allow-lean-import` enables the compiler dependency in the generated link configuration.
+- Supply the C symbols listed in `<prefix>.externs.txt` when linking the consumer. An extern for another backend, such as `go:foreign.Increment`, is rejected during generation. `<prefix>.implemented-by.txt` lists Lean declarations that call a replacement implementation.
+
+## Link the library
+
+The default build produces `lib<prefix>.a`. Use `leanfran-c build --shared --out-dir out` for `lib<prefix>.so` on Linux or `lib<prefix>.dylib` on macOS, linked with `libleanshared`. The build also writes link settings for all three build tools.
+
+- **pkg-config** accepts `out/pricing.pc` in the command above. For a path containing spaces, get the flags through your build system so it can preserve argument boundaries.
+- **GNU Make** can include `out/pricing.mk`. Compile with `$(PRICING_CFLAGS)` and put `$(PRICING_LDLIBS)` after the source or object arguments.
+- **CMake** can use `find_package(pricing CONFIG REQUIRED)` and `target_link_libraries(pricing-demo PRIVATE pricing::pricing)`. Set `-Dpricing_DIR=/absolute/path/to/out` when configuring.
+
+The generated settings use absolute paths to the output directory and the active Lean toolchain. Run generation and build again if either moves. Keep the shared library and its Lean runtime dependencies available at the recorded paths when running a dynamically linked executable.
+
+### GMP when distributing binaries
+
+Inspect `leanc --print-ldflags` and the generated link settings to see which GMP your build uses. The Linux Lean distribution installed by elan can link GMP statically. To link against shared GMP, use the project's Nix Lean environment with `nix develop .#c` and regenerate and build the bindings with that toolchain.
+
+GMP is available under LGPLv3 or GPLv2. If you distribute a statically linked executable under the LGPLv3 terms for GMP, see section 4 for notices, license texts, and the materials and terms that let recipients relink the executable with a modified GMP. The section also describes the shared-library option. [GMP licensing](https://gmplib.org/#WHAT) and [LGPLv3 section 4](https://www.gnu.org/licenses/lgpl-3.0.html#section4).
 
 ## Embed Lean in C sources
 
@@ -130,7 +151,7 @@ theorem total_empty : total #[] = 0 := rfl
 #include "pricing.h"
 ```
 
-A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks. A Lean string that needs `*/` can write it as `"*" ++ "/"`.
+A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks. The block's Lean code can begin with `import` lines for modules of the `[[require]]` packages and for `LeanCLib.C`, which defines the C operations and `C.Status` used in [Verify a C function in Lean](#verify-a-c-function-in-lean). A Lean string that needs `*/` can write it as `"*" ++ "/"`.
 
 ```toml
 # leanfran.toml
@@ -149,7 +170,7 @@ path = "../pricing-rules"
 | `sources` | Glob patterns for C files to scan. `**` matches any number of directories. |
 | `lean-files` | Lean files added as blocks. The file name is the block name. |
 | `out-dir` | Output directory inside the project. The default is `leanfran`. |
-| `cflags` | Compiler flags clang uses to read `LF_STRUCT` files that `compile_commands.json` does not cover. |
+| `cflags` | Compiler flags clang uses to read files with `LF_STRUCT` or `LF_MODEL` that `compile_commands.json` does not cover. |
 | `[[require]]` | Lake dependencies, copied to the workspace. A relative `path` is resolved from the project root. |
 
 The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, `leanfran-config.cmake`, and `leanfran.manifest.json`. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
@@ -196,7 +217,7 @@ Fields use `bool`, the fixed-width integer types, `size_t`, `float`, `double`, `
 
 Declare `LF_STRUCT` structs in a header that includes `leanfran.h`. The block's generated header includes that header by a path relative to the output directory and defines `<prefix>_<name>` as an alias, so the C program passes its own struct to the generated functions. The wrappers check each constraint and return `LF_INVALID` with the type and proof field, as in `Invalid order.qty_ge`.
 
-`LF_STRUCT` and `LF_FIELD` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads the marked files with `clang -Xclang -ast-dump=json`, so clang must be on `PATH` only for projects that use `LF_STRUCT`. clang takes each file's flags from `compile_commands.json` in the project root. A header uses the flags of the first entry that includes it. Files without an entry use `cflags`.
+`LF_STRUCT` and `LF_FIELD` expand to clang `annotate` attributes and to nothing for other compilers. `sync`, `status`, and `check` read the files with `LF_STRUCT` or `LF_MODEL` using `clang -Xclang -ast-dump=json`, so a project that uses either needs clang on `PATH`. clang takes a file's flags from the first entry for that file in `compile_commands.json` in the project root. A header uses the flags of the first entry that includes it. Files without an entry use `cflags`. clang also searches the output directory for headers, so a C file can include a block's generated header by name.
 
 ## Verify a C function in Lean
 
@@ -221,12 +242,12 @@ int32_t clamp(int32_t lo, int32_t hi, int32_t x) {
 
 | `LF_MODEL` argument | Meaning |
 | --- | --- |
-| `refines=<name>` | A Lean function with the same arguments that returns the expected result. |
+| `refines=<name>` | A Lean function with the same arguments that returns the expected result. For a function that returns `lf_status` with an `out` pointer, the result is `C.Status × Option T`, where `T` is the Lean type of `*out`. |
 | `requires=<name>` | A Lean function with the same arguments that returns `Bool`. Every obligation assumes it returns `true`. |
 | `ensures=<label>:<name>` | A Lean function returning `Bool` that takes the arguments followed by the result. Use a distinct label for each postcondition. |
 | `spec=<block>` | The Lean block that contains the names. The default is the only block in the file that contains `LF_MODEL`. |
 
-Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers, so `check` needs clang on `PATH`.
+Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads `LF_MODEL` functions to generate the [model test](#model-test), so `sync`, `status`, and `check` need clang on `PATH`.
 
 ### Obligations and proof status
 
@@ -271,13 +292,13 @@ leanfran-c status
 
 The translator accepts `static` and external functions with these parts.
 
-- Types: `int8_t` to `int64_t`, `uint8_t` to `uint64_t`, `int` and `unsigned` (32 bits), `long` and `unsigned long` (64 bits), `size_t`, `bool`, `double`, `LF_STRUCT` structs and the generated record types passed by value, and `LF_ARRAY` arrays. A function returns one value, or `lf_status` with a final `out` pointer.
+- Types: `int8_t` to `int64_t`, `uint8_t` to `uint64_t`, `int` and `unsigned` (32 bits), `long` and `unsigned long` (64 bits), `size_t`, `bool`, `double`, `LF_STRUCT` structs and the generated record types passed by value, and `LF_ARRAY` arrays. Generated enums and tagged unions are outside the subset. A function returns one value, or `lf_status` with a final `out` pointer.
 - Statements: local declarations with initializers, assignment, compound assignment, `++`, `--`, `if`, `switch` with `break`-terminated cases, `for`, `while`, `do while`, `break`, `continue`, and `return`.
 - Expressions: integer and `double` arithmetic, comparisons, bitwise operators and shifts, `&&`, `||`, `!`, `?:`, array and field reads, integer conversions, and calls to other translated functions.
 
-Keep other pointers, writes to fields and array elements, globals and `static` locals, I/O, `goto`, recursion, variadic functions, unions, function pointers, `volatile`, uninitialized locals, `switch` fallthrough, string literals, and the floating-point environment outside modeled functions. Implementation-defined behavior follows GCC and Clang: right shifts of negative values are arithmetic, and conversions to signed types wrap. `double` operations use Lean's `Float`.
+Keep other pointers, calls that pass an array or an `out` pointer, assignments, `++`, `--`, and the comma operator used as values, writes to fields and array elements, struct literals, `malloc` and `free`, globals and `static` locals, I/O, `goto`, recursion, variadic functions, unions, function pointers, `volatile`, uninitialized locals, `switch` fallthrough, string literals, and the floating-point environment outside modeled functions. `check` reports a function that uses any of them as `unextracted` with the C file, line, column, and reason. Implementation-defined behavior follows GCC and Clang: right shifts of negative values are arithmetic, and conversions to signed types wrap. `double` operations use Lean's `Float`.
 
-A `proved` obligation is a theorem about the translated definition. The trusted pieces outside each proof are the translator, clang's AST, [the operation model](../langs/C/lean/LeanCLib/C.lean), and the C compiler. The repository tests them. The operation tests compare `LeanCLib.C` with GCC and Clang at `-O0` and `-O2` and match each modeled failure with the UBSan diagnostic. The translation tests compare translated functions with the compiled C. The model test below runs your implementation against the spec.
+A `proved` obligation is a theorem about the translated definition. The trusted pieces outside each proof are the translator, clang's AST, [the operation model](../langs/C/lean/LeanCLib/C.lean), and the C compiler. The repository tests them. The operation tests compare `LeanCLib.C` with GCC and Clang at `-O0` and `-O2` and match each modeled failure with the UBSan diagnostic. The translation tests compare translated functions with the compiled C, and inputs that make a translation fail must stop the C function under UBSan. Out-of-range array reads are the exception: UBSan does not detect them through pointers, so the tests do not compare those failures with C. The model test below runs your implementation against the spec.
 
 ### Model test
 
@@ -299,25 +320,3 @@ clamp.clamp [refines]: mismatch (seed 1, run 0)
 The target builds the test with your source files that contain the modeled functions, using `$(CC) -fno-wrapv -fsanitize=undefined,float-cast-overflow -fno-sanitize-recover=all` with `$(CFLAGS)` and `cflags` from `leanfran.toml`. UBSan stops the test at the first undefined behavior in your C code. A mismatch prints the seed, the run, the input, and both results. In both cases the test exits with status 1. `LEANFRAN_RUNS` sets the number of inputs (200 by default) and `LEANFRAN_SEED` sets the seed (1 by default). Including `leanfran.mk` in a Makefile leaves its default goal unchanged.
 
 The test does not cover `static` functions, `lf_status` results, struct arguments or results, or specs whose public C function has a different signature. It prints a `skipped:` line with the reason for each. The source files the test links must not define `main`. Nix's C compiler wrapper adds `-fwrapv` through its hardening flags. The target's `-fno-wrapv` turns it off so UBSan reports signed overflow.
-
-## Generation checks
-
-- If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning.
-- If the module imports the Lean compiler directly or indirectly, generation reports the import chain and exits with status 254. `--allow-lean-import` enables the compiler dependency in the generated link configuration.
-- Supply the C symbols listed in `<prefix>.externs.txt` when linking the consumer. An extern for another backend, such as `go:foreign.Increment`, is rejected during generation. `<prefix>.implemented-by.txt` lists Lean declarations that call a replacement implementation.
-
-## Link the library
-
-The default build produces `lib<prefix>.a`. Use `leanfran-c build --shared --out-dir out` for `lib<prefix>.so` on Linux or `lib<prefix>.dylib` on macOS, linked with `libleanshared`. The build also writes link settings for all three build tools.
-
-- **pkg-config** accepts `out/pricing.pc` in the command above. For a path containing spaces, get the flags through your build system so it can preserve argument boundaries.
-- **GNU Make** can include `out/pricing.mk`. Compile with `$(PRICING_CFLAGS)` and put `$(PRICING_LDLIBS)` after the source or object arguments.
-- **CMake** can use `find_package(pricing CONFIG REQUIRED)` and `target_link_libraries(pricing-demo PRIVATE pricing::pricing)`. Set `-Dpricing_DIR=/absolute/path/to/out` when configuring.
-
-The generated settings use absolute paths to the output directory and the active Lean toolchain. Run generation and build again if either moves. Keep the shared library and its Lean runtime dependencies available at the recorded paths when running a dynamically linked executable.
-
-### GMP when distributing binaries
-
-Inspect `leanc --print-ldflags` and the generated link settings to see which GMP your build uses. The Linux Lean distribution installed by elan can link GMP statically. To link against shared GMP, use the project's Nix Lean environment with `nix develop .#c` and regenerate and build the bindings with that toolchain.
-
-GMP is available under LGPLv3 or GPLv2. If you distribute a statically linked executable under the LGPLv3 terms for GMP, see section 4 for notices, license texts, and the materials and terms that let recipients relink the executable with a modified GMP. The section also describes the shared-library option. [GMP licensing](https://gmplib.org/#WHAT) and [LGPLv3 section 4](https://www.gnu.org/licenses/lgpl-3.0.html#section4).
