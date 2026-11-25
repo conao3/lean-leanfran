@@ -8,18 +8,18 @@ type taskState struct {
 }
 
 func newTask(value V, finished bool) V {
-	return V{p: &Obj{rc: 1, kind: kindTask, fs: []V{value}, x: &taskState{finished: finished}}}
+	return V{p: newObjX(kindTask, []V{value}, &taskState{finished: finished})}
 }
 
 func taskResult(task V) (V, bool) {
-	state := task.p.x.(*taskState)
+	state := task.p.ext().x.(*taskState)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	return task.p.fs[0], state.finished
 }
 
 func resolveTask(task, value V) {
-	state := task.p.x.(*taskState)
+	state := task.p.ext().x.(*taskState)
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.finished {
@@ -100,7 +100,7 @@ func Lean_io_get_task_state(task V) uint8 {
 }
 
 func Lean_io_promise_new() V {
-	return V{p: &Obj{rc: 1, kind: kindPromise, fs: []V{newTask(V{}, false)}}}
+	return V{p: newObjX(kindPromise, []V{newTask(V{}, false)}, nil)}
 }
 
 func Lean_io_promise_resolve(value, promise V) V {

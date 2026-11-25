@@ -1,6 +1,9 @@
 package rt
 
-import "math"
+import (
+	"math"
+	"unsafe"
+)
 
 type V struct {
 	p *Obj
@@ -12,8 +15,19 @@ type Obj struct {
 	tag  uint16
 	kind uint8
 	fs   []V
-	x    any
 }
+
+type objX struct {
+	Obj
+	x any
+}
+
+func newObjX(kind uint8, fs []V, x any) *Obj {
+	o := &objX{Obj: Obj{rc: 1, kind: kind, fs: fs}, x: x}
+	return &o.Obj
+}
+
+func (o *Obj) ext() *objX { return (*objX)(unsafe.Pointer(o)) }
 
 const (
 	kindCtor uint8 = iota
@@ -44,6 +58,9 @@ func Lean_is_shared(v V) bool         { return v.p != nil && v.p.rc > 1 }
 func Lean_obj_tag(v V) uint64 {
 	if v.p == nil {
 		return v.n
+	}
+	if v.p.kind == kindCtor {
+		return uint64(v.p.tag)
 	}
 	switch v.p.kind {
 	case kindClosure:
@@ -99,7 +116,12 @@ func Lean_dec(v V) {
 	if v.p.rc != 0 {
 		return
 	}
-	stack := []*Obj{v.p}
+	freeObj(v.p)
+}
+
+func freeObj(root *Obj) {
+	var buf [16]*Obj
+	stack := append(buf[:0], root)
 	for len(stack) != 0 {
 		i := len(stack) - 1
 		o := stack[i]
@@ -116,12 +138,9 @@ func Lean_dec(v V) {
 			}
 		}
 		if o.kind == kindHandle {
-			o.x.(*fileHandle).close()
+			o.ext().x.(*fileHandle).close()
 		}
 		o.rc = -1
-		clear(o.fs)
-		o.fs = nil
-		o.x = nil
 	}
 }
 
@@ -149,17 +168,67 @@ func Lean_mark_persistent(v V) V {
 	return v
 }
 
+type ctor1 struct {
+	Obj
+	fields [1]V
+}
+
+type ctor2 struct {
+	Obj
+	fields [2]V
+}
+
+type ctor3 struct {
+	Obj
+	fields [3]V
+}
+
+type ctor4 struct {
+	Obj
+	fields [4]V
+}
+
+type ctor6 struct {
+	Obj
+	fields [6]V
+}
+
+type ctor8 struct {
+	Obj
+	fields [8]V
+}
+
 func Lean_alloc_ctor(tag uint16, numObjs, scalarBytes int) V {
 	words := numObjs + (scalarBytes+7)/8
 	var p *Obj
-	if words <= 4 {
-		o := &struct {
-			Obj
-			fields [4]V
-		}{}
-		o.fs = o.fields[:words:words]
+	switch {
+	case words == 0:
+		p = &Obj{}
+	case words == 1:
+		o := &ctor1{}
+		o.fs = o.fields[:]
 		p = &o.Obj
-	} else {
+	case words == 2:
+		o := &ctor2{}
+		o.fs = o.fields[:]
+		p = &o.Obj
+	case words == 3:
+		o := &ctor3{}
+		o.fs = o.fields[:]
+		p = &o.Obj
+	case words == 4:
+		o := &ctor4{}
+		o.fs = o.fields[:]
+		p = &o.Obj
+	case words <= 6:
+		o := &ctor6{}
+		o.fs = o.fields[:words]
+		p = &o.Obj
+	case words <= 8:
+		o := &ctor8{}
+		o.fs = o.fields[:words]
+		p = &o.Obj
+	default:
 		p = &Obj{fs: make([]V, words)}
 	}
 	p.rc = 1

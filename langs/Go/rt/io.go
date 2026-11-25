@@ -320,7 +320,7 @@ type fileHandle struct {
 
 func newHandle(file *os.File, owned bool) V {
 	h := &fileHandle{file: file, reader: bufio.NewReader(file), owned: owned}
-	return V{p: &Obj{rc: 1, kind: kindHandle, x: h}}
+	return V{p: newObjX(kindHandle, nil, h)}
 }
 
 func (h *fileHandle) close() {
@@ -332,7 +332,7 @@ func (h *fileHandle) close() {
 	}
 }
 
-func handle(v V) *fileHandle { return v.p.x.(*fileHandle) }
+func handle(v V) *fileHandle { return v.p.ext().x.(*fileHandle) }
 
 func Lean_io_prim_handle_mk(name V, mode uint8) V {
 	flags := [...]int{
