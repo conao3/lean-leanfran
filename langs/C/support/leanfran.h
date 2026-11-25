@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define LEANFRAN_VERSION "0.10.0"
+#define LEANFRAN_VERSION "0.11.1"
 
 typedef enum {
     LF_OK,
