@@ -43,7 +43,7 @@ C applications build the compiler and support files with `nix build .#c`. See th
 
 ## Releases
 
-Start the `Release` workflow once per release. It updates the shared version, checks every backend, pushes the release commit and tag, and starts `Publish`. Concurrent `Release` runs execute one at a time. If publishing to any registry fails, rerun `Publish` with the same tag. It skips versions already published.
+Start the `Release` workflow once per release. It updates the shared version and checks every backend on the release commit, which is the `master` commit the run started from plus the version changes. It then pushes the `vX.Y.Z` tag on the release commit, starts `Publish` from that tag, and brings the release commit into `master`: a fast-forward when `master` has not moved, or a merge commit `Merge release vX.Y.Z into master` when it has. Pull requests may merge while a release runs. If the merge conflicts or `master` was rewound, the job fails after the tag and `Publish` have started and prints the command to merge the tag into `master` by hand. The next `Release` stops until `master` contains the latest tag. Concurrent `Release` runs execute one at a time; a run that waited behind another stops in its first job, so start it again from the latest `master`. If publishing to any registry fails, rerun `Publish` with the same tag. It skips versions already published.
 
 `Publish` distributes the `vX.Y.Z` tag to crates.io, PyPI, npm, Clojars, Packagist, and the Go module mirror. PHP and Go carry the shared release version in their compiler entry points. Go also records it in the root Go package. Generator versions track emitted-code compatibility separately from release versions.
 
