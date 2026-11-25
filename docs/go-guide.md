@@ -309,17 +309,19 @@ The region's mutex also serializes the callbacks of one tenant, so `t.snapshot` 
 
 The kernel fixture measures `transition`, `apply`, and reading the reply in Go. For handle measurements, it prepares the actor and command outside the timed loop and hands the snapshot to `apply` with `Take`. The final-row benchmark selects the last row on every call.
 
-On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU, with a load average of 8 to 9 from other work on the six cores, was:
+On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU, with a load average of 7 to 9 from other work on the six cores, was:
 
 | Snapshot rows | Ordinary wrappers, first row | Handles, first row | Handles, final row | Scoped handles, final row |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 | | | 0.90 µs, 6 allocs | 0.73 µs, 5 allocs |
-| 10 | 7.48 µs, 71 allocs | 0.67 µs, 6 allocs | | |
-| 100 | 64.58 µs, 575 allocs | 0.67 µs, 6 allocs | 3.58 µs, 6 allocs | 3.36 µs, 5 allocs |
-| 1,000 | 721.71 µs, 5,534 allocs | 0.89 µs, 6 allocs | 45.09 µs, 6 allocs | 31.46 µs, 5 allocs |
-| 10,000 | | | 0.85 ms, 6 allocs | 0.90 ms, 5 allocs |
+| 1 | | | 0.64 µs, 6 allocs | 0.68 µs, 5 allocs |
+| 10 | 6.28 µs, 71 allocs | 0.65 µs, 6 allocs | | |
+| 100 | 51.31 µs, 575 allocs | 0.61 µs, 6 allocs | 2.79 µs, 6 allocs | 3.00 µs, 5 allocs |
+| 1,000 | 536.02 µs, 5,534 allocs | 0.63 µs, 6 allocs | 26.78 µs, 6 allocs | 25.61 µs, 5 allocs |
+| 10,000 | | | 0.54 ms, 6 allocs | 0.47 ms, 5 allocs |
 
-At 100 rows, the first-row handle benchmark took 1.07 µs with 6 allocations under the server mutex. Converting a Go command each time took 1.19 µs with 8 allocations. Finding a missing row walks the whole list in 9.8 ns per row at 1,000 rows and 9.1 ns per row at 10,000 rows without allocating.
+At 100 rows, the first-row handle benchmark took 0.63 µs with 6 allocations under the server mutex. Converting a Go command each time took 0.81 µs with 8 allocations. Finding a missing row walks the whole list in 5.4 ns per row at 1,000 rows and 6.8 ns per row at 10,000 rows without allocating.
+
+`make test-value-regions` runs a scoped command with Go conversions on a one-row snapshot. On the Linux amd64 CI runner (4 CPUs, Go 1.27.3), one goroutine in one region completed 2.0 to 2.1 million commands per second, and eight goroutines in eight regions completed 3.3 to 3.9 million, 1.7 to 2.0 times as many. The same Lean functions without a handle lock scaled by 1.6 to 1.9 times, so allocation and garbage collection, not the region mutex, bound the speedup.
 
 ## JSON and JSON Schema
 
