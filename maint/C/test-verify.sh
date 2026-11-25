@@ -62,9 +62,9 @@ expect_state clamp refines failed
 grep -Eq '^error: lean/Proofs/States\.lean:[0-9]+:[0-9]+:' "$scratch/err"
 cp "$scratch/states.c" "$source"
 
+run 1 check
 sed 's/^uint32_t proved(uint32_t n) { return n + 1; }/uint32_t proved(uint32_t n)   {  return n + 1;  }/' \
     "$scratch/states.c" >"$source"
-run 1 check
 run 0 status
 expect_state proved refines proved
 cp "$scratch/states.c" "$source"
@@ -103,4 +103,41 @@ run 1 status
 run 0 check
 test "$(grep -c '^states\.' "$scratch/out")" -eq 0
 run 0 status
+
+app="$scratch/header"
+mkdir -p "$app/src" "$app/include"
+printf 'sources = ["src/*.c", "include/*.h"]\n' >"$app/leanfran.toml"
+cat >"$app/include/header.h" <<'C'
+/* leanfran:lean header
+def incSpec (n : UInt32) : UInt32 := n + 1
+def addSpec (a b : Int32) : Int32 := a + b
+def addOk (a b r : Int32) : Bool := r == a + b
+def small (a b : Int32) : Bool := a < 100 && b < 100 && a > -100 && b > -100
+*/
+#include "leanfran.h"
+
+LF_MODEL("refines=incSpec")
+uint32_t inc(uint32_t n);
+
+LF_MODEL("refines=incSpec")
+uint32_t lost(uint32_t n);
+C
+cat >"$app/src/impl.c" <<'C'
+#include "../include/header.h"
+
+uint32_t inc(uint32_t n) { return n + 1; }
+
+LF_MODEL("refines=addSpec", "ensures=sum:addOk", "requires=small", "spec=header")
+int32_t add(int32_t a, int32_t b) { return a + b; }
+C
+run 1 check --require proved
+for row in 'inc refines missing' 'lost refines unextracted' 'add refines missing' 'add sum missing'; do
+    read -r fn label state <<<"$row"
+    grep -Fxq "header.$fn [$label]: $state" "$scratch/out"
+done
+grep -Fxq 'include/header.h:13:10: unextracted lost: LF_MODEL function has no definition in the configured sources' \
+    "$scratch/err"
+model="$app/.leanfran/workspace/LeanCModel/header/Fn_add.lean"
+grep -Fq '= true → «add» «a» «b» = Except.ok (_root_.«addSpec» «a» «b»)' "$model"
+grep -Fq '= true → ∃ r, «add» «a» «b» = Except.ok r ∧ _root_.«addOk» «a» «b» r = true' "$model"
 echo "verify: obligation states, stale results and --require proved checked"
