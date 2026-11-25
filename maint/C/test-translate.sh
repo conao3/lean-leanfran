@@ -71,8 +71,10 @@ fi
 awk '{ n[$1]++ } n[$1] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \
     >"$scratch/undefined-inputs.txt"
 grep '= !indexOutOfRange$' "$scratch/lean.txt" | sed 's/ = .*//' |
-    awk '$1 == "at" && $NF >= -16 && $NF < $3 + 16' >"$scratch/out-of-range.txt"
-test -s "$scratch/out-of-range.txt"
+    awk '($1 == "at" && $NF >= -16 && $NF < $3 + 16) || $1 == "sum_prefix"' \
+    >"$scratch/out-of-range.txt"
+grep -q '^at ' "$scratch/out-of-range.txt"
+grep -q '^sum_prefix ' "$scratch/out-of-range.txt"
 printf '%s\n' 'at Bi 0 0' 'at Bi 3 1 2 3 3' 'at Bi 3 1 2 3 -1' >"$scratch/edge-inputs.txt"
 "$project/.lake/build/bin/oracle" <"$scratch/edge-inputs.txt" >"$scratch/edge.txt"
 test "$(grep -c '= !indexOutOfRange$' "$scratch/edge.txt")" -eq 3
