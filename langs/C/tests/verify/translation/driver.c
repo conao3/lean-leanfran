@@ -244,24 +244,27 @@ static void evaluate(char *line) {
     } else if (NAME("switch_loop")) {
         printf("%" PRId32, switch_loop(read_int()));
     } else if (NAME("sum")) {
-        int64_t xs[8];
         size_t n = read_uint();
+        int64_t *xs = malloc(n * sizeof(*xs));
         for (size_t i = 0; i < n; i++)
             xs[i] = read_int();
         printf("%" PRId64, sum(xs, n));
+        free(xs);
     } else if (NAME("at")) {
-        int32_t xs[8];
         size_t n = read_uint();
+        int32_t *xs = malloc(n * sizeof(*xs));
         for (size_t i = 0; i < n; i++)
             xs[i] = read_int();
         int32_t i = read_int();
         printf("%" PRId32, at(xs, n, i));
+        free(xs);
     } else if (NAME("total")) {
-        item items[8];
         size_t n = read_uint();
+        item *items = malloc(n * sizeof(*items));
         for (size_t i = 0; i < n; i++)
             items[i] = read_item();
         printf("%" PRId64, total(items, n));
+        free(items);
     } else if (NAME("item_value")) {
         printf("%" PRId64, item_value(read_item()));
     } else if (NAME("dot")) {
