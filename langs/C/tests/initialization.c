@@ -15,6 +15,7 @@ static void *initialize(void *unused) {
         sched_yield();
     }
     assert(public_api_init(NULL) == LF_OK);
+    lf_thread_detach();
     return NULL;
 }
 

@@ -90,6 +90,32 @@ Records use Lean field names, enums use constructor names, and variants with pay
 
 Generation writes `<prefix>.schema.json` in draft 2020-12. A single API type appears at the document root. With multiple API types, select the type in `$defs` using the part of the function name before `_to_json`. The schema follows the Go backend's rules for field bounds and recursive references.
 
+## Value handles
+
+A value handle is an owned reference to a Lean value. Use handles to pass a value through several calls while keeping its Lean representation. The generated header declares a `<type>_ref` struct for each type. For built-in types the name includes the module prefix, `type_`, and a Lean type stem, such as `pricing_type_uint64_ref` or `pricing_type_string_ref`. Use a zero-initialized struct for an empty handle and treat its `obj` field as opaque.
+
+| Operation | Ownership |
+| --- | --- |
+| `<type>_ref_from(&value, &handle, &error)` | Borrows the C value and returns an owned handle. |
+| `<type>_ref_get(handle, &value, &error)` | Borrows the handle and returns a C value with the usual output ownership. |
+| `<type>_ref_retain(handle)` | Returns another owned reference to the same Lean value. |
+| `<type>_ref_release(handle)` | Releases one owned reference. An empty handle is safe to release. |
+| `<prefix>_<function>_ref(..., &handle, &error)` | Borrows its handle arguments and returns an owned handle on success. |
+| `<prefix>_<function>_ref_take(..., &handle, &error)` | Transfers one owned reference per argument to Lean and returns an owned handle on success. An exclusive array can reuse its storage. |
+
+Assigning a handle struct copies its pointer. Call `_ref_retain` whenever two owners need separate references. Release an owned output before reusing its storage. Unit-returning functions keep the status-only signature. `_ref_take` checks module initialization, empty inputs, and the output pointer before consuming any arguments. Once Lean runs, it consumes the arguments even if it returns `LF_EXCEPT` or `LF_IO`. Discard the transferred input handles and use the output only on success. Use an input handle’s own storage for the output when the types match and you intend to replace the transferred reference. If Lean returns an error, clear that slot before using it again.
+
+### Call from another thread
+
+`<prefix>_init` attaches its caller to the Lean runtime. After module initialization, call `lf_thread_attach()` on each additional C thread before it uses Lean. Call `lf_thread_detach()` when the thread is done with Lean, after releasing its references. Repeated attach calls on the same thread need a single detach.
+
+Call `<type>_ref_share(handle)` on the owning thread before publishing a handle to another thread. Publish it with ordinary thread synchronization, such as passing it to `pthread_create`. Sharing marks the Lean value and its reachable objects for atomic reference counting. The caller still owns the same reference. Keep a reference alive while another thread borrows it, or transfer or retain a reference for that thread to release.
+
+### Performance
+
+On an Intel Core i5-8400 with the standard Nix C development shell and Lean 4.35.0, summing an array of 100 line items took 7.485 µs per call through the ordinary public function and 0.078 µs per call through the value handle function. Each timing averages 100,000 calls. Each row contains a string, a quantity, and a price. The handle timing reuses an input handle created before the timed loop and includes reading and releasing each result handle. Run `nix shell nixpkgs#gnumake -c make check BACKENDS=C` from the repository root to run the same benchmark.
+
+
 ## Generation checks
 
 - If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning.

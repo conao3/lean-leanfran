@@ -237,4 +237,14 @@ def emitJsonWrappers (apis : Array JsonApi) : String :=
     s!"else status = {api.type.converter}_from_lean(lean_ctor_get(value, 0), out, err);\n" ++
     "lean_dec(result);\nreturn status;\n}\n\n")
 
+def emitExcept (name value : String) : String :=
+  "if (err == NULL) { status = LF_EXCEPT; goto done; }\n" ++
+  s!"lean_object *payload = lean_ctor_get({value}, 0);\n" ++
+  "lean_inc(payload);\nlean_object *boxed = lean_alloc_ctor(0, 2, 0);\n" ++
+  "lean_ctor_set(boxed, 0, payload);\nlean_ctor_set(boxed, 1, lean_box(0));\n" ++
+  s!"lean_object *json = lf_{name}_encode_json(boxed);\n" ++
+  "lf_str message;\nstatus = lf_copy_string(json, &message, err);\nlean_dec(json);\n" ++
+  "if (status == LF_OK) { lf_error_clear(err); *err = (lf_error){LF_EXCEPT, message.ptr}; status = LF_EXCEPT; }\n" ++
+  "goto done;\n"
+
 end LeanC

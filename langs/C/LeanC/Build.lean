@@ -106,8 +106,9 @@ private def selectExports (env : Environment) (moduleName : Name) (cPrefix : Str
     ["lf_nat", "lf_int"].flatMap fun name =>
       ["free", "from_dec", "to_dec", "from_lean", "to_lean"].map fun suffix => s!"{name}_{suffix}"
   let typeNames := (descs.toList.flatMap fun d => d.names ++ d.deciderNames) ++
-    (exportJsonApis cPrefix exports descs).toList.flatMap JsonApi.names
-  let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}"]
+    (exportJsonApis cPrefix exports descs).toList.flatMap JsonApi.names ++
+    (refTypes exports descs).flatMap (refNames cPrefix)
+  let functionNames := exports.toList.flatMap fun e => [e.symbol, s!"lf_{e.symbol}", e.refSymbol false, e.refSymbol true]
   for name in reserved ++ supportNames ++ integerNames ++ typeNames ++ functionNames do
     if claimed.contains name then throw s!"C name collision: {name}"
     claimed := claimed.insert name
@@ -165,7 +166,8 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
   return #[s!"{target.cPrefix}_init", s!"lf_{target.cPrefix}_nat_decimal",
     s!"lf_{target.cPrefix}_int_decimal"] ++ (descs.toList.flatMap fun d => d.names ++ d.deciderNames).toArray ++
     (apis.toList.flatMap JsonApi.names).toArray ++
-    exports.flatMap (fun entry => #[entry.symbol, s!"lf_{entry.symbol}"])
+    ((refTypes exports descs).flatMap (refNames target.cPrefix)).toArray ++
+    exports.flatMap (fun entry => #[entry.symbol, s!"lf_{entry.symbol}", entry.refSymbol false, entry.refSymbol true])
 
 unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name)
     (checks : Checks := {}) (renames : Renames := {}) (projectInit : Bool := false) :

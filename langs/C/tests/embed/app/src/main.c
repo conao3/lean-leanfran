@@ -21,6 +21,10 @@ int main(void) {
     assert(invoice_invoice_price(2, &total, &err) == LF_NOT_INITIALIZED);
     lf_str json = {0};
     assert(invoice_uint32_to_json(&total, &json, &err) == LF_NOT_INITIALIZED);
+    invoice_type_uint32_ref quantity, result;
+    const uint32_t two = 2;
+    assert(invoice_type_uint32_ref_from(&two, &quantity, &err) ==
+           LF_NOT_INITIALIZED);
     assert(leanfran_init(&err) == LF_OK);
     assert(catalog_base_price(&base, &err) == LF_OK);
     assert(limits_minimum_price(&minimum, &err) == LF_OK);
@@ -33,7 +37,14 @@ int main(void) {
            LF_OK);
     assert(decoded == total);
     lf_free(json.ptr);
+    assert(invoice_type_uint32_ref_from(&two, &quantity, &err) == LF_OK);
+    assert(invoice_invoice_price_ref_take(quantity, &result, &err) == LF_OK);
+    uint32_t ref_total = 0;
+    assert(invoice_type_uint32_ref_get(result, &ref_total, &err) == LF_OK);
+    assert(ref_total == total);
+    invoice_type_uint32_ref_release(result);
     printf("%u %u %u\n", (unsigned)base, (unsigned)total, (unsigned)minimum);
     lf_error_clear(&err);
+    lf_thread_detach();
     return 0;
 }

@@ -1,4 +1,5 @@
 import LeanC.Export
+import LeanC.Ref
 
 open Lean
 
@@ -20,8 +21,10 @@ def emitHeader (cPrefix : String) (exports : Array Export) (descs : Array Desc) 
     emitTypeDeclarations descs ++
     String.join (apis.toList.map fun api => api.validPrototype ++ ";\n" ++
       api.toJsonPrototype ++ ";\n" ++ api.fromJsonPrototype ++ ";\n") ++
+    String.join ((refTypes exports descs).map (emitRefDeclaration cPrefix)) ++
     s!"lf_status {cPrefix}_init(lf_error *err);\n" ++
-    String.join (exports.toList.map fun entry => entry.prototype ++ ";\n") ++
+    String.join (exports.toList.map fun entry => entry.prototype ++ ";\n" ++
+      entry.refPrototype cPrefix false ++ ";\n" ++ entry.refPrototype cPrefix true ++ ";\n") ++
     "\n#ifdef __cplusplus\n}\n#endif\n\n#endif\n"
 
 def emitScalarWrapper (entry : Export) : String := Id.run do
@@ -76,16 +79,6 @@ def emitScalarWrapper (entry : Export) : String := Id.run do
 
 def Export.usesMarshalling (entry : Export) : Bool :=
   entry.args.any CType.byPointer || entry.result.byPointer || entry.exception.isSome
-
-private def emitExcept (name value : String) : String :=
-  "if (err == NULL) { status = LF_EXCEPT; goto done; }\n" ++
-  s!"lean_object *payload = lean_ctor_get({value}, 0);\n" ++
-  "lean_inc(payload);\nlean_object *boxed = lean_alloc_ctor(0, 2, 0);\n" ++
-  "lean_ctor_set(boxed, 0, payload);\nlean_ctor_set(boxed, 1, lean_box(0));\n" ++
-  s!"lean_object *json = lf_{name}_encode_json(boxed);\n" ++
-  "lf_str message;\nstatus = lf_copy_string(json, &message, err);\nlean_dec(json);\n" ++
-  "if (status == LF_OK) { lf_error_clear(err); *err = (lf_error){LF_EXCEPT, message.ptr}; status = LF_EXCEPT; }\n" ++
-  "goto done;\n"
 
 def emitWrapper (cPrefix : String) (entry : Export) : String := Id.run do
   unless entry.usesMarshalling do return emitScalarWrapper entry
@@ -153,6 +146,7 @@ private def emitInitializer (cPrefix init : String) : String :=
     s!"    lf_initialize(lf_{cPrefix}_initialize, &init_error);\n" ++
     s!"    atomic_store(&{if cPrefix == "leanfran" then "lf_project_initialized" else "initialized"}, init_error.status == LF_OK);\n}\n\n" ++
     s!"lf_status {cPrefix}_init(lf_error *err) \{\n" ++
+    "    lf_thread_attach();\n" ++
     "    pthread_once(&once, initialize_once);\n" ++
     "    if (init_error.status != LF_OK) {\n" ++
     "        const char *message = init_error.message == NULL ? \"Lean initialization failed\" : init_error.message;\n" ++
@@ -176,8 +170,10 @@ def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs :
         "#define initialized lf_project_initialized\n\n" ++
         s!"lf_status {cPrefix}_init(lf_error *err) \{\n    return leanfran_init(err);\n}\n\n"
     else emitInitializer cPrefix (Lean.mkModuleInitializationFunctionName (exportModule mod))) ++
-    (if apis.isEmpty then "" else emitMarshalling cPrefix descs) ++
+    (if exports.isEmpty then "" else emitMarshalling cPrefix descs) ++
     emitJsonWrappers apis ++
-    String.intercalate "\n" (exports.toList.map (emitWrapper cPrefix))
+    String.join ((refTypes exports descs).map (emitRefType cPrefix)) ++
+    String.intercalate "\n" (exports.toList.map fun entry =>
+      emitWrapper cPrefix entry ++ emitRefWrapper cPrefix entry false ++ emitRefWrapper cPrefix entry true)
 
 end LeanC

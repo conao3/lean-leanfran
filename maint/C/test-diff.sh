@@ -150,3 +150,20 @@ if [[ $(uname -s) == Linux ]]; then
     "$scratch/json_sanitized" </dev/null >"$scratch/c-sanitized.json"
     cmp "$scratch/lean.json" "$scratch/c-sanitized.json"
 fi
+
+handles="$scratch/handles"
+"$compiler" generate --module-name ValueHandles --out-dir "$handles"
+"$compiler" build --out-dir "$handles"
+handles_args=(-I"$handles" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/value_handles.c")
+leanc "${handles_args[@]}" "$handles/libvalue_handles.a" -o "$scratch/value_handles"
+"$scratch/value_handles" </dev/null
+"$scratch/value_handles" --benchmark </dev/null
+
+if [[ $(uname -s) == Linux ]]; then
+    handles_source=("$handles/value_handles.c" "$handles/leanfran.c" "$handles/libvalue_handles.a")
+    leanc "${handles_args[@]}" "${sanitizer[@]}" "${handles_source[@]}" -o "$scratch/value_handles_asan"
+    "$scratch/value_handles_asan" </dev/null
+    LEAN_CC=clang leanc "${handles_args[@]}" -fsanitize=thread -fno-omit-frame-pointer -no-pie \
+        "${handles_source[@]}" -o "$scratch/value_handles_tsan"
+    TSAN_OPTIONS=halt_on_error=1 "$scratch/value_handles_tsan" </dev/null
+fi

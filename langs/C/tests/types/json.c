@@ -57,11 +57,17 @@ static void check_invariants(lf_error *err) {
     };
     public_types_checked_range output;
     assert(public_types_checked_range_valid(&value, err));
+    public_types_checked_range_ref handle;
+    assert(public_types_checked_range_ref_from(&value, &handle, err) == LF_OK);
+    public_types_checked_range_ref_release(handle);
     assert(public_types_echo(&value, &output, err) == LF_OK);
     public_types_checked_range_free(&output);
 
     value.capacity = 20;
     assert(!public_types_checked_range_valid(&value, err));
+    assert(strcmp(err->message, "Invalid Checked.Small.property") == 0);
+    assert(public_types_checked_range_ref_from(&value, &handle, err) ==
+           LF_INVALID);
     assert(strcmp(err->message, "Invalid Checked.Small.property") == 0);
     value.capacity = 12;
     value.limit = lf_nat_from_u64(8);
