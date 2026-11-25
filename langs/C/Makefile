@@ -1,52 +1,36 @@
 .DEFAULT_GOAL := check
-.PHONY: build check format format-check
+.PHONY: build check check-model check-translate check-verify check-random format format-check
 
-c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/types/*.c tests/embed/app/src/*.c tests/embed/app/src/*.h tests/embed/app/src/nested/*.h)
+c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/types/*.c \
+	tests/embed/app/src/*.c tests/embed/app/src/*.h tests/embed/app/src/nested/*.h \
+	tests/verify/*.c tests/verify/translation/*.c tests/verify/translation/*.h \
+	tests/verify/states/src/*.c tests/verify/random/src/*.c \
+	tests/verify/records/src/*.c tests/verify/records/src/*.h)
 clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
 
 build:
 	lake build
 
-check: build format-check
+check: build format-check check-model check-translate check-verify check-random
 	../../maint/C/test-diff.sh
 	../../maint/C/test-link.sh
 	../../maint/C/test-embed.sh
 	../../maint/C/test-schema.sh
+
+check-model: build
+	../../maint/C/test-model.sh
+
+check-translate: build
+	../../maint/C/test-translate.sh
+
+check-verify: build
+	../../maint/C/test-verify.sh
+
+check-random: build
+	../../maint/C/test-random.sh
 
 format:
 	$(clang_format) -i $(c_sources)
 
 format-check:
 	$(clang_format) --dry-run --Werror $(c_sources)
-
-c_sources += $(wildcard tests/verify/*.c)
-
-.PHONY: check-model
-check: check-model
-
-check-model: build
-	../../maint/C/test-model.sh
-
-c_sources += $(wildcard tests/verify/translation/*.c tests/verify/translation/*.h)
-
-.PHONY: check-translate
-check: check-translate
-
-check-translate: build
-	../../maint/C/test-translate.sh
-
-c_sources += $(wildcard tests/verify/states/src/*.c)
-
-.PHONY: check-verify
-check: check-verify
-
-check-verify: build
-	../../maint/C/test-verify.sh
-
-c_sources += $(wildcard tests/verify/random/src/*.c)
-
-.PHONY: check-random
-check: check-random
-
-check-random: build
-	../../maint/C/test-random.sh

@@ -1,0 +1,4 @@
+[
+  {"directory": ".", "file": "src/shop.c", "arguments": ["cc", "-DSHOP_FIRST", "-c", "src/shop.c"]},
+  {"directory": ".", "file": "src/shop.c", "arguments": ["cc", "-c", "src/shop.c"]}
+]
