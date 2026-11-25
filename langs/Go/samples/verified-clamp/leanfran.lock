@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "hash": "3327504379c6d825c01a73bcb67ce6333fc4d9d427a522c0ddb834ed1a3a5575",
+  "hash": "06d8cca61ad5589419686bc4a1a3fd8e0cdc5d6e0f2993047a239f94007535c7",
   "obligations": [
     {
       "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d636c616d70.Clamp",

@@ -249,7 +249,7 @@ Generated packages reserve `Handle` and `Value` for these method sets. A Lean na
 
 Named Lean data types use their generated Go type as the handle parameter. Built-in type markers distinguish types with a shared Go representation, such as `leanfran.NatType` and `leanfran.IntType`, or `leanfran.ListType[T]` and `leanfran.ArrayType[T]`. Types with decidable proof fields use the existing validated Go conversion. Types with proofs that Go cannot validate and types containing `Std.HashMap` get opaque type markers. Construct and inspect those values through Lean functions that take and return handles.
 
-Use one server mutex around a sequence that reads, updates, and replaces its snapshot. The runtime serializes individual handle operations and reference releases because separate handles can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `Handle.Transition` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
+Use one server mutex around a sequence that reads, updates, and replaces its snapshot. Handle operations in one region run one at a time, because the handles of a region can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `Handle.Transition` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
 
 ```go
 s.mu.Lock()
@@ -264,40 +264,64 @@ s.snapshot = next
 return inventory.Value.ReadUInt64(reply), nil
 ```
 
-Call `v.IsExclusive()` to check whether the Lean heap object has one reference at that moment. Scalars and persistent objects return false. Go copies of the same handle share one owner, and child objects have their own reference counts. To check a handle and consume it under the same lock, use `v.IsExclusiveIn(scope)` inside `leanfran.WithValues`.
+Call `v.IsExclusive()` to check whether the Lean heap object has one reference at that moment. Scalars and persistent objects return false. Go copies of the same handle share one owner, and child objects have their own reference counts. To check a handle and consume it under the same lock, use `v.IsExclusiveIn(scope)` inside `WithValues`.
 
-`WithValues` holds the runtime mutex across a callback. Call `Handle.In(scope)` and `Value.In(scope)` to use the same methods with its `*leanfran.ValueScope`. Also pass the scope to `v.CloseIn` and `leanfran.SplitValueIn`. Use scoped calls throughout the callback and call `WithValues` from outside any active callback. The scope expires on return. Handles can outlive the scope and use ordinary calls again. A scope stores its first eight handles in its own allocation, so a callback that creates up to eight handles allocates once for all of them. The JSON summary's `scopedValueFunctions` map gives call templates such as `Handle.In(scope).Width`.
+### Run handles in parallel with regions
+
+A `*leanfran.Region` holds one mutex. Every handle belongs to at most one region, which `v.Region()` returns. Operations on the handles of one region run one at a time, and operations in separate regions run in parallel. Give each independent snapshot, such as one tenant's state, its own region from `leanfran.NewRegion()`.
+
+- A handle created in a scope, and every result of a call in a scope, belongs to the scope's region.
+- A call outside a scope runs in the region of its input handles. If no input belongs to a region, the call runs in the default region.
+- A handle that `Value.NewT` creates outside a scope belongs to no region until its first operation. It then joins that operation's region and stays there. `ReadT`, `Close`, and `IsExclusive` count as operations.
+- A call whose inputs belong to two regions panics with `leanfran: Values from different Regions in one call`, before it takes any reference. Passing another region's handle to a call in a scope panics the same way. To move data between regions, read it with `Value.ReadT` and create it again in the other region.
+- Constants and other persistent Lean values are never written, so every region can use them.
+
+Programs that never create a region keep all their handles in the default region, and their handle operations run one at a time.
+
+`r.WithValues` holds the region's mutex across a callback, and `leanfran.WithValues` does the same for the default region. Call `Handle.In(scope)` and `Value.In(scope)` to use the same methods with its `*leanfran.ValueScope`. Also pass the scope to `v.CloseIn` and `leanfran.SplitValueIn`. Use scoped calls throughout the callback. Call a region's `WithValues` from outside its active callbacks, and do not call handles of the scope's region without the scope inside a callback, because the mutex is already held. The scope expires on return. Handles can outlive the scope and use ordinary calls again. A scope stores its first eight handles in its own allocation, so a callback that creates up to eight handles allocates once for all of them. The JSON summary's `scopedValueFunctions` map gives call templates such as `Handle.In(scope).Width`.
 
 ```go
-var result uint64
-var err error
-leanfran.WithValues(func(scope *leanfran.ValueScope) {
-    next, reply, callErr := inventory.Handle.In(scope).Transition(s.snapshot.Borrow(), command.Take())
-    if callErr != nil {
-        err = callErr
-        return
-    }
-    defer reply.CloseIn(scope)
-    result = inventory.Value.In(scope).ReadUInt64(reply)
-    s.snapshot.CloseIn(scope)
-    s.snapshot = next
-})
-return result, err
+type tenant struct {
+    region   *leanfran.Region
+    snapshot leanfran.Value[inventory.Snapshot]
+}
+
+func (t *tenant) reserve(amount uint64) (uint64, error) {
+    var result uint64
+    var err error
+    t.region.WithValues(func(scope *leanfran.ValueScope) {
+        command := inventory.Value.In(scope).NewUInt64(amount)
+        next, reply, callErr := inventory.Handle.In(scope).Transition(t.snapshot.Borrow(), command.Take())
+        if callErr != nil {
+            err = callErr
+            return
+        }
+        defer reply.CloseIn(scope)
+        result = inventory.Value.In(scope).ReadUInt64(reply)
+        t.snapshot.CloseIn(scope)
+        t.snapshot = next
+    })
+    return result, err
+}
 ```
+
+The region's mutex also serializes the callbacks of one tenant, so `t.snapshot` needs no other lock. Create the first snapshot in the region with `t.region.WithValues` and `Handle.In(scope)`.
 
 The kernel fixture measures `transition`, `apply`, and reading the reply in Go. For handle measurements, it prepares the actor and command outside the timed loop and hands the snapshot to `apply` with `Take`. The final-row benchmark selects the last row on every call.
 
-On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU, with a load average of 8 to 9 from other work on the six cores, was:
+On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU, with a load average of 7 to 9 from other work on the six cores, was:
 
 | Snapshot rows | Ordinary wrappers, first row | Handles, first row | Handles, final row | Scoped handles, final row |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 | | | 0.90 µs, 6 allocs | 0.73 µs, 5 allocs |
-| 10 | 7.48 µs, 71 allocs | 0.67 µs, 6 allocs | | |
-| 100 | 64.58 µs, 575 allocs | 0.67 µs, 6 allocs | 3.58 µs, 6 allocs | 3.36 µs, 5 allocs |
-| 1,000 | 721.71 µs, 5,534 allocs | 0.89 µs, 6 allocs | 45.09 µs, 6 allocs | 31.46 µs, 5 allocs |
-| 10,000 | | | 0.85 ms, 6 allocs | 0.90 ms, 5 allocs |
+| 1 | | | 0.64 µs, 6 allocs | 0.68 µs, 5 allocs |
+| 10 | 6.28 µs, 71 allocs | 0.65 µs, 6 allocs | | |
+| 100 | 51.31 µs, 575 allocs | 0.61 µs, 6 allocs | 2.79 µs, 6 allocs | 3.00 µs, 5 allocs |
+| 1,000 | 536.02 µs, 5,534 allocs | 0.63 µs, 6 allocs | 26.78 µs, 6 allocs | 25.61 µs, 5 allocs |
+| 10,000 | | | 0.54 ms, 6 allocs | 0.47 ms, 5 allocs |
 
-At 100 rows, the first-row handle benchmark took 1.07 µs with 6 allocations under the server mutex. Converting a Go command each time took 1.19 µs with 8 allocations. Finding a missing row walks the whole list in 9.8 ns per row at 1,000 rows and 9.1 ns per row at 10,000 rows without allocating.
+At 100 rows, the first-row handle benchmark took 0.63 µs with 6 allocations under the server mutex. Converting a Go command each time took 0.81 µs with 8 allocations. Finding a missing row walks the whole list in 5.4 ns per row at 1,000 rows and 6.8 ns per row at 10,000 rows without allocating.
+
+`make test-value-regions` runs a scoped command with Go conversions on a one-row snapshot. On the Linux amd64 CI runner (4 CPUs, Go 1.27.3), one goroutine in one region completed 2.0 to 2.1 million commands per second, and eight goroutines in eight regions completed 3.3 to 3.9 million, 1.7 to 2.0 times as many. The same Lean functions without a handle lock scaled by 1.6 to 1.9 times, so allocation and garbage collection, not the region mutex, bound the speedup.
 
 ## JSON and JSON Schema
 

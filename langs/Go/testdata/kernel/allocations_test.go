@@ -216,7 +216,9 @@ func BenchmarkScopedCommand(b *testing.B) {
 func rawSnapshot(rows int64) (leanfran.Value[Snapshot], rt.V) {
 	snapshot := initialValue(rows)
 	inputs := [1]leanfran.ValueUse{snapshot.Borrow().Use()}
-	leanfran.AcquireValueInputs(inputs[:])
+	op := leanfran.BeginValueOperation(nil, inputs[:])
+	defer op.End()
+	op.Acquire(inputs[:])
 	return snapshot, inputs[0].Lean()
 }
 

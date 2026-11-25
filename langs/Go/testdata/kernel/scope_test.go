@@ -101,8 +101,11 @@ func TestLeakedValues(t *testing.T) {
 		kept := leanfran.WrapValue[Counter](raw)
 		if scoped {
 			leanfran.WithValues(func(scope *leanfran.ValueScope) {
-				_ = leanfran.WrapValueIn[Counter](scope, raw)
-				leanfran.WrapValueIn[Counter](scope, raw).CloseIn(scope)
+				op := leanfran.BeginValueOperation(scope, nil)
+				_ = leanfran.WrapValueIn[Counter](op, raw)
+				closed := leanfran.WrapValueIn[Counter](op, raw)
+				op.End()
+				closed.CloseIn(scope)
 			})
 		} else {
 			_ = leanfran.WrapValue[Counter](raw)

@@ -319,3 +319,9 @@ func Reuse(v V, tag uint16, numObjs, scalarBytes int, updateTag bool) V {
 	}
 	return v
 }
+
+var hole = Obj{rc: -1}
+
+func Hole() V { return V{p: &hole} }
+
+func IsHole(v V) bool { return v.p == &hole }

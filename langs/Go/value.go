@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/conao3/leanfran-go/rt"
 )
@@ -28,9 +29,15 @@ type Value[T any] struct {
 }
 
 type valueOwner struct {
-	raw   rt.V
-	valid bool
+	raw    rt.V
+	region *Region
 }
+
+func (o *valueOwner) regionPtr() *unsafe.Pointer {
+	return (*unsafe.Pointer)(unsafe.Pointer(&o.region))
+}
+
+func (o *valueOwner) loadRegion() *Region { return (*Region)(atomic.LoadPointer(o.regionPtr())) }
 
 type ValueInput[T any] struct {
 	value Value[T]
@@ -43,11 +50,13 @@ type ValueUse struct {
 	take  bool
 }
 
-var valueMu sync.Mutex
+type Region struct {
+	mu sync.Mutex
+}
 
-func LockValues() { valueMu.Lock() }
+var defaultRegion Region
 
-func UnlockValues() { valueMu.Unlock() }
+func NewRegion() *Region { return new(Region) }
 
 type ValueScope struct {
 	state *valueScopeState
@@ -55,16 +64,19 @@ type ValueScope struct {
 
 type valueScopeState struct {
 	scope  ValueScope
+	region *Region
 	mu     sync.Mutex
+	used   int32
 	active bool
-	used   int
 	slots  [8]valueOwner
 }
 
-func WithValues(f func(*ValueScope)) {
-	LockValues()
-	defer UnlockValues()
-	state := &valueScopeState{active: true}
+func WithValues(f func(*ValueScope)) { defaultRegion.WithValues(f) }
+
+func (r *Region) WithValues(f func(*ValueScope)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := &valueScopeState{region: r, active: true}
 	state.scope.state = state
 	defer state.finish()
 	f(&state.scope)
@@ -76,10 +88,32 @@ func (s *valueScopeState) finish() {
 	s.active = false
 }
 
-func BeginValueOperation(scope *ValueScope) {
+type ValueOperation struct {
+	region *Region
+	scope  *valueScopeState
+}
+
+const mixedRegions = "leanfran: Values from different Regions in one call"
+
+func BeginValueOperation(scope *ValueScope, inputs []ValueUse) ValueOperation {
 	if scope == nil {
-		LockValues()
-		return
+		var region *Region
+		for i := range inputs {
+			if owner := inputs[i].owner; owner != nil {
+				if r := owner.loadRegion(); r != nil {
+					if region == nil {
+						region = r
+					} else if r != region {
+						panic(mixedRegions)
+					}
+				}
+			}
+		}
+		if region == nil {
+			region = &defaultRegion
+		}
+		region.mu.Lock()
+		return ValueOperation{region: region}
 	}
 	state := scope.state
 	if state == nil {
@@ -90,23 +124,39 @@ func BeginValueOperation(scope *ValueScope) {
 		state.mu.Unlock()
 		panic("leanfran: inactive ValueScope")
 	}
+	return ValueOperation{region: state.region, scope: state}
 }
 
-func EndValueOperation(scope *ValueScope) {
-	if scope == nil {
-		UnlockValues()
+func (op ValueOperation) End() {
+	if op.scope != nil {
+		op.scope.mu.Unlock()
 		return
 	}
-	scope.state.mu.Unlock()
+	op.region.mu.Unlock()
+}
+
+func (op ValueOperation) join(o *valueOwner) {
+	if o == nil {
+		return
+	}
+	r := o.loadRegion()
+	if r == nil && atomic.CompareAndSwapPointer(o.regionPtr(), nil, unsafe.Pointer(op.region)) {
+		return
+	}
+	if r == nil {
+		r = o.loadRegion()
+	}
+	if r != op.region {
+		panic(mixedRegions)
+	}
 }
 
 func (o *valueOwner) clear() {
-	o.raw = rt.V{}
-	o.valid = false
+	o.raw = rt.Hole()
 }
 
 func (o *valueOwner) release() {
-	if o != nil && o.valid {
+	if o != nil && !rt.IsHole(o.raw) {
 		raw := o.raw
 		o.clear()
 		rt.Lean_dec(raw)
@@ -114,7 +164,7 @@ func (o *valueOwner) release() {
 }
 
 func (o *valueOwner) check() {
-	if o == nil || !o.valid {
+	if o == nil || rt.IsHole(o.raw) {
 		panic("leanfran: empty Value")
 	}
 }
@@ -122,16 +172,30 @@ func (o *valueOwner) check() {
 func (v Value[T]) Close() { v.CloseIn(nil) }
 
 func (v Value[T]) CloseIn(scope *ValueScope) {
-	BeginValueOperation(scope)
-	defer EndValueOperation(scope)
+	op := v.begin(scope)
+	defer op.End()
+	op.join(v.owner)
 	v.owner.release()
+}
+
+func (v Value[T]) begin(scope *ValueScope) ValueOperation {
+	inputs := [1]ValueUse{{owner: v.owner}}
+	return BeginValueOperation(scope, inputs[:])
+}
+
+func (v Value[T]) Region() *Region {
+	if v.owner == nil {
+		return nil
+	}
+	return v.owner.loadRegion()
 }
 
 func (v Value[T]) IsExclusive() bool { return v.IsExclusiveIn(nil) }
 
 func (v Value[T]) IsExclusiveIn(scope *ValueScope) bool {
-	BeginValueOperation(scope)
-	defer EndValueOperation(scope)
+	op := v.begin(scope)
+	defer op.End()
+	op.join(v.owner)
 	v.owner.check()
 	return rt.Lean_is_exclusive(v.owner.raw)
 }
@@ -144,7 +208,27 @@ func (v ValueInput[T]) Use() ValueUse { return ValueUse{owner: v.value.owner, ta
 
 func (u ValueUse) Lean() rt.V { return u.raw }
 
-func AcquireValueInputs(inputs []ValueUse) {
+func (op ValueOperation) Acquire(inputs []ValueUse) {
+	joining := false
+	for i := range inputs {
+		owner := inputs[i].owner
+		if owner == nil {
+			owner.check()
+		}
+		if r := owner.loadRegion(); r != op.region {
+			if r != nil {
+				panic(mixedRegions)
+			}
+			joining = joining || !inputs[i].take
+		}
+	}
+	if joining {
+		for i := range inputs {
+			if !inputs[i].take {
+				op.join(inputs[i].owner)
+			}
+		}
+	}
 	for i, input := range inputs {
 		input.owner.check()
 		if input.take {
@@ -179,68 +263,67 @@ func TrackLeakedValues(enabled bool) { trackLeaks.Store(enabled) }
 func LeakedValues() int64 { return leakedValues.Load() }
 
 func countLeakedValue(o *valueOwner) {
-	if o.valid {
+	if !rt.IsHole(o.raw) {
 		leakedValues.Add(1)
 	}
 }
 
-func newOwner(scope *ValueScope, raw rt.V) *valueOwner {
-	if trackLeaks.Load() {
-		owner := &valueOwner{raw: raw, valid: true}
+func newOwner(op ValueOperation, raw rt.V) *valueOwner {
+	var owner *valueOwner
+	switch {
+	case trackLeaks.Load():
+		owner = &valueOwner{raw: raw, region: op.region}
 		runtime.SetFinalizer(owner, countLeakedValue)
-		return owner
+	case op.scope != nil && int(op.scope.used) < len(op.scope.slots):
+		owner = &op.scope.slots[op.scope.used]
+		op.scope.used++
+		owner.raw, owner.region = raw, op.region
+	default:
+		owner = &valueOwner{raw: raw, region: op.region}
 	}
-	if scope != nil {
-		state := scope.state
-		if state.used < len(state.slots) {
-			owner := &state.slots[state.used]
-			state.used++
-			owner.raw, owner.valid = raw, true
-			return owner
-		}
-	}
-	return &valueOwner{raw: raw, valid: true}
+	return owner
 }
 
-func WrapValue[T any](raw rt.V) Value[T] { return WrapValueIn[T](nil, raw) }
+func WrapValue[T any](raw rt.V) Value[T] { return WrapValueIn[T](ValueOperation{}, raw) }
 
-func WrapValueIn[T any](scope *ValueScope, raw rt.V) Value[T] {
-	return Value[T]{owner: newOwner(scope, raw)}
+func WrapValueIn[T any](op ValueOperation, raw rt.V) Value[T] {
+	return Value[T]{owner: newOwner(op, raw)}
 }
 
-func WrapFieldsIn[A, B any](scope *ValueScope, pair rt.V) (Value[A], Value[B]) {
+func WrapFieldsIn[A, B any](op ValueOperation, pair rt.V) (Value[A], Value[B]) {
 	a, b := OwnValueField(pair, 0), OwnValueField(pair, 1)
-	if scope == nil && !trackLeaks.Load() {
-		owners := &[2]valueOwner{{raw: a, valid: true}, {raw: b, valid: true}}
+	if op.scope == nil && !trackLeaks.Load() {
+		owners := &[2]valueOwner{{raw: a, region: op.region}, {raw: b, region: op.region}}
 		return Value[A]{owner: &owners[0]}, Value[B]{owner: &owners[1]}
 	}
-	return Value[A]{owner: newOwner(scope, a)}, Value[B]{owner: newOwner(scope, b)}
+	return Value[A]{owner: newOwner(op, a)}, Value[B]{owner: newOwner(op, b)}
 }
 
 func NewValue[T, G any](codec Codec[G], v G, path string) (Value[T], error) {
-	return newValue[T](nil, codec, v, path)
+	return newValue[T](ValueOperation{}, codec, v, path)
 }
 
 func NewValueIn[T, G any](scope *ValueScope, codec Codec[G], v G, path string) (Value[T], error) {
 	if scope == nil {
 		return NewValue[T](codec, v, path)
 	}
-	BeginValueOperation(scope)
-	defer EndValueOperation(scope)
-	return newValue[T](scope, codec, v, path)
+	op := BeginValueOperation(scope, nil)
+	defer op.End()
+	return newValue[T](op, codec, v, path)
 }
 
 func NewUncheckedValueIn[T, G any](scope *ValueScope, codec Codec[G], v G) Value[T] {
-	if scope != nil {
-		BeginValueOperation(scope)
-		defer EndValueOperation(scope)
+	if scope == nil {
+		return WrapValue[T](codec.ToLean(v))
 	}
-	return WrapValueIn[T](scope, codec.ToLean(v))
+	op := BeginValueOperation(scope, nil)
+	defer op.End()
+	return WrapValueIn[T](op, codec.ToLean(v))
 }
 
 var validations = sync.Pool{New: func() any { return new(ValidationError) }}
 
-func newValue[T, G any](scope *ValueScope, codec Codec[G], v G, path string) (Value[T], error) {
+func newValue[T, G any](op ValueOperation, codec Codec[G], v G, path string) (Value[T], error) {
 	if codec.Check != nil {
 		validation := validations.Get().(*ValidationError)
 		codec.Check(validation, v)
@@ -253,14 +336,15 @@ func newValue[T, G any](scope *ValueScope, codec Codec[G], v G, path string) (Va
 		}
 		validations.Put(validation)
 	}
-	return WrapValueIn[T](scope, codec.ToLean(v)), nil
+	return WrapValueIn[T](op, codec.ToLean(v)), nil
 }
 
 func ReadValue[T, G any](codec Codec[G], v Value[T]) G { return ReadValueIn(nil, codec, v) }
 
 func ReadValueIn[T, G any](scope *ValueScope, codec Codec[G], v Value[T]) G {
-	BeginValueOperation(scope)
-	defer EndValueOperation(scope)
+	op := v.begin(scope)
+	defer op.End()
+	op.join(v.owner)
 	v.owner.check()
 	return codec.FromLean(v.owner.raw)
 }
@@ -276,11 +360,11 @@ func SplitValue[A, B any](v ValueInput[PairType[A, B]]) (Value[A], Value[B]) {
 }
 
 func SplitValueIn[A, B any](scope *ValueScope, v ValueInput[PairType[A, B]]) (Value[A], Value[B]) {
-	BeginValueOperation(scope)
-	defer EndValueOperation(scope)
 	inputs := [1]ValueUse{v.Use()}
-	AcquireValueInputs(inputs[:])
+	op := BeginValueOperation(scope, inputs[:])
+	defer op.End()
+	op.Acquire(inputs[:])
 	raw := inputs[0].Lean()
 	defer rt.Lean_dec(raw)
-	return WrapFieldsIn[A, B](scope, raw)
+	return WrapFieldsIn[A, B](op, raw)
 }
