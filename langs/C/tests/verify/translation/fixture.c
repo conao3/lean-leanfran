@@ -405,3 +405,58 @@ uint32_t shape_tag(shapes_geo_shape s) {
 shapes_geo_shape bigger(shapes_geo_shape a, shapes_geo_shape b) {
     return shape_area(a) >= shape_area(b) ? a : b;
 }
+
+int32_t color_sum(const shapes_geo_color *cs LF_ARRAY(n), size_t n) {
+    int32_t t = 0;
+    for (size_t i = 0; i < n; i++)
+        t += color_code(cs[i]);
+    return t;
+}
+
+int64_t area_sum(const shapes_geo_shape *ss LF_ARRAY(n), size_t n) {
+    int64_t t = 0;
+    for (size_t i = 0; i < n; i++)
+        t += shape_area(ss[i]);
+    return t;
+}
+
+int64_t area_tail(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
+                  uint32_t k) {
+    if (k > n)
+        return -1;
+    return area_sum(ss, n) - area_sum(ss, k);
+}
+
+lf_status color_at(const shapes_geo_color *cs LF_ARRAY(n), size_t n, int32_t i,
+                   shapes_geo_color *out) {
+    if (i < 0 || (size_t)i >= n)
+        return LF_INVALID;
+    *out = cs[i];
+    return LF_OK;
+}
+
+shapes_geo_color color_or(const shapes_geo_color *cs LF_ARRAY(n), size_t n,
+                          int32_t i) {
+    shapes_geo_color c = shapes_geo_color_blue;
+    color_at(cs, n, i, &c);
+    return c;
+}
+
+lf_status largest(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
+                  shapes_geo_shape *out) {
+    if (n == 0)
+        return LF_INVALID;
+    shapes_geo_shape best = ss[0];
+    for (size_t i = 1; i < n; i++)
+        best = bigger(best, ss[i]);
+    *out = best;
+    return LF_OK;
+}
+
+int64_t largest_area(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
+                     shapes_geo_shape s) {
+    shapes_geo_shape b = s;
+    if (largest(ss, n, &b) != LF_OK)
+        return -shape_area(b);
+    return shape_area(b);
+}

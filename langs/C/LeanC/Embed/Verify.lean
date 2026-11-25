@@ -319,6 +319,11 @@ private def obligations (m : ModelFunction) (fn : Verify.Function) : String := I
   let args := String.join (params.toList.map (" " ++ ·.1))
   let binders := " ".intercalate (params.toList.map fun (n, t) => s!"({n} : {t})")
   let quantified := if params.isEmpty then "" else s!"∀ {binders}, "
+  let sizes := String.join (fn.params.toList.filterMap fun p =>
+    match p.kind, p.ty with
+    | .length array, .int _ signed width => some s!"{array}.size < 2 ^ {if signed then width - 1 else width} → "
+    | _, _ => none)
+  let quantified := quantified ++ sizes
   let requires := match m.requires with
     | some name => s!"{qualified name}{args} = true → "
     | none => ""

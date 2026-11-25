@@ -31,6 +31,9 @@ static const spec specs[] = {
     {"count_pos", "B"},     {"count_or", "B"},    {"color_code", "K"},
     {"next_color", "K"},    {"keep_color", "Kb"}, {"shape_area", "S"},
     {"circle_radius", "S"}, {"shape_tag", "S"},   {"bigger", "SS"},
+    {"color_sum", "E"},     {"area_sum", "U"},    {"area_tail", "UN"},
+    {"color_at", "En"},     {"color_or", "En"},   {"largest", "U"},
+    {"largest_area", "US"},
 };
 
 static uint64_t state = 1;
@@ -126,6 +129,8 @@ static void print_value(char kind) {
         printf(" %" PRIu64, next() % 100000);
     } else if (kind == 'K') {
         printf(" %d", (int)(next() % 3));
+    } else if (kind == 'n' || kind == 'N') {
+        printf(" %d", (int)(next() % 6) - (kind == 'n'));
     } else if (kind == 'S') {
         int tag = (int)(next() % 5);
         printf(" %d", tag);
@@ -147,11 +152,15 @@ static void print_inputs(void) {
             printf("%s %s", specs[s].name,
                    specs[s].kinds[0] ? specs[s].kinds : "-");
             for (const char *k = specs[s].kinds; *k; k++) {
-                if (*k == 'A' || *k == 'B' || *k == 'I') {
+                if (strchr("ABIEU", *k)) {
                     size_t len = next() % 5;
                     printf(" %zu", len);
                     for (size_t i = 0; i < len; i++)
-                        print_value(*k == 'A' ? 'l' : *k == 'B' ? 'i' : 'T');
+                        print_value(*k == 'A'   ? 'l'
+                                    : *k == 'B' ? 'i'
+                                    : *k == 'I' ? 'T'
+                                    : *k == 'E' ? 'K'
+                                                : 'S');
                 } else {
                     print_value(*k);
                 }
@@ -234,6 +243,22 @@ static void print_shape(shapes_geo_shape s) {
     default:
         printf("4");
     }
+}
+
+static shapes_geo_color *read_colors(size_t *n) {
+    *n = read_uint();
+    shapes_geo_color *cs = malloc(*n * sizeof(*cs));
+    for (size_t i = 0; i < *n; i++)
+        cs[i] = (shapes_geo_color)read_int();
+    return cs;
+}
+
+static shapes_geo_shape *read_shapes(size_t *n) {
+    *n = read_uint();
+    shapes_geo_shape *ss = malloc(*n * sizeof(*ss));
+    for (size_t i = 0; i < *n; i++)
+        ss[i] = read_shape();
+    return ss;
 }
 
 static void print_double(double value) {
@@ -473,6 +498,55 @@ static void evaluate(char *line) {
     } else if (NAME("bigger")) {
         shapes_geo_shape a = read_shape(), b = read_shape();
         print_shape(bigger(a, b));
+    } else if (NAME("color_sum")) {
+        size_t n;
+        shapes_geo_color *cs = read_colors(&n);
+        printf("%" PRId32, color_sum(cs, n));
+        free(cs);
+    } else if (NAME("area_sum")) {
+        size_t n;
+        shapes_geo_shape *ss = read_shapes(&n);
+        printf("%" PRId64, area_sum(ss, n));
+        free(ss);
+    } else if (NAME("area_tail")) {
+        size_t n;
+        shapes_geo_shape *ss = read_shapes(&n);
+        uint32_t k = read_uint();
+        printf("%" PRId64, area_tail(ss, n, k));
+        free(ss);
+    } else if (NAME("color_at")) {
+        size_t n;
+        shapes_geo_color *cs = read_colors(&n), out = shapes_geo_color_red;
+        int32_t i = read_int();
+        lf_status status = color_at(cs, n, i, &out);
+        if (status == LF_OK)
+            printf("%d %d", (int)status, (int)out);
+        else
+            printf("%d -", (int)status);
+        free(cs);
+    } else if (NAME("color_or")) {
+        size_t n;
+        shapes_geo_color *cs = read_colors(&n);
+        int32_t i = read_int();
+        printf("%d", (int)color_or(cs, n, i));
+        free(cs);
+    } else if (NAME("largest")) {
+        size_t n;
+        shapes_geo_shape *ss = read_shapes(&n), out;
+        memset(&out, 0, sizeof(out));
+        lf_status status = largest(ss, n, &out);
+        printf("%d ", (int)status);
+        if (status == LF_OK)
+            print_shape(out);
+        else
+            printf("-");
+        free(ss);
+    } else if (NAME("largest_area")) {
+        size_t n;
+        shapes_geo_shape *ss = read_shapes(&n);
+        shapes_geo_shape s = read_shape();
+        printf("%" PRId64, largest_area(ss, n, s));
+        free(ss);
     } else if (NAME("lits")) {
         print_double(lits());
     } else {

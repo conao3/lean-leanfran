@@ -155,6 +155,13 @@ def evaluate (name : String) : P String := do
   | "circle_radius" => return result toString («circle_radius» (← shape))
   | "shape_tag" => return toString («shape_tag» (← shape))
   | "bigger" => return result showShape («bigger» (← shape) (← shape))
+  | "color_sum" => return result toString («color_sum» (← array color))
+  | "area_sum" => return result toString («area_sum» (← array shape))
+  | "area_tail" => return result toString («area_tail» (← array shape) (← u32))
+  | "color_at" => return result (outcome (toString ·.ctorIdx)) («color_at» (← array color) (← i32))
+  | "color_or" => return result (toString ·.ctorIdx) («color_or» (← array color) (← i32))
+  | "largest" => return result (outcome showShape) («largest» (← array shape))
+  | "largest_area" => return result toString («largest_area» (← array shape) (← shape))
   | _ => return s!"unknown function {name}"
 
 partial def main : IO Unit := do
