@@ -13,7 +13,7 @@ for backend in "$@"; do
     Python) (cd langs/Python && nix develop ../..#python -c ../../maint/Python/bump-version.sh "$v") ;;
     TypeScript) (cd langs/TypeScript && nix develop ../..#typescript -c ../../maint/TypeScript/bump-version.sh "$v") ;;
     Clojure) (cd langs/Clojure && nix develop ../..#clojure -c clojure -T:build set-version :version "\"$v\"") ;;
-    PHP) (cd langs/PHP && nix develop ../..#php -c ../../maint/PHP/bump-version.sh "$v") ;;
+    PHP) maint/PHP/bump-version.sh "$v" ;;
     Go) (cd langs/Go && nix develop ../..#go -c ../../maint/Go/bump-version.sh "$v") ;;
     C) maint/C/bump-version.sh "$v" ;;
     *) echo "set-version.sh: unknown backend: $backend" >&2; exit 2 ;;
