@@ -14,10 +14,10 @@ Generation requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Add these depende
 
 ```toml
 [dependencies]
-leanfran = "0.13.0"
+leanfran = "0.13.1"
 
 [build-dependencies]
-leanfran-build = "0.13.0"
+leanfran-build = "0.13.1"
 ```
 
 ## First Lean block

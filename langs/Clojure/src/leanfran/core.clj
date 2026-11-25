@@ -28,7 +28,7 @@
 (def generator-version
   "Part of the cache key, so that cached output is regenerated when the
   generator changes."
-  "0.13.0")
+  "0.13.1")
 
 
 (defn- project-root
