@@ -19,6 +19,7 @@
   <a href="https://clojars.org/io.github.conao3/leanfran"><img src="https://img.shields.io/clojars/v/io.github.conao3/leanfran.svg?label=Clojure" alt="Clojure on Clojars"></a>
   <a href="https://packagist.org/packages/conao3/leanfran"><img src="https://img.shields.io/packagist/v/conao3/leanfran?label=PHP" alt="PHP on Packagist"></a>
   <a href="https://pkg.go.dev/github.com/conao3/leanfran-go"><img src="https://pkg.go.dev/badge/github.com/conao3/leanfran-go.svg" alt="Go on pkg.go.dev"></a>
+  <a href="langs/C/README.md"><img src="https://img.shields.io/github/v/tag/conao3/lean-leanfran?sort=semver&amp;label=C" alt="C from Git tags"></a>
 </p>
 
 <p align="center">
@@ -32,7 +33,7 @@
 
 # leanfran
 
-leanfran brings Lean 4 to Rust, Python, TypeScript, Clojure, PHP, and Go. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime; Lean is needed to check and generate code, not to run the result.
+leanfran brings Lean 4 to Rust, Python, TypeScript, Clojure, PHP, Go, and C. Write functions and proofs together, compile them to your application's language, and call them through native types. The generated code runs with a small host-language runtime, or with Lean's runtime library for C; Lean is needed to check and generate code, not to run the result.
 
 ## Quick look
 
@@ -84,7 +85,7 @@ Every supported language embeds Lean the same way (see the table below). The out
 
 ## Lean at the core
 
-leanfran compiles Lean's compiler IR into source code for the selected language. You can generate code from a Lean project or embed Lean blocks directly in host-language source files. Proofs are checked by Lean during generation and erased from the executable code.
+leanfran compiles Lean's compiler IR into source code for the selected language. For C, it uses Lean's C emitter and adds headers, conversion code and link settings. You can generate code from a Lean project or embed Lean blocks directly in host-language source files. Proofs are checked by Lean during generation and erased from the executable code.
 
 | Language   | Start here                                     | Package                                                                               | Integration                                    |
 | ---------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -94,12 +95,13 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
 | PHP        | [PHP quick start](langs/PHP/README.md)               | [conao3/leanfran on Packagist](https://packagist.org/packages/conao3/leanfran) | `#[Lean]`, `#[Model]`, Composer CLI |
 | Go         | [Go quick start](langs/Go/README.md)                 | [leanfran-go on pkg.go.dev](https://pkg.go.dev/github.com/conao3/leanfran-go) | `go get github.com/conao3/leanfran-go`, embedded Lean, Go module tool |
+| C          | [C quick start](langs/C/README.md)                   | [Git tags](https://github.com/conao3/lean-leanfran/tags), Nix flake output `#c` | `leanfran:lean` comments, C headers, pkg-config, Make and CMake |
 
 ## What you can build
 
 - **Proved functions in your application.** Keep an algorithm and its correctness proof together, then call the generated function from your application.
 - **Validated data at the boundary.** Lean structures and inductive types map to host-language values. Supported proof fields become runtime checks for the invariants your proofs assume.
-- **Specifications for host-language code.** Bind supported Rust, Python, TypeScript, Clojure, PHP, or Go functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
+- **Specifications for host-language code.** Bind supported Rust, Python, TypeScript, Clojure, PHP, Go, or C functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
 
 The backends share Lean's semantics and are tested against Lean's native C backend. Their supported types, externs and host-language integrations are documented in the [language guides](#documentation).
 
@@ -119,7 +121,13 @@ Nix can install the Go compiler from any directory.
 nix profile install 'github:conao3/lean-leanfran#go'
 ```
 
-Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to your application. Follow the other language quick starts for their dependencies, project setup, and generation commands.
+Install the C compiler `leanfran-c` the same way. Its headers and link settings come from the generation commands.
+
+```sh
+nix profile install 'github:conao3/lean-leanfran#c'
+```
+
+Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to your application, and the [C quick start](langs/C/README.md) to generate and link a C library. Follow the other language quick starts for their dependencies, project setup, and generation commands.
 
 ## Documentation
 
@@ -131,6 +139,7 @@ Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
 | PHP        | [Setup and first block](langs/PHP/README.md)       | [Embedding, types, verification and CLI](docs/php-guide.md)     | [PHP samples](langs/PHP/samples/README.md)               |
 | Go         | [Setup and first block](langs/Go/README.md)         | [Embedding, types, verification and CLI](docs/go-guide.md) | [Go samples](langs/Go/samples/) |
+| C          | [Setup and generation](langs/C/README.md)           | [Embedding, types, verification and linking](docs/c-guide.md) | [Embedded C test project](langs/C/tests/embed/app/) |
 
 ## Contribution
 

@@ -156,7 +156,7 @@ The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanf
 
 - `leanfran-c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: …`. A failure leaves the previous output directory unchanged.
 - `leanfran-c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, the compiler version, or a missing output file. It exits with status 0 when the output is current.
-- `leanfran-c check` runs `sync` and then `status`.
+- `leanfran-c check` runs `sync`, checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean), and then runs `status`.
 
 ### Use C structs in Lean
 
@@ -197,6 +197,108 @@ Fields use `bool`, the fixed-width integer types, `size_t`, `float`, `double`, `
 Declare `LF_STRUCT` structs in a header that includes `leanfran.h`. The block's generated header includes that header by a path relative to the output directory and defines `<prefix>_<name>` as an alias, so the C program passes its own struct to the generated functions. The wrappers check each constraint and return `LF_INVALID` with the type and proof field, as in `Invalid order.qty_ge`.
 
 `LF_STRUCT` and `LF_FIELD` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads the marked files with `clang -Xclang -ast-dump=json`, so clang must be on `PATH` only for projects that use `LF_STRUCT`. clang takes each file's flags from `compile_commands.json` in the project root. A header uses the flags of the first entry that includes it. Files without an entry use `cflags`.
+
+## Verify a C function in Lean
+
+Put `LF_MODEL(...)` from `leanfran.h` before a C function and write the specification in a Lean block. `leanfran-c check` translates the function from clang's JSON AST into a Lean definition and checks the proofs you write about it.
+
+```c
+/* leanfran:lean clamp
+def spec (lo hi x : Int32) : Int32 := if x < lo then lo else if x > hi then hi else x
+def ordered (lo hi _x : Int32) : Bool := lo ≤ hi
+*/
+#include "leanfran.h"
+
+LF_MODEL("refines=spec", "requires=ordered")
+int32_t clamp(int32_t lo, int32_t hi, int32_t x) {
+    if (x < lo)
+        return lo;
+    if (x > hi)
+        return hi;
+    return x;
+}
+```
+
+| `LF_MODEL` argument | Meaning |
+| --- | --- |
+| `refines=<name>` | A Lean function with the same arguments that returns the expected result. |
+| `requires=<name>` | A Lean function with the same arguments that returns `Bool`. Every obligation assumes it returns `true`. |
+| `ensures=<label>:<name>` | A Lean function returning `Bool` that takes the arguments followed by the result. Use a distinct label for each postcondition. |
+| `spec=<block>` | The Lean block that contains the names. The default is the only block in the file that contains `LF_MODEL`. |
+
+Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers, so `check` needs clang on `PATH`.
+
+### Obligations and proof status
+
+`check` writes the translation of each function and its callees to the module `LeanCModel.<block>` in `.leanfran/workspace`. Each obligation is an abbreviation such as `clamp.obligation.refines`. Prove it in `lean/Proofs/*.lean` with a declaration named `clamp.proof.refines` in the namespace `LeanCModel.<block>`.
+
+```lean
+import LeanCModel.clamp
+
+namespace LeanCModel.clamp
+
+theorem clamp.proof.refines : clamp.obligation.refines := by
+  intro lo hi x _
+  simp only [clamp, spec, Id.run]
+  split <;> (try split) <;> rfl
+
+end LeanCModel.clamp
+```
+
+A function whose body can hit undefined behavior returns `C.M α`, which is `Except C.Exc α`. Signed overflow, division by zero, a shift count that is negative or not less than the width, an out-of-range array index, and a non-terminating loop are modeled failures. Refinement then means the translated function returns `Except.ok` with the specified value, so a proof also shows that the failures do not occur on inputs that satisfy `requires`. A postcondition for such a function states that a successful result exists and satisfies the predicate.
+
+```sh
+leanfran-c check --require proved
+leanfran-c status
+```
+
+`check` prints one line per obligation, such as `clamp.clamp [refines]: proved`, and writes `leanfran.lock` in the project root with the states and SHA-256 hashes of the inputs.
+
+| State | Meaning |
+| --- | --- |
+| `proved` | The declaration has the obligation's type and depends only on `propext`, `Quot.sound`, and `Classical.choice`. |
+| `sorry` | The declaration depends on `sorryAx`. |
+| `axioms` | The declaration depends on another axiom. This includes tactics that add a native-computation axiom. |
+| `missing` | The proof declaration is absent. |
+| `mismatch` | The declaration's type differs from the obligation. |
+| `failed` | A proof file that declares the proof fails to build. |
+| `unextracted` | The function is outside the translated subset or its translation does not elaborate. The diagnostic gives the C file, line, column, and reason. |
+| `stale` | `status` found a change to the function, a function it calls, a struct it uses, the spec block, the proofs, `leanfran.toml`, or the compiler since the lock was written. |
+
+`check --require proved` exits with status 1 unless every obligation is `proved`. Plain `check` exits with status 1 when a function is `unextracted` or a proof fails to build. `status` reads the lock and exits with status 1 when an obligation is stale.
+
+### C subset and proof scope
+
+The translator accepts `static` and external functions with these parts.
+
+- Types: `int8_t` to `int64_t`, `uint8_t` to `uint64_t`, `int` and `unsigned` (32 bits), `long` and `unsigned long` (64 bits), `size_t`, `bool`, `double`, `LF_STRUCT` structs and the generated record types passed by value, and `LF_ARRAY` arrays. A function returns one value, or `lf_status` with a final `out` pointer.
+- Statements: local declarations with initializers, assignment, compound assignment, `++`, `--`, `if`, `switch` with `break`-terminated cases, `for`, `while`, `do while`, `break`, `continue`, and `return`.
+- Expressions: integer and `double` arithmetic, comparisons, bitwise operators and shifts, `&&`, `||`, `!`, `?:`, array and field reads, integer conversions, and calls to other translated functions.
+
+Keep other pointers, writes to fields and array elements, globals and `static` locals, I/O, `goto`, recursion, variadic functions, unions, function pointers, `volatile`, uninitialized locals, `switch` fallthrough, string literals, and the floating-point environment outside modeled functions. Implementation-defined behavior follows GCC and Clang: right shifts of negative values are arithmetic, and conversions to signed types wrap. `double` operations use Lean's `Float`.
+
+A `proved` obligation is a theorem about the translated definition. The trusted pieces outside each proof are the translator, clang's AST, [the operation model](../langs/C/lean/LeanCLib/C.lean), and the C compiler. The repository tests them. The operation tests compare `LeanCLib.C` with GCC and Clang at `-O0` and `-O2` and match each modeled failure with the UBSan diagnostic. The translation tests compare translated functions with the compiled C. The model test below runs your implementation against the spec.
+
+### Model test
+
+When the sources contain `LF_MODEL`, `sync` also writes `leanfran_model_test.c` and `leanfran_model_test.h` to the output directory and a `leanfran-model-test` target to `leanfran.mk`. The test calls the spec through the block's public C function and compares it with your C function. It enumerates boundary values first and then uses seeded random inputs, and it discards inputs that `requires` rejects. NaN results match each other, and other `double` results are compared bit for bit.
+
+```sh
+make -f leanfran/leanfran.mk leanfran-model-test
+LEANFRAN_RUNS=10000 LEANFRAN_SEED=7 make -f leanfran/leanfran.mk leanfran-model-test
+```
+
+The `clamp` example prints `clamp.clamp: 109 inputs passed (seed 1)`. An implementation that returns `hi - 1` when `x >= hi` fails on the first boundary input.
+
+```text
+clamp.clamp [refines]: mismatch (seed 1, run 0)
+  input: lo=0, hi=0, x=0
+  expected: 0, got: -1
+```
+
+The target builds the test with your source files that contain the modeled functions, using `$(CC) -fno-wrapv -fsanitize=undefined,float-cast-overflow -fno-sanitize-recover=all` with `$(CFLAGS)` and `cflags` from `leanfran.toml`. UBSan stops the test at the first undefined behavior in your C code. A mismatch prints the seed, the run, the input, and both results. In both cases the test exits with status 1. `LEANFRAN_RUNS` sets the number of inputs (200 by default) and `LEANFRAN_SEED` sets the seed (1 by default). Including `leanfran.mk` in a Makefile leaves its default goal unchanged.
+
+The test does not cover `static` functions, `lf_status` results, struct arguments or results, or specs whose public C function has a different signature. It prints a `skipped:` line with the reason for each. The source files the test links must not define `main`. Nix's C compiler wrapper adds `-fwrapv` through its hardening flags. The target's `-fno-wrapv` turns it off so UBSan reports signed overflow.
 
 ## Generation checks
 
