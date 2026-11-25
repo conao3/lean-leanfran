@@ -26,3 +26,11 @@ check: check-model
 
 check-model: build
 	../../maint/C/test-model.sh
+
+c_sources += $(wildcard tests/verify/translation/*.c tests/verify/translation/*.h)
+
+.PHONY: check-translate
+check: check-translate
+
+check-translate: build
+	../../maint/C/test-translate.sh

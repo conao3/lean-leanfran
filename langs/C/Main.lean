@@ -1,5 +1,6 @@
 import LeanC
 import LeanC.Embed.Workspace
+import LeanC.Verify.Command
 
 open Lean LeanC System
 
@@ -11,7 +12,8 @@ inductive CliCommand where
 def usage : String :=
   "Usage: leanfran-c generate --module-name M [--roots name,...] [--prefix prefix] [--rename Lean.Name=c_name] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
   "       leanfran-c build [--shared] --out-dir dir\n" ++
-  "       leanfran-c {sync|status|check} [--dir dir]"
+  "       leanfran-c {sync|status|check} [--dir dir]\n" ++
+  "       leanfran-c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]"
 
 def parse (command : String) (args : List String) : Except String CliCommand := do
   if let some embed := ([("sync", Embed.Command.sync), ("status", .status), ("check", .check)].lookup command) then
@@ -68,6 +70,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     IO.println s!"leanfran-c (Lean {Lean.versionString})"
     return 0
   let command :: rest := args | IO.eprintln usage; return 252
+  if command == "translate" then return ← Verify.translateMain rest
   let cmd ← match parse command rest with
     | .ok cmd => pure cmd
     | .error message => IO.eprintln s!"leanfran-c: {message}\n{usage}"; return 252

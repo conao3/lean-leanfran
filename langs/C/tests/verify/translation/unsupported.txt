@@ -1,0 +1,27 @@
+pointer 14:26 pointer parameter 'p'
+heap 16:33 call to 'malloc', which has no definition in this file
+global 18:31 global variable 'counter'
+static_local 21:20 'static' local variable 'n'
+io 25:27 call to 'puts', which has no definition in this file
+jump 28:5 goto
+fact 33:9 recursion
+uses_fact 35:39 call to unextracted function 'fact'
+variadic 37:9 variadic function
+with_union 39:33 unsupported type 'union number'
+function_pointer 41:9 function pointer type
+volatile_local 44:22 unsupported type 'volatile int32_t'
+uninitialized 49:13 local variable 'x' without an initializer
+fallthrough 58:5 switch fallthrough
+early_break 68:13 break inside a switch case before its end
+string_literal 75:39 string literal
+rounding 77:33 call to 'fegetround', which has no definition in this file
+assign_value 81:12 assignment used as a value
+increment_value 84:45 '++' used as a value
+comma 86:36 comma operator
+set_field 89:5 assignment to a struct field
+literal 94:26 unsupported expression InitListExpr
+single 98:7 unsupported result type 'float'
+character 100:6 unsupported result type 'char'
+mutable_array 102:32 LF_ARRAY parameter 'xs' must point to const
+pass_array 105:12 call to unextracted function 'mutable_array'
+address 115:12 call to 'out_value', which takes arrays or an out parameter

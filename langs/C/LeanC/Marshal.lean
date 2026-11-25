@@ -44,6 +44,13 @@ def CType.free (ty : CType) (ptr : String) : String :=
 def Field.declaration (field : Field) : String :=
   s!"    {field.type.cName} {if field.indirect then "*" else ""}{field.name};\n"
 
+def cStringLiteral (value : String) : String :=
+  "\"" ++ String.join (value.toList.map fun c =>
+    if c == '"' || c == '\\' then s!"\\{c}" else c.toString) ++ "\""
+
+def Field.leanDeclaration (field : Field) : String :=
+  s!"    {field.type.cName} {if field.indirect then "*" else ""}{field.name} LF_LEAN({cStringLiteral field.leanName});\n"
+
 def Constructor.payload (ctor : Constructor) (desc : Desc) : String :=
   s!"{desc.name}_{ctor.name}_fields"
 
@@ -66,11 +73,14 @@ def Desc.declaration (desc : Desc) : String := Id.run do
   if desc.shape == .option then
     let field := { desc.ctors[1]!.fields[0]! with name := "value" }
     return s!"struct {desc.name} \{\n    bool has_value;\n{field.declaration}};\n"
-  if desc.shape == .record || desc.shape == .pair then
+  if desc.shape == .record then
     let fields := desc.ctors[0]!.fields
     let members := if fields.isEmpty then "    uint8_t unused;\n"
-      else String.join (fields.toList.map Field.declaration)
-    return s!"struct {desc.name} \{\n{members}};\n"
+      else String.join (fields.toList.map Field.leanDeclaration)
+    return s!"struct LF_LEAN({cStringLiteral desc.sourceName.toString}) {desc.name} \{\n{members}};\n"
+  if desc.shape == .pair then
+    let fields := desc.ctors[0]!.fields
+    return s!"struct {desc.name} \{\n{String.join (fields.toList.map Field.declaration)}};\n"
   let tags := desc.ctors.toList.map fun ctor =>
     s!"    {ctor.tag desc} = {ctor.layout.ctorInfo.cidx}"
   let enumDecl := s!"typedef enum {desc.tagType} \{\n{String.intercalate ",\n" tags}\n} {desc.tagType};\n"

@@ -12,9 +12,19 @@ inductive Exc where
   | shiftOutOfRange
   | floatToIntOutOfRange
   | indexOutOfRange
+  | diverged
+  | missingReturn
   deriving DecidableEq, Repr, Inhabited
 
 abbrev M := Except Exc
+
+inductive Status where
+  | ok
+  | invalid
+  | except
+  | io
+  | notInitialized
+  deriving DecidableEq, Repr, Inhabited
 
 class IntType (α : Type) where
   width : Nat
@@ -132,5 +142,18 @@ def index (values : Array α) (i : Int) : M α :=
   else match values[i.toNat]? with
     | some value => .ok value
     | none => .error .indexOutOfRange
+
+inductive Loop where
+  | forever
+
+def repeatStep (step : Unit → σ → M (ForInStep σ)) (state : σ) : Option (M σ) :=
+  match step () state with
+  | .error e => some (.error e)
+  | .ok (.done result) => some (.ok result)
+  | .ok (.yield next) => repeatStep step next
+partial_fixpoint
+
+instance : ForIn M Loop Unit where
+  forIn _ state step := (repeatStep step state).getD (.error .diverged)
 
 end C
