@@ -118,7 +118,7 @@ renamed="$scratch/renamed"
     --rename Collision.fooBar=camel_case --rename Collision.Fields.fooBar=camel_case \
     --rename Collision.Fields=renamed_fields
 grep -F 'lf_status public_types_camel_case(' "$renamed/public_types.h"
-grep -F 'bool camel_case;' "$renamed/public_types.h"
+grep -F 'bool camel_case LF_LEAN("fooBar");' "$renamed/public_types.h"
 grep -F 'typedef struct public_types_renamed_fields' "$renamed/public_types.h"
 "$compiler" build --out-dir "$renamed"
 
