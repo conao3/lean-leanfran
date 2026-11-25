@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define LEANFRAN_VERSION "0.11.1"
+#define LEANFRAN_VERSION "0.12.0"
 
 #ifdef __clang__
 #define LF_STRUCT(name) __attribute__((annotate("leanfran", "struct", #name)))
