@@ -436,7 +436,7 @@ def emitSum (cfg : RenderCfg) (name : String) (vs : Array VariantInfo) (decoder 
   let mut toCases := ""
   let mut fromCases := ""
   let mut checks := ""
-  for (v, i) in vs.zipIdx do
+  for v in vs do
     let ty := v.ident
     let (code, fields) ← variantFuncs cfg ty ty v false s!", {quoteGo v.name}"
     out := out ++ variantDecl cfg ty fields v.constructor ++
