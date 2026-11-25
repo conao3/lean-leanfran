@@ -140,4 +140,53 @@ grep -Fxq 'include/header.h:13:10: unextracted lost: LF_MODEL function has no de
 model="$app/.leanfran/workspace/LeanCModel/header/Fn_add.lean"
 grep -Fq '= true → «add» «a» «b» = Except.ok (_root_.«addSpec» «a» «b»)' "$model"
 grep -Fq '= true → ∃ r, «add» «a» «b» = Except.ok r ∧ _root_.«addOk» «a» «b» r = true' "$model"
+
+app="$scratch/records"
+cp -R "$backend/tests/verify/records" "$app"
+expect_model() {
+    grep -Fxq "$1: $2" "$scratch/out" || {
+        echo "expected $1: $2" >&2
+        exit 1
+    }
+}
+run 0 check --require proved
+expect_model 'shop.line_total [refines]' proved
+expect_model 'shop.point_sum [refines]' proved
+expect_model 'div.safe_div [refines]' proved
+run 0 status
+
+db="$app/compile_commands.json"
+cp "$db" "$scratch/compile_commands.json"
+cat >"$db" <<'JSON'
+[
+  {"directory": ".", "file": "src/shop.c", "arguments": ["cc", "-c", "src/shop.c"]},
+  {"directory": ".", "file": "src/shop.c", "arguments": ["cc", "-DSHOP_FIRST", "-c", "src/shop.c"]}
+]
+JSON
+run 1 status
+expect_model 'shop.point_sum [refines]' stale
+expect_model 'div.safe_div [refines]' proved
+run 1 check
+expect_model 'shop.point_sum [refines]' failed
+expect_model 'div.safe_div [refines]' proved
+cp "$scratch/compile_commands.json" "$db"
+run 0 check --require proved
+
+cp "$app/src/shop.c" "$scratch/shop.c"
+cp "$app/leanfran.lock" "$scratch/records.lock"
+cp "$app/leanfran/shop.h" "$scratch/shop.h"
+printf 'int broken(void) { return }\n' >>"$app/src/shop.c"
+run 1 status
+for model in 'shop.line_total' 'shop.point_sum' 'div.safe_div'; do
+    expect_model "$model [refines]" stale
+done
+grep -Fq "/src/shop.c: clang exited with 1" "$scratch/err"
+grep -Eq '/src/shop\.c:[0-9]+:[0-9]+: error: expected expression' "$scratch/err"
+run 254 check
+grep -Fq "/src/shop.c: clang exited with 1" "$scratch/err"
+cmp "$scratch/records.lock" "$app/leanfran.lock"
+cmp "$scratch/shop.h" "$app/leanfran/shop.h"
+cp "$scratch/shop.c" "$app/src/shop.c"
+run 0 status
+
 echo "verify: obligation states, stale results and --require proved checked"

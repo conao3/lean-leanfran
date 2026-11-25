@@ -260,7 +260,7 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
   return result
 
 def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (sources : Array FilePath)
-    (modelSource : String) : IO (Array ModelFunction) := do
+    (modelSource : String) (headers : FilePath) : IO (Array ModelFunction) := do
   if sources.isEmpty then return #[]
   let clang ← (IO.Process.output {cmd := "clang", args := #["--version"]}).toBaseIO
   unless clang.toOption.any (·.exitCode == 0) do
@@ -268,7 +268,7 @@ def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (s
   let db ← readDatabase root
   IO.FS.withTempDir fun tmp => do
     IO.FS.writeFile (tmp / "leanfran.h") supportHeader
-    let extra := #["-I", tmp.toString]
+    let extra := #["-I", tmp.toString, "-I", headers.toString]
     let mut paths := sources
     if sources.any (·.extension != some "c") then
       for path in ← sourceFiles root config do
