@@ -243,11 +243,12 @@ static void print_double(double value) {
         printf("%" PRIu64, bits(value));
 }
 
-static size_t read_array(int64_t *xs) {
-    size_t n = read_uint();
-    for (size_t i = 0; i < n; i++)
+static int64_t *read_array(size_t *n) {
+    *n = read_uint();
+    int64_t *xs = malloc(*n * sizeof(*xs));
+    for (size_t i = 0; i < *n; i++)
         xs[i] = read_int();
-    return n;
+    return xs;
 }
 
 static void print_status(lf_status status, int32_t out) {
@@ -326,24 +327,27 @@ static void evaluate(char *line) {
     } else if (NAME("switch_loop")) {
         printf("%" PRId32, switch_loop(read_int()));
     } else if (NAME("sum")) {
-        int64_t xs[8];
         size_t n = read_uint();
+        int64_t *xs = malloc(n * sizeof(*xs));
         for (size_t i = 0; i < n; i++)
             xs[i] = read_int();
         printf("%" PRId64, sum(xs, n));
+        free(xs);
     } else if (NAME("at")) {
-        int32_t xs[8];
         size_t n = read_uint();
+        int32_t *xs = malloc(n * sizeof(*xs));
         for (size_t i = 0; i < n; i++)
             xs[i] = read_int();
         int32_t i = read_int();
         printf("%" PRId32, at(xs, n, i));
+        free(xs);
     } else if (NAME("total")) {
-        item items[8];
         size_t n = read_uint();
+        item *items = malloc(n * sizeof(*items));
         for (size_t i = 0; i < n; i++)
             items[i] = read_item();
         printf("%" PRId64, total(items, n));
+        free(items);
     } else if (NAME("item_value")) {
         printf("%" PRId64, item_value(read_item()));
     } else if (NAME("dot")) {
@@ -362,14 +366,16 @@ static void evaluate(char *line) {
         else
             printf("%d -", (int)status);
     } else if (NAME("sum_twice")) {
-        int64_t xs[8];
-        size_t n = read_array(xs);
+        size_t n;
+        int64_t *xs = read_array(&n);
         printf("%" PRId64, sum_twice(xs, n));
+        free(xs);
     } else if (NAME("sum_prefix")) {
-        int64_t xs[8];
-        size_t n = read_array(xs);
+        size_t n;
+        int64_t *xs = read_array(&n);
         uint32_t k = read_uint();
         printf("%" PRId64, sum_prefix(xs, n, k));
+        free(xs);
     } else if (NAME("div_sum")) {
         int32_t a = read_int(), b = read_int(), c = read_int(), out = 0;
         lf_status status = div_sum(a, b, c, &out);
@@ -385,20 +391,22 @@ static void evaluate(char *line) {
         int32_t a = read_int(), b = read_int();
         printf("%" PRId32, countdown(a, b));
     } else if (NAME("checked_sum")) {
-        int64_t xs[8], out = 0;
-        size_t n = read_array(xs);
+        size_t n;
+        int64_t *xs = read_array(&n), out = 0;
         lf_status status = checked_sum(xs, n, &out);
         if (status == LF_OK)
             printf("%d %" PRId64, (int)status, out);
         else
             printf("%d -", (int)status);
+        free(xs);
     } else if (NAME("total_or")) {
-        int64_t xs[8];
-        size_t n = read_array(xs);
+        size_t n;
+        int64_t *xs = read_array(&n);
         printf("%" PRId64, total_or(xs, n));
+        free(xs);
     } else if (NAME("count_pos")) {
-        int32_t xs[8];
         size_t n = read_uint(), out = 0;
+        int32_t *xs = malloc(n * sizeof(*xs));
         for (size_t i = 0; i < n; i++)
             xs[i] = read_int();
         lf_status status = count_pos(xs, n, &out);
@@ -406,12 +414,14 @@ static void evaluate(char *line) {
             printf("%d %zu", (int)status, out);
         else
             printf("%d -", (int)status);
+        free(xs);
     } else if (NAME("count_or")) {
-        int32_t xs[8];
         size_t n = read_uint();
+        int32_t *xs = malloc(n * sizeof(*xs));
         for (size_t i = 0; i < n; i++)
             xs[i] = read_int();
         printf("%zu", count_or(xs, n));
+        free(xs);
     } else if (NAME("size_ops")) {
         size_t n = read_uint();
         unsigned long m = read_uint();

@@ -52,6 +52,7 @@ test "$(wc -l <"$scratch/translated.txt")" -eq "$expected"
 lake build oracle
 
 export NIX_HARDENING_ENABLE=""
+export ASAN_OPTIONS=redzone=256
 flags=(-std=c11 -Wall -Wextra -Werror -pedantic -ffp-contract=off
     -I "$backend/support" "${clang_args[@]}")
 cc "${flags[@]}" "$fixtures/driver.c" -o "$scratch/inputs"
@@ -71,6 +72,14 @@ if grep -qE '= !(diverged|missingReturn)$' "$scratch/lean.txt"; then
 fi
 awk '{ n[$1]++ } n[$1] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \
     >"$scratch/undefined-inputs.txt"
+grep '= !indexOutOfRange$' "$scratch/lean.txt" | sed 's/ = .*//' |
+    awk '($1 == "at" && $NF >= -16 && $NF < $3 + 16) || $1 == "sum_prefix"' \
+    >"$scratch/out-of-range.txt"
+grep -q '^at ' "$scratch/out-of-range.txt"
+grep -q '^sum_prefix ' "$scratch/out-of-range.txt"
+printf '%s\n' 'at Bi 0 0' 'at Bi 3 1 2 3 3' 'at Bi 3 1 2 3 -1' >"$scratch/edge-inputs.txt"
+"$project/.lake/build/bin/oracle" <"$scratch/edge-inputs.txt" >"$scratch/edge.txt"
+test "$(grep -c '= !indexOutOfRange$' "$scratch/edge.txt")" -eq 3
 
 compilers=(clang)
 if [[ $(uname -s) == Linux ]]; then
@@ -96,6 +105,30 @@ for cc in "${compilers[@]}"; do
             fi
         done <"$scratch/undefined-inputs.txt"
         echo "$cc $opt: $(wc -l <"$scratch/lean-ok.txt") translated results matched and $(wc -l <"$scratch/undefined-inputs.txt") UBSan cases trapped"
+
+        "$cc" "${flags[@]}" "$opt" -g -fsanitize=address -fno-omit-frame-pointer \
+            "$fixtures/driver.c" -o "$scratch/asan"
+        "$scratch/asan" <"$scratch/ok-inputs.txt" >"$scratch/asan.txt"
+        diff -u "$scratch/lean-ok.txt" "$scratch/asan.txt"
+        while read -r line; do
+            status=0
+            "$scratch/asan" <<<"$line" >/dev/null 2>"$scratch/asan.log" || status=$?
+            if [[ $status == 0 ]] || ! grep -q 'ERROR: AddressSanitizer' "$scratch/asan.log"; then
+                echo "$cc $opt ASan: expected an out-of-range read for '$line'" >&2
+                cat "$scratch/asan.log" >&2
+                exit 1
+            fi
+        done <"$scratch/out-of-range.txt"
+        while read -r line; do
+            status=0
+            "$scratch/asan" <<<"$line" >/dev/null 2>"$scratch/asan.log" || status=$?
+            if [[ $status == 0 ]] || ! grep -q 'AddressSanitizer: heap-buffer-overflow' "$scratch/asan.log"; then
+                echo "$cc $opt ASan: expected a heap-buffer-overflow for '$line'" >&2
+                cat "$scratch/asan.log" >&2
+                exit 1
+            fi
+        done <"$scratch/edge-inputs.txt"
+        echo "$cc $opt: $(wc -l <"$scratch/asan.txt") results matched under ASan and $(($(wc -l <"$scratch/out-of-range.txt") + 3)) out-of-range reads within 16 elements trapped"
     done
 done
 
