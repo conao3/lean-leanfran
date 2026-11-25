@@ -24,13 +24,17 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.next.outputs.version }}
+      base: ${{ steps.next.outputs.base }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
           fetch-tags: true
       - id: next
-        run: echo "version=$(maint/next-version.sh "$BUMP")" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(maint/next-version.sh "$BUMP")" >> "$GITHUB_OUTPUT"
+          echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         env:
           BUMP: ${{ inputs.version_bump }}
 
@@ -44,6 +48,8 @@ jobs:
         dir: [Rust, Python, TypeScript, Clojure, PHP, Go, C]
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.base }}
       - uses: cachix/install-nix-action@v32.0.0
       - run: maint/set-version.sh "$VERSION" "$DIR"
         env:
@@ -57,9 +63,37 @@ jobs:
           name: version-patch-${{ matrix.dir }}
           path: version-${{ matrix.dir }}.patch
 
+  tag:
+    name: Push the release commit and tag
+    needs: [version, set]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.base }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: version-patch-*
+          merge-multiple: true
+      - run: maint/apply-version.sh "$VERSION"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "release v$VERSION"
+          maint/push-release.sh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+
   check:
     name: make check (${{ matrix.dir }})
-    needs: [version, set]
+    needs: [version, tag]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -72,6 +106,8 @@ jobs:
             nix-shells: php php85
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/v${{ needs.version.outputs.version }}
       - uses: cachix/install-nix-action@v32.0.0
       - if: matrix.nix-shells
         id: nix-cache
@@ -93,47 +129,17 @@ jobs:
         with:
           path: ${{ runner.temp }}/nix-cache
           key: ${{ steps.nix-cache.outputs.cache-primary-key }}
-      - uses: actions/download-artifact@v8.0.2
-        with:
-          pattern: version-patch-*
-          merge-multiple: true
-      - run: maint/apply-version.sh "$VERSION"
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
       - run: make check BACKENDS=${{ matrix.dir }}
 
-  tag:
-    name: Tag, start the publish and merge into the branch
+  publish:
+    name: Start the publish
     needs: [version, check]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
-      contents: write
       actions: write
     steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: actions/download-artifact@v8.0.2
-        with:
-          pattern: version-patch-*
-          merge-multiple: true
-      - run: maint/apply-version.sh "$VERSION"
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "release v$VERSION"
-          maint/push-release.sh tag
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          BRANCH: ${{ github.ref_name }}
-      - run: gh workflow run publish.yml -f tag="v$VERSION"
+      - run: gh workflow run publish.yml -R "$GITHUB_REPOSITORY" -f tag="v$VERSION"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
-      - run: maint/push-release.sh land
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          BRANCH: ${{ github.ref_name }}

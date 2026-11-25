@@ -90,7 +90,7 @@ for scenario in unchanged advance-1 advance-3 advance-during-push conflict rewin
     fi
     export DURING_PUSH
     status=0
-    (cd release && PATH="$release_path" && "$push_release" tag && "$push_release" land) > output 2>&1 || status=$?
+    (cd release && PATH="$release_path" && "$push_release") > output 2>&1 || status=$?
 
     kept=$(git -C writer rev-parse master)
     if [[ $scenario == rewind || $scenario == rewind-during-push ]]; then
@@ -99,7 +99,7 @@ for scenario in unchanged advance-1 advance-3 advance-during-push conflict rewin
     git -C remote merge-base --is-ancestor "$kept" master || fail "dropped commits from master"
 
     case $scenario in
-        rewind|existing-tag)
+        conflict|existing-tag)
             [[ $status != 0 ]] || fail "unexpectedly succeeded"
             [[ $(git -C remote show-ref) == "$before" ]] || fail "changed remote refs"
             if [[ $scenario == existing-tag ]]; then
@@ -109,27 +109,19 @@ for scenario in unchanged advance-1 advance-3 advance-during-push conflict rewin
             fi
             echo "$scenario: stopped and pushed nothing"
             ;;
-        conflict|rewind-during-push)
-            [[ $status != 0 ]] || fail "unexpectedly succeeded"
-            [[ $(git -C remote rev-parse "v$VERSION^{commit}") == "$release_commit" ]] || fail "tag is not the release commit"
-            [[ $(git -C remote rev-parse master) == "$kept" ]] || fail "changed master"
-            grep -qF "git merge v$VERSION" output || fail "missing hand fix"
-            echo "$scenario: tag pushed, master unchanged, failed with the hand fix"
-            ;;
-        unchanged)
-            [[ $status == 0 ]] || fail "failed"
-            [[ $(git -C remote rev-parse "v$VERSION^{commit}") == "$release_commit" ]] || fail "tag is not the release commit"
-            [[ $(git -C remote rev-parse master) == "$release_commit" ]] || fail "master is not the release commit"
-            echo "$scenario: tag and master point to the release commit"
-            ;;
         *)
             [[ $status == 0 ]] || fail "failed"
-            [[ $(git -C remote rev-parse "v$VERSION^{commit}") == "$release_commit" ]] || fail "tag is not the release commit"
-            [[ $(git -C remote rev-parse master^1) == "$kept" ]] || fail "first parent is not the advanced master"
-            [[ $(git -C remote rev-parse master^2) == "$release_commit" ]] || fail "second parent is not the release commit"
-            [[ $(git -C remote show master:version) == "$VERSION" ]] || fail "version not merged"
-            [[ $(git -C remote log -1 --format=%s master) == "Merge release v$VERSION into master" ]] || fail "merge message"
-            echo "$scenario: tag pushed and master merged the release commit"
+            [[ $(git -C remote rev-parse "v$VERSION^{commit}") == "$(git -C remote rev-parse master)" ]] || fail "tag is not master"
+            [[ $(git -C remote rev-parse master^) == "$kept" ]] || fail "parent is not the latest master"
+            [[ $(git -C remote show master:version) == "$VERSION" ]] || fail "version not written"
+            [[ $(git -C remote log -1 --format=%s master) == "release v$VERSION" ]] || fail "commit message"
+            if [[ $scenario == rewind* ]]; then
+                ! git -C remote merge-base --is-ancestor "$(git -C writer rev-parse master)" master || fail "restored rewound commits"
+            fi
+            if [[ $scenario == unchanged ]]; then
+                [[ $(git -C remote rev-parse master) == "$release_commit" ]] || fail "master is not the release commit"
+            fi
+            echo "$scenario: release commit and tag pushed on the latest master"
             ;;
     esac
 done
