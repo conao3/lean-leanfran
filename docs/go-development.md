@@ -11,7 +11,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 - `langs/Go/lean/LeanGoLib/Go.lean` defines modeled failure and Go operations. The tool embeds its source and writes it into the Lake workspace. The Nix compiler package also installs the source in `share/leanfran-go/LeanGoLib/`.
 - `langs/Go/leanfrantest/` runs seeded tests against public Lean spec wrappers. It is called by the Go files that `sync` generates in each modeled package.
 - `langs/Go/schema/` renders JSON and JSON Schema from generated descriptors. The root Go package provides validation errors and typed conversion combinators.
-- `langs/Go/value.go` manages handle ownership and serializes Lean reference counts shared across handle calls. `langs/Go/rt/` implements the runtime. It uses `rt.V` for Lean objects and Go's fixed-width types for unboxed scalars. Arrays and strings use copy-on-write, and tail calls between functions use a trampoline.
+- `langs/Go/value.go` manages handle ownership and serializes Lean reference counts shared across handle calls. `langs/Go/rt/` implements the runtime. It uses `rt.V` for Lean objects and Go's fixed-width types for unboxed scalars. A constructor object holds its fields in the same allocation as its header, and a kind with a Go payload such as a string or closure uses the larger `objX` allocation. Arrays and strings use copy-on-write, and tail calls between functions use a trampoline.
 - `langs/Go/LeanGo/RuntimeExterns.lean` lists the runtime symbols. The emitter reports missing names before producing output.
 - `langs/Go/LeanGoTest/` holds Lean fixtures for native and generated programs. `langs/Go/testdata/` holds Go drivers for generated packages. `langs/Go/test-out/` holds check artifacts.
 - `langs/Go/make/` registers check targets through `CHECK_TARGETS`. `maint/Go/` contains the extern generator and the test scripts.
@@ -48,11 +48,11 @@ nix develop .#go -c make -C langs/Go samples
 
 `test-embed-scan` checks literal scanning, source positions, and block dependencies. `test-embed` installs the CLI as a module tool in a fixture, checks round-trip models and tags, and verifies that failed proofs and syntax errors preserve the installed Go. It checks manifests with a PATH that contains Go alone. `test-embed-samples` rebuilds the two embedded modules, compares their generated files with the checkout, and compares the range sample with a native Lean C oracle.
 
-Run `make test-kernel` in `langs/Go/` to compare 5,000 seeded commands through the ordinary Go functions, the handle functions, and Lean's native C backend. It also checks distinct handle types at compile time, tests shared handles and scoped calls with eight goroutines under the race detector, and checks allocation limits for updates to the first and final rows. After generation, run the kernel benchmark in the backend shell:
+Run `make test-kernel` in `langs/Go/` to compare 5,000 seeded commands through the ordinary Go functions, the handle functions, and Lean's native C backend. It also checks distinct handle types at compile time, tests shared handles and scoped calls with eight goroutines under the race detector, and checks allocation limits for updates to the first and final rows. `make test-value-cost` prints the allocation counts of an ordinary command, a final-row command and a scoped command with Go conversions, checks that walking 10,000 rows allocates nothing, and counts a leaked handle with `leanfran.TrackLeakedValues`. After generation, run the kernel benchmark in the backend shell:
 
 ```sh
 cd langs/Go
-go test ./test-out/_generated/kernel -run '^$' -bench '^Benchmark(Command|LastRowCommand|ScopedLastRowCommand)$' \
+go test ./test-out/_generated/kernel -run '^$' -bench '^Benchmark(Command|LastRowCommand|ScopedLastRowCommand|ScopedCommand|Walk)$' \
   -benchmem -benchtime=300ms -cpu=1 -count=5
 ```
 

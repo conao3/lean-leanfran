@@ -241,15 +241,15 @@ To reuse public types from a generated library, use `--type-module Library.Names
 
 Use the ordinary wrappers for Go data such as input from JSON. Use handles when Go keeps a Lean value across calls, such as a server's snapshot. A `leanfran.Value[T]` owns one Lean reference. The generated `Value.NewT` converts Go data once and returns an `error` when T requires input validation. `Value.ReadT` copies the contents back to Go.
 
-For a generated function `F`, `Handle.F` accepts `leanfran.ValueInput[T]` for each argument. Pass `v.Borrow()` to keep using `v` or `v.Take()` to transfer its reference at the start of the call. If the Lean function can update an exclusively owned object in place, `Take` lets it do so. Copies of a Go handle refer to the same owner. Taking it empties every copy. `v.Close()` releases the reference and can be called on an empty handle. Reading or passing an empty handle panics. Unreachable handles also release their references through Go's garbage collector.
+For a generated function `F`, `Handle.F` accepts `leanfran.ValueInput[T]` for each argument. Pass `v.Borrow()` to keep using `v` or `v.Take()` to transfer its reference at the start of the call. If the Lean function can update an exclusively owned object in place, `Take` lets it do so. Copies of a Go handle refer to the same owner. Taking it empties every copy. `v.Close()` releases the reference and can be called on an empty handle. Reading or passing an empty handle panics. A handle that becomes unreachable before `Close` or `Take` keeps its Lean reference. Go's garbage collector still frees the Lean objects, but objects shared with that handle keep a reference count above one, so later calls copy them instead of updating them in place. In tests, call `leanfran.TrackLeakedValues(true)`. After a garbage collection, `leanfran.LeakedValues()` returns the number of handles that were collected while holding a reference.
 
-Handle functions return an `error` only for `IO` or a top-level `Except`. A `Unit` result contributes no handle. A top-level product returns two handles. For an `Except E (A × B)`, the two handles hold the successful product fields. Use `errors.As` for `*leanfran.ExceptError[E]` when the error has a Go representation, or `*leanfran.ExceptError[leanfran.Value[E]]` for an opaque Lean error. Use `leanfran.SplitValue` on a product already held in a handle. The JSON summary's `valueFunctions` map gives package-relative selectors such as `Handle.Width`. Each `valueConversions` entry lists the type stem and its `new`, `read`, `newIn`, and `readIn` selectors.
+Handle functions return an `error` only for `IO` or a top-level `Except`. A `Unit` result contributes no handle. A top-level product returns two handles. For an `Except E (A × B)`, the two handles hold the successful product fields. Use `errors.AsType[*leanfran.ExceptError[E]](err)` when the error has a Go representation, or `*leanfran.ExceptError[leanfran.Value[E]]` for an opaque Lean error. Unlike `errors.As`, `errors.AsType` does not allocate a target on every call. Use `leanfran.SplitValue` on a product already held in a handle. The JSON summary's `valueFunctions` map gives package-relative selectors such as `Handle.Width`. Each `valueConversions` entry lists the type stem and its `new`, `read`, `newIn`, and `readIn` selectors.
 
 Generated packages reserve `Handle` and `Value` for these method sets. A Lean name that maps to `Handle` or `Value` receives one leading `Lean`, as do names with existing `Lean` prefixes before either reserved word. For example, the Lean type `Value` is exported as `LeanValue`. A function named `in` has the handle method `Handle.LeanIn`, with the same rule for existing `Lean` prefixes before `In`. Ordinary wrappers keep their own package-level identifiers.
 
 Named Lean data types use their generated Go type as the handle parameter. Built-in type markers distinguish types with a shared Go representation, such as `leanfran.NatType` and `leanfran.IntType`, or `leanfran.ListType[T]` and `leanfran.ArrayType[T]`. Types with decidable proof fields use the existing validated Go conversion. Types with proofs that Go cannot validate and types containing `Std.HashMap` get opaque type markers. Construct and inspect those values through Lean functions that take and return handles.
 
-Use one server mutex around a sequence that reads, updates, and replaces its snapshot. The runtime serializes individual handle operations and reference releases, including releases by the garbage collector, because separate handles can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `Handle.Transition` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
+Use one server mutex around a sequence that reads, updates, and replaces its snapshot. The runtime serializes individual handle operations and reference releases because separate handles can share Lean subobjects. Goroutines can move between OS threads. Here the snapshot is borrowed during `Handle.Transition` so the server can keep it if Lean returns an error. [Inventory server example](../langs/Go/samples/value-server/main.go).
 
 ```go
 s.mu.Lock()
@@ -266,7 +266,7 @@ return inventory.Value.ReadUInt64(reply), nil
 
 Call `v.IsExclusive()` to check whether the Lean heap object has one reference at that moment. Scalars and persistent objects return false. Go copies of the same handle share one owner, and child objects have their own reference counts. To check a handle and consume it under the same lock, use `v.IsExclusiveIn(scope)` inside `leanfran.WithValues`.
 
-`WithValues` holds the runtime mutex across a callback. Call `Handle.In(scope)` and `Value.In(scope)` to use the same methods with its `*leanfran.ValueScope`. Also pass the scope to `v.CloseIn` and `leanfran.SplitValueIn`. Use scoped calls throughout the callback and call `WithValues` from outside any active callback. The scope expires on return. Handles can outlive the scope and use ordinary calls again. The JSON summary's `scopedValueFunctions` map gives call templates such as `Handle.In(scope).Width`.
+`WithValues` holds the runtime mutex across a callback. Call `Handle.In(scope)` and `Value.In(scope)` to use the same methods with its `*leanfran.ValueScope`. Also pass the scope to `v.CloseIn` and `leanfran.SplitValueIn`. Use scoped calls throughout the callback and call `WithValues` from outside any active callback. The scope expires on return. Handles can outlive the scope and use ordinary calls again. A scope stores its first eight handles in its own allocation, so a callback that creates up to eight handles allocates once for all of them. The JSON summary's `scopedValueFunctions` map gives call templates such as `Handle.In(scope).Width`.
 
 ```go
 var result uint64
@@ -287,17 +287,17 @@ return result, err
 
 The kernel fixture measures `transition`, `apply`, and reading the reply in Go. For handle measurements, it prepares the actor and command outside the timed loop and hands the snapshot to `apply` with `Take`. The final-row benchmark selects the last row on every call.
 
-On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of three runs on one CPU was:
+On Linux amd64 with an Intel Core i5-8400 and Go 1.27.3, the median of five runs on one CPU, with a load average of 8 to 9 from other work on the six cores, was:
 
 | Snapshot rows | Ordinary wrappers, first row | Handles, first row | Handles, final row | Scoped handles, final row |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 | | | 1.20 µs, 7 allocs | 1.14 µs, 8 allocs |
-| 10 | 10.29 µs, 80 allocs | 1.17 µs, 7 allocs | | |
-| 100 | 77.89 µs, 584 allocs | 1.32 µs, 7 allocs | 3.98 µs, 7 allocs | 4.20 µs, 8 allocs |
-| 1,000 | 775.51 µs, 5,543 allocs | 1.29 µs, 7 allocs | 31.10 µs, 7 allocs | 30.65 µs, 8 allocs |
-| 10,000 | | | 1.25 ms, 7 allocs | 0.88 ms, 8 allocs |
+| 1 | | | 0.90 µs, 6 allocs | 0.73 µs, 5 allocs |
+| 10 | 7.48 µs, 71 allocs | 0.67 µs, 6 allocs | | |
+| 100 | 64.58 µs, 575 allocs | 0.67 µs, 6 allocs | 3.58 µs, 6 allocs | 3.36 µs, 5 allocs |
+| 1,000 | 721.71 µs, 5,534 allocs | 0.89 µs, 6 allocs | 45.09 µs, 6 allocs | 31.46 µs, 5 allocs |
+| 10,000 | | | 0.85 ms, 6 allocs | 0.90 ms, 5 allocs |
 
-At 100 rows, the first-row handle benchmark took 1.16 µs with 7 allocations under the server mutex. Converting a Go command each time took 1.66 µs with 10 allocations.
+At 100 rows, the first-row handle benchmark took 1.07 µs with 6 allocations under the server mutex. Converting a Go command each time took 1.19 µs with 8 allocations. Finding a missing row walks the whole list in 9.8 ns per row at 1,000 rows and 9.1 ns per row at 10,000 rows without allocating.
 
 ## JSON and JSON Schema
 
