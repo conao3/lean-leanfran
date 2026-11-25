@@ -1,4 +1,7 @@
 import Lean.Compiler.LCNF.ToImpureType
+import Lean.Compiler.NoncomputableAttr
+import Lean.Meta.SynthInstance
+import Lean.PrettyPrinter
 
 open Lean Lean.Meta Lean.Compiler.LCNF
 
@@ -114,32 +117,49 @@ structure Field where
   type : CType
   layout : CtorFieldInfo
   indirect : Bool
+  index : Nat
+  flat : Bool := false
+  bounds : Array (String × Int) := #[]
+  deriving Inhabited
+
+structure Invariant where
+  field : String
+  index : Nat
+  proposition : String
+  instanceTerm : String
+  dependencies : Array Name
   deriving Inhabited
 
 structure Constructor where
   name : String
+  leanCtor : Name
   leanName : String
   layout : CtorLayout
   fields : Array Field
   positional : Bool
+  invariants : Array Invariant
   deriving Inhabited
 
 inductive Shape where
-  | record | enum | variant | option | array | list | pair
+  | record | enum | variant | option | array | list | pair | subtype
   deriving BEq, Inhabited
 
 structure Desc where
   type : Expr
+  typeSource : String
+  sourceName : Name
+  params : Array String
   name : String
   shape : Shape := .record
   ctors : Array Constructor := #[]
   item : CType := .unit
   trivial : Bool := false
+  finBound : Option Nat := none
   deriving Inhabited
 
 abbrev DescribeM := StateT (Array Desc) MetaM
 
-private def typeStem (cPrefix : String) (ty : CType) : String :=
+def CType.typeStem (ty : CType) (cPrefix : String) : String :=
   match ty with
   | .named name => String.ofList (name.toList.drop (cPrefix.length + 1))
   | .string => "string"
@@ -153,14 +173,90 @@ private def typeStem (cPrefix : String) (ty : CType) : String :=
   | .float32 => "float32"
   | _ => (ty.cName.splitOn "_t").head!
 
+def leanTypeSource (type : Expr) : MetaM String :=
+  withOptions (fun o => o.setBool `pp.fullNames true |>.setBool `pp.notation false
+      |>.setBool `pp.explicit true) do
+    return (← ppExpr type).pretty (width := 10000)
+
+private def literalInt? (e : Lean.Expr) : MetaM (Option Int) := do
+  let e ← instantiateMVars e
+  if let some i := e.int? then return some i
+  if let some n ← (evalNat e).run then return some (Int.ofNat n)
+  return none
+
+private def boundOf (v : Lean.Expr) (p : Lean.Expr) : MetaM (Option (String × Int)) := do
+  let p := p.consumeMData
+  let (op, a, b) ← match p.getAppFnArgs with
+    | (``LT.lt, #[_, _, a, b]) => pure ("lt", a, b)
+    | (``LE.le, #[_, _, a, b]) => pure ("le", a, b)
+    | (``GT.gt, #[_, _, a, b]) => pure ("gt", a, b)
+    | (``GE.ge, #[_, _, a, b]) => pure ("ge", a, b)
+    | _ => return none
+  let lenKind (e : Lean.Expr) : Option String := match e.getAppFnArgs with
+    | (``String.length, #[x]) => if x == v then some "Length" else none
+    | (``List.length, #[_, x]) => if x == v then some "Items" else none
+    | (``ByteArray.size, #[x]) => if x == v then some "Items" else none
+    | (``Array.size, #[_, x]) => if x == v then some "Items" else none
+    | _ => none
+  let flip : String → String
+    | "lt" => "gt" | "le" => "ge" | "gt" => "lt" | _ => "le"
+  let isNumericView (e : Lean.Expr) : Bool :=
+    let e := match e.getAppFnArgs with | (``Int.ofNat, #[x]) => x | _ => e
+    e == v || match e.getAppFnArgs with
+      | (n, #[x]) =>
+        ([``UInt8.toNat, ``UInt16.toNat, ``UInt32.toNat, ``UInt64.toNat,
+          ``Int8.toInt, ``Int16.toInt, ``Int32.toInt, ``Int64.toInt].contains n) && x == v
+      | _ => false
+  let (op, target, lit) := if isNumericView a || (lenKind a).isSome then (op, a, b) else (flip op, b, a)
+  let some c ← literalInt? lit | return none
+  if let some k := lenKind target then
+    return some <| match op with
+      | "lt" => (s!"max{k}", c - 1)
+      | "le" => (s!"max{k}", c)
+      | "gt" => (s!"min{k}", c + 1)
+      | _ => (s!"min{k}", c)
+  unless isNumericView target do return none
+  return some <| match op with
+    | "lt" => ("exclusiveMaximum", c)
+    | "le" => ("maximum", c)
+    | "gt" => ("exclusiveMinimum", c)
+    | _ => ("minimum", c)
+
+private def describeInvariant (typeName : Name) (field : String) (fields : Array Expr)
+    (index : Nat) : MetaM Invariant := do
+  let proposition ← instantiateMVars (← inferType fields[index]!)
+  let decision ← try
+      instantiateMVars (← synthInstance (mkApp (mkConst ``Decidable) proposition))
+    catch _ => throwError "C invariant: {typeName}.{field} has no Decidable instance for {proposition}"
+  if decision.getUsedConstants.any (isNoncomputable (← getEnv) ·) then
+    throwError "C invariant: {typeName}.{field} has a noncomputable Decidable instance"
+  let mut lctx ← getLCtx
+  for i in [:index] do
+    if ← isProof fields[i]! then
+      if proposition.containsFVar fields[i]!.fvarId! || decision.containsFVar fields[i]!.fvarId! then
+        throwError "C invariant: {typeName}.{field} depends on another proof field"
+    lctx := lctx.setUserName fields[i]!.fvarId! (s!"lfv{i}").toName
+  withLCtx' lctx do
+    return ⟨field, index, ← leanTypeSource proposition, ← leanTypeSource decision, decision.getUsedConstants⟩
+
+def Desc.hasInvariants (desc : Desc) : Bool :=
+  desc.ctors.any (!·.invariants.isEmpty)
+
+def Desc.invariantMessage (desc : Desc) (inv : Invariant) : String :=
+  s!"Invalid {desc.sourceName}.{inv.field}"
+
 partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : DescribeM CType :=
   Meta.withIncRecDepth do
+    let original := type
     let type ← whnf type
     let .const name levels := type.getAppFn | throwError "unsupported type {type}"
     if let some primitive := CType.ofName name then
       return primitive
+    let subtype := name == `Subtype || name == `Fin
+    let sourceName := if name == `Subtype then original.getAppFn.constName?.getD name else name
     for desc in ← get do
-      if desc.type.getAppFn.constName? == some name && (← isDefEq desc.type type) then
+      if desc.type.getAppFn.constName? == some name &&
+          desc.sourceName == sourceName && (← isDefEq desc.type type) then
         return .named desc.name
     let env ← getEnv
     let some (.inductInfo ind) := env.find? name | throwError "unsupported type {type}"
@@ -170,14 +266,26 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
     let params := type.getAppArgs
     if params.size != ind.numParams then throwError "unsupported type {type}"
     let mut stems := #[]
-    for param in params do
+    for param in (if subtype then #[] else params) do
       unless (← inferType param).isSort do throwError "unsupported type argument {param}"
-      stems := stems.push (typeStem cPrefix (← readType cPrefix renames param))
-    let base := if name == `Prod then "pair" else name.toString
-    let stem := publicName renames name base
+      stems := stems.push ((← readType cPrefix renames param).typeStem cPrefix)
+    let finBound ← if name == `Fin then do
+      let some bound ← (evalNat params[0]!).run
+        | throwError "C invariant: Fin requires a literal bound"
+      pure (some bound)
+      else pure none
+    let descriptions ← get
+    let base := if let some bound := finBound then s!"fin_{bound}"
+      else if name == `Prod then "pair"
+      else if sourceName == `Subtype then
+        s!"subtype_{descriptions.countP (fun d => d.type.isAppOf `Subtype)}"
+      else sourceName.toString
+    let stem := publicName renames sourceName base
     let nameC := escapeIdentifier s!"{cPrefix}_{String.intercalate "_" (stem :: stems.toList)}"
     if (← get).any (·.name == nameC) then throwError "C name collision: {nameC}"
-    let desc : Desc := { type, name := nameC }
+    let desc : Desc := {
+      type, name := nameC, typeSource := ← leanTypeSource original, sourceName, finBound,
+      params := ← if subtype then pure #[] else params.mapM fun p => return (← ppExpr p).pretty }
     modify (·.push desc)
     let item ← if name == `Array || name == `List then readType cPrefix renames params[0]!
       else pure CType.unit
@@ -188,8 +296,9 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
         let info ← getConstInfoCtor ctorName
         let ty ← Meta.instantiateForall (info.type.instantiateLevelParams info.levelParams levels) params
         let layout ← getCtorLayout ctorName
-        let (fields, positional) ← forallTelescopeReducing ty fun fields _ => do
+        let (fields, positional, invariants) ← forallTelescopeReducing ty fun fields _ => do
           let mut result := #[]
+          let mut invariants := #[]
           let mut positional := false
           for i in [:fields.size] do
             let position := layout.fieldInfo[i]!
@@ -197,6 +306,14 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
             | .erased | .void =>
               unless ← isProof fields[i]! do
                 throwError "unsupported erased field in {ctorName}"
+              let raw := (← fields[i]!.fvarId!.getUserName)
+              let field := if raw.isAnonymous || raw.hasMacroScopes || raw.isInternal then s!"h{i}"
+                else lastComponent raw
+              invariants := invariants.push (← describeInvariant sourceName field fields i)
+              let prop := (← inferType fields[i]!).headBeta
+              for j in [:result.size] do
+                if let some bound ← boundOf fields[result[j]!.index]! prop then
+                  result := result.modify j fun f => { f with bounds := f.bounds.push bound }
             | _ =>
               let localDecl ← fields[i]!.fvarId!.getDecl
               let rawName := localDecl.userName
@@ -212,13 +329,15 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
                 throwError "C name collision: {nameC}.{fieldName}"
               result := result.push {
                 name := fieldName, leanName, type := fieldType,
-                layout := position, indirect}
-          return (result, positional)
+                layout := position, indirect, index := i,
+                flat := isStruct && (isSubobjectField? env name rawName).isSome }
+          return (result, positional, invariants)
         ctors := ctors.push {
           name := publicName renames ctorName (lastComponent ctorName),
-          leanName := lastComponent ctorName, layout, fields, positional}
+          leanCtor := ctorName, leanName := lastComponent ctorName, layout, fields, positional, invariants}
     let shape :=
-      if name == `Option then .option
+      if subtype then .subtype
+      else if name == `Option then .option
       else if name == `Array then .array
       else if name == `List then .list
       else if name == `Prod then .pair
@@ -228,10 +347,5 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
     let trivial := (← hasTrivialImpureStructure? name).isSome
     modify fun ds => (ds.filter (·.name != nameC)).push { desc with ctors, shape, item, trivial }
     return .named nameC
-
-def leanTypeSource (type : Expr) : MetaM String :=
-  withOptions (fun o => o.setBool `pp.fullNames true |>.setBool `pp.notation false
-      |>.setBool `pp.explicit true) do
-    return (← ppExpr type).pretty
 
 end LeanC

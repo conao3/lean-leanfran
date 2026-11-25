@@ -6,6 +6,9 @@ The C backend builds on Lean's native C emitter and runtime. It selects Lean def
 
 - `langs/C/Main.lean` parses `leanfran-c generate` and `build`.
 - `langs/C/LeanC/Export.lean` selects declarations and emits the Lean export module. Its `@[export]` declarations supply stable symbols independent of the Lake package name.
+- `langs/C/LeanC/Desc.lean` describes public types and synthesizes evidence that proof fields are decidable.
+- `langs/C/LeanC/Json.lean` emits deciders and JSON codecs as Lean source. `langs/C/lean/LeanfranC/Json.lean` provides the runtime parser and serializer and imports only `Init`. The generated export module links the runtime with the user library.
+- `langs/C/LeanC/Schema.lean` emits draft 2020-12 JSON Schema from the same public type descriptions.
 - `langs/C/LeanC/Check.lean` inspects reachable declarations and imports for `sorryAx`, compiler dependencies, externs, and `implemented_by` replacements.
 - `langs/C/LeanC/Header.lean` emits the C11 header, conversion wrappers, and per-module initializer. `langs/C/support/` provides the common ABI, runtime initialization, and string and error ownership helpers.
 - `langs/C/LeanC/Build.lean` uses Lake's module dependencies and native objects to assemble the library. `langs/C/LeanC/Link.lean` uses the active toolchain's `leanc --print-ldflags` output to generate pkg-config, Make, and CMake settings. Linux groups the static Lean libraries for the linker. macOS links them without GNU linker groups.
@@ -28,3 +31,5 @@ CI builds the Nix package and runs the C checks on Linux and macOS arm64. To run
 The differential check compares stdout, stderr, and process status with the native Lean oracle for successful and failing I/O. It tests calls before initialization, repeat and concurrent initialization, and initialization errors. To detect ownership errors in Lean objects, it counts live mimalloc blocks across repeated calls and checks that intentionally missing or extra decrements change the count. Linux also runs ASan, LeakSanitizer, and UBSan on the C conversion and support code.
 
 The link check exercises generation diagnostics, user-supplied externs, and compiler imports. It builds the generated wrappers as C11 and checks the public header from C++17. Fixtures compile and run consumers through pkg-config, GNU Make, and CMake with static and shared libraries.
+
+The JSON check compares compressed output with Lean's `deriving ToJson` and compares parser acceptance and output with `Lean.Json.parse`. It exercises failures from proof fields in C and JSON values and checks live mimalloc blocks across repeated failures. The schema check compiles the same fixture module with the Go backend and compares its draft 2020-12 schemas with the C output.

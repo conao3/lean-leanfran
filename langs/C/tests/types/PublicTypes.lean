@@ -119,3 +119,56 @@ structure Fields where
 def echo (value : Fields) : Fields := value
 
 end Collision
+
+namespace Checked
+
+abbrev Small := { n : UInt16 // n.toNat < 20 }
+
+structure Range where
+  low : Nat
+  high : Nat
+  limit : Fin 8
+  capacity : Small
+  ordered : low ≤ high
+  nonzero : high > 0
+
+def echo (value : Range) : Range := value
+
+def batch (values : Array Range) : Array Range := values
+
+opaque secret : Prop := True
+
+structure Undecidable where
+  value : Nat
+  proof : secret
+
+def bad (value : Undecidable) : Nat := value.value
+
+end Checked
+
+namespace Schema
+
+structure Base where
+  title : String
+  huge : Nat
+
+structure Record extends Base where
+  tree : Typed.Tree
+  pair : Int × Bool
+  count : UInt64
+  ratio : Float
+  values : List (Option Nat)
+  omitted? : Option String
+
+def sample : Record := {
+  title := "雪\x00😀\n\t\r\""
+  huge := 123456789012345678901234567890
+  tree := Typed.tree
+  pair := (-123456789012345678901234567890, true)
+  count := 18446744073709551615
+  ratio := -8.5
+  values := [some 3, none]
+  omitted? := none
+}
+
+end Schema

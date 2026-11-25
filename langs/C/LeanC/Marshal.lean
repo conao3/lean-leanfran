@@ -57,6 +57,8 @@ def Desc.tagType (desc : Desc) : String :=
   if desc.shape == .enum then desc.name else s!"{desc.name}_tag"
 
 def Desc.declaration (desc : Desc) : String := Id.run do
+  if desc.shape == .subtype then
+    return s!"typedef {desc.ctors[0]!.fields[0]!.type.cName} {desc.name};\n"
   if desc.shape == .array || desc.shape == .list then
     return s!"struct {desc.name} \{\n    {desc.item.cName} *items;\n    size_t len;\n};\n"
   if desc.shape == .option then
@@ -86,7 +88,7 @@ def Desc.names (desc : Desc) : List String :=
       desc.tagType :: (desc.ctors.filter (!·.fields.isEmpty)).toList.map (·.payload desc) else [])
 
 def emitTypeDeclarations (descs : Array Desc) : String :=
-  let forwards := descs.toList.filter (·.shape != .enum) |>.map fun desc =>
+  let forwards := descs.toList.filter (fun d => d.shape != .enum && d.shape != .subtype) |>.map fun desc =>
     s!"typedef struct {desc.name} {desc.name};\n"
   String.join forwards ++ "\n" ++
     String.join (descs.toList.map fun desc => desc.declaration ++ desc.freePrototype ++ ";\n\n")
@@ -146,7 +148,8 @@ def emitMarshalSupport (cPrefix : String) : String :=
     .usize, .float, .float32, .char, .string, .unit].map emitPrimitive)
 
 def Field.path (field : Field) (desc : Desc) (ctor : Constructor) (value : String) : String :=
-  if desc.shape == .option then s!"{value}->value"
+  if desc.shape == .subtype then s!"(*{value})"
+  else if desc.shape == .option then s!"{value}->value"
   else if desc.shape == .variant then s!"{value}->as.{ctor.name}.{field.name}"
   else s!"{value}->{field.name}"
 
@@ -215,15 +218,19 @@ def Field.emitFrom (field : Field) (path : String) (ctor : Constructor) (trivial
 
 def Constructor.emitTo (ctor : Constructor) (desc : Desc) : String := Id.run do
   let info := ctor.layout.ctorInfo
+  let validate := fun value =>
+    if desc.hasInvariants then s!"status = {desc.name}_check({value}, err);\nif (status != LF_OK) goto fail;\n"
+    else ""
   if ctor.fields.isEmpty then
-    return s!"*out = lean_box({info.cidx});\nreturn LF_OK;\n"
+    let tag := s!"lean_box({info.cidx})"
+    return validate tag ++ s!"*out = {tag};\nreturn LF_OK;\n"
   let mut code := ""
   if !desc.trivial then
     code := s!"value = lean_alloc_ctor({info.cidx}, {info.size}, sizeof(size_t) * {info.usize} + {info.ssize});\n"
     for i in [:info.size] do
       code := code ++ s!"lean_ctor_set(value, {i}, lean_box(0));\n"
   code := code ++ String.join (ctor.fields.toList.map fun f => f.emitTo (f.path desc ctor "in") ctor desc.trivial)
-  return code ++ "*out = value;\nreturn LF_OK;\n"
+  return code ++ validate "value" ++ "*out = value;\nreturn LF_OK;\n"
 
 def Constructor.emitFrom (ctor : Constructor) (desc : Desc) : String := Id.run do
   let tag := if desc.shape == .enum then s!"*out = {ctor.tag desc};\n"
@@ -269,6 +276,7 @@ def Desc.emitCtors (desc : Desc) : String := Id.run do
   let hasFields := desc.ctors.any (!·.fields.isEmpty)
   let cases := desc.shape == .variant || desc.shape == .enum || desc.shape == .option
   let mut toBody := if hasFields then "lean_object *value = NULL;\nlean_object *field = lean_box(0);\nlf_status status;\n"
+    else if desc.hasInvariants then "lf_status status;\n"
     else "(void)err;\n"
   let mut fromBody := if hasFields then "lean_object *field;\nlf_status status;\n" else "(void)err;\n"
   if desc.shape != .enum then fromBody := fromBody ++ s!"*out = ({desc.name})\{0};\n"
@@ -293,15 +301,28 @@ def Desc.emitCtors (desc : Desc) : String := Id.run do
   if hasFields then
     toBody := toBody ++ "fail:\nif (value != NULL) lean_dec(value);\nreturn status;\n"
     fromBody := fromBody ++ s!"fail:\n{desc.name}_free(out);\nreturn status;\n"
+  else if desc.hasInvariants then
+    toBody := toBody ++ "fail:\nreturn status;\n"
   return s!"LF_INLINE {ty.toPrototype} \{\n{toBody}}\n\n" ++
     s!"LF_INLINE {ty.fromPrototype} \{\n{fromBody}}\n\n"
+
+private def Desc.emitCheck (desc : Desc) : String :=
+  if !desc.hasInvariants then "" else
+    s!"extern lean_object *lf_{desc.name}_decide(lean_object *);\n" ++
+    s!"LF_INLINE lf_status {desc.name}_check(lean_object *value, lf_error *err) \{\n" ++
+    "lean_object *box = lean_alloc_ctor(0, 2, 0);\n" ++
+    "lean_inc(value);\nlean_ctor_set(box, 0, value);\nlean_ctor_set(box, 1, lean_box(0));\n" ++
+    s!"lean_object *message = lf_{desc.name}_decide(box);\n" ++
+    "if (lean_is_scalar(message)) return LF_OK;\n" ++
+    "lf_status status = lf_set_error(err, LF_INVALID, lean_string_cstr(lean_ctor_get(message, 0)));\n" ++
+    "lean_dec(message);\nreturn status;\n}\n\n"
 
 def emitMarshalling (cPrefix : String) (descs : Array Desc) : String :=
   emitMarshalSupport cPrefix ++
     String.join (descs.toList.map fun desc =>
       let ty := CType.named desc.name
       s!"LF_INLINE {ty.toPrototype};\nLF_INLINE {ty.fromPrototype};\n") ++ "\n" ++
-    String.join (descs.toList.map fun desc => desc.emitFree ++
+    String.join (descs.toList.map fun desc => desc.emitCheck ++ desc.emitFree ++
       if desc.shape == .list || desc.shape == .array then desc.emitSequence else desc.emitCtors)
 
 end LeanC

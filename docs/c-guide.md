@@ -67,7 +67,7 @@ Initialize each `lf_error` with `{0}` and call `lf_error_clear` to release its m
 
 - Lean scalars use the corresponding C scalar types, including `uint32_t` for `Char` and `size_t` for `USize`. C passes scalar and `lf_str` arguments by value. `lf_str` borrows a UTF-8 byte range on input and owns an allocated, NUL-terminated byte range on output. The length counts bytes, including any embedded zero bytes.
 - `Nat` and `Int` use `lf_nat` and `lf_int`. Initialize small values with `lf_nat_from_u64` or `lf_int_from_i64`. Use `_from_dec` to parse a decimal string and `_to_dec` to obtain an owned `lf_str`. `lf_nat_to_u64` and `lf_int_to_i64` return false for values outside their respective ranges.
-- Structures use C structs with fields in declaration order. Proof fields are erased. C callers are responsible for any invariants expressed by those proofs.
+- Structures use C structs with data fields in declaration order. Each proof field is checked when C supplies the value. `Fin n` uses an alias for `lf_nat`, and `Subtype` uses an alias for the C type of its underlying value.
 - A Lean inductive with only nullary constructors uses a C enum. Each enumerator's value is its Lean constructor number. An inductive with payloads uses a struct with a `tag` and an `as` union. The tag selects the active union member. Recursive fields that would make a C value infinitely large use pointers.
 - `Option α` uses a struct with `has_value` and `value`. `Array α` and `List α` use a typed `items` pointer and a `len` element count. An empty sequence has length zero. `ByteArray` uses `lf_byte_array` with the same fields. `Prod α β` uses a pair struct with `fst` and `snd`.
 - `Except ε α` in a return type writes the success value to `out`. An error returns `LF_EXCEPT` and stores a UTF-8 JSON representation of the payload in `lf_error.message` when an error pointer is provided. An enclosing `IO` failure returns `LF_IO`.
@@ -79,6 +79,16 @@ Public function names use the module prefix and the snake case form of the final
 Generated functions borrow inputs, including all pointed-to data, for the duration of the call. Pass a pointer to a borrowed value for each composite argument. For output, provide writable storage and release any owned value in that storage before a new call writes to it.
 
 On a successful call, the caller owns the output's nested allocations. Pass the output to the generated `<type>_free` function to release its nested strings, arrays, and recursive fields and clear the value in place. The function leaves the outer storage available to its owner. Use `lf_nat_free`, `lf_int_free`, or `lf_byte_array_free` for the common types and `lf_free(out.ptr)` for a top-level `lf_str`.
+
+## Validation and JSON
+
+Call `<type>_valid(&value, &error)` to check a C value before passing it to an exported function. The generated wrappers also check their inputs, including values nested in arrays, records, and variants. A failed Lean invariant returns `LF_INVALID` and identifies the Lean type and proof field. Generation exits with status 254 if it cannot synthesize a computable `Decidable` instance.
+
+The generated header declares `<type>_to_json(&value, &json, &error)` and `<type>_from_json(data, len, &value, &error)`. Free the encoded JSON with `lf_free(json.ptr)` and free decoded values using the same ownership rules as other outputs. The decoder takes a UTF-8 byte range and checks the same invariants when it constructs the Lean value. For example, when `Pricing.total` exposes `UInt64`, `pricing_uint64_to_json` encodes the result as a quoted decimal string.
+
+Records use Lean field names, enums use constructor names, and variants with payloads use objects with a single constructor key. A record field named `field?` is emitted as `field` when its option holds a value. `none` encodes as `null`, so nested options with the same JSON representation decode to the outer `none`. `Nat` and `Int` use decimal JSON numbers. `UInt64` and `USize` use quoted decimals. The generated JSON parser accepts up to 1024 nested levels. For integer fields, scientific notation can append up to 10000 decimal zeros. Decimal digits can be supplied directly for larger integers.
+
+Generation writes `<prefix>.schema.json` in draft 2020-12. A single API type appears at the document root. With multiple API types, select the type in `$defs` using the part of the function name before `_to_json`. The schema follows the Go backend's rules for field bounds and recursive references.
 
 ## Generation checks
 

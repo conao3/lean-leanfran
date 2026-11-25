@@ -1,5 +1,4 @@
 import LeanC.Export
-import LeanC.Except
 
 open Lean
 
@@ -14,11 +13,13 @@ def Export.prototype (entry : Export) : String :=
   let params := if entry.result == .unit then params else params ++ [s!"{entry.result.cName} *out"]
   s!"lf_status {entry.symbol}({String.intercalate ", " (params ++ ["lf_error *err"])})"
 
-def emitHeader (cPrefix : String) (exports : Array Export) (descs : Array Desc) : String :=
+def emitHeader (cPrefix : String) (exports : Array Export) (descs : Array Desc) (apis : Array JsonApi) : String :=
   let guard := s!"LEANFRAN_{cPrefix}_H"
   s!"#ifndef {guard}\n#define {guard}\n\n#include \"leanfran.h\"\n\n" ++
     "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n" ++
     emitTypeDeclarations descs ++
+    String.join (apis.toList.map fun api => api.validPrototype ++ ";\n" ++
+      api.toJsonPrototype ++ ";\n" ++ api.fromJsonPrototype ++ ";\n") ++
     s!"lf_status {cPrefix}_init(lf_error *err);\n" ++
     String.join (exports.toList.map fun entry => entry.prototype ++ ";\n") ++
     "\n#ifdef __cplusplus\n}\n#endif\n\n#endif\n"
@@ -76,7 +77,17 @@ def emitScalarWrapper (entry : Export) : String := Id.run do
 def Export.usesMarshalling (entry : Export) : Bool :=
   entry.args.any CType.byPointer || entry.result.byPointer || entry.exception.isSome
 
-def emitWrapper (entry : Export) : String := Id.run do
+private def emitExcept (name value : String) : String :=
+  "if (err == NULL) { status = LF_EXCEPT; goto done; }\n" ++
+  s!"lean_object *payload = lean_ctor_get({value}, 0);\n" ++
+  "lean_inc(payload);\nlean_object *boxed = lean_alloc_ctor(0, 2, 0);\n" ++
+  "lean_ctor_set(boxed, 0, payload);\nlean_ctor_set(boxed, 1, lean_box(0));\n" ++
+  s!"lean_object *json = lf_{name}_encode_json(boxed);\n" ++
+  "lf_str message;\nstatus = lf_copy_string(json, &message, err);\nlean_dec(json);\n" ++
+  "if (status == LF_OK) { lf_error_clear(err); *err = (lf_error){LF_EXCEPT, message.ptr}; status = LF_EXCEPT; }\n" ++
+  "goto done;\n"
+
+def emitWrapper (cPrefix : String) (entry : Export) : String := Id.run do
   unless entry.usesMarshalling do return emitScalarWrapper entry
   let resultAbi := if entry.io || entry.exception.isSome then "lean_object *" else entry.result.abiName
   let abi := if entry.args.isEmpty then #["uint8_t"] else entry.args.map CType.abiName
@@ -112,7 +123,7 @@ def emitWrapper (entry : Export) : String := Id.run do
   let value := if entry.io then "lean_io_result_get_value(result)"
     else if entry.boxResult then "lean_ctor_get(result, 0)" else "result"
   if let some error := entry.exception then
-    code := code ++ s!"if (lean_obj_tag({value}) == 0) \{\n{emitExcept error value}}\n"
+    code := code ++ s!"if (lean_obj_tag({value}) == 0) \{\n{emitExcept (error.jsonName cPrefix) value}}\n"
   let value := if entry.exception.isSome then s!"lean_ctor_get({value}, 0)" else value
   if entry.result != .unit then
     if resultAbi == "lean_object *" then
@@ -130,7 +141,7 @@ def emitWrapper (entry : Export) : String := Id.run do
       String.join (owned.toList.map fun (_, i) => s!"if (arg{i} != NULL) lean_dec(arg{i});\n") ++ "return status;\n"
   return code ++ "}\n"
 
-def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc) : String :=
+def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc) (apis : Array JsonApi) : String :=
   let init := Lean.mkModuleInitializationFunctionName (exportModule mod)
   s!"#include \"{cPrefix}.h\"\n" ++
     "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <stdlib.h>\n#include <string.h>\n\n" ++
@@ -152,8 +163,8 @@ def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs :
     "        const char *message = init_error.message == NULL ? \"Lean initialization failed\" : init_error.message;\n" ++
     "        return lf_set_error(err, init_error.status, message);\n" ++
     "    }\n    return LF_OK;\n}\n\n" ++
-    (if exports.any Export.usesMarshalling then emitMarshalling cPrefix descs else "") ++
-    (if exports.any (·.exception.isSome) then emitExceptSupport descs else "") ++
-    String.intercalate "\n" (exports.toList.map emitWrapper)
+    (if apis.isEmpty then "" else emitMarshalling cPrefix descs) ++
+    emitJsonWrappers apis ++
+    String.intercalate "\n" (exports.toList.map (emitWrapper cPrefix))
 
 end LeanC
