@@ -253,7 +253,7 @@ Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a 
 
 ### Obligations and proof status
 
-`check` writes the translation of each function and its callees to the module `LeanCModel.<block>` in `.leanfran/workspace`. Each obligation is an abbreviation such as `clamp.obligation.refines`. Prove it in `lean/Proofs/*.lean` with a declaration named `clamp.proof.refines` in the namespace `LeanCModel.<block>`.
+`check` writes the translation of each function and its callees to the module `LeanCModel.<block>` in `.leanfran/workspace`. Each obligation is an abbreviation such as `clamp.obligation.refines`. It quantifies over the arguments, assumes for each `LF_ARRAY` argument that its size fits the length argument's type (`xs.size < 2 ^ 64` for `size_t`, `2 ^ 31` for `int32_t`), and then assumes `requires`. Prove it in `lean/Proofs/*.lean` with a declaration named `clamp.proof.refines` in the namespace `LeanCModel.<block>`.
 
 ```lean
 import LeanCModel.clamp
@@ -268,7 +268,7 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
 end LeanCModel.clamp
 ```
 
-A function whose body can hit undefined behavior returns `C.M α`, which is `Except C.Exc α`. Signed overflow, division by zero, a shift count that is negative or not less than the width, an out-of-range array index, and a non-terminating loop are modeled failures. Refinement then means the translated function returns `Except.ok` with the specified value, so a proof also shows that the failures do not occur on inputs that satisfy `requires`. A postcondition for such a function states that a successful result exists and satisfies the predicate.
+A function whose body can hit undefined behavior returns `C.M α`, which is `Except C.Exc α`. Signed overflow, division by zero, a shift count that is negative or not less than the width, a `double` to integer conversion out of range, an out-of-range array index, a read of an inactive tagged-union member, a non-terminating loop, and reaching the end of a function that returns a value are modeled failures. Refinement then means the translated function returns `Except.ok` with the specified value, so a proof also shows that the failures do not occur on inputs that satisfy `requires`. A postcondition for such a function states that a successful result exists and satisfies the predicate.
 
 ```sh
 leanfran-c check --require proved
@@ -294,7 +294,7 @@ leanfran-c status
 
 The translator accepts `static` and external functions with these parts.
 
-- Types: `int8_t` to `int64_t`, `uint8_t` to `uint64_t`, `int` and `unsigned` (32 bits), `long` and `unsigned long` (64 bits), `size_t`, `bool`, `double`, `LF_STRUCT` structs and the generated record types passed by value, the generated enums and tagged unions passed by value, other C enums as their underlying integer type (`unsigned int`, or `int` when an enumerator is negative), and `LF_ARRAY` arrays. A function returns one value, or `lf_status` with a final `out` pointer.
+- Types: `int8_t` to `int64_t`, `uint8_t` to `uint64_t`, `int` and `unsigned` (32 bits), `long` and `unsigned long` (64 bits), `size_t`, `bool`, `double`, `LF_STRUCT` structs and the generated record types passed by value, the generated enums and tagged unions passed by value, other C enums as their underlying integer type (`unsigned int`, or `int` when an enumerator is negative), and `LF_ARRAY` arrays. An `LF_ARRAY` element and the `out` pointee can be any of these value types, including generated enums and tagged unions. A function returns one value, or `lf_status` with a final `out` pointer.
 - Generated enums: a value is the Lean constructor. Conversions to integers give the constructor number, so comparisons and `switch` on enumerators work. A conversion from an integer to a generated enum must be an enumerator or a constant that names a constructor.
 - Generated tagged unions: a value is the Lean value. `x.tag` is the constructor number. `x.as.<constructor>.<field>` reads a field of the active constructor; reading a member of another constructor fails the translated definition with `C.Exc.inactiveMember`, so a `refines` proof also shows that the function reads only the active member.
 - Statements: local declarations with initializers, assignment, compound assignment, `++`, `--`, `if`, `switch` with `break`-terminated cases, `for`, `while`, `do while`, `break`, `continue`, and `return`.
@@ -325,4 +325,4 @@ clamp.clamp [refines]: mismatch (seed 1, run 0)
 
 The target builds the test with your source files that contain the modeled functions, using `$(CC) -fno-wrapv -fsanitize=undefined,float-cast-overflow -fno-sanitize-recover=all` with `$(CFLAGS)` and `cflags` from `leanfran.toml`. UBSan stops the test at the first undefined behavior in your C code. A mismatch prints the seed, the run, the input, and both results. In both cases the test exits with status 1. `LEANFRAN_RUNS` sets the number of inputs (200 by default) and `LEANFRAN_SEED` sets the seed (1 by default). Including `leanfran.mk` in a Makefile leaves its default goal unchanged.
 
-The test does not cover `static` functions, `lf_status` results, struct arguments or results, or specs whose public C function has a different signature. It prints a `skipped:` line with the reason for each. The source files the test links must not define `main`. Nix's C compiler wrapper adds `-fwrapv` through its hardening flags. The target's `-fno-wrapv` turns it off so UBSan reports signed overflow.
+The test does not cover `static` functions, `lf_status` results, `out` pointers, structs, generated enums or tagged unions as arguments, array elements, or results, or specs whose public C function has a different signature. It prints a `skipped:` line with the reason for each. The source files the test links must not define `main`. Nix's C compiler wrapper adds `-fwrapv` through its hardening flags. The target's `-fno-wrapv` turns it off so UBSan reports signed overflow.

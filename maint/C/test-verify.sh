@@ -155,6 +155,11 @@ expect_model 'shop.point_sum [refines]' proved
 expect_model 'div.safe_div [refines]' proved
 expect_model 'shop.size_weight [refines]' proved
 expect_model 'shop.parcel_size [refines]' proved
+for model in level_of first_or first_level level_at level_at_or; do
+    expect_model "grade.$model [refines]" proved
+done
+grep -Fq '∀ («xs» : Array Int32) («d» : Int32), «xs».size < 2 ^ 64 → «first_or» «xs» «d» = Except.ok' \
+    "$app/.leanfran/workspace/LeanCModel/grade/Fn_first_or.lean"
 run 0 status
 
 db="$app/compile_commands.json"
@@ -179,7 +184,8 @@ cp "$app/leanfran.lock" "$scratch/records.lock"
 cp "$app/leanfran/shop.h" "$scratch/shop.h"
 printf 'int broken(void) { return }\n' >>"$app/src/shop.c"
 run 1 status
-for model in 'shop.line_total' 'shop.point_sum' 'shop.size_weight' 'shop.parcel_size' 'div.safe_div'; do
+for model in 'shop.line_total' 'shop.point_sum' 'shop.size_weight' 'shop.parcel_size' 'div.safe_div' \
+    'grade.level_of' 'grade.first_or' 'grade.first_level' 'grade.level_at' 'grade.level_at_or'; do
     expect_model "$model [refines]" stale
 done
 grep -Fq "/src/shop.c: clang exited with 1" "$scratch/err"
