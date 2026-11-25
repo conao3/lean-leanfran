@@ -226,6 +226,9 @@ private def scanC (file : FilePath) (source : String) : IO (Array Block × Optio
       i := i + 1
   return (blocks, modelLine, verified)
 
+def sourceFiles (root : FilePath) (config : Config) : IO (Array FilePath) :=
+  filesFor root config.out config.sources
+
 def scan (root : FilePath) (config : Config) : IO (Array Block × Array ModelSource × Array FilePath) := do
   let mut blocks := #[]
   let mut models := #[]

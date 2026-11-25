@@ -37,8 +37,10 @@ structure ModelFunction where
   error : Option String := none
   closure : Array Verify.Function := #[]
   callees : Std.HashMap String (Array String) := {}
+  declaration : Bool := false
 
-def ModelFunction.model (m : ModelFunction) : String := s!"LeanCModel.{m.block}.{m.name}"
+def ModelFunction.model (m : ModelFunction) : String :=
+  if m.block.isEmpty then s!"LeanCModel.{m.name}" else s!"LeanCModel.{m.block}.{m.name}"
 
 def ModelFunction.labels (m : ModelFunction) : Array String :=
   if m.checks.isEmpty then #["model"] else m.checks.map (·.label)
@@ -185,11 +187,16 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
   let records := ast.walk.filter fun n =>
     n.kind == "RecordDecl" && (!(annotations n "lean").isEmpty || !(annotations n "struct").isEmpty)
   let recordJson := records.map (normalize ·.json)
+  let relativeTo := fun (path : FilePath) =>
+    FilePath.mk ((path.toString.drop (root.toString.length + 1)).toString)
   let localBlocks := blocks.filter (·.file == relative)
   let mut result := #[]
   for node in defs do
     let attrs := annotations node "model"
     if attrs.isEmpty then continue
+    let written := (node.children.find? fun attr => (annotation attr).any (·[0]? == some "model")).map
+      fun attr => relativeTo (absolute command.directory attr.location.file)
+    let localBlocks := blocks.filter (·.file == written.getD relative)
     let name := node.string "name"
     let line := lineOf source node.location.offset
     let column := node.location.column
@@ -228,6 +235,26 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
       Json.str (Json.compress (Lean.toJson (attrs.map Lean.toJson))), Json.arr asts, Json.arr recordJson,
       Lean.toJson (specBlocks.map fun b => (b.name, b.imports, b.source)), Json.str modelSource]))
     result := result.push {model with hash}
+  for node in ast.children do
+    unless node.kind == "FunctionDecl" && !node.children.any (·.kind == "CompoundStmt") &&
+        absolute command.directory node.location.file == file do continue
+    let attrs := node.children.filterMap fun attr =>
+      if (attr.get? "inherited") == some (.bool true) then none else annotation attr
+    let attrs := attrs.filter (·[0]? == some "model")
+    if attrs.isEmpty then continue
+    let name := node.string "name"
+    let line := lineOf source node.location.offset
+    let place := s!"{relative}:{line}:{node.location.column}"
+    let checks := match parseModel (attrs[0]!.extract 1 attrs[0]!.size) with
+      | .ok (_, _, checks) => checks
+      | .error _ => #[]
+    let block := match parseModel (attrs[0]!.extract 1 attrs[0]!.size) with
+      | .ok (some spec, _, _) => spec
+      | _ => (localBlocks[0]?.map (·.name)).getD ""
+    let hash ← sha256 (Json.compress (Lean.toJson #[Lean.toJson name, Lean.toJson attrs]))
+    result := result.push {
+      name, block, file := relative, line, column := node.location.column, checks, hash, declaration := true
+      error := some s!"{place}: unextracted {name}: LF_MODEL function has no definition in the configured sources" }
   return result
 
 def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (sources : Array FilePath)
@@ -240,11 +267,23 @@ def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (s
   IO.FS.withTempDir fun tmp => do
     IO.FS.writeFile (tmp / "leanfran.h") supportHeader
     let extra := #["-I", tmp.toString]
+    let mut paths := sources
+    if sources.any (·.extension != some "c") then
+      for path in ← sourceFiles root config do
+        if path.extension == some "c" && !paths.contains path then paths := paths.push path
     let mut models := #[]
-    for path in sources do
+    for path in paths do
       let command ← commandFor db config root path extra
       models := models ++ (← discoverFile root command (extra ++ #["-x", "c"]) blocks modelSource)
-    return models
+    let defined := models.filter (!·.declaration) |>.map (·.name)
+    let mut seen : Std.HashSet String := {}
+    let mut result := #[]
+    for m in models do
+      if m.declaration then
+        if defined.contains m.name || seen.contains m.name then continue
+        seen := seen.insert m.name
+      result := result.push m
+    return result
 
 def proofSources (root : FilePath) : IO (Array (String × FilePath × String)) := do
   let dir := root / "lean" / "Proofs"
