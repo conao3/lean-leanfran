@@ -1,0 +1,1 @@
+sources = ["src/*.c", "src/*.h"]

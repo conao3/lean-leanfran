@@ -123,6 +123,8 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
     discard <| writeChanged (blockPath dir block) (imports deps ++ block.source)
   IO.FS.createDirAll (dir / "LeanfranC")
   discard <| writeChanged (dir / "LeanfranC" / "Json.lean") jsonSupportSource
+  IO.FS.createDirAll (dir / "LeanCLib")
+  discard <| writeChanged (dir / "LeanCLib" / "C.lean") cLibSource
   let lakefile := dir / "lakefile.toml"
   let requirements := Toml.ppTable config.requirements
   let manifest := dir / "lake-manifest.json"
@@ -224,9 +226,9 @@ private def publish (stage out backup : FilePath) : IO Unit := do
     throw error
   if hadOutput then IO.FS.removeDirAll backup
 
-private def writeModelTest (root stage out : FilePath) (config : Config) (blocks : Array Block)
+private def writeModelTest (root scratch stage out : FilePath) (config : Config) (blocks : Array Block)
     (models : Models) (verified : Array FilePath) (exports : Std.HashMap String (Array Export)) : IO Unit := do
-  let functions ← discoverModels root config blocks verified models.source
+  let functions ← discoverModels root config blocks verified models.source scratch
   if functions.isEmpty then return
   let (source, files) := modelTest functions blocks exports
   IO.FS.writeFile (stage / modelTestSource) source
@@ -247,7 +249,7 @@ private unsafe def sync (root state : FilePath) (config : Config) (blocks : Arra
   try
     workspace dir config blocks models
     let exports ← buildProject dir blocks models (transaction / "build") stage out
-    writeModelTest root stage out config blocks models verified exports
+    writeModelTest root (transaction / "build") stage out config blocks models verified exports
     IO.FS.writeFile (stage / manifestName) ((toJson manifest).pretty ++ "\n")
     publish stage out backup
   finally
@@ -261,7 +263,7 @@ inductive Command where
 private def statusAll (root : FilePath) (config : Config) (blocks : Array Block) (models : Models)
     (verified : Array FilePath) : IO UInt32 := do
   let code ← status config blocks (← makeManifest config blocks models)
-  let functions ← (discoverModels root config blocks verified models.source).toBaseIO
+  let functions ← (discoverModels root config blocks verified models.source config.out).toBaseIO
   let modelCode ← modelStatus root config (functions.mapError toString)
   return max code modelCode
 
@@ -293,7 +295,7 @@ unsafe def execute (command : Command) (dir : FilePath) : IO UInt32 := do
           throw <| IO.userError s!"output directory {config.out} is nonempty and has no {manifestName}"
       sync root state config blocks models verified manifest
       if let .check require := command then
-        let functions ← discoverModels root config blocks verified models.source
+        let functions ← discoverModels root config blocks verified models.source config.out
         let modelCode ← checkModels root (state / "workspace") config functions (!models.source.isEmpty) require
         let config ← readConfig root
         let (blocks, sources, _) ← scan root config
