@@ -3,6 +3,7 @@ package kernel
 import (
 	"fmt"
 	"math/big"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -198,6 +199,20 @@ func TestScopedCommandAllocations(t *testing.T) {
 		t.Fatalf("%g allocations per scoped command, want at most 7", allocations)
 	}
 	t.Logf("%g allocations per scoped command", allocations)
+	const runs = 10_000
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for range runs {
+		if _, err := scopedCommand(&snapshot, actor, command); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runtime.ReadMemStats(&after)
+	bytes := (after.TotalAlloc - before.TotalAlloc) / runs
+	if bytes > 512 {
+		t.Fatalf("%d bytes per scoped command, want at most 512", bytes)
+	}
+	t.Logf("%d bytes per scoped command", bytes)
 }
 
 func BenchmarkScopedCommand(b *testing.B) {
