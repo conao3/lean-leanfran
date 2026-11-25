@@ -139,7 +139,7 @@ structure Desc where
 
 abbrev DescribeM := StateT (Array Desc) MetaM
 
-private def typeStem (cPrefix : String) (ty : CType) : String :=
+def typeStem (cPrefix : String) (ty : CType) : String :=
   match ty with
   | .named name => String.ofList (name.toList.drop (cPrefix.length + 1))
   | .string => "string"
