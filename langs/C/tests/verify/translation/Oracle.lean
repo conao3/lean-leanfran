@@ -100,6 +100,14 @@ def evaluate (name : String) : P String := do
   | "uneg" => return toString («uneg» (← u32))
   | "lmix" => return result toString («lmix» (← i64) (← u32))
   | "lits" => return bits «lits»
+  | "compare" => return result toString («compare» (← i32) (← i32))
+  | "negate" => return result toString («negate» (← i32) (← double))
+  | "compound" => return result toString («compound» (← i32) (← i32))
+  | "nested_ternary" => return result toString («nested_ternary» (← i32) (← i32))
+  | "and_ternary" => return result toString («and_ternary» (← i32) (← i32))
+  | "bool_literal" => return result toString «bool_literal»
+  | "shadow" => return result toString («shadow» (← i32))
+  | "lit_pick" => return bits («lit_pick» (← i32))
   | _ => return s!"unknown function {name}"
 
 partial def main : IO Unit := do

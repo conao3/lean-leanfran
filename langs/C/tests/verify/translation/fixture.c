@@ -205,3 +205,78 @@ uint32_t uneg(uint32_t a) { return -a + (a > 5u); }
 long lmix(long a, unsigned int b) { return a + b; }
 
 double lits(void) { return 0.1 + 1e-5 + 3.25e10 - 2.5; }
+
+int32_t compare(int32_t a, int32_t b) {
+    return (a <= b) * 4 + (a >= b) * 2 + (a == b);
+}
+
+int32_t negate(int32_t a, double x) {
+    int32_t n = -a;
+    double y = -x;
+    return n + (y > 0.0);
+}
+
+int32_t compound(int32_t a, int32_t b) {
+    int32_t r = a;
+    r %= b;
+    r <<= (b & 7);
+    r >>= 1;
+    r &= a;
+    r |= b;
+    r ^= 3;
+    int64_t w = a;
+    w += b;
+    w -= r;
+    int32_t d = a;
+    d += 0.5 * b;
+    return r + (int32_t)w + d;
+}
+
+int32_t nested_ternary(int32_t a, int32_t b) {
+    return b != 0 ? (a / b > 1 ? 1 : 2) : 0;
+}
+
+int32_t and_ternary(int32_t a, int32_t b) {
+    return b != 0 && (a / b > 1 ? 1 : 0);
+}
+
+int64_t bool_literal(void) {
+    int64_t r = (int32_t)(bool)5;
+    return r + (int64_t)(double)3 + (int64_t)(bool)0;
+}
+
+int32_t shadow(int32_t first) {
+    int32_t total = 0;
+    for (int32_t i = 0; i < 3; i++) {
+        bool first = i == 0;
+        total += first;
+    }
+    return total + first;
+}
+
+double lit_pick(int32_t k) {
+    switch (k) {
+    case 0:
+        return 0.1;
+    case 1:
+        return 0.30000000000000004;
+    case 2:
+        return 1.7976931348623157e308;
+    case 3:
+        return 2.2250738585072014e-308;
+    case 4:
+        return 4.9406564584124654e-324;
+    case 5:
+        return 123456789.12345679;
+    case 6:
+        return 6.02214076e23;
+    case 7:
+        return 1.0000000000000002;
+    case 8:
+        return 9007199254740993.0;
+    case 9:
+        return 1e-310;
+    default:
+        return 2.718281828459045;
+    }
+}

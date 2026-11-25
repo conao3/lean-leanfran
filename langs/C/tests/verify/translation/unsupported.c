@@ -114,3 +114,9 @@ int32_t address(void) {
     int32_t b = 0;
     return out_value(&b);
 }
+
+int32_t even(int32_t n);
+
+int32_t odd(int32_t n) { return n == 0 ? 0 : even(n - 1); }
+
+int32_t even(int32_t n) { return n == 0 ? 1 : odd(n - 1); }

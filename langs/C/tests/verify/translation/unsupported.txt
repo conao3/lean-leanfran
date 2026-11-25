@@ -25,3 +25,5 @@ character 100:6 unsupported result type 'char'
 mutable_array 102:32 LF_ARRAY parameter 'xs' must point to const
 pass_array 105:12 call to unextracted function 'mutable_array'
 address 115:12 call to 'out_value', which takes arrays or an out parameter
+odd 120:9 recursion
+even 122:9 recursion

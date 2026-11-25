@@ -216,7 +216,7 @@ private def indented (body : M α) : M α := do
 
 private def fresh (base : String) : M String := do
   modify fun s => {s with counter := s.counter + 1}
-  return leanIdent s!"{base}'{(← get).counter}"
+  return leanIdent s!"{base}#{(← get).counter}"
 
 private def localName (name : String) : M String := do
   let s ← get
@@ -258,13 +258,13 @@ private def castCode (node : Node) (code : Code) (to : Ty) : M Code := do
         return {code with text := s!"({value} : {target})", ty := to}
     return {code with text := s!"(C.cast {code.text} : {target})", ty := to, prop := none, literal := none}
   | .bool, .int .. =>
-    return {code with text := s!"(C.cast {code.text} : {target})", ty := to, bool := some code.text}
+    return {code with text := s!"(C.cast {code.text} : {target})", ty := to, bool := some code.text, literal := none}
   | .int .., .bool | .double, .bool =>
     let literal := code.literal.map fun value => if value == 0 then "false" else "true"
     let text := (code.bool <|> literal).getD s!"(C.cast {code.text} : Bool)"
-    return {code with text, ty := .bool, bool := some text}
+    return {code with text, ty := .bool, bool := some text, literal := none}
   | .int .., .double | .bool, .double =>
-    return {code with text := s!"(C.cast {code.text} : Float)", ty := to, bool := none, prop := none}
+    return {code with text := s!"(C.cast {code.text} : Float)", ty := to, bool := none, prop := none, literal := none}
   | .double, .int .. =>
     return {text := ← lift s!"(C.floatToInt {code.text} : C.M {target})", ty := to, lifts := true}
   | _, _ => fail node "unsupported conversion"
@@ -370,14 +370,15 @@ private partial def expr (node : Node) : M Code := do
   | "BinaryOperator" => binary node
   | "UnaryOperator" => unary node
   | "ConditionalOperator" =>
-    let c ← condition node (← expr (← child node 0))
+    let cond ← expr (← child node 0)
+    let c ← condition node cond
     let a ← expr (← child node 1)
     let b ← expr (← child node 2)
     let ty ← nodeTy node
     if a.lifts || b.lifts then
       let text ← lift s!"(if {c} then (do pure {a.text}) else (do pure {b.text}) : C.M {← leanOf ty})"
       return {text, ty, lifts := true}
-    return {text := s!"(if {c} then {a.text} else {b.text})", ty}
+    return {text := s!"(if {c} then {a.text} else {b.text})", ty, lifts := cond.lifts}
   | "ArraySubscriptExpr" =>
     let base := stripCasts (← child node 0)
     if base.kind == "StringLiteral" then fail base "string literal"
@@ -535,6 +536,22 @@ private partial def alwaysReturns (node : Node) : Bool :=
   | "IfStmt" =>
     (node.get? "hasElse") == some (.bool true) && node.children.size == 3 &&
       alwaysReturns node.children[1]! && alwaysReturns node.children[2]!
+  | "SwitchStmt" =>
+    match node.children[1]? with
+    | some body =>
+      let items := if body.kind == "CompoundStmt" then body.children else #[body]
+      let isLabel := fun (n : Node) => n.kind == "CaseStmt" || n.kind == "DefaultStmt"
+      let rec inner (fuel : Nat) (n : Node) : Node × Bool :=
+        match fuel with
+        | 0 => (n, false)
+        | fuel + 1 =>
+          if n.kind == "CaseStmt" then inner fuel (n.children[1]?.getD n)
+          else if n.kind == "DefaultStmt" then ((inner fuel (n.children[0]?.getD n)).1, true)
+          else (n, false)
+      let hasDefault := items.any fun n => isLabel n && (inner 64 n).2
+      let ends := items.zipIdx.filter fun (_, i) => i + 1 == items.size || isLabel items[i + 1]!
+      hasDefault && !items.isEmpty && ends.all fun (n, _) => alwaysReturns (inner 64 n).1
+    | none => false
   | _ => false
 
 private def statusName (node : Node) : Option String := do

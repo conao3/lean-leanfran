@@ -11,18 +11,21 @@ typedef struct {
 } spec;
 
 static const spec specs[] = {
-    {"clamp", "iii"},    {"add_i32", "ii"},    {"twice", "i"},
-    {"clamp_plus", "i"}, {"arith_u32", "uu"},  {"div_mod", "ii"},
-    {"shifts", "ii"},    {"ushift", "Li"},     {"narrow", "cw"},
-    {"conv", "l"},       {"logic", "ii"},      {"ternary", "ii"},
-    {"bools", "bbi"},    {"doubles", "dd"},    {"d2i", "d"},
-    {"i2d", "lL"},       {"dcmp", "dd"},       {"loop_while", "u"},
-    {"loop_do", "i"},    {"loop_for", "i"},    {"nested_loops", "i"},
-    {"choose", "i"},     {"switch_loop", "i"}, {"sum", "A"},
-    {"at", "Bi"},        {"total", "I"},       {"item_value", "T"},
-    {"dot", "PP"},       {"pick", "PPb"},      {"safe_div", "ii"},
-    {"size_ops", "zL"},  {"use_helper", "i"},  {"uneg", "u"},
-    {"lmix", "lu"},      {"lits", ""},
+    {"clamp", "iii"},      {"add_i32", "ii"},    {"twice", "i"},
+    {"clamp_plus", "i"},   {"arith_u32", "uu"},  {"div_mod", "ii"},
+    {"shifts", "ii"},      {"ushift", "Li"},     {"narrow", "cw"},
+    {"conv", "l"},         {"logic", "ii"},      {"ternary", "ii"},
+    {"bools", "bbi"},      {"doubles", "dd"},    {"d2i", "d"},
+    {"i2d", "lL"},         {"dcmp", "dd"},       {"loop_while", "u"},
+    {"loop_do", "i"},      {"loop_for", "i"},    {"nested_loops", "i"},
+    {"choose", "i"},       {"switch_loop", "i"}, {"sum", "A"},
+    {"at", "Bi"},          {"total", "I"},       {"item_value", "T"},
+    {"dot", "PP"},         {"pick", "PPb"},      {"safe_div", "ii"},
+    {"size_ops", "zL"},    {"use_helper", "i"},  {"uneg", "u"},
+    {"lmix", "lu"},        {"lits", ""},         {"compare", "ii"},
+    {"negate", "id"},      {"compound", "ii"},   {"nested_ternary", "ii"},
+    {"and_ternary", "ii"}, {"bool_literal", ""}, {"shadow", "i"},
+    {"lit_pick", "i"},
 };
 
 static uint64_t state = 1;
@@ -288,6 +291,28 @@ static void evaluate(char *line) {
         long a = read_int();
         unsigned int b = read_uint();
         printf("%ld", lmix(a, b));
+    } else if (NAME("compare")) {
+        int32_t a = read_int(), b = read_int();
+        printf("%" PRId32, compare(a, b));
+    } else if (NAME("negate")) {
+        int32_t a = read_int();
+        double x = from_bits(read_uint());
+        printf("%" PRId32, negate(a, x));
+    } else if (NAME("compound")) {
+        int32_t a = read_int(), b = read_int();
+        printf("%" PRId32, compound(a, b));
+    } else if (NAME("nested_ternary")) {
+        int32_t a = read_int(), b = read_int();
+        printf("%" PRId32, nested_ternary(a, b));
+    } else if (NAME("and_ternary")) {
+        int32_t a = read_int(), b = read_int();
+        printf("%" PRId32, and_ternary(a, b));
+    } else if (NAME("bool_literal")) {
+        printf("%" PRId64, bool_literal());
+    } else if (NAME("shadow")) {
+        printf("%" PRId32, shadow(read_int()));
+    } else if (NAME("lit_pick")) {
+        print_double(lit_pick(read_int()));
     } else if (NAME("lits")) {
         print_double(lits());
     } else {
