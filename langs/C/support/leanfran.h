@@ -11,6 +11,15 @@ extern "C" {
 
 #define LEANFRAN_VERSION "0.11.1"
 
+#ifdef __clang__
+#define LF_STRUCT(name) __attribute__((annotate("leanfran", "struct", #name)))
+#define LF_FIELD(...)                                                          \
+    __attribute__((annotate("leanfran", "field", __VA_ARGS__)))
+#else
+#define LF_STRUCT(name)
+#define LF_FIELD(...)
+#endif
+
 typedef enum {
     LF_OK,
     LF_INVALID,

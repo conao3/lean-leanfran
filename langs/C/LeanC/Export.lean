@@ -32,7 +32,8 @@ def defaultRoots (env : Environment) (mod : Name) : Array Name := Id.run do
        | some (.opaqueInfo _) => true
        | _ => false)
 
-def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM Export := do
+def readExport (cPrefix : String) (renames : Renames) (name : Name)
+    (externalTypes : ExternalTypes := {}) : DescribeM Export := do
   let some info := (← getEnv).find? name | throwError "unknown declaration '{name}'"
   match info with
   | .defnInfo _ | .opaqueInfo _ => pure ()
@@ -43,7 +44,7 @@ def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM 
   let mut argTypes := #[]
   while let .forallE _ domain body _ := type do
     let domain := domain.consumeMData
-    let arg ← try readType cPrefix renames domain catch e =>
+    let arg ← try readType cPrefix renames domain externalTypes catch e =>
       let message ← e.toMessageData.toString
       if message.startsWith "C name collision:" || message.startsWith "C invariant:" then throw e
       throwError "'{name}' has an unsupported parameter type: {e.toMessageData}"
@@ -54,10 +55,10 @@ def readExport (cPrefix : String) (renames : Renames) (name : Name) : DescribeM 
   let io := type.isAppOfArity `IO 1
   let result := if io then type.appArg! else type
   let exception ← if result.isAppOfArity `Except 2 then
-    some <$> readType cPrefix renames result.appFn!.appArg!
+    some <$> readType cPrefix renames result.appFn!.appArg! externalTypes
     else pure none
   let value := if exception.isSome then result.appArg! else result
-  let resultC ← try readType cPrefix renames value catch e =>
+  let resultC ← try readType cPrefix renames value externalTypes catch e =>
     let message ← e.toMessageData.toString
     if message.startsWith "C name collision:" || message.startsWith "C invariant:" then throw e
     throwError "'{name}' has an unsupported result type: {e.toMessageData}"

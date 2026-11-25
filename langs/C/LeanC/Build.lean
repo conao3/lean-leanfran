@@ -75,7 +75,7 @@ private def missingExterns (lean : LeanInstall) (externs : Std.HashSet String) :
   return missing.toArray.qsort (· < ·)
 
 private def selectExports (env : Environment) (moduleName : Name) (cPrefix : String)
-    (roots : Array Name) (checks : Checks) (renames : Renames) : ExceptT String IO (Array Export × Array Desc) := do
+    (roots : Array Name) (checks : Checks) (renames : Renames) (externalTypes : ExternalTypes) : ExceptT String IO (Array Export × Array Desc) := do
   if let some chain := leanImportChain env moduleName then
     let message := s!"Lean compiler import: {" -> ".intercalate (chain.map Name.toString)}"
     unless checks.allowLeanImport do throw s!"{message} (use --allow-lean-import to allow)"
@@ -85,7 +85,7 @@ private def selectExports (env : Environment) (moduleName : Name) (cPrefix : Str
   for name in names.qsort Name.lt do
     let read : MetaM (Except String (Export × Array Desc)) := do
       try
-        return .ok (← (readExport cPrefix renames name).run descs)
+        return .ok (← (readExport cPrefix renames name externalTypes).run descs)
       catch error =>
         return .error (← error.toMessageData.toString)
     let described ← ExceptT.lift <| read.run'.toIO' {fileName := "<C exports>", fileMap := default} {env}
@@ -132,13 +132,13 @@ def jsonSupportSource : String := include_str "../lean/LeanfranC/Json.lean"
 
 private def generateFiles (env : Environment) (lean : LeanInstall) (target : Target)
     (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames)
-    (projectInit : Bool) : ExceptT String IO (Array String) := do
+    (projectInit : Bool) (externalTypes : ExternalTypes) : ExceptT String IO (Array String) := do
   if projectInit then
     if let some idx := env.getModuleIdx? target.moduleName.toName then
       for info in env.header.moduleData[idx.toNat]!.constants do
         if info.type.hasSorry || (info.value? (allowOpaque := true)).any Expr.hasSorry then
           throw s!"'{info.name}' uses sorryAx"
-  let (exports, descs) ← selectExports env target.moduleName.toName target.cPrefix roots checks renames
+  let (exports, descs) ← selectExports env target.moduleName.toName target.cPrefix roots checks renames externalTypes
   let reachable := reachableRoots exports descs
   checkSorry env checks reachable
   let calls ← foreignCalls env reachable
@@ -170,14 +170,15 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
     exports.flatMap (fun entry => #[entry.symbol, s!"lf_{entry.symbol}", entry.refSymbol false, entry.refSymbol true])
 
 unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name)
-    (checks : Checks := {}) (renames : Renames := {}) (projectInit : Bool := false) :
+    (checks : Checks := {}) (renames : Renames := {}) (projectInit : Bool := false)
+    (externalTypes : ExternalTypes := {}) :
     IO (Except String (Array String)) := do
   let mod ← findModule ws target
   discard <| ws.runBuild mod.olean.fetch
   Lean.initSearchPath ws.lakeEnv.lean.sysroot ws.leanPath
   Lean.enableInitializersExecution
   let env ← Lean.importModules #[{module := mod.name}] {} (loadExts := true)
-  (generateFiles env ws.lakeEnv.lean target out roots checks renames projectInit).run
+  (generateFiles env ws.lakeEnv.lean target out roots checks renames projectInit externalTypes).run
 
 def moduleObjects (ws : Workspace) (mod : Lake.Module) : IO (Array FilePath) := do
   let imports ← ws.runBuild mod.transImports.fetch
@@ -196,8 +197,8 @@ private def cCompiler (lean : LeanInstall) : FilePath :=
   if lean.customCc then lean.cc else "cc"
 
 def compileCObjects (lean : LeanInstall) (tmp : FilePath)
-    (sources : Array (FilePath × String × Bool)) : IO (Array FilePath) := do
-  let cFlags := #["-I", lean.includeDir.toString] ++ lean.cFlags ++ #["-fPIC"]
+    (sources : Array (FilePath × String × Bool)) (extra : Array String := #[]) : IO (Array FilePath) := do
+  let cFlags := #["-I", lean.includeDir.toString] ++ lean.cFlags ++ #["-fPIC"] ++ extra
   sources.mapM fun (source, name, publicSymbols) => do
     let obj := tmp / s!"{name}.o"
     let args := if publicSymbols then cFlags.push "-fvisibility=default" else cFlags

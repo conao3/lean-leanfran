@@ -144,6 +144,13 @@ inductive Shape where
   | record | enum | variant | option | array | list | pair | subtype
   deriving BEq, Inhabited
 
+structure ExternalType where
+  header : String
+  cType : String
+  deriving Inhabited, BEq
+
+abbrev ExternalTypes := Std.HashMap Name ExternalType
+
 structure Desc where
   type : Expr
   typeSource : String
@@ -155,6 +162,7 @@ structure Desc where
   item : CType := .unit
   trivial : Bool := false
   finBound : Option Nat := none
+  externalType : Option ExternalType := none
   deriving Inhabited
 
 abbrev DescribeM := StateT (Array Desc) MetaM
@@ -245,7 +253,8 @@ def Desc.hasInvariants (desc : Desc) : Bool :=
 def Desc.invariantMessage (desc : Desc) (inv : Invariant) : String :=
   s!"Invalid {desc.sourceName}.{inv.field}"
 
-partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : DescribeM CType :=
+partial def readType (cPrefix : String) (renames : Renames) (type : Expr)
+    (externalTypes : ExternalTypes := {}) : DescribeM CType :=
   Meta.withIncRecDepth do
     let original := type
     let type ← whnf type
@@ -253,7 +262,9 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
     if let some primitive := CType.ofName name then
       return primitive
     let subtype := name == `Subtype || name == `Fin
-    let sourceName := if name == `Subtype then original.getAppFn.constName?.getD name else name
+    let originalName := original.getAppFn.constName?.getD name
+    let externalType := externalTypes[originalName]?
+    let sourceName := if name == `Subtype || externalType.isSome then originalName else name
     for desc in ← get do
       if desc.type.getAppFn.constName? == some name &&
           desc.sourceName == sourceName && (← isDefEq desc.type type) then
@@ -268,7 +279,7 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
     let mut stems := #[]
     for param in (if subtype then #[] else params) do
       unless (← inferType param).isSort do throwError "unsupported type argument {param}"
-      stems := stems.push ((← readType cPrefix renames param).typeStem cPrefix)
+      stems := stems.push ((← readType cPrefix renames param externalTypes).typeStem cPrefix)
     let finBound ← if name == `Fin then do
       let some bound ← (evalNat params[0]!).run
         | throwError "C invariant: Fin requires a literal bound"
@@ -280,14 +291,15 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
       else if sourceName == `Subtype then
         s!"subtype_{descriptions.countP (fun d => d.type.isAppOf `Subtype)}"
       else sourceName.toString
-    let stem := publicName renames sourceName base
-    let nameC := escapeIdentifier s!"{cPrefix}_{String.intercalate "_" (stem :: stems.toList)}"
+    let stem := publicName renames sourceName (if externalType.isSome then lastComponent sourceName else base)
+    let parts := if externalType.isSome then [stem] else stem :: stems.toList
+    let nameC := escapeIdentifier s!"{cPrefix}_{String.intercalate "_" parts}"
     if (← get).any (·.name == nameC) then throwError "C name collision: {nameC}"
     let desc : Desc := {
-      type, name := nameC, typeSource := ← leanTypeSource original, sourceName, finBound,
+      type, name := nameC, typeSource := ← leanTypeSource original, sourceName, finBound, externalType,
       params := ← if subtype then pure #[] else params.mapM fun p => return (← ppExpr p).pretty }
     modify (·.push desc)
-    let item ← if name == `Array || name == `List then readType cPrefix renames params[0]!
+    let item ← if name == `Array || name == `List then readType cPrefix renames params[0]! externalTypes
       else pure CType.unit
     let isStruct := Lean.isStructure env name
     let mut ctors := #[]
@@ -321,8 +333,8 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr) : Desc
               positional := positional || anonymous
               let leanName := if anonymous then s!"a{result.size}" else lastComponent rawName
               let fieldKey := (if isStruct then name else ctorName) ++ leanName.toName
-              let fieldName := publicName renames fieldKey leanName
-              let fieldType ← readType cPrefix renames localDecl.type
+              let fieldName := if externalType.isSome && isStruct then leanName else publicName renames fieldKey leanName
+              let fieldType ← readType cPrefix renames localDecl.type externalTypes
               let indirect := (← get).any fun t => t.name == fieldType.cName &&
                 t.ctors.isEmpty && t.shape == .record
               if result.any (·.name == fieldName) then

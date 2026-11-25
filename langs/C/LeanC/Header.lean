@@ -16,7 +16,10 @@ def Export.prototype (entry : Export) : String :=
 
 def emitHeader (cPrefix : String) (exports : Array Export) (descs : Array Desc) (apis : Array JsonApi) : String :=
   let guard := s!"LEANFRAN_{cPrefix}_H"
+  let headers := ((descs.filterMap (·.externalType.map (·.header))).toList.eraseDups).mergeSort
   s!"#ifndef {guard}\n#define {guard}\n\n#include \"leanfran.h\"\n\n" ++
+    String.join (headers.map (fun header => s!"#include \"{header}\"\n")) ++
+    (if headers.isEmpty then "" else "\n") ++
     "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n" ++
     emitTypeDeclarations descs ++
     String.join (apis.toList.map fun api => api.validPrototype ++ ";\n" ++

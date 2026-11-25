@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := check
 .PHONY: build check format format-check
 
-c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/types/*.c tests/embed/app/src/*.c tests/embed/app/src/nested/*.h)
+c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/types/*.c tests/embed/app/src/*.c tests/embed/app/src/*.h tests/embed/app/src/nested/*.h)
 clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
 
 build:

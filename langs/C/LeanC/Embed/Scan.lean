@@ -9,6 +9,7 @@ structure Config where
   source : String
   sources : Array String
   leanFiles : Array String
+  cflags : Array String
   out : FilePath
   requirements : Toml.Table
 
@@ -40,6 +41,7 @@ def readConfig (root : FilePath) : IO Config := do
   let result : Except String Config := do
     let sources ← strings table `sources
     let leanFiles ← strings table `«lean-files»
+    let cflags ← strings table `cflags
     for pattern in sources ++ leanFiles do discard <| relativeParts pattern
     let out ← match table.find? `«out-dir» with
       | none => pure "leanfran"
@@ -63,7 +65,7 @@ def readConfig (root : FilePath) : IO Config := do
           | _ => throw "'require' must contain Lake dependency tables"
         pure (Toml.Table.empty.insert `require (.array ref values))
       | _ => throw "'require' must contain Lake dependency tables"
-    return {source, sources, leanFiles, out := root / String.intercalate "/" parts, requirements}
+    return {source, sources, leanFiles, cflags, out := root / String.intercalate "/" parts, requirements}
   match result with
   | .ok config => return config
   | .error message => failAt path 1 message
@@ -176,12 +178,18 @@ private def blockAt (file : FilePath) (line headerLine : Nat) (comment : String)
       source := "\n".intercalate (lines.drop 1)}
   return some {name, file, line, bodyLine := headerLine + 1, source := "\n".intercalate lines}
 
-private def scanC (file : FilePath) (source : String) : IO (Array Block) := do
+structure ModelSource where
+  path : FilePath
+  line : Nat
+  deriving Inhabited
+
+private def scanC (file : FilePath) (source : String) : IO (Array Block × Option Nat) := do
   let source := (source.replace "\r\n" "\n").toList.toArray
   let chars := spliceLines source
   let charAt := fun i => chars[i]!.char
   let next := fun i c => i < chars.size && charAt i == c
   let mut blocks := #[]
+  let mut modelLine := none
   let mut i := 0
   while i < chars.size do
     let char := charAt i
@@ -206,15 +214,23 @@ private def scanC (file : FilePath) (source : String) : IO (Array Block) := do
         if i == chars.size then failAt file line "unterminated Lean block"
         blocks := blocks.push block
       i := i + 2
+    else if char.isAlphanum || char == '_' then
+      let start := i
+      while i < chars.size && ((charAt i).isAlphanum || charAt i == '_') do i := i + 1
+      if modelLine.isNone && String.ofList ((chars.extract start i).toList.map (·.char)) == "LF_STRUCT" then
+        modelLine := some chars[start]!.line
     else
       i := i + 1
-  return blocks
+  return (blocks, modelLine)
 
-def scan (root : FilePath) (config : Config) : IO (Array Block) := do
+def scan (root : FilePath) (config : Config) : IO (Array Block × Array ModelSource) := do
   let mut blocks := #[]
+  let mut models := #[]
   for path in ← filesFor root config.out config.sources do
     let file := FilePath.mk ((path.toString.drop (root.toString.length + 1)).toString)
-    blocks := blocks ++ (← scanC file (← IO.FS.readFile path))
+    let (found, modelLine) ← scanC file (← IO.FS.readFile path)
+    blocks := blocks ++ found
+    if let some line := modelLine then models := models.push {path, line}
   for path in ← filesFor root config.out config.leanFiles do
     let file := FilePath.mk ((path.toString.drop (root.toString.length + 1)).toString)
     let name := path.fileStem.getD ""
@@ -230,6 +246,6 @@ def scan (root : FilePath) (config : Config) : IO (Array Block) := do
     for name in block.imports do
       unless seen.contains name do
         failAt block.file (block.bodyLine - 1) s!"unknown Lean block import '{name}'"
-  return blocks.qsort (·.name < ·.name)
+  return (blocks.qsort (·.name < ·.name), models)
 
 end LeanC.Embed

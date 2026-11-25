@@ -1,5 +1,5 @@
 import LeanC.Build
-import LeanC.Embed.Scan
+import LeanC.Embed.Models
 
 open Lean Lake System
 
@@ -31,14 +31,20 @@ private structure Manifest where
   compiler : String
   config : String
   blocks : Array BlockHash
+  models : String := ""
   deriving FromJson, ToJson
 
-private def makeManifest (config : Config) (blocks : Array Block) : IO Manifest := do
+private def makeManifest (config : Config) (blocks : Array Block) (models : Models) : IO Manifest := do
   let hashes : Array BlockHash ← blocks.mapM fun block => do
     let sha256 ← sha256 (Json.compress (toJson (block.imports, block.source)))
     pure {name := block.name, file := block.file.toString, line := block.line, sha256}
   let compiler ← sha256 s!"{releaseVersion}/{Lean.versionString}"
-  return {schema := 1, compiler, config := ← sha256 config.source, blocks := hashes}
+  let mut inputs := #[models.source]
+  for path in models.inputs do
+    inputs := inputs.push s!"{path}:{← sha256 (← IO.FS.readFile path)}"
+  let modelHash ← sha256 (Json.compress (toJson inputs))
+  let configHash ← sha256 config.source
+  return {schema := 2, compiler, config := configHash, blocks := hashes, models := modelHash}
 
 private def outputFiles (blocks : Array Block) : Array String :=
   #["leanfran.h", "leanfran.pc", "leanfran.mk", "leanfran-config.cmake", "libleanfran.a"] ++
@@ -53,6 +59,7 @@ private def status (config : Config) (blocks : Array Block) (current : Manifest)
   if previous.schema != current.schema || previous.compiler != current.compiler then
     stale := stale.push "leanfran-c"
   if previous.config != current.config then stale := stale.push "leanfran.toml"
+  if previous.models != current.models then stale := stale.push "LF_STRUCT"
   let old := Std.HashMap.ofList (previous.blocks.toList.map fun b => (b.name, b))
   let new := Std.HashSet.ofList (current.blocks.toList.map (·.name))
   stale := stale ++ (current.blocks.filter (fun b => old[b.name]? != some b)).map (·.name)
@@ -76,7 +83,7 @@ private def blockPath (dir : FilePath) (block : Block) : FilePath :=
 private def imports (modules : Array String) : String :=
   String.join (modules.toList.map (fun name => s!"import {name}\n"))
 
-private def remapDiagnostic (dir : FilePath) (blocks : Array Block) (line : String) : String := Id.run do
+private def remapDiagnostic (dir : FilePath) (blocks : Array Block) (models : Models) (line : String) : String := Id.run do
   for block in blocks do
     let generated := (blockPath "." block).toString
     let relative := (generated.drop 2).toString
@@ -87,21 +94,22 @@ private def remapDiagnostic (dir : FilePath) (blocks : Array Block) (line : Stri
       let number :: column :: message := location.splitOn ":" | continue
       let some n := number.toNat? | continue
       let some col := column.toNat? | continue
-      let sourceLine := if n ≤ block.imports.size then block.bodyLine - 1
-        else block.bodyLine + n - block.imports.size - 1
+      let count := block.imports.size + (if models.blocks.contains block.name then 1 else 0)
+      let sourceLine := if n ≤ count then block.bodyLine - 1
+        else block.bodyLine + n - count - 1
       let severity := if label == "error: " || label == "warning: " then label else ""
       return s!"{block.file}:{sourceLine}:{col + 1}: {severity}{(":".intercalate message).trimAscii}"
   return line
 
-private def runLake (dir : FilePath) (blocks : Array Block) (args : Array String) : IO Unit := do
+private def runLake (dir : FilePath) (blocks : Array Block) (models : Models) (args : Array String) : IO Unit := do
   let result ← IO.Process.output {cmd := "lake", cwd := some dir, args := #["--no-ansi"] ++ args}
   for stream in #[result.stdout, result.stderr] do
     if !stream.isEmpty then
-      IO.eprint ("\n".intercalate ((stream.splitOn "\n").map (remapDiagnostic dir blocks)))
+      IO.eprint ("\n".intercalate ((stream.splitOn "\n").map (remapDiagnostic dir blocks models)))
   unless result.exitCode == 0 do
     throw <| IO.userError s!"lake {args[0]!} exited with {result.exitCode}"
 
-private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) : IO Unit := do
+private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) (models : Models) : IO Unit := do
   let sources := dir / "LeanfranBlocks"
   IO.FS.createDirAll sources
   let desired := Std.HashSet.ofList (blocks.toList.map (fun block => s!"{block.name}.lean"))
@@ -113,8 +121,15 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
         for artifact in ← lib.readDir do
           if artifact.fileName.startsWith s!"{entry.path.fileStem.getD ""}." then
             IO.FS.removeFile artifact.path
+  let modelFile := dir / "LeanfranModels.lean"
+  if !models.source.isEmpty then
+    discard <| writeChanged modelFile models.source
+  else if ← modelFile.pathExists then
+    IO.FS.removeFile modelFile
   for block in blocks do
-    discard <| writeChanged (blockPath dir block) (imports (block.imports.map Block.moduleName) ++ block.source)
+    let deps := block.imports.map Block.moduleName
+    let deps := if models.blocks.contains block.name then deps.push "LeanfranModels" else deps
+    discard <| writeChanged (blockPath dir block) (imports deps ++ block.source)
   IO.FS.createDirAll (dir / "LeanfranC")
   discard <| writeChanged (dir / "LeanfranC" / "Json.lean") jsonSupportSource
   let lakefile := dir / "lakefile.toml"
@@ -128,15 +143,17 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
     "defaultTargets = [\"LeanfranBlocks\"]\n\n" ++ requirements ++
     "\n[[lean_lib]]\nname = \"LeanfranBlocks\"\nglobs = [\"LeanfranBlocks.+\"]\n" ++
     "\n[[lean_lib]]\nname = \"LeanfranExport\"\nglobs = [\"LeanfranExport.+\"]\n" ++
+    "\n[[lean_lib]]\nname = \"LeanfranModels\"\n" ++
     "\n[[lean_lib]]\nname = \"LeanfranProject\"\n" ++
     "\n[[lean_lib]]\nname = \"LeanfranC\"\nglobs = [\"LeanfranC.+\"]\n")
   discard <| writeChanged (dir / "lean-toolchain") s!"leanprover/lean4:v{Lean.versionString}\n"
   if !(← manifest.pathExists) || installed.toOption != some requirements then
-    runLake dir blocks #["update", "--keep-toolchain"]
+    runLake dir blocks models #["update", "--keep-toolchain"]
     discard <| writeChanged dependencyConfig requirements
-  runLake dir blocks #["build"]
+  runLake dir blocks models #["build"]
 
-private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (scratch stage out : FilePath) :
+private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models : Models)
+    (scratch stage out : FilePath) :
     IO Unit := do
   let ws ← loadWorkspace dir
   let mut symbols : Std.HashSet String := .ofList ["leanfran_init", "lf_project_initialized"]
@@ -146,7 +163,7 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (scratch
   IO.FS.createDirAll stage
   for block in blocks do
     let target := {moduleName := Block.moduleName block.name, cPrefix := block.name : Target}
-    let names ← match ← generate ws target scratch #[] {} {} true with
+    let names ← match ← generate ws target scratch #[] {} {} true models.types with
       | .ok names => pure names
       | .error error => throw <| IO.userError s!"{block.file}:{block.line}:1: error: {error}"
     for name in names do
@@ -154,7 +171,11 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (scratch
         throw <| IO.userError s!"{block.file}:{block.line}:1: error: C name collision: {name}"
       symbols := symbols.insert name
     let header := s!"{block.name}.h"
-    IO.FS.writeFile (stage / header) (← IO.FS.readFile (scratch / header))
+    let text ← IO.FS.readFile (scratch / header)
+    IO.FS.writeFile (stage / header) text
+    let scratchHeader := models.headers.foldl (init := text) fun text (header, file) =>
+      text.replace s!"#include \"{header}\"" s!"#include \"{file}\""
+    IO.FS.writeFile (scratch / header) scratchHeader
     let exportFile := exportPath target dir
     IO.FS.createDirAll exportFile.parent.get!
     discard <| writeChanged exportFile (← IO.FS.readFile (exportPath target scratch))
@@ -162,7 +183,7 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (scratch
     sources := sources.push (scratch / s!"{block.name}.c", s!"block_{block.name}", true)
   let projectModule := "LeanfranProject"
   discard <| writeChanged (dir / s!"{projectModule}.lean") (imports modules)
-  runLake dir blocks #["build", s!"+{projectModule}:olean"]
+  runLake dir blocks models #["build", s!"+{projectModule}:olean"]
   let ws ← loadWorkspace dir
   let mod ← findModule ws {moduleName := projectModule, cPrefix := "leanfran"}
   let objects ← moduleObjects ws mod
@@ -176,7 +197,9 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (scratch
   IO.FS.writeFile support supportSource
   IO.FS.writeFile init (emitProjectInitializer (Lean.mkModuleInitializationFunctionName mod.name mod.pkg.id?))
   let lean := ws.lakeEnv.lean
-  let native ← compileCObjects lean scratch (sources ++ #[(support, "support", true), (init, "init", true)])
+  let wrappers ← compileCObjects lean scratch sources (#["-iquote", scratch.toString] ++ models.flags)
+  let native ← compileCObjects lean scratch #[(support, "support", true), (init, "init", true)]
+  let native := wrappers ++ native
   let archive := "libleanfran.a"
   let library := scratch / archive
   let some () ← (Lake.compileStaticLib library (native ++ objects) lean.ar).toBaseIO
@@ -205,7 +228,8 @@ private def publish (stage out backup : FilePath) : IO Unit := do
     throw error
   if hadOutput then IO.FS.removeDirAll backup
 
-private unsafe def sync (state : FilePath) (config : Config) (blocks : Array Block) (manifest : Manifest) :
+private unsafe def sync (state : FilePath) (config : Config) (blocks : Array Block) (models : Models)
+    (manifest : Manifest) :
     IO Unit := do
   let out := config.out
   let dir := state / "workspace"
@@ -215,8 +239,8 @@ private unsafe def sync (state : FilePath) (config : Config) (blocks : Array Blo
   let stage := transaction / "output"
   let backup := transaction / "previous"
   try
-    workspace dir config blocks
-    buildProject dir blocks (transaction / "build") stage out
+    workspace dir config blocks models
+    buildProject dir blocks models (transaction / "build") stage out
     IO.FS.writeFile (stage / manifestName) ((toJson manifest).pretty ++ "\n")
     publish stage out backup
   finally
@@ -234,16 +258,18 @@ unsafe def execute (command : Command) (dir : FilePath) : IO UInt32 := do
   if (command matches .status) && !(← state.isDir) then
     let config ← readConfig root
     checkDirectory root config.out
-    let blocks ← scan root config
-    return ← status config blocks (← makeManifest config blocks)
+    let (blocks, sources) ← scan root config
+    let models ← readModels root config blocks sources
+    return ← status config blocks (← makeManifest config blocks models)
   IO.FS.createDirAll state
   let lock ← IO.FS.Handle.mk (state / "lock") .append
   lock.lock (exclusive := !(command matches .status))
   try
     let config ← readConfig root
     checkDirectory root config.out
-    let blocks ← scan root config
-    let manifest ← makeManifest config blocks
+    let (blocks, sources) ← scan root config
+    let models ← readModels root config blocks sources
+    let manifest ← makeManifest config blocks models
     match command with
     | .status => status config blocks manifest
     | .sync | .check =>
@@ -251,11 +277,12 @@ unsafe def execute (command : Command) (dir : FilePath) : IO UInt32 := do
       if (← config.out.isDir) && !(← (config.out / manifestName).pathExists) then
         unless (← config.out.readDir).isEmpty do
           throw <| IO.userError s!"output directory {config.out} is nonempty and has no {manifestName}"
-      sync state config blocks manifest
+      sync state config blocks models manifest
       if command matches .check then
         let config ← readConfig root
-        let blocks ← scan root config
-        status config blocks (← makeManifest config blocks)
+        let (blocks, sources) ← scan root config
+        let models ← readModels root config blocks sources
+        status config blocks (← makeManifest config blocks models)
       else
         IO.println s!"synced {blocks.size} Lean blocks"
         return 0
