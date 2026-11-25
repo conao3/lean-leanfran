@@ -140,9 +140,8 @@ out-dir = "leanfran"
 cflags = ["-Isrc/include"]
 
 [[require]]
-name = "mathlib"
-git = "https://github.com/leanprover-community/mathlib4"
-rev = "v4.35.0"
+name = "pricing_rules"
+path = "../pricing-rules"
 ```
 
 | Key | Meaning |

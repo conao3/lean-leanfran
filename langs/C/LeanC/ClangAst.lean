@@ -138,7 +138,11 @@ def readDatabase (root : FilePath) : IO (Array CompileCommand) := do
         | .error _ => splitCommand (← entry.getObjValAs? String "command")
       if argv.isEmpty then throw s!"empty compile command for {file}"
       return {directory, file, flags := compileFlags directory file argv}
-  IO.ofExcept (result.mapError fun message => s!"{path}: {message}")
+  let commands ← IO.ofExcept (result.mapError fun message => s!"{path}: {message}")
+  commands.mapM fun command => do
+    let real := fun (path : FilePath) => do
+      return (← (IO.FS.realPath path).toBaseIO).toOption.getD path
+    return {command with directory := ← real command.directory, file := ← real command.file}
 
 def dump (command : CompileCommand) (extra : Array String := #[]) : IO Node := do
   let output ← IO.Process.output {

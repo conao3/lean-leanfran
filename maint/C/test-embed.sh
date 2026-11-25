@@ -109,17 +109,21 @@ sed 's/"ge=1", "le=999"/"min_len=1"/' "$scratch/models-changed.h" >"$models"
 expect_status 254 sync
 grep -E "^src/models\.h:7:14: error: 'min_len' requires a string or array field" "$scratch/diagnostics"
 diff -r "$scratch/models-previous" "$out"
+sed 's/= 250 := by decide/= 251 := by decide/' "$scratch/models.h" >"$models"
+expect_status 254 sync
+grep -E '^src/models\.h:35:[0-9]+: error:' "$scratch/diagnostics"
+diff -r "$scratch/models-previous" "$out"
 sed 's/LF_STRUCT(pricing) {/LF_STRUCT(missing) {/' "$scratch/models.h" >"$models"
 expect_status 254 sync
 grep -E "^src/models\.h:17:9: error: LF_STRUCT refers to unknown Lean block 'missing'" "$scratch/diagnostics"
-sed 's/    bool express;/    char *note;\n    bool express;/' "$scratch/models.h" >"$models"
+perl -pe 's/^    bool express;/    char *note;\n    bool express;/' "$scratch/models.h" >"$models"
 expect_status 254 sync
 grep -E "^src/models\.h:19:11: error: unsupported LF_STRUCT field type 'char \*'" "$scratch/diagnostics"
 diff -r "$scratch/models-previous" "$out"
 
 mkdir -p "$app/src/config"
 printf '#define APP_MAX_ORDERS "max_len=4"\n' >"$app/src/config/app_config.h"
-sed 's/#include "leanfran.h"/#include "leanfran.h"\n#include "app_config.h"/; s/LF_FIELD("max_len=4")/LF_FIELD(APP_MAX_ORDERS)/' "$scratch/models.h" >"$models"
+perl -pe 's/^#include "leanfran.h"/#include "leanfran.h"\n#include "app_config.h"/; s/LF_FIELD\("max_len=4"\)/LF_FIELD(APP_MAX_ORDERS)/' "$scratch/models.h" >"$models"
 expect_status 254 sync
 grep -F "'app_config.h' file not found" "$scratch/diagnostics"
 cat >"$app/compile_commands.json" <<JSON
