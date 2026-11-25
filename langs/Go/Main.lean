@@ -4,7 +4,7 @@ import LeanGo.Check
 open Lean LeanGo
 
 def version : String := "0.11.1"
-def generatorVersion : String := "11"
+def generatorVersion : String := "12"
 
 def usage : String := "leanfran-go --version | --generator-version | --lean-version
 leanfran-go module generate --module-name <Name> [options]

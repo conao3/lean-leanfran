@@ -593,14 +593,14 @@ def emitValueFn (cfg : RenderCfg) (f : PublicFn) : Except String String := do
   | _ => pure ()
   let output := match result with
     | .unit => #[]
-    | .prod a b =>
-      #[s!"leanfran.WrapValueIn[{a.valueType cfg}](scope, leanfran.OwnValueField({raw}, 0))",
-        s!"leanfran.WrapValueIn[{b.valueType cfg}](scope, leanfran.OwnValueField({raw}, 1))"]
+    | .prod .. => #["first", "second"]
     | d =>
       let owned := if raw == "raw" then raw else "leanfran.OwnValueField(raw, 0)"
       #[s!"leanfran.WrapValueIn[{d.valueType cfg}](scope, {owned})"]
   if raw == "raw" && (match result with | .prod .. => true | .unit => ty.isPossibleRef | _ => false) then
     body := body ++ "\tdefer rt.Lean_dec(raw)\n"
+  if let .prod a b := result then
+    body := body ++ s!"\tfirst, second := leanfran.WrapFieldsIn[{a.valueType cfg}, {b.valueType cfg}](scope, {raw})\n"
   let forward := if signature.isEmpty then "" else "return "
   let wrapper := s!"func (lfHandle) {f.ident}({joinArgs binders}) {signature}\{\n\t{forward}lfScopedHandle\{}.{f.ident}({joinArgs forwarded})\n}\n\n"
   return wrapper ++ s!"func (api lfScopedHandle) {f.ident}({joinArgs binders}) {signature}\{\n\tscope := api.scope\n\tleanfran.BeginValueOperation(scope)\n\tdefer leanfran.EndValueOperation(scope)\n{prepare}{ownership}{run}{io}{body}{returnValues output canFail}}\n\n"

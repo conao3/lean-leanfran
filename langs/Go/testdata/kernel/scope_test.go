@@ -90,25 +90,36 @@ func TestValueScopeConcurrent(t *testing.T) {
 	}
 }
 
-func TestValueScopeCleanup(t *testing.T) {
+func TestLeakedValues(t *testing.T) {
+	leanfran.TrackLeakedValues(true)
+	defer leanfran.TrackLeakedValues(false)
 	for _, scoped := range []bool{false, true} {
+		before := leanfran.LeakedValues()
 		raw := rt.Lean_alloc_ctor(0, 0, 0)
+		rt.Lean_inc(raw)
 		rt.Lean_inc(raw)
 		kept := leanfran.WrapValue[Counter](raw)
 		if scoped {
 			leanfran.WithValues(func(scope *leanfran.ValueScope) {
 				_ = leanfran.WrapValueIn[Counter](scope, raw)
+				leanfran.WrapValueIn[Counter](scope, raw).CloseIn(scope)
 			})
 		} else {
 			_ = leanfran.WrapValue[Counter](raw)
+			leanfran.WrapValue[Counter](raw).Close()
 		}
 		deadline := time.Now().Add(5 * time.Second)
-		for !kept.IsExclusive() && time.Now().Before(deadline) {
+		for leanfran.LeakedValues() == before && time.Now().Before(deadline) {
 			runtime.GC()
 			time.Sleep(time.Millisecond)
 		}
-		if !kept.IsExclusive() {
-			t.Errorf("scoped=%v: GC did not release the second Lean reference", scoped)
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond)
+		if got := leanfran.LeakedValues() - before; got != 1 {
+			t.Errorf("scoped=%v: %d leaked Values, want 1", scoped, got)
+		}
+		if kept.IsExclusive() {
+			t.Errorf("scoped=%v: the leaked Value released its Lean reference", scoped)
 		}
 		kept.Close()
 	}
