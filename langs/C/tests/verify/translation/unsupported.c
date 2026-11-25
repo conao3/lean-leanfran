@@ -134,3 +134,9 @@ int32_t local_array(void) {
     int32_t b = 0;
     return head(&b, 1);
 }
+
+shapes_geo_color to_color(int32_t x) { return x; }
+
+shapes_geo_color far_color(void) { return 7; }
+
+shapes_geo_shape_rect_fields rect_of(shapes_geo_shape s) { return s.as.rect; }

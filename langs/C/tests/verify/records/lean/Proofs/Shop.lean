@@ -41,4 +41,12 @@ theorem line_total.proof.refines : line_total.obligation.refines := by
   rw [Int64.toInt_mul, Int64.toInt_ofInt, Int64.toInt_ofInt]
   exact (congrArg (Int.bmod · Int64.size) (hq.symm ▸ hv).symm)
 
+theorem size_weight.proof.refines : size_weight.obligation.refines := by
+  intro s
+  cases s <;> rfl
+
+theorem parcel_size.proof.refines : parcel_size.obligation.refines := by
+  intro p
+  cases p <;> rfl
+
 end LeanCModel.shop

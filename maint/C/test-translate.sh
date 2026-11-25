@@ -34,9 +34,10 @@ LAKE
 
 cd "$project"
 lake build FixtureTypes LeanCLib
-"$compiler" generate --module-name FixtureTypes --roots Geo.norm1 --prefix shapes \
+"$compiler" generate --module-name FixtureTypes --roots Geo.norm1,Geo.paint --prefix shapes \
     --out-dir "$scratch/shapes"
 grep -Fq 'struct LF_LEAN("Geo.Point") shapes_geo_point' "$scratch/shapes/shapes.h"
+grep -Fq 'struct LF_LEAN("Geo.Shape") shapes_geo_shape' "$scratch/shapes/shapes.h"
 
 clang_args=(-I "$scratch/shapes" -I "$fixtures")
 "$compiler" translate --block fixture --import FixtureTypes \
@@ -59,11 +60,12 @@ cc "${flags[@]}" "$fixtures/driver.c" -o "$scratch/inputs"
 test "$(wc -l <"$scratch/lean.txt")" -eq "$(wc -l <"$scratch/inputs.txt")"
 grep -v ' = !' "$scratch/lean.txt" >"$scratch/lean-ok.txt"
 sed 's/ = .*//' "$scratch/lean-ok.txt" >"$scratch/ok-inputs.txt"
-grep ' = !' "$scratch/lean.txt" | grep -v '= !indexOutOfRange$' >"$scratch/undefined.txt"
+grep ' = !' "$scratch/lean.txt" | grep -vE '= !(indexOutOfRange|inactiveMember)$' >"$scratch/undefined.txt"
 for exc in signedOverflow divByZero shiftOutOfRange floatToIntOutOfRange; do
     grep -q "= !$exc\$" "$scratch/undefined.txt"
 done
 grep -q '= !indexOutOfRange$' "$scratch/lean.txt"
+grep -q '^circle_radius .* = !inactiveMember$' "$scratch/lean.txt"
 if grep -qE '= !(diverged|missingReturn)$' "$scratch/lean.txt"; then
     exit 1
 fi
