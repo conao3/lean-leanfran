@@ -6,6 +6,22 @@ structure Point where
 
 def norm1 (p : Point) : Int32 := p.x + p.y
 
+inductive Color where
+  | red
+  | green
+  | blue
+
+inductive Shape where
+  | circle (r : Int32)
+  | rect (w h : Int32)
+  | pair : Int32 → Int64 → Shape
+  | tinted (c : Color) (r : Int32) (pos : 0 ≤ r)
+  | dot
+
+def paint (s : Shape) (c : Color) : Shape := match c with
+  | .red => s
+  | _ => .dot
+
 end Geo
 
 structure «item» where

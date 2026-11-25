@@ -11,24 +11,26 @@ typedef struct {
 } spec;
 
 static const spec specs[] = {
-    {"clamp", "iii"},      {"add_i32", "ii"},    {"twice", "i"},
-    {"clamp_plus", "i"},   {"arith_u32", "uu"},  {"div_mod", "ii"},
-    {"shifts", "ii"},      {"ushift", "Li"},     {"narrow", "cw"},
-    {"conv", "l"},         {"logic", "ii"},      {"ternary", "ii"},
-    {"bools", "bbi"},      {"doubles", "dd"},    {"d2i", "d"},
-    {"i2d", "lL"},         {"dcmp", "dd"},       {"loop_while", "u"},
-    {"loop_do", "i"},      {"loop_for", "i"},    {"nested_loops", "i"},
-    {"choose", "i"},       {"switch_loop", "i"}, {"sum", "A"},
-    {"at", "Bi"},          {"total", "I"},       {"item_value", "T"},
-    {"dot", "PP"},         {"pick", "PPb"},      {"safe_div", "ii"},
-    {"size_ops", "zL"},    {"use_helper", "i"},  {"uneg", "u"},
-    {"lmix", "lu"},        {"lits", ""},         {"compare", "ii"},
-    {"negate", "id"},      {"compound", "ii"},   {"nested_ternary", "ii"},
-    {"and_ternary", "ii"}, {"bool_literal", ""}, {"shadow", "i"},
-    {"lit_pick", "i"},     {"sum_twice", "A"},   {"sum_prefix", "Au"},
-    {"div_sum", "iii"},    {"forward", "ii"},    {"div_or", "iii"},
-    {"countdown", "ii"},   {"checked_sum", "A"}, {"total_or", "A"},
-    {"count_pos", "B"},    {"count_or", "B"},
+    {"clamp", "iii"},       {"add_i32", "ii"},    {"twice", "i"},
+    {"clamp_plus", "i"},    {"arith_u32", "uu"},  {"div_mod", "ii"},
+    {"shifts", "ii"},       {"ushift", "Li"},     {"narrow", "cw"},
+    {"conv", "l"},          {"logic", "ii"},      {"ternary", "ii"},
+    {"bools", "bbi"},       {"doubles", "dd"},    {"d2i", "d"},
+    {"i2d", "lL"},          {"dcmp", "dd"},       {"loop_while", "u"},
+    {"loop_do", "i"},       {"loop_for", "i"},    {"nested_loops", "i"},
+    {"choose", "i"},        {"switch_loop", "i"}, {"sum", "A"},
+    {"at", "Bi"},           {"total", "I"},       {"item_value", "T"},
+    {"dot", "PP"},          {"pick", "PPb"},      {"safe_div", "ii"},
+    {"size_ops", "zL"},     {"use_helper", "i"},  {"uneg", "u"},
+    {"lmix", "lu"},         {"lits", ""},         {"compare", "ii"},
+    {"negate", "id"},       {"compound", "ii"},   {"nested_ternary", "ii"},
+    {"and_ternary", "ii"},  {"bool_literal", ""}, {"shadow", "i"},
+    {"lit_pick", "i"},      {"sum_twice", "A"},   {"sum_prefix", "Au"},
+    {"div_sum", "iii"},     {"forward", "ii"},    {"div_or", "iii"},
+    {"countdown", "ii"},    {"checked_sum", "A"}, {"total_or", "A"},
+    {"count_pos", "B"},     {"count_or", "B"},    {"color_code", "K"},
+    {"next_color", "K"},    {"keep_color", "Kb"}, {"shape_area", "S"},
+    {"circle_radius", "S"}, {"shape_tag", "S"},   {"bigger", "SS"},
 };
 
 static uint64_t state = 1;
@@ -122,6 +124,17 @@ static void print_value(char kind) {
         printf(" %" PRIu64, 1 + next() % 1000);
         print_scalar('l');
         printf(" %" PRIu64, next() % 100000);
+    } else if (kind == 'K') {
+        printf(" %d", (int)(next() % 3));
+    } else if (kind == 'S') {
+        int tag = (int)(next() % 5);
+        printf(" %d", tag);
+        if (tag == 3)
+            printf(" %d", (int)(next() % 1000));
+        else
+            print_scalar('i');
+        print_scalar('l');
+        print_value('K');
     } else {
         print_scalar(kind);
     }
@@ -169,6 +182,58 @@ static item read_item(void) {
     it.price = read_int();
     it.weight = (size_t)read_uint();
     return it;
+}
+
+static shapes_geo_shape read_shape(void) {
+    shapes_geo_shape s;
+    memset(&s, 0, sizeof(s));
+    int tag = (int)read_int();
+    int32_t a = (int32_t)read_int();
+    int64_t b = read_int();
+    shapes_geo_color c = (shapes_geo_color)read_int();
+    switch (tag) {
+    case 0:
+        s.tag = shapes_geo_shape_circle;
+        s.as.circle.r = a;
+        break;
+    case 1:
+        s.tag = shapes_geo_shape_rect;
+        s.as.rect.w = a;
+        s.as.rect.h = (int32_t)b;
+        break;
+    case 2:
+        s.tag = shapes_geo_shape_pair;
+        s.as.pair.a0 = a;
+        s.as.pair.a1 = b;
+        break;
+    case 3:
+        s.tag = shapes_geo_shape_tinted;
+        s.as.tinted.c = c;
+        s.as.tinted.r = a;
+        break;
+    default:
+        s.tag = shapes_geo_shape_dot;
+    }
+    return s;
+}
+
+static void print_shape(shapes_geo_shape s) {
+    switch (s.tag) {
+    case shapes_geo_shape_circle:
+        printf("0 %" PRId32, s.as.circle.r);
+        break;
+    case shapes_geo_shape_rect:
+        printf("1 %" PRId32 " %" PRId32, s.as.rect.w, s.as.rect.h);
+        break;
+    case shapes_geo_shape_pair:
+        printf("2 %" PRId32 " %" PRId64, s.as.pair.a0, s.as.pair.a1);
+        break;
+    case shapes_geo_shape_tinted:
+        printf("3 %d %" PRId32, (int)s.as.tinted.c, s.as.tinted.r);
+        break;
+    default:
+        printf("4");
+    }
 }
 
 static void print_double(double value) {
@@ -391,6 +456,23 @@ static void evaluate(char *line) {
         printf("%" PRId32, shadow(read_int()));
     } else if (NAME("lit_pick")) {
         print_double(lit_pick(read_int()));
+    } else if (NAME("color_code")) {
+        printf("%" PRId32, color_code((shapes_geo_color)read_int()));
+    } else if (NAME("next_color")) {
+        printf("%d", (int)next_color((shapes_geo_color)read_int()));
+    } else if (NAME("keep_color")) {
+        shapes_geo_color c = (shapes_geo_color)read_int();
+        bool swap = read_int();
+        printf("%d", (int)keep_color(c, swap));
+    } else if (NAME("shape_area")) {
+        printf("%" PRId64, shape_area(read_shape()));
+    } else if (NAME("circle_radius")) {
+        printf("%" PRId32, circle_radius(read_shape()));
+    } else if (NAME("shape_tag")) {
+        printf("%" PRIu32, shape_tag(read_shape()));
+    } else if (NAME("bigger")) {
+        shapes_geo_shape a = read_shape(), b = read_shape();
+        print_shape(bigger(a, b));
     } else if (NAME("lits")) {
         print_double(lits());
     } else {

@@ -104,6 +104,7 @@ public def evaluate (kind op : @& String) (a b : UInt64) : IO UInt64 :=
     | .floatToIntOutOfRange => "floatToIntOutOfRange"
     | .indexOutOfRange => "indexOutOfRange"
     | .diverged => "diverged"
-    | .missingReturn => "missingReturn"))
+    | .missingReturn => "missingReturn"
+    | .inactiveMember => "inactiveMember"))
 
 end ModelOps

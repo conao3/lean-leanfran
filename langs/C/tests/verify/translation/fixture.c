@@ -353,3 +353,55 @@ double lit_pick(int32_t k) {
         return 2.718281828459045;
     }
 }
+
+int32_t color_code(shapes_geo_color c) {
+    switch (c) {
+    case shapes_geo_color_red:
+        return 1;
+    case shapes_geo_color_green:
+        return 20;
+    default:
+        return c * 100;
+    }
+}
+
+shapes_geo_color next_color(shapes_geo_color c) {
+    if (c == shapes_geo_color_red)
+        return shapes_geo_color_green;
+    if (c == shapes_geo_color_green)
+        return shapes_geo_color_blue;
+    return shapes_geo_color_red;
+}
+
+shapes_geo_color keep_color(shapes_geo_color c, bool swap) {
+    shapes_geo_color d = c;
+    if (swap)
+        d = 0;
+    return d;
+}
+
+int64_t shape_area(shapes_geo_shape s) {
+    switch (s.tag) {
+    case shapes_geo_shape_circle:
+        return 3 * s.as.circle.r * s.as.circle.r;
+    case shapes_geo_shape_rect:
+        return (int64_t)s.as.rect.w * s.as.rect.h;
+    case shapes_geo_shape_pair:
+        return s.as.pair.a0 + s.as.pair.a1;
+    case shapes_geo_shape_tinted:
+        return color_code(s.as.tinted.c) + s.as.tinted.r;
+    default:
+        return 0;
+    }
+}
+
+int32_t circle_radius(shapes_geo_shape s) { return s.as.circle.r; }
+
+uint32_t shape_tag(shapes_geo_shape s) {
+    shapes_geo_shape_tag t = s.tag;
+    return t * 10 + (s.tag == shapes_geo_shape_dot);
+}
+
+shapes_geo_shape bigger(shapes_geo_shape a, shapes_geo_shape b) {
+    return shape_area(a) >= shape_area(b) ? a : b;
+}

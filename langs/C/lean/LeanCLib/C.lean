@@ -14,6 +14,7 @@ inductive Exc where
   | indexOutOfRange
   | diverged
   | missingReturn
+  | inactiveMember
   deriving DecidableEq, Repr, Inhabited
 
 abbrev M := Except Exc
