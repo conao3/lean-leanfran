@@ -6,6 +6,7 @@ def runtimeExterns : Array String := #[
   "acosh",
   "acoshf",
   "acquireTail",
+  "array",
   "asin",
   "asinf",
   "asinh",

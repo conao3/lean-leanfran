@@ -219,11 +219,11 @@ func Sequence[T any](kind string, item Codec[T]) Codec[[]T] {
 			}
 			return list
 		}
-		array := rt.Lean_mk_empty_array_with_capacity(rt.NatFromUint64(uint64(len(x))))
-		for _, value := range x {
-			array = rt.Lean_array_push(array, item.ToLean(value))
+		fields := make([]rt.V, len(x))
+		for i, value := range x {
+			fields[i] = item.ToLean(value)
 		}
-		return array
+		return rt.Array(fields)
 	}, func(v rt.V) []T {
 		if kind == "list" {
 			out := []T{}

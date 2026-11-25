@@ -4,6 +4,8 @@ func array(fields []V) V {
 	return V{p: &(&objS{Obj: Obj{rc: 1, kind: kindArray}, fs: fields}).Obj}
 }
 
+func Array(fields []V) V { return array(fields) }
+
 func Lean_mk_empty_array() V { return array(nil) }
 
 func Lean_mk_empty_array_with_capacity(n V) V {
