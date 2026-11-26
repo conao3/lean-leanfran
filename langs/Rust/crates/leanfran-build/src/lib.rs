@@ -239,8 +239,9 @@ impl Builder {
         if src.is_dir() {
             println!("cargo:rerun-if-changed={}", src.display());
         }
-        let mut lean_files = self.lean_user_files();
-        let keys = self.block_keys_with_files(&blocks, &self.csimp_key(), &lean_files)?;
+        let lean = self.lean_dir();
+        let mut local = local_lean::LocalLean::new(&lean, self.lean_user_files());
+        let keys = self.block_keys_with_local(&blocks, &self.csimp_key(), &mut local)?;
         let cache = self.cache_dir();
         let mut missing = Vec::new();
         for (i, b) in blocks.iter().enumerate() {
@@ -271,12 +272,12 @@ impl Builder {
                 )));
             }
             self.generate(&blocks, &missing, &items)?;
-            lean_files = self.lean_user_files();
+            local = local_lean::LocalLean::new(&lean, self.lean_user_files());
         }
         if cache.is_dir() {
             println!("cargo:rerun-if-changed={}", cache.display());
         }
-        for f in lean_files {
+        for f in local.files() {
             println!("cargo:rerun-if-changed={}", f.display());
         }
         let doc_dir = self.out_dir.join("leanfran").join("doc");
@@ -485,7 +486,6 @@ impl Builder {
             let packages = local_lean::packages_dir(&lean);
             collect_user_files(&lean, &lean, packages.as_deref(), &mut out);
         }
-        out.sort();
         out
     }
 
@@ -494,17 +494,20 @@ impl Builder {
         if blocks.iter().all(|b| b.imports.is_empty()) {
             return cache_keys(&self.crate_name, blocks, extra);
         }
-        self.block_keys_with_files(blocks, extra, &self.lean_user_files())
+        let lean = self.lean_dir();
+        self.block_keys_with_local(
+            blocks,
+            extra,
+            &mut local_lean::LocalLean::new(&lean, self.lean_user_files()),
+        )
     }
 
-    fn block_keys_with_files(
+    fn block_keys_with_local(
         &self,
         blocks: &[Block],
         extra: &str,
-        files: &[PathBuf],
+        local: &mut local_lean::LocalLean<'_>,
     ) -> Result<Vec<String>, Error> {
-        let lean = self.lean_dir();
-        let mut local = local_lean::LocalLean::new(&lean, files);
         let digests = blocks
             .iter()
             .map(|b| local.fingerprint(&b.imports))

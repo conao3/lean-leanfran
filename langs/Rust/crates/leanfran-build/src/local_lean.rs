@@ -1,4 +1,4 @@
-use crate::{sha_hex, syntax::normalize_path, Error};
+use crate::{collect_user_files, sha_hex, syntax::normalize_path, Error};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
@@ -23,10 +23,12 @@ pub(super) fn packages_dir(root: &Path) -> Option<PathBuf> {
 
 pub(super) struct LocalLean<'a> {
     root: &'a Path,
-    files: &'a [PathBuf],
+    files: Vec<PathBuf>,
     packages: Vec<(PathBuf, Option<LakeConfig>)>,
+    copied_dirs: Vec<(PathBuf, PathBuf)>,
+    overrides_present: bool,
     config_hashes: Vec<String>,
-    local_git_manifest_hash: Option<String>,
+    fallback_fingerprint: Option<String>,
     modules: HashMap<PathBuf, (String, Vec<PathBuf>)>,
 }
 
@@ -35,6 +37,7 @@ pub(super) struct LocalLean<'a> {
 struct LakeConfig {
     #[serde(default)]
     src_dir: PathBuf,
+    lake_dir: Option<PathBuf>,
     #[serde(default, rename = "lean_lib")]
     libs: Vec<Library>,
     #[serde(default, rename = "require")]
@@ -56,7 +59,10 @@ struct DependencySource {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct LakeManifest {
+    packages_dir: Option<PathBuf>,
+    lake_dir: Option<PathBuf>,
     packages: Vec<LockedPackage>,
 }
 
@@ -64,6 +70,7 @@ struct LakeManifest {
 #[serde(tag = "type", rename_all = "lowercase")]
 enum LockedPackage {
     Git {
+        name: String,
         url: String,
     },
     #[serde(rename_all = "camelCase")]
@@ -77,6 +84,15 @@ enum LockedPackage {
     },
     #[serde(other)]
     Other,
+}
+
+impl LockedPackage {
+    fn name(&self) -> Option<&str> {
+        match self {
+            Self::Git { name, .. } | Self::Path { name, .. } => Some(name),
+            Self::Other => None,
+        }
+    }
 }
 
 fn reachable_paths<'a>(
@@ -100,9 +116,14 @@ fn is_local_git_url(url: &str) -> bool {
     url.starts_with("file://") || Path::new(url).is_absolute() || !url.contains(':')
 }
 
-fn hash_config(root: &Path, file: &Path, hashes: &mut Vec<String>) -> Option<String> {
+fn hash_config(
+    root: &Path,
+    file: &Path,
+    identity: &Path,
+    hashes: &mut Vec<String>,
+) -> Option<String> {
     let text = fs::read_to_string(file).ok()?;
-    let relative = normalize_path(file.strip_prefix(root).unwrap_or(file));
+    let relative = normalize_path(identity.strip_prefix(root).unwrap_or(identity));
     hashes.push(sha_hex(&[relative.as_bytes(), text.as_bytes()]));
     Some(text)
 }
@@ -110,21 +131,18 @@ fn hash_config(root: &Path, file: &Path, hashes: &mut Vec<String>) -> Option<Str
 fn package_config(
     root: &Path,
     dir: &Path,
+    identity: &Path,
     file: Option<PathBuf>,
     hashes: &mut Vec<String>,
 ) -> Option<LakeConfig> {
-    let file = file.map_or_else(
-        || {
-            let lean = dir.join("lakefile.lean");
-            if lean.is_file() {
-                lean
-            } else {
-                dir.join("lakefile.toml")
-            }
-        },
-        |file| dir.join(file),
-    );
-    let text = hash_config(root, &file, hashes)?;
+    let file = file.unwrap_or_else(|| {
+        if dir.join("lakefile.lean").is_file() {
+            PathBuf::from("lakefile.lean")
+        } else {
+            PathBuf::from("lakefile.toml")
+        }
+    });
+    let text = hash_config(root, &dir.join(&file), &identity.join(&file), hashes)?;
     if file.extension().is_some_and(|ext| ext == "toml") {
         toml::from_str(&text).ok()
     } else {
@@ -194,12 +212,17 @@ fn matches_glob(module: &Path, glob: &str) -> bool {
 }
 
 impl<'a> LocalLean<'a> {
-    pub(super) fn new(root: &'a Path, files: &'a [PathBuf]) -> Self {
+    pub(super) fn new(root: &'a Path, mut files: Vec<PathBuf>) -> Self {
         let mut config_hashes = Vec::new();
-        let config = package_config(root, root, None, &mut config_hashes);
+        let config = package_config(root, root, root, None, &mut config_hashes);
         let mut packages = vec![(root.to_path_buf(), config)];
-        let manifest = hash_config(root, &root.join("lake-manifest.json"), &mut config_hashes);
-        let mut local_git_manifest_hash = None;
+        let manifest_file = root.join("lake-manifest.json");
+        let manifest = hash_config(root, &manifest_file, &manifest_file, &mut config_hashes);
+        let manifest_hash = config_hashes.last().cloned();
+        let mut fallback_fingerprint = None;
+        let mut copied_dirs = Vec::new();
+        let mut extra_files = Vec::new();
+        let mut overrides_present = false;
         if let Ok(canonical_root) = root.canonicalize() {
             let mut visited = BTreeSet::from([root.to_path_buf()]);
             let mut local_dir = |path: PathBuf| {
@@ -209,38 +232,95 @@ impl<'a> LocalLean<'a> {
                     .then_some(dep)
             };
             if let Some(manifest) = manifest {
-                if let Ok(manifest) = serde_json::from_str::<LakeManifest>(&manifest) {
-                    if manifest.packages.iter().any(
-                        |entry| matches!(entry, LockedPackage::Git { url } if is_local_git_url(url)),
-                    ) {
-                        local_git_manifest_hash = config_hashes.last().cloned();
+                if let Ok(mut manifest) = serde_json::from_str::<LakeManifest>(&manifest) {
+                    let lake_dir = packages[0]
+                        .1
+                        .as_ref()
+                        .and_then(|cfg| cfg.lake_dir.as_deref())
+                        .or(manifest.lake_dir.as_deref())
+                        .unwrap_or(Path::new(".lake"));
+                    let overrides = root.join(lake_dir).join("package-overrides.json");
+                    overrides_present = !matches!(overrides.try_exists(), Ok(false));
+                    if let Some(text) =
+                        hash_config(root, &overrides, &overrides, &mut config_hashes)
+                    {
+                        extra_files.push(overrides);
+                        fallback_fingerprint = config_hashes.last().cloned();
+                        if let Ok(overrides) = serde_json::from_str::<LakeManifest>(&text) {
+                            for entry in overrides.packages {
+                                if let Some(name) = entry.name() {
+                                    manifest
+                                        .packages
+                                        .retain(|locked| locked.name() != Some(name));
+                                    manifest.packages.push(entry);
+                                }
+                            }
+                        }
                     }
+                    if manifest.packages.iter().any(
+                        |entry| matches!(entry, LockedPackage::Git { url, .. } if is_local_git_url(url)),
+                    ) {
+                        fallback_fingerprint = match (manifest_hash, fallback_fingerprint) {
+                            (Some(manifest), Some(overrides)) => {
+                                Some(sha_hex(&[manifest.as_bytes(), overrides.as_bytes()]))
+                            }
+                            (manifest, overrides) => manifest.or(overrides),
+                        };
+                    }
+                    let packages_dir = root.join(
+                        manifest
+                            .packages_dir
+                            .unwrap_or_else(|| lake_dir.join("packages")),
+                    );
                     let mut locked = Vec::new();
                     for entry in manifest.packages {
                         if let LockedPackage::Path {
                             name,
                             dir,
-                            copy: false,
+                            copy,
                             config_file,
                             manifest_file,
                         } = entry
                         {
-                            let Some(dir) = local_dir(root.join(dir)) else {
-                                continue;
+                            let (dir, identity) = if copy {
+                                let identity = root.join(dir);
+                                let materialized = packages_dir.join(&name);
+                                let dir = if materialized.is_dir() {
+                                    materialized
+                                } else {
+                                    identity.clone()
+                                };
+                                let nested_packages = self::packages_dir(&dir);
+                                collect_user_files(
+                                    &dir,
+                                    &dir,
+                                    nested_packages.as_deref(),
+                                    &mut extra_files,
+                                );
+                                copied_dirs.push((dir.clone(), identity.clone()));
+                                (dir, identity)
+                            } else {
+                                let Some(dir) = local_dir(root.join(dir)) else {
+                                    continue;
+                                };
+                                (dir.clone(), dir)
                             };
                             let mut hashes = Vec::new();
-                            let config = package_config(root, &dir, config_file, &mut hashes);
+                            let config =
+                                package_config(root, &dir, &identity, config_file, &mut hashes);
                             if let Some(manifest_file) = manifest_file {
-                                hash_config(root, &dir.join(manifest_file), &mut hashes);
+                                hash_config(
+                                    root,
+                                    &dir.join(&manifest_file),
+                                    &identity.join(&manifest_file),
+                                    &mut hashes,
+                                );
                             }
                             locked.push((name, dir, config, hashes));
                         }
                     }
                     // Overrides can change the requirements of the locked packages.
-                    let reachable = if matches!(
-                        root.join(".lake/package-overrides.json").try_exists(),
-                        Ok(false)
-                    ) {
+                    let reachable = if !overrides_present {
                         reachable_paths(
                             packages[0].1.as_ref(),
                             locked
@@ -275,8 +355,9 @@ impl<'a> LocalLean<'a> {
                         .filter_map(Requirement::path)
                         .filter_map(|dep| {
                             let dep = local_dir(dir.join(dep))?;
-                            let config = package_config(root, &dep, None, &mut config_hashes);
-                            hash_config(root, &dep.join("lake-manifest.json"), &mut config_hashes);
+                            let config = package_config(root, &dep, &dep, None, &mut config_hashes);
+                            let manifest = dep.join("lake-manifest.json");
+                            hash_config(root, &manifest, &manifest, &mut config_hashes);
                             Some((dep, config))
                         })
                         .collect();
@@ -285,61 +366,72 @@ impl<'a> LocalLean<'a> {
                 }
             }
         }
+        files.extend(extra_files);
+        files.sort();
+        files.dedup();
         Self {
             root,
             files,
             packages,
+            copied_dirs,
+            overrides_present,
             config_hashes,
-            local_git_manifest_hash,
+            fallback_fingerprint,
             modules: HashMap::new(),
         }
     }
 
-    fn resolve(&self, path: &Path) -> Option<PathBuf> {
-        for (package, config) in &self.packages {
-            let Some(config) = config else {
-                // Executable Lake configurations cannot be evaluated on an offline cache hit.
-                if let Some(file) = self
-                    .files
-                    .iter()
-                    .find(|f| f.starts_with(package) && f.ends_with(path))
-                {
-                    return Some(file.clone());
+    pub(super) fn files(&self) -> &[PathBuf] {
+        &self.files
+    }
+
+    fn resolve(&self, path: &Path) -> impl Iterator<Item = PathBuf> + '_ {
+        let path = path.to_path_buf();
+        self.packages
+            .iter()
+            .filter_map(move |(package, config)| {
+                let Some(config) = config else {
+                    // Executable Lake configurations cannot be evaluated on an offline cache hit.
+                    return self
+                        .files
+                        .iter()
+                        .find(|f| f.starts_with(package) && f.ends_with(&path))
+                        .cloned();
+                };
+                // Lake searches the workspace's own libraries in reverse declaration order.
+                let library = config.libs.iter().rev().find(|lib| lib.builds(&path))?;
+                let dir = package.join(&config.src_dir).join(&library.src_dir);
+                // The file scan keeps the path through symlinks, even for targets outside lean/.
+                let source = dir.join(&path);
+                if self.files.binary_search(&source).is_ok() {
+                    return Some(source);
                 }
-                continue;
-            };
-            // Lake searches the workspace's own libraries in reverse declaration order.
-            let Some(library) = config.libs.iter().rev().find(|lib| lib.builds(path)) else {
-                continue;
-            };
-            let dir = package.join(&config.src_dir).join(&library.src_dir);
-            // The file scan keeps the path through symlinks, even for targets outside lean/.
-            let source = dir.join(path);
-            if self.files.binary_search(&source).is_ok() {
-                return Some(source);
-            }
-            let dir = dir.canonicalize().ok()?;
-            let root = self.root.canonicalize().ok()?;
-            let source = self.root.join(dir.strip_prefix(root).ok()?).join(path);
-            return self
-                .files
-                .binary_search(&source)
-                .ok()
-                .map(|i| self.files[i].clone());
-        }
-        None
+                let dir = dir.canonicalize().ok()?;
+                let root = self.root.canonicalize().ok()?;
+                let source = self.root.join(dir.strip_prefix(root).ok()?).join(&path);
+                self.files
+                    .binary_search(&source)
+                    .ok()
+                    .map(|i| self.files[i].clone())
+            })
+            .take(if self.overrides_present {
+                usize::MAX
+            } else {
+                1
+            })
     }
 
     pub(super) fn fingerprint(&mut self, imports: &[String]) -> Result<Option<String>, Error> {
         let mut pending: Vec<_> = imports
             .iter()
-            .filter_map(|m| module_path(&mut m.trim()).and_then(|p| self.resolve(&p)))
+            .filter_map(|m| module_path(&mut m.trim()))
+            .flat_map(|p| self.resolve(&p))
             .collect();
         if pending.is_empty() {
             return Ok(if imports.is_empty() {
                 None
             } else {
-                self.local_git_manifest_hash.clone()
+                self.fallback_fingerprint.clone()
             });
         }
         let mut seen = BTreeSet::new();
@@ -352,9 +444,13 @@ impl<'a> LocalLean<'a> {
                     .map_err(|e| Error::new(format!("{}: {e}", path.display())))?;
                 let deps = header_imports(&source)
                     .into_iter()
-                    .filter_map(|p| self.resolve(&p))
+                    .flat_map(|p| self.resolve(&p))
                     .collect();
-                let rel = normalize_path(path.strip_prefix(self.root).unwrap_or(&path));
+                let identity = self.copied_dirs.iter().find_map(|(dir, identity)| {
+                    path.strip_prefix(dir).ok().map(|p| identity.join(p))
+                });
+                let identity = identity.as_deref().unwrap_or(&path);
+                let rel = normalize_path(identity.strip_prefix(self.root).unwrap_or(identity));
                 self.modules.insert(
                     path.clone(),
                     (sha_hex(&[rel.as_bytes(), source.as_bytes()]), deps),
@@ -363,7 +459,11 @@ impl<'a> LocalLean<'a> {
             pending.extend(self.modules[&path].1.iter().cloned());
         }
         let mut hash = Sha256::new();
-        for path in seen {
+        let mut modules: Vec<_> = seen.into_iter().collect();
+        if !self.copied_dirs.is_empty() {
+            modules.sort_by_key(|path| &self.modules[path].0);
+        }
+        for path in modules {
             hash.update(self.modules[&path].0.as_bytes());
         }
         for config in &self.config_hashes {

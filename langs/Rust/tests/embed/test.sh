@@ -197,6 +197,31 @@ printf 'def dependencyValue : UInt32 := 1\n' > "$removed_imports/lean/replacemen
 test "$(cargo run -q --manifest-path "$removed_imports/Cargo.toml")" = 12
 echo "embed-test: Rust tracks the active provider even when the removed provider remains locked"
 
+copied_imports=test-out/fixtures/copied-imports
+rm -rf "$copied_imports"
+mkdir -p "$copied_imports"
+cp -r tests/embed/fixtures/local-imports/. "$copied_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$copied_imports/"
+copied_lean="$copied_imports/lean"
+sed '/^path = "dep"$/a copy = true' "$copied_lean/lakefile.toml" > "$copied_lean/lakefile.new"
+mv "$copied_lean/lakefile.new" "$copied_lean/lakefile.toml"
+test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 11
+cp "$copied_lean/lake-manifest.json" "$copied_imports/manifest.before"
+printf 'def dependencyValue : UInt32 := 1\n' > "$copied_lean/dep/Dependency.lean"
+test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 11
+(cd "$copied_lean" && lake update dependency)
+cmp "$copied_imports/manifest.before" "$copied_lean/lake-manifest.json"
+if LEANFRAN_OFFLINE=1 cargo run -q --manifest-path "$copied_imports/Cargo.toml" > "$copied_imports/offline.log" 2>&1; then
+  echo "embed-test: a stale copy=true cache was accepted offline" >&2
+  cat "$copied_imports/offline.log" >&2
+  exit 1
+fi
+grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$copied_imports/offline.log"
+test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 12
+mv "$copied_lean/downloaded" "$copied_imports/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 12
+echo "embed-test: Rust tracks refreshed Lake copies and reuses the cache without the copied directory"
+
 override_imports=test-out/fixtures/override-imports
 rm -rf "$override_imports"
 mkdir -p "$override_imports"
@@ -206,8 +231,12 @@ override_lean="$override_imports/lean"
 mkdir "$override_lean/replacement"
 printf 'name = "replacement"\n\n[[lean_lib]]\nname = "Replacement"\n' > "$override_lean/replacement/lakefile.toml"
 printf 'def replacementValue : UInt32 := 0\n' > "$override_lean/replacement/Replacement.lean"
+mkdir "$override_lean/shadow"
+printf 'name = "shadow"\n\n[[lean_lib]]\nname = "Replacement"\n' > "$override_lean/shadow/lakefile.toml"
+printf 'def replacementValue : UInt32 := 99\n' > "$override_lean/shadow/Replacement.lean"
 cp "$override_lean/lakefile.toml" "$override_lean/lakefile.active"
 printf '\n[[require]]\nname = "replacement"\npath = "replacement"\n' >> "$override_lean/lakefile.toml"
+printf '\n[[require]]\nname = "shadow"\npath = "shadow"\n' >> "$override_lean/lakefile.toml"
 (cd "$override_lean" && lake update)
 mv "$override_lean/lakefile.active" "$override_lean/lakefile.toml"
 cp -r "$override_lean/dep" "$override_lean/override"
@@ -218,8 +247,9 @@ sed -e 's/import Dependency/import Replacement/' -e 's/dependencyValue/replaceme
 mv "$override_lean/local/Support.new" "$override_lean/local/Support.lean"
 test "$(cargo run -q --manifest-path "$override_imports/Cargo.toml")" = 11
 printf 'def replacementValue : UInt32 := 1\n' > "$override_lean/replacement/Replacement.lean"
-if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$override_imports/Cargo.toml" > "$override_imports/offline.log" 2>&1; then
+if LEANFRAN_OFFLINE=1 cargo run -q --manifest-path "$override_imports/Cargo.toml" > "$override_imports/offline.log" 2>&1; then
   echo "embed-test: a stale cache for a dependency reached via a Lake override was accepted offline" >&2
+  cat "$override_imports/offline.log" >&2
   exit 1
 fi
 grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$override_imports/offline.log"
