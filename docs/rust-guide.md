@@ -49,8 +49,12 @@ downloaded packages. The fingerprint includes the root and local packages' Lake 
 manifest files. Keep these files alongside the cache for offline builds.
 For Git dependencies from local repositories, a changed locked revision also invalidates
 blocks with explicit imports, even if the Git checkout is absent.
+For a path dependency with `copy = true`, leanfran fingerprints the copy that Lake builds.
+If the copy is absent, it uses the original path that Lake would copy from. Keep that source
+in sync with the copy used to generate the cache if you build offline without the copied directory.
 When there are no Lake package overrides and all requirements can be read from local TOML
 configurations, unused lockfile entries cannot claim an import from a package still in use.
+With overrides, leanfran fingerprints all matching local package candidates.
 Executable `lakefile.lean` configurations are not evaluated on a cache hit; their local imports
 are matched by path suffix instead.
 

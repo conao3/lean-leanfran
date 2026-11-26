@@ -197,6 +197,97 @@ printf 'def dependencyValue : UInt32 := 1\n' > "$removed_imports/lean/replacemen
 test "$(cargo run -q --manifest-path "$removed_imports/Cargo.toml")" = 12
 echo "embed-test: Rust tracks the active provider even when the removed provider remains locked"
 
+copied_imports=test-out/fixtures/copied-imports
+rm -rf "$copied_imports"
+mkdir -p "$copied_imports"
+cp -r tests/embed/fixtures/local-imports/. "$copied_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$copied_imports/"
+copied_lean="$copied_imports/lean"
+sed -e 's/"dependency"/"my-lib"/' -e '/^path = "dep"$/a copy = true' "$copied_lean/lakefile.toml" > "$copied_lean/lakefile.new"
+mv "$copied_lean/lakefile.new" "$copied_lean/lakefile.toml"
+sed 's/"dependency"/"my-lib"/' "$copied_lean/dep/lakefile.toml" > "$copied_lean/dep/lakefile.new"
+mv "$copied_lean/dep/lakefile.new" "$copied_lean/dep/lakefile.toml"
+test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 11
+test -f "$copied_lean/downloaded/my-lib/Dependency.lean"
+cp "$copied_lean/lake-manifest.json" "$copied_imports/manifest.before"
+printf 'def dependencyValue : UInt32 := 1\n' > "$copied_lean/dep/Dependency.lean"
+test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 11
+(cd "$copied_lean" && lake update my-lib)
+cmp "$copied_imports/manifest.before" "$copied_lean/lake-manifest.json"
+if LEANFRAN_OFFLINE=1 cargo run -q --manifest-path "$copied_imports/Cargo.toml" > "$copied_imports/offline.log" 2>&1; then
+  echo "embed-test: a stale copy=true cache was accepted offline" >&2
+  cat "$copied_imports/offline.log" >&2
+  exit 1
+fi
+grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$copied_imports/offline.log"
+test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 12
+mv "$copied_lean/downloaded" "$copied_imports/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 12
+echo "embed-test: Rust tracks refreshed Lake copies and reuses the cache without the copied directory"
+
+for child_copy in false true; do
+  nested_imports="test-out/fixtures/copied-parent-$child_copy"
+  rm -rf "$nested_imports"
+  mkdir -p "$nested_imports"
+  cp -r tests/embed/fixtures/local-imports/. "$nested_imports/"
+  cp "$local_imports/"{Cargo.toml,build.rs} "$nested_imports/"
+  nested_lean="$nested_imports/lean"
+  sed '/^path = "dep"$/a copy = true' "$nested_lean/lakefile.toml" > "$nested_lean/lakefile.new"
+  mv "$nested_lean/lakefile.new" "$nested_lean/lakefile.toml"
+  mkdir "$nested_lean/dep/child"
+  printf '\n[[require]]\nname = "child"\npath = "child"\ncopy = %s\n' "$child_copy" >> "$nested_lean/dep/lakefile.toml"
+  printf 'name = "child"\n\n[[lean_lib]]\nname = "Child"\n' > "$nested_lean/dep/child/lakefile.toml"
+  printf 'import Child\ndef dependencyValue : UInt32 := childValue\n' > "$nested_lean/dep/Dependency.lean"
+  printf 'def childValue : UInt32 := 0\n' > "$nested_lean/dep/child/Child.lean"
+  test "$(cargo run -q --manifest-path "$nested_imports/Cargo.toml")" = 11
+  printf 'def childValue : UInt32 := 1\n' > "$nested_lean/dep/child/Child.lean"
+  (cd "$nested_lean" && lake update)
+  test "$(cargo run -q --manifest-path "$nested_imports/Cargo.toml")" = 12
+  mv "$nested_lean/downloaded" "$nested_imports/downloaded"
+  test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$nested_imports/Cargo.toml")" = 12
+done
+echo "embed-test: Rust tracks ordinary and copied path dependencies of a copied parent"
+
+sibling_imports=test-out/fixtures/copied-sibling
+rm -rf "$sibling_imports"
+mkdir -p "$sibling_imports"
+cp -r tests/embed/fixtures/local-imports/. "$sibling_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$sibling_imports/"
+sibling_lean="$sibling_imports/lean"
+sed '/^path = "dep"$/a copy = true' "$sibling_lean/lakefile.toml" > "$sibling_lean/lakefile.new"
+mv "$sibling_lean/lakefile.new" "$sibling_lean/lakefile.toml"
+mkdir -p "$sibling_lean/sibling-src/child"
+printf '\n[[require]]\nname = "sibling"\npath = "sibling-src"\ncopy = true\n' >> "$sibling_lean/lakefile.toml"
+printf 'name = "sibling"\n' > "$sibling_lean/sibling-src/lakefile.toml"
+printf '\n[[require]]\nname = "child"\npath = "../sibling/child"\n' >> "$sibling_lean/dep/lakefile.toml"
+printf 'name = "child"\n\n[[lean_lib]]\nname = "Child"\n' > "$sibling_lean/sibling-src/child/lakefile.toml"
+printf 'import Child\ndef dependencyValue : UInt32 := childValue\n' > "$sibling_lean/dep/Dependency.lean"
+printf 'def childValue : UInt32 := 0\n' > "$sibling_lean/sibling-src/child/Child.lean"
+test "$(cargo run -q --manifest-path "$sibling_imports/Cargo.toml")" = 11
+mv "$sibling_lean/downloaded" "$sibling_imports/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$sibling_imports/Cargo.toml")" = 11
+echo "embed-test: offline cache reuse follows parent traversal into a sibling copy"
+
+copy_source_dir=test-out/fixtures/copied-source-dir
+rm -rf "$copy_source_dir"
+mkdir -p "$copy_source_dir"
+cp -r tests/embed/fixtures/local-imports/. "$copy_source_dir/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$copy_source_dir/"
+source_lean="$copy_source_dir/lean"
+sed '/^path = "dep"$/a copy = true' "$source_lean/lakefile.toml" > "$source_lean/lakefile.new"
+mv "$source_lean/lakefile.new" "$source_lean/lakefile.toml"
+mkdir "$source_lean/dep/LeanRustGen"
+printf '\n[[lean_lib]]\nname = "CopiedValue"\nsrcDir = "LeanRustGen"\n' >> "$source_lean/dep/lakefile.toml"
+printf 'import CopiedValue\ndef dependencyValue : UInt32 := copiedValue\n' > "$source_lean/dep/Dependency.lean"
+printf 'def copiedValue : UInt32 := 0\n' > "$source_lean/dep/LeanRustGen/CopiedValue.lean"
+test "$(cargo run -q --manifest-path "$copy_source_dir/Cargo.toml")" = 11
+printf 'def copiedValue : UInt32 := 1\n' > "$source_lean/dep/LeanRustGen/CopiedValue.lean"
+(cd "$source_lean" && lake update dependency)
+test "$(cargo run -q --manifest-path "$copy_source_dir/Cargo.toml")" = 12
+mv "$source_lean/downloaded" "$copy_source_dir/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$copy_source_dir/Cargo.toml")" = 12
+echo "embed-test: Rust tracks a copied package's own LeanRustGen source directory"
+
 override_imports=test-out/fixtures/override-imports
 rm -rf "$override_imports"
 mkdir -p "$override_imports"
@@ -206,8 +297,12 @@ override_lean="$override_imports/lean"
 mkdir "$override_lean/replacement"
 printf 'name = "replacement"\n\n[[lean_lib]]\nname = "Replacement"\n' > "$override_lean/replacement/lakefile.toml"
 printf 'def replacementValue : UInt32 := 0\n' > "$override_lean/replacement/Replacement.lean"
+mkdir "$override_lean/shadow"
+printf 'name = "shadow"\n\n[[lean_lib]]\nname = "Replacement"\n' > "$override_lean/shadow/lakefile.toml"
+printf 'def replacementValue : UInt32 := 99\n' > "$override_lean/shadow/Replacement.lean"
 cp "$override_lean/lakefile.toml" "$override_lean/lakefile.active"
 printf '\n[[require]]\nname = "replacement"\npath = "replacement"\n' >> "$override_lean/lakefile.toml"
+printf '\n[[require]]\nname = "shadow"\npath = "shadow"\n' >> "$override_lean/lakefile.toml"
 (cd "$override_lean" && lake update)
 mv "$override_lean/lakefile.active" "$override_lean/lakefile.toml"
 cp -r "$override_lean/dep" "$override_lean/override"
@@ -218,8 +313,9 @@ sed -e 's/import Dependency/import Replacement/' -e 's/dependencyValue/replaceme
 mv "$override_lean/local/Support.new" "$override_lean/local/Support.lean"
 test "$(cargo run -q --manifest-path "$override_imports/Cargo.toml")" = 11
 printf 'def replacementValue : UInt32 := 1\n' > "$override_lean/replacement/Replacement.lean"
-if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$override_imports/Cargo.toml" > "$override_imports/offline.log" 2>&1; then
+if LEANFRAN_OFFLINE=1 cargo run -q --manifest-path "$override_imports/Cargo.toml" > "$override_imports/offline.log" 2>&1; then
   echo "embed-test: a stale cache for a dependency reached via a Lake override was accepted offline" >&2
+  cat "$override_imports/offline.log" >&2
   exit 1
 fi
 grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$override_imports/offline.log"

@@ -239,8 +239,9 @@ impl Builder {
         if src.is_dir() {
             println!("cargo:rerun-if-changed={}", src.display());
         }
-        let mut lean_files = self.lean_user_files();
-        let keys = self.block_keys_with_files(&blocks, &self.csimp_key(), &lean_files)?;
+        let lean = self.lean_dir();
+        let mut local = local_lean::LocalLean::new(&lean, self.lean_user_files());
+        let keys = self.block_keys_with_local(&blocks, &self.csimp_key(), &mut local)?;
         let cache = self.cache_dir();
         let mut missing = Vec::new();
         for (i, b) in blocks.iter().enumerate() {
@@ -271,12 +272,12 @@ impl Builder {
                 )));
             }
             self.generate(&blocks, &missing, &items)?;
-            lean_files = self.lean_user_files();
+            local = local_lean::LocalLean::new(&lean, self.lean_user_files());
         }
         if cache.is_dir() {
             println!("cargo:rerun-if-changed={}", cache.display());
         }
-        for f in lean_files {
+        for f in local.files() {
             println!("cargo:rerun-if-changed={}", f.display());
         }
         let doc_dir = self.out_dir.join("leanfran").join("doc");
@@ -483,9 +484,8 @@ impl Builder {
         let lean = self.lean_dir();
         if lean.is_dir() {
             let packages = local_lean::packages_dir(&lean);
-            collect_user_files(&lean, &lean, packages.as_deref(), &mut out);
+            collect_user_files(&lean, &lean, packages.as_deref(), true, &mut out);
         }
-        out.sort();
         out
     }
 
@@ -494,17 +494,20 @@ impl Builder {
         if blocks.iter().all(|b| b.imports.is_empty()) {
             return cache_keys(&self.crate_name, blocks, extra);
         }
-        self.block_keys_with_files(blocks, extra, &self.lean_user_files())
+        let lean = self.lean_dir();
+        self.block_keys_with_local(
+            blocks,
+            extra,
+            &mut local_lean::LocalLean::new(&lean, self.lean_user_files()),
+        )
     }
 
-    fn block_keys_with_files(
+    fn block_keys_with_local(
         &self,
         blocks: &[Block],
         extra: &str,
-        files: &[PathBuf],
+        local: &mut local_lean::LocalLean<'_>,
     ) -> Result<Vec<String>, Error> {
-        let lean = self.lean_dir();
-        let mut local = local_lean::LocalLean::new(&lean, files);
         let digests = blocks
             .iter()
             .map(|b| local.fingerprint(&b.imports))
@@ -1113,7 +1116,13 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mut Vec<PathBuf>) {
+fn collect_user_files(
+    root: &Path,
+    dir: &Path,
+    packages: Option<&Path>,
+    skip_generated: bool,
+    out: &mut Vec<PathBuf>,
+) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -1121,8 +1130,8 @@ fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mu
         let p = e.path();
         let rel = p.strip_prefix(root).unwrap_or(&p);
         let first = rel.components().next().map(|c| c.as_os_str().to_owned());
-        if first.as_deref() == Some("LeanRustGen".as_ref())
-            || first.as_deref() == Some(".lake".as_ref())
+        if first.as_deref() == Some(".lake".as_ref())
+            || (skip_generated && first.as_deref() == Some("LeanRustGen".as_ref()))
         {
             continue;
         }
@@ -1130,7 +1139,7 @@ fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mu
             if packages.is_some_and(|packages| p.canonicalize().is_ok_and(|p| p == packages)) {
                 continue;
             }
-            collect_user_files(root, &p, packages, out);
+            collect_user_files(root, &p, packages, skip_generated, out);
         } else {
             out.push(p);
         }
