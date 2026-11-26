@@ -308,7 +308,7 @@ A `proved` obligation is a theorem about the translated definition. The trusted 
 
 ### Model test
 
-When the sources contain `LF_MODEL`, `sync` also writes `leanfran_model_test.c` and `leanfran_model_test.h` to the output directory and a `leanfran-model-test` target to `leanfran.mk`. The test calls the spec through the block's public C function and compares it with your C function. It enumerates boundary values first and then uses seeded random inputs, and it discards inputs that `requires` rejects. NaN results match each other, and other `double` results are compared bit for bit.
+When the sources contain `LF_MODEL`, `sync` also writes `leanfran_model_test.c` and `leanfran_model_test.h` to the output directory and a `leanfran-model-test` target to `leanfran.mk`. The test calls the spec through the block's public C function and compares it with your C function. It enumerates boundary values first and then uses seeded random inputs, and it discards inputs that `requires` rejects. The test fails when no generated input satisfies `requires`. NaN results match each other, and other `double` results are compared bit for bit.
 
 ```sh
 make -f leanfran/leanfran.mk leanfran-model-test
@@ -323,7 +323,7 @@ clamp.clamp [refines]: mismatch (seed 1, run 0)
   expected: 0, got: -1
 ```
 
-The target builds the test with your source files that contain the modeled functions, using `$(CC) -fno-wrapv -fsanitize=undefined,float-cast-overflow -fno-sanitize-recover=all` with `$(CFLAGS)` and `cflags` from `leanfran.toml`. UBSan stops the test at the first undefined behavior in your C code. A mismatch prints the seed, the run, the input, and both results. In both cases the test exits with status 1. `LEANFRAN_RUNS` sets the number of inputs (200 by default) and `LEANFRAN_SEED` sets the seed (1 by default). Including `leanfran.mk` in a Makefile leaves its default goal unchanged.
+The target builds the test with your source files that contain the modeled functions, using `$(CC) -fno-wrapv -fsanitize=undefined,float-cast-overflow -fno-sanitize-recover=all` with `$(CFLAGS)` and `cflags` from `leanfran.toml`. UBSan stops the test at the first undefined behavior in your C code. A mismatch prints the seed, the run, the input, and both results. In both cases the test program exits with status 1 and `make` reports the failure. `LEANFRAN_RUNS` sets the number of inputs (200 by default) and `LEANFRAN_SEED` sets the seed (1 by default). Including `leanfran.mk` in a Makefile leaves its default goal unchanged.
 
 Generated enums and tagged unions can be arguments and results. Every enum constructor is a boundary value. A tagged-union argument takes each constructor without proof fields, with boundary and random values for its fields. A function whose tagged-union argument has only constructors with proof fields is skipped. Results are compared by value: an enum by its constructor, and a tagged union by its tag and then by each field of the active constructor. A mismatch prints these values by their C names, such as `kinds_shape_rect{w=0, h=0, level=kinds_level_low}`. Payload fields can be the integer, `bool`, `double`, and generated enum types.
 

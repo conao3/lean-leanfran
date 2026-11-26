@@ -138,4 +138,19 @@ for cc in "${compilers[@]}"; do
         exit 1
     fi
 done
-echo "random: model tests passed, off-by-one implementations and a signed overflow failed"
+sed 's/^def negate (b : Bool) : Bool := !b$/&\ndef never (_x : Int32) : Bool := false\ndef same (x : Int32) : Int32 := x/' \
+    "$scratch/random.c" >"$source"
+cat >>"$source" <<'C'
+
+LF_MODEL("refines=same", "requires=never")
+int32_t vacuous(int32_t x) {
+    return x + 1;
+}
+C
+"$compiler" sync --dir "$app" >/dev/null
+for cc in "${compilers[@]}"; do
+    model_test 2 "$cc"
+    grep -Fxq 'random.vacuous: no input satisfied requires' "$scratch/err"
+done
+cp "$scratch/random.c" "$source"
+echo "random: model tests passed, off-by-one implementations, a signed overflow and an unsatisfiable requires failed"
