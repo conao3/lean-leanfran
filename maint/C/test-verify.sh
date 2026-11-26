@@ -166,6 +166,16 @@ grep -Fq '∀ («xs» : Array Int32) («d» : Int32), «xs».size < 2 ^ 64 → �
     "$app/.leanfran/workspace/LeanCModel/grade/File_src_sgrade_dc/Fn_first_or.lean"
 run 0 status
 
+ubsan=(-std=c11 -fno-wrapv -fsanitize=undefined -fno-sanitize-recover=all)
+cc "${ubsan[@]}" -I"$app/src" -I"$app/leanfran" -c "$app/src/shop.c" -o "$scratch/shop.o"
+contract_flags=$(PKG_CONFIG_PATH="$app/leanfran" pkg-config --cflags --libs leanfran)
+eval 'cc "${ubsan[@]}" -Wall -Wextra -Werror -I"$app/src" "$app/contract.c" "$scratch/shop.o" -o "$scratch/contract" '"$contract_flags"
+expected='large order: Invalid order.qty_le
+small order: valid
+line_total = 3600
+level 7: Invalid grade_level tag'
+test "$("$scratch/contract")" = "$expected"
+
 db="$app/compile_commands.json"
 cp "$db" "$scratch/compile_commands.json"
 cat >"$db" <<'JSON'

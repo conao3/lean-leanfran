@@ -99,11 +99,13 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 
 ## What you can build
 
-- **Proved functions in your application.** Keep an algorithm and its correctness proof together, then call the generated function from your application.
+- **Proved Lean functions in your application.** Keep an algorithm and its correctness proof together in Lean, then call the function generated from it.
 - **Validated data at the boundary.** Lean structures and inductive types map to host-language values. Supported proof fields become runtime checks for the invariants your proofs assume.
 - **Specifications for host-language code.** Bind supported Rust, Python, TypeScript, Clojure, PHP, Go, or C functions to Lean specifications, translate them to Lean, and check proof obligations. Each language guide describes its supported subset and verification tools.
 
 The backends share Lean's semantics and are tested against Lean's native C backend. Their supported types, externs and host-language integrations are documented in the [language guides](#documentation).
+
+Proofs are theorems about Lean definitions. The code that runs is generated from those definitions, and tests cover the step from proof to running code: each backend's emitter and runtime (for C, Lean's own C emitter and runtime and leanfran's conversion code) is tested against Lean's native C backend. A proof about a host-language function is a theorem about its translation to Lean, so the translator is outside the proof. The [C proof scope](docs/c-guide.md#c-subset-and-proof-scope) and the [Go proof scope](docs/go-guide.md#go-subset-and-proof-scope) list what their proofs trust.
 
 ## Get started
 
