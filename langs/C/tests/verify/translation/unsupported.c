@@ -148,3 +148,97 @@ lf_status overlap(const int32_t *xs LF_ARRAY(n), size_t n, int32_t *out) {
     *out = xs[0];
     return LF_OK;
 }
+
+lf_status byte_out(const int32_t *xs LF_ARRAY(n), size_t n, uint8_t *out) {
+    if (n == 0)
+        return LF_INVALID;
+    *out = 0;
+    if (xs[0] > 0)
+        *out = 1;
+    return LF_OK;
+}
+
+lf_status byte_array(const uint8_t *bs LF_ARRAY(n), size_t n, int32_t *out) {
+    *out = (int32_t)n;
+    return LF_OK;
+}
+
+lf_status sign_out(const int32_t *xs LF_ARRAY(n), size_t n, uint32_t *out) {
+    *out = (uint32_t)n;
+    return LF_OK;
+}
+
+lf_status enum_out(const uint32_t *xs LF_ARRAY(n), size_t n,
+                   shapes_geo_color *out) {
+    *out = shapes_geo_color_red;
+    return LF_OK;
+}
+
+lf_status enum_array(const shapes_geo_color *cs LF_ARRAY(n), size_t n,
+                     int32_t *out) {
+    *out = (int32_t)n;
+    return LF_OK;
+}
+
+lf_status struct_out(const int32_t *xs LF_ARRAY(n), size_t n,
+                     shapes_geo_point p, shapes_geo_point *out) {
+    *out = p;
+    return LF_OK;
+}
+
+lf_status struct_array(const shapes_geo_point *ps LF_ARRAY(n), size_t n,
+                       int32_t *out) {
+    *out = (int32_t)n;
+    return LF_OK;
+}
+
+lf_status union_out(const int64_t *xs LF_ARRAY(n), size_t n, shapes_geo_shape s,
+                    shapes_geo_shape *out) {
+    *out = s;
+    return LF_OK;
+}
+
+lf_status union_array(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
+                      shapes_geo_color *out) {
+    *out = shapes_geo_color_red;
+    return LF_OK;
+}
+
+lf_status byte_restrict(const int32_t *xs LF_ARRAY(n), size_t n,
+                        uint8_t *restrict out) {
+    *out = 1;
+    return LF_OK;
+}
+
+lf_status union_restrict(const shapes_geo_shape *restrict ss LF_ARRAY(n),
+                         size_t n, shapes_geo_color *out) {
+    *out = shapes_geo_color_red;
+    return LF_OK;
+}
+
+lf_status wide_out(const int32_t *xs LF_ARRAY(n), size_t n, int64_t *out) {
+    *out = (int64_t)n;
+    return LF_OK;
+}
+
+lf_status float_out(const int64_t *xs LF_ARRAY(n), size_t n, double *out) {
+    *out = 1.0;
+    return LF_OK;
+}
+
+lf_status bool_out(const int32_t *xs LF_ARRAY(n), size_t n, bool *out) {
+    *out = n > 0;
+    return LF_OK;
+}
+
+lf_status wide_enum(const int64_t *xs LF_ARRAY(n), size_t n,
+                    shapes_geo_color *out) {
+    *out = shapes_geo_color_red;
+    return LF_OK;
+}
+
+lf_status wide_struct(const int64_t *xs LF_ARRAY(n), size_t n,
+                      shapes_geo_point p, shapes_geo_point *out) {
+    *out = p;
+    return LF_OK;
+}

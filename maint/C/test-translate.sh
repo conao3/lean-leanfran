@@ -143,5 +143,7 @@ while read -r fn line reason; do
         exit 1
     fi
 done <unsupported.txt
-grep -Fxq "translated out_value" "$scratch/unsupported.out"
+for fn in out_value byte_restrict union_restrict wide_out float_out bool_out wide_enum wide_struct; do
+    grep -Fxq "translated $fn" "$scratch/unsupported.out"
+done
 echo "translate: $(wc -l <unsupported.txt) unsupported constructs reported with their positions"

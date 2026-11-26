@@ -49,4 +49,20 @@ theorem parcel_size.proof.refines : parcel_size.obligation.refines := by
   intro p
   cases p <;> rfl
 
+theorem keep_point.proof.refines : keep_point.obligation.refines := by
+  intro xs p h
+  rfl
+
+theorem point_one.proof.refines : point_one.obligation.refines := by
+  intro ps h
+  rfl
+
+theorem keep_parcel.proof.refines : keep_parcel.obligation.refines := by
+  intro xs p h
+  rfl
+
+theorem parcel_one.proof.refines : parcel_one.obligation.refines := by
+  intro ps h
+  rfl
+
 end LeanCModel.shop
