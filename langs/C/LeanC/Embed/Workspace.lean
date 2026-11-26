@@ -150,9 +150,10 @@ private def workspace (dir : FilePath) (config : Config) (blocks : Array Block) 
 
 private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models : Models)
     (scratch stage out : FilePath) :
-    IO (Std.HashMap String (Array Export)) := do
+    IO (Std.HashMap String (Array Export) × Array Desc) := do
   let ws ← loadWorkspace dir
   let mut exports : Std.HashMap String (Array Export) := {}
+  let mut types : Array Desc := #[]
   let mut symbols : Std.HashSet String := .ofList ["leanfran_init", "lf_project_initialized"]
   let mut modules := #[]
   let mut sources := #[]
@@ -161,7 +162,10 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models 
   for block in blocks do
     let target := {moduleName := Block.moduleName block.name, cPrefix := block.name : Target}
     let names ← match ← generate ws target scratch #[] {} {} true models.types with
-      | .ok (names, entries) => exports := exports.insert block.name entries; pure names
+      | .ok (names, entries, descs) =>
+        exports := exports.insert block.name entries
+        types := types ++ descs
+        pure names
       | .error error => throw <| IO.userError s!"{block.file}:{block.line}:1: error: {error}"
     for name in names do
       if symbols.contains name then
@@ -203,7 +207,7 @@ private unsafe def buildProject (dir : FilePath) (blocks : Array Block) (models 
     | throw <| IO.userError s!"could not create {archive}"
   IO.FS.rename library (stage / archive)
   writeLinkFiles stage "leanfran" archive releaseVersion flags.staticFlags out
-  return exports
+  return (exports, types)
 
 private def checkDirectory (root path : FilePath) : IO Unit := do
   let mut parent := path
@@ -227,10 +231,11 @@ private def publish (stage out backup : FilePath) : IO Unit := do
   if hadOutput then IO.FS.removeDirAll backup
 
 private def writeModelTest (root scratch stage out : FilePath) (config : Config) (blocks : Array Block)
-    (models : Models) (verified : Array FilePath) (exports : Std.HashMap String (Array Export)) : IO Unit := do
+    (models : Models) (verified : Array FilePath) (exports : Std.HashMap String (Array Export))
+    (types : Array Desc) : IO Unit := do
   let functions ← discoverModels root config blocks verified models.source scratch
   if functions.isEmpty then return
-  let (source, files) := modelTest functions blocks exports
+  let (source, files) := modelTest functions blocks exports types
   IO.FS.writeFile (stage / modelTestSource) source
   IO.FS.writeFile (stage / "leanfran_model_test.h") modelTestSupport
   let mk := stage / "leanfran.mk"
@@ -248,8 +253,8 @@ private unsafe def sync (root state : FilePath) (config : Config) (blocks : Arra
   let backup := transaction / "previous"
   try
     workspace dir config blocks models
-    let exports ← buildProject dir blocks models (transaction / "build") stage out
-    writeModelTest root (transaction / "build") stage out config blocks models verified exports
+    let (exports, types) ← buildProject dir blocks models (transaction / "build") stage out
+    writeModelTest root (transaction / "build") stage out config blocks models verified exports types
     IO.FS.writeFile (stage / manifestName) ((toJson manifest).pretty ++ "\n")
     publish stage out backup
   finally
