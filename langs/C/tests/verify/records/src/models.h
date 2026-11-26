@@ -24,10 +24,13 @@ def parcelSpec (p : Parcel) : Size := match p with
   | .envelope => .small
 
 def keepPoint (_ : Array Int32) (p : Point) : C.Status × Option Point :=
-(C.Status.ok, some p) def pointOne (_ : Array Point) : C.Status × Option Int32
-:= (C.Status.ok, some 1) def keepParcel (_ : Array UInt32) (p : Parcel) :
-C.Status × Option Parcel := (C.Status.ok, some p) def parcelOne (_ : Array
-Parcel) : C.Status × Option Int32 := (C.Status.ok, some 1)
+  (C.Status.ok, some p)
+def pointOne (_ : Array Point) : C.Status × Option Int32 :=
+  (C.Status.ok, some 1)
+def keepParcel (_ : Array UInt32) (p : Parcel) : C.Status × Option Parcel :=
+  (C.Status.ok, some p)
+def parcelOne (_ : Array Parcel) : C.Status × Option Int32 :=
+  (C.Status.ok, some 1)
 */
 #ifndef MODELS_H
 #define MODELS_H

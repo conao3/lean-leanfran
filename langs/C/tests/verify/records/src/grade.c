@@ -25,19 +25,21 @@ def levelAtOr (xs : Array Int32) (i : UInt32) : Level :=
   if h : i.toNat < xs.size then levelOf xs[i.toNat] else .high
 
 def posAt (xs : Array Int32) : C.Status × Option UInt8 :=
-  if h : 0 < xs.size then (C.Status.ok, some (if (0 : Int32) < xs[0] then 1 else
-0)) else (C.Status.invalid, none)
+  if h : 0 < xs.size then
+    (C.Status.ok, some (if (0 : Int32) < xs[0] then 1 else 0))
+  else (C.Status.invalid, none)
 
-def byteOne (_ : Array UInt8) : C.Status × Option Int32 := (C.Status.ok, some 1)
+def byteOne (_ : Array UInt8) : C.Status × Option Int32 :=
+  (C.Status.ok, some 1)
 
-def signOne (_ : Array Int32) : C.Status × Option UInt32 := (C.Status.ok, some
-1)
+def signOne (_ : Array Int32) : C.Status × Option UInt32 :=
+  (C.Status.ok, some 1)
 
-def lowLevel (_ : Array UInt32) : C.Status × Option Level := (C.Status.ok, some
-.low)
+def lowLevel (_ : Array UInt32) : C.Status × Option Level :=
+  (C.Status.ok, some .low)
 
-def levelOne (_ : Array Level) : C.Status × Option Int32 := (C.Status.ok, some
-1)
+def levelOne (_ : Array Level) : C.Status × Option Int32 :=
+  (C.Status.ok, some 1)
 */
 #include "grade.h"
 
