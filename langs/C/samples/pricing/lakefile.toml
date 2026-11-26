@@ -3,3 +3,4 @@ defaultTargets = ["Pricing"]
 
 [[lean_lib]]
 name = "Pricing"
+roots = ["Pricing.Core"]
