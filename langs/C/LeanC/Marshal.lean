@@ -11,11 +11,12 @@ def CType.converter : CType → String
   | .nat => "lf_nat"
   | .int => "lf_int"
   | .bytes => "lf_byte_array"
+  | .floats => "lf_float_array"
   | .unit => "lf_unit"
   | ty => s!"lf_{ty.cName}"
 
 def CType.ownsMemory : CType → Bool
-  | .string | .named _ | .nat | .int | .bytes => true
+  | .string | .named _ | .nat | .int | .bytes | .floats => true
   | _ => false
 
 def CType.box (abi : String) (expr : String) : String :=
@@ -161,7 +162,8 @@ def emitMarshalSupport (cPrefix : String) : String :=
       "        lf_str copy;\n        lf_status status = lf_copy_string(decimal, &copy, err);\n" ++
       "        lean_dec(decimal);\n        if (status != LF_OK) return status;\n" ++
       "        value.decimal = copy.ptr;\n    }\n    *out = value;\n    return LF_OK;\n}\n\n") ++
-  s!"extern {CType.bytes.toPrototype};\nextern {CType.bytes.fromPrototype};\n\n" ++
+  String.join ([CType.bytes, .floats].map fun ty =>
+    s!"extern {ty.toPrototype};\nextern {ty.fromPrototype};\n") ++ "\n" ++
   String.join ([CType.bool, .uint8, .uint16, .uint32, .uint64, .int8, .int16, .int32, .int64,
     .usize, .float, .float32, .char, .string, .unit].map emitPrimitive)
 

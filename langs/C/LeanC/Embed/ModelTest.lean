@@ -13,7 +13,7 @@ def modelTestBinary := "leanfran_model_test"
 
 private def boundaryType (boundary : String) : Option CType :=
   match CType.ofName boundary.toName with
-  | some .char | some .float32 | some .string | some .unit | some .nat | some .int | some .bytes => none
+  | some .char | some .float32 | some .string | some .unit | some .nat | some .int | some .bytes | some .floats => none
   | ty => ty
 
 private def arrayType (cPrefix : String) (elem : CType) : CType :=

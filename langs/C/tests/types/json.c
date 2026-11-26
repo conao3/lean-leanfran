@@ -1,6 +1,7 @@
 #include "public_types.h"
 #include <assert.h>
 #include <lean/mimalloc.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -46,6 +47,33 @@ static void check_codec(lf_error *err) {
     lf_free(json.ptr);
     public_types_schema_record_free(&decoded);
     public_types_schema_record_free(&value);
+}
+
+static void check_floats(lf_error *err) {
+    double raw[] = {1.5, -0.25, 0.1, 1e300, -0.0, INFINITY, -INFINITY, NAN};
+    size_t count = sizeof(raw) / sizeof(*raw);
+    lf_float_array values = {raw, count}, decoded;
+    lf_str json;
+    assert(public_types_float_array_to_json(&values, &json, err) == LF_OK);
+    assert(public_types_float_array_from_json(json.ptr, json.len, &decoded,
+                                              err) == LF_OK);
+    assert(decoded.len == count);
+    const size_t exact[] = {0, 1, 5, 6};
+    for (size_t i = 0; i < sizeof(exact) / sizeof(*exact); ++i) {
+        assert(decoded.items[exact[i]] == raw[exact[i]]);
+    }
+    assert(isnan(decoded.items[count - 1]));
+    lf_str again;
+    assert(public_types_float_array_to_json(&decoded, &again, err) == LF_OK);
+    assert(json.len == again.len && memcmp(json.ptr, again.ptr, json.len) == 0);
+    lf_free(again.ptr);
+    assert(fwrite(json.ptr, 1, json.len, stdout) == json.len);
+    assert(putchar('\n') != EOF);
+    lf_float_array_free(&decoded);
+    lf_free(json.ptr);
+    const char invalid[] = "[1.5,\"one\"]";
+    assert(public_types_float_array_from_json(invalid, strlen(invalid),
+                                              &decoded, err) == LF_INVALID);
 }
 
 static void check_invariants(lf_error *err) {
@@ -116,6 +144,7 @@ int main(void) {
     assert(error.status == LF_NOT_INITIALIZED);
     assert(public_types_init(&error) == LF_OK);
     check_codec(&error);
+    check_floats(&error);
     check_invariants(&error);
     lf_error_clear(&error);
     return 0;

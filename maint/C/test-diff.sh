@@ -93,6 +93,7 @@ roots=Typed.mixed,Typed.checkMixed,Typed.tree,Typed.checkTree,Typed.color,Typed.
 roots+=,Typed.arrays,Typed.lists,Typed.bytes,Typed.naturals,Typed.integers,Typed.options
 roots+=,Checked.echo,Checked.batch,Schema.sample
 roots+=,Typed.multiple,Typed.checked,Typed.checkUnit,Typed.sampleArray,Typed.empty,Typed.positional
+roots+=,Typed.floats,Typed.floatSum,Typed.floatMake,Typed.samples
 "$compiler" generate --module-name PublicTypes --roots "$roots" --out-dir "$types"
 "$compiler" build --out-dir "$types"
 
@@ -110,6 +111,14 @@ rejected() {
 rejected 'C name collision: public_types_foo_bar' --roots Collision.fooBar,Collision.foo_bar
 rejected 'C name collision: public_types_collision_fields.foo_bar' --roots Collision.echo
 rejected 'unsupported parameter type' --roots Typed.unsupported
+not_constructor='the Lean runtime does not represent it as a constructor object'
+rejected "'Typed.taskGet' has an unsupported parameter type: unsupported type Task UInt8: $not_constructor" \
+    --roots Typed.taskGet
+rejected "'Typed.taskPure' has an unsupported result type: unsupported type Task UInt8: $not_constructor" \
+    --roots Typed.taskPure
+rejected "'Typed.thunkGet' has an unsupported parameter type: unsupported type Thunk UInt8: $not_constructor" \
+    --roots Typed.thunkGet
+rejected "unsupported type Task UInt8: $not_constructor (field Typed.Pending.task)" --roots Typed.pendingGet
 rejected 'Checked.Undecidable.proof has no Decidable instance' --roots Checked.bad
 
 renamed="$scratch/renamed"

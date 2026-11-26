@@ -114,7 +114,7 @@ private def primitiveType (ty : String) : Option String :=
     ("uint32_t", "UInt32"), ("uint64_t", "UInt64"), ("int8_t", "Int8"), ("int16_t", "Int16"),
     ("int32_t", "Int32"), ("int64_t", "Int64"), ("size_t", "USize"), ("float", "Float32"),
     ("double", "Float"), ("lf_str", "String"), ("lf_nat", "Nat"), ("lf_int", "Int"),
-    ("lf_byte_array", "ByteArray")].lookup ty
+    ("lf_byte_array", "ByteArray"), ("lf_float_array", "FloatArray")].lookup ty
 
 private structure FieldType where
   lean : String
@@ -172,7 +172,7 @@ private def constraint (field : String) (ty : FieldType) (text : String) :
     return (s!"{field}_{key}", s!"{lhs} {rel} ({number} : Int)")
   if key == "min_len" || key == "max_len" then
     let projection ← if ty.lean == "String" then pure "length"
-      else if ty.lean == "ByteArray" || ty.array.isSome then pure "size"
+      else if ty.lean == "ByteArray" || ty.lean == "FloatArray" || ty.array.isSome then pure "size"
       else throw s!"'{key}' requires a string or array field"
     if number < 0 then throw s!"'{key}' requires a nonnegative length"
     let rel := if key == "min_len" then "≥" else "≤"
