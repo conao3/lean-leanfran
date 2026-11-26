@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lean! checks beyond the tests of the crate: the cache is used without Lean, LEANFRAN_OFFLINE=1
 # builds from the cache, a wrong proof stops the build at the Rust file and line, and a block
-# missing from the cache is listed under LEANFRAN_OFFLINE=1.
+# missing from the cache is listed under LEANFRAN_OFFLINE=1. An unchanged build stays fresh.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
@@ -19,6 +19,17 @@ if [ -n "$written" ]; then
   exit 1
 fi
 echo "embed-test: cached build without leanfran and with LEANFRAN_OFFLINE=1"
+
+fresh_log=$(mktemp)
+if ! LEANFRAN_OFFLINE=1 cargo build -vv -p leanfran-embed-test > "$fresh_log" 2>&1 ||
+    ! grep -q "Fresh leanfran-embed-test " "$fresh_log"; then
+  echo "embed-test: the unchanged crate was not fresh" >&2
+  sed -n '/leanfran-embed-test/p' "$fresh_log" >&2
+  rm -f "$fresh_log"
+  exit 1
+fi
+rm -f "$fresh_log"
+echo "embed-test: an unchanged build stays fresh without a proof lockfile"
 
 fixture=test-out/fixtures/bad-proof
 rm -rf "$fixture"
@@ -57,6 +68,7 @@ if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$fixture/Cargo.toml" > "$f
 fi
 grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$fixture/offline.log"
 grep -q "src/lib.rs (crate::bad::" "$fixture/offline.log"
+grep -q "Restore the matching cache, or unset LEANFRAN_OFFLINE" "$fixture/offline.log"
 echo "embed-test: LEANFRAN_OFFLINE=1 lists the block missing from the cache"
 if cargo build -q --manifest-path "$fixture/Cargo.toml" > "$fixture/build.log" 2>&1; then
   echo "embed-test: the wrong proof was accepted" >&2

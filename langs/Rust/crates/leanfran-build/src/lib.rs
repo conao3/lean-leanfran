@@ -228,8 +228,10 @@ impl Builder {
         println!("cargo:rerun-if-env-changed=LEANFRAN_CLI");
         println!("cargo:rerun-if-env-changed=LEANFRAN_REQUIRE");
         let extracting = std::env::var("LEANFRAN_EXTRACTING").as_deref() == Ok("1");
+        let offline = std::env::var("LEANFRAN_OFFLINE").as_deref() == Ok("1");
         self.check_toolchain()?;
-        let (blocks, files) = self.scan()?;
+        let mut items = model::CrateItems::default();
+        let (blocks, files) = self.scan_blocks((!extracting).then_some(&mut items))?;
         for f in &files {
             println!("cargo:rerun-if-changed={}", f.display());
         }
@@ -250,7 +252,7 @@ impl Builder {
             }
         }
         if !missing.is_empty() && !extracting {
-            if std::env::var("LEANFRAN_OFFLINE").as_deref() == Ok("1") {
+            if offline {
                 let names: Vec<String> = missing
                     .iter()
                     .map(|&i| {
@@ -263,12 +265,12 @@ impl Builder {
                     })
                     .collect();
                 return Err(Error::new(format!(
-                    "leanfran-build: LEANFRAN_OFFLINE=1 and these lean! blocks are not in {}:\n{}",
+                    "leanfran-build: LEANFRAN_OFFLINE=1 and these lean! blocks are not in {}:\n{}\nRestore the matching cache, or unset LEANFRAN_OFFLINE and rebuild with the required Lean toolchain and leanfran compiler.",
                     cache.display(),
                     names.join("\n")
                 )));
             }
-            self.generate(&blocks, &keys, &missing)?;
+            self.generate(&blocks, &keys, &missing, &items)?;
         }
         if cache.is_dir() {
             println!("cargo:rerun-if-changed={}", cache.display());
@@ -276,21 +278,24 @@ impl Builder {
         for f in lean_files {
             println!("cargo:rerun-if-changed={}", f.display());
         }
-        println!("cargo:rerun-if-changed={}", self.lock_path().display());
         let doc_dir = self.out_dir.join("leanfran").join("doc");
         fs::create_dir_all(&doc_dir)?;
         if extracting {
             return Ok(());
         }
-        println!(
-            "cargo:rerun-if-changed={}",
-            self.model_dir()
-                .join("FunsExternal_Template.lean")
-                .display()
-        );
-        let offline = std::env::var("LEANFRAN_OFFLINE").as_deref() == Ok("1");
-        self.compile_opaque(&self.scan_items()?, offline)?;
-        self.verify(&blocks, &doc_dir)
+        if !items.models.is_empty() {
+            println!("cargo:rerun-if-changed={}", self.lock_path().display());
+        }
+        if !items.opaque.is_empty() {
+            println!(
+                "cargo:rerun-if-changed={}",
+                self.model_dir()
+                    .join("FunsExternal_Template.lean")
+                    .display()
+            );
+            self.compile_opaque(&items, offline)?;
+        }
+        self.verify(&blocks, &items, &doc_dir)
     }
 
     /// Generates the cache entries of the `blocks` that `select` accepts and that are not
@@ -308,7 +313,7 @@ impl Builder {
         if missing.is_empty() {
             return Ok(());
         }
-        self.generate(blocks, &keys, &missing)
+        self.generate(blocks, &keys, &missing, &self.scan_items()?)
     }
 
     fn check_toolchain(&self) -> Result<(), Error> {
@@ -325,18 +330,29 @@ impl Builder {
 
     /// The modelled functions, opaque functions, `use`s and item hashes of `src/**/*.rs`.
     pub fn scan_items(&self) -> Result<model::CrateItems, Error> {
+        let mut items = model::CrateItems::default();
+        self.visit_rust_files(|rel, ast| {
+            model::scan_file(rel, file_module(rel), ast, &mut items);
+            Ok(())
+        })?;
+        Ok(items)
+    }
+
+    fn visit_rust_files(
+        &self,
+        mut visit: impl FnMut(&str, &syn::File) -> Result<(), Error>,
+    ) -> Result<Vec<PathBuf>, Error> {
         let mut files = Vec::new();
         collect_rs(&self.manifest_dir.join("src"), &mut files)?;
         files.sort();
-        let mut items = model::CrateItems::default();
         for f in &files {
             let rel = normalize_path(f.strip_prefix(&self.manifest_dir).unwrap_or(f));
             let text = fs::read_to_string(f)?;
             let ast = syn::parse_file(&text)
                 .map_err(|e| Error::new(format!("leanfran-build: cannot parse {rel}: {e}")))?;
-            model::scan_file(&rel, file_module(&rel), &ast, &mut items);
+            visit(&rel, &ast)?;
         }
-        Ok(items)
+        Ok(files)
     }
 
     /// The current hashes of the specs: `sha256:<cache key>` of the blocks (without the
@@ -382,8 +398,12 @@ impl Builder {
         }
     }
 
-    fn verify(&self, blocks: &[Block], doc_dir: &Path) -> Result<(), Error> {
-        let items = self.scan_items()?;
+    fn verify(
+        &self,
+        blocks: &[Block],
+        items: &model::CrateItems,
+        doc_dir: &Path,
+    ) -> Result<(), Error> {
         if !items.errors.is_empty() {
             return Err(Error::new(format!(
                 "leanfran-build: invalid #[leanfran::model]:\n{}",
@@ -394,8 +414,8 @@ impl Builder {
             return Ok(());
         }
         let lock = lock::Lock::read(&self.lock_path()).map_err(Error::new)?;
-        let spec_hashes = self.spec_hashes(blocks, &items)?;
-        let states = verify::states(&items, &lock, &spec_hashes, &self.crate_ident());
+        let spec_hashes = self.spec_hashes(blocks, items)?;
+        let states = verify::states(items, &lock, &spec_hashes, &self.crate_ident());
         for m in &states {
             write_if_changed(&doc_dir.join(&m.doc_file), verify::doc_text(m).as_bytes())?;
         }
@@ -416,28 +436,33 @@ impl Builder {
 
     /// The `lean!` blocks of `src/**/*.rs` and the scanned files.
     pub fn scan(&self) -> Result<(Vec<Block>, Vec<PathBuf>), Error> {
-        let mut files = Vec::new();
-        collect_rs(&self.manifest_dir.join("src"), &mut files)?;
-        files.sort();
+        self.scan_blocks(None)
+    }
+
+    fn scan_blocks(
+        &self,
+        mut items: Option<&mut model::CrateItems>,
+    ) -> Result<(Vec<Block>, Vec<PathBuf>), Error> {
         let mut blocks = Vec::new();
-        for f in &files {
-            let rel = normalize_path(f.strip_prefix(&self.manifest_dir).unwrap_or(f));
-            let text = fs::read_to_string(f)?;
-            let ast = syn::parse_file(&text)
-                .map_err(|e| Error::new(format!("leanfran-build: cannot parse {rel}: {e}")))?;
+        let files = self.visit_rust_files(|rel, ast| {
+            let module = file_module(rel);
             let mut v = Scanner {
-                file: rel.clone(),
-                hash: file_hash(&rel),
-                module: file_module(&rel),
+                file: rel.to_owned(),
+                hash: file_hash(rel),
+                module: module.clone(),
                 blocks: Vec::new(),
                 error: None,
             };
-            v.visit_file(&ast);
+            v.visit_file(ast);
             if let Some(e) = v.error {
                 return Err(e);
             }
             blocks.extend(v.blocks);
-        }
+            if let Some(items) = items.as_deref_mut() {
+                model::scan_file(rel, module, ast, items);
+            }
+            Ok(())
+        })?;
         let mut seen: HashMap<Vec<String>, &Block> = HashMap::new();
         for b in &blocks {
             if let Some(o) = seen.insert(b.path.clone(), b) {
@@ -510,7 +535,13 @@ impl Builder {
         Ok(())
     }
 
-    fn generate(&self, blocks: &[Block], keys: &[String], missing: &[usize]) -> Result<(), Error> {
+    fn generate(
+        &self,
+        blocks: &[Block],
+        keys: &[String],
+        missing: &[usize],
+        items: &model::CrateItems,
+    ) -> Result<(), Error> {
         let model = self
             .lean_dir()
             .join("LeanRustGen")
@@ -694,7 +725,7 @@ impl Builder {
         }
         let mut live: BTreeSet<PathBuf> =
             keys.iter().map(|k| cache.join(format!("{k}.rs"))).collect();
-        for o in self.opaque_models(&self.scan_items()?)? {
+        for o in self.opaque_models(items)? {
             live.insert(cache.join(format!("{}.rs", o.key)));
         }
         prune_dir(&cache, &live)?;

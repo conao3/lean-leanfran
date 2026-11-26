@@ -58,6 +58,11 @@ Commit `.leanfran/cache/` and `lean/` (its `.gitignore` excludes `lean/.lake/`),
 `.leanfran/cache/**` to the crate's `include` when you publish it. The macro only includes the
 generated file, so rust-analyzer never runs Lean.
 
+If an offline build reports a missing cache entry, restore `.leanfran/cache/` from the
+same source revision. After editing a block or upgrading the generator, unset
+`LEANFRAN_OFFLINE`, rebuild with matching versions of Lean and the compiler, and commit
+the refreshed cache and Lean files.
+
 ## Quick start: a lake project
 
 ```
