@@ -35,6 +35,7 @@ while IFS= read -r -d '' path; do
     case "$path" in
         langs/Go/*) selected[C]=1 ;; # C compares schemas with Go.
         langs/PHP/* | langs/TypeScript/*) selected[Go]=1 ;; # Go checks PHP externs and TypeScript schemas.
+        langs/Python/LeanPython/RuntimeExterns.lean) selected[PHP]=1 ;; # PHP checks Python extern coverage.
     esac
 done
 

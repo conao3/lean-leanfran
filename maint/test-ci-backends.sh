@@ -17,6 +17,7 @@ test "$(bash maint/ci-backends.sh --all)" = "$all"
 test "$(bash maint/ci-backends.sh </dev/null)" = '[]'
 check '["Rust"]' langs/Rust/crates/example.rs
 check '["Python","Clojure"]' langs/Python/src/fixture.py maint/Clojure/test-diff.sh
+check '["Python","PHP"]' langs/Python/LeanPython/RuntimeExterns.lean
 check '["C"]' langs/C/support/leanfran.c
 check '["Go","C"]' langs/Go/LeanGo/Emit.lean
 check '["PHP","Go"]' langs/PHP/LeanPhp/RuntimeExterns.lean
