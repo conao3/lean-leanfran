@@ -196,3 +196,32 @@ test "$(cargo run -q --manifest-path "$removed_imports/Cargo.toml")" = 11
 printf 'def dependencyValue : UInt32 := 1\n' > "$removed_imports/lean/replacement/Dependency.lean"
 test "$(cargo run -q --manifest-path "$removed_imports/Cargo.toml")" = 12
 echo "embed-test: Rust tracks the active provider even when the removed provider remains locked"
+
+override_imports=test-out/fixtures/override-imports
+rm -rf "$override_imports"
+mkdir -p "$override_imports"
+cp -r tests/embed/fixtures/local-imports/. "$override_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$override_imports/"
+override_lean="$override_imports/lean"
+mkdir "$override_lean/replacement"
+printf 'name = "replacement"\n\n[[lean_lib]]\nname = "Replacement"\n' > "$override_lean/replacement/lakefile.toml"
+printf 'def replacementValue : UInt32 := 0\n' > "$override_lean/replacement/Replacement.lean"
+cp "$override_lean/lakefile.toml" "$override_lean/lakefile.active"
+printf '\n[[require]]\nname = "replacement"\npath = "replacement"\n' >> "$override_lean/lakefile.toml"
+(cd "$override_lean" && lake update)
+mv "$override_lean/lakefile.active" "$override_lean/lakefile.toml"
+cp -r "$override_lean/dep" "$override_lean/override"
+printf '\n[[require]]\nname = "replacement"\npath = "../replacement"\n' >> "$override_lean/override/lakefile.toml"
+mkdir -p "$override_lean/.lake"
+printf '%s\n' '{"version":"1.3.0","packages":[{"type":"path","name":"dependency","dir":"override","inherited":false,"configFile":"lakefile.toml"}]}' > "$override_lean/.lake/package-overrides.json"
+sed -e 's/import Dependency/import Replacement/' -e 's/dependencyValue/replacementValue/' "$override_lean/local/Support.lean" > "$override_lean/local/Support.new"
+mv "$override_lean/local/Support.new" "$override_lean/local/Support.lean"
+test "$(cargo run -q --manifest-path "$override_imports/Cargo.toml")" = 11
+printf 'def replacementValue : UInt32 := 1\n' > "$override_lean/replacement/Replacement.lean"
+if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$override_imports/Cargo.toml" > "$override_imports/offline.log" 2>&1; then
+  echo "embed-test: a stale cache for a dependency reached via a Lake override was accepted offline" >&2
+  exit 1
+fi
+grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$override_imports/offline.log"
+test "$(cargo run -q --manifest-path "$override_imports/Cargo.toml")" = 12
+echo "embed-test: Rust tracks locked path dependencies reached via Lake overrides"

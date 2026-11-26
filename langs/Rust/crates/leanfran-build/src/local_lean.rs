@@ -236,13 +236,20 @@ impl<'a> LocalLean<'a> {
                             locked.push((name, dir, config, hashes));
                         }
                     }
-                    // An opaque or absent configuration can require a path package transitively.
-                    let reachable = reachable_paths(
-                        packages[0].1.as_ref(),
-                        locked
-                            .iter()
-                            .map(|(name, _, config, _)| (name.as_str(), config.as_ref())),
-                    );
+                    // Overrides can change the requirements of the locked packages.
+                    let reachable = if matches!(
+                        root.join(".lake/package-overrides.json").try_exists(),
+                        Ok(false)
+                    ) {
+                        reachable_paths(
+                            packages[0].1.as_ref(),
+                            locked
+                                .iter()
+                                .map(|(name, _, config, _)| (name.as_str(), config.as_ref())),
+                        )
+                    } else {
+                        None
+                    };
                     let active: Vec<_> = locked
                         .iter()
                         .map(|(name, ..)| {
