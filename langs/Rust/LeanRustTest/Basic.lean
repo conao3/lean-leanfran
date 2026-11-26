@@ -13,6 +13,13 @@ def sumAcc (acc : Nat) : Nat → Nat
   | 0 => acc
   | n + 1 => sumAcc (acc + n + 1) n
 
+theorem sumAcc_eq (acc n : Nat) : sumAcc acc n = acc + sumTo n := by
+  induction n generalizing acc with
+  | zero => simp [sumAcc, sumTo]
+  | succ n ih =>
+    simp only [sumAcc, sumTo, ih]
+    omega
+
 def isEven : Nat → Bool
   | 0 => true
   | n + 1 => !isEven n
@@ -44,6 +51,10 @@ def arrSquares (n : Nat) : Array Nat := Id.run do
   return a
 
 def firstEven? (xs : List Nat) : Option Nat := xs.find? (· % 2 == 0)
+
+theorem firstEven?_eq_none_iff (xs : List Nat) :
+    firstEven? xs = none ↔ ∀ x ∈ xs, x % 2 ≠ 0 := by
+  simp [firstEven?]
 
 def u64wrap (a b : UInt64) : UInt64 := a * b + 7
 
