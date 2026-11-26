@@ -239,7 +239,7 @@ impl Builder {
         if src.is_dir() {
             println!("cargo:rerun-if-changed={}", src.display());
         }
-        let lean_files = self.lean_user_files();
+        let mut lean_files = self.lean_user_files();
         let keys = self.block_keys_with_files(&blocks, &self.csimp_key(), &lean_files)?;
         let cache = self.cache_dir();
         let mut missing = Vec::new();
@@ -270,7 +270,8 @@ impl Builder {
                     names.join("\n")
                 )));
             }
-            self.generate(&blocks, &keys, &missing, &items)?;
+            self.generate(&blocks, &missing, &items)?;
+            lean_files = self.lean_user_files();
         }
         if cache.is_dir() {
             println!("cargo:rerun-if-changed={}", cache.display());
@@ -313,7 +314,7 @@ impl Builder {
         if missing.is_empty() {
             return Ok(());
         }
-        self.generate(blocks, &keys, &missing, &self.scan_items()?)
+        self.generate(blocks, &missing, &self.scan_items()?)
     }
 
     fn check_toolchain(&self) -> Result<(), Error> {
@@ -538,7 +539,6 @@ impl Builder {
     fn generate(
         &self,
         blocks: &[Block],
-        keys: &[String],
         missing: &[usize],
         items: &model::CrateItems,
     ) -> Result<(), Error> {
@@ -644,6 +644,8 @@ impl Builder {
                 .current_dir(&lean),
             "lake env",
         )?;
+        // The first Lake build can create the manifest that locks the generated code's inputs.
+        let keys = self.block_keys(blocks, &self.csimp_key())?;
         let tmp = self.out_dir.join("leanfran").join("tmp");
         fs::create_dir_all(&tmp)?;
         let jobs: Vec<serde_json::Value> = missing

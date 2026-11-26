@@ -122,3 +122,30 @@ test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --man
 printf 'def nestedValue : UInt32 := 3\n' > "$local_imports/lean-src/Nested/Values.lean"
 test "$(cargo run -q --manifest-path "$manifest")" = 14
 echo "embed-test: changing a Lean import through a symlinked source directory regenerates Rust"
+
+mkdir "$local_imports/lean/new-dep"
+cp "$local_imports/lean/dep/"{Dependency.lean,lakefile.toml} "$local_imports/lean/new-dep/"
+sed 's/path = "dep"/path = "new-dep"/' "$local_imports/lean/lakefile.toml" > "$local_imports/lean/lakefile.new"
+mv "$local_imports/lean/lakefile.new" "$local_imports/lean/lakefile.toml"
+test "$(cargo run -q --manifest-path "$manifest")" = 14
+printf 'def dependencyValue : UInt32 := 2\n' > "$local_imports/lean/dep/Dependency.lean"
+if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$manifest" > "$local_imports/offline.log" 2>&1; then
+  echo "embed-test: a stale cache for the locked Lake dependency was accepted offline" >&2
+  exit 1
+fi
+grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$local_imports/offline.log"
+test "$(cargo run -q --manifest-path "$manifest")" = 15
+(cd "$local_imports/lean" && lake update dependency)
+test "$(cargo run -q --manifest-path "$manifest")" = 14
+echo "embed-test: Rust tracks the locked dependency before and after lake update"
+
+printf '\ndef identity (a : α) := a\n' >> "$local_imports/lean/new-dep/Dependency.lean"
+test "$(cargo run -q --manifest-path "$manifest")" = 14
+sed '/^name = "dependency"$/a leanOptions = { autoImplicit = false }' "$local_imports/lean/new-dep/lakefile.toml" > "$local_imports/lean/new-dep/lakefile.new"
+mv "$local_imports/lean/new-dep/lakefile.new" "$local_imports/lean/new-dep/lakefile.toml"
+if cargo build -q --manifest-path "$manifest" > "$local_imports/options.log" 2>&1; then
+  echo "embed-test: Rust reused a cache generated with old dependency options" >&2
+  exit 1
+fi
+grep -Fq 'Unknown identifier `α`' "$local_imports/options.log"
+echo "embed-test: changing a local dependency lakefile invalidates Rust"

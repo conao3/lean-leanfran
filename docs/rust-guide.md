@@ -44,7 +44,9 @@ block's cache and proof hashes; edits to unrelated Lean files, including proof f
 block does not import, do not. Regenerate the cache online and commit it alongside the source
 changes before building with `LEANFRAN_OFFLINE=1`.
 With `lakefile.toml`, imports are resolved against configured libraries and source directories,
-including Lake path dependencies under `lean/` but excluding downloaded packages.
+including Lake path dependencies under `lean/` as locked by `lake-manifest.json`, but excluding
+downloaded packages. The fingerprint includes the root and local packages' Lake configuration and
+manifest files. Keep these files alongside the cache for offline builds.
 Executable `lakefile.lean` configurations are not evaluated on a cache hit; their local imports
 are matched by path suffix instead.
 

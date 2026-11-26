@@ -25,7 +25,7 @@ pub(super) struct LocalLean<'a> {
     root: &'a Path,
     files: &'a [PathBuf],
     packages: Vec<(PathBuf, Option<LakeConfig>)>,
-    config_text: Option<String>,
+    config_hashes: Vec<String>,
     modules: HashMap<PathBuf, (String, Vec<PathBuf>)>,
 }
 
@@ -51,6 +51,58 @@ struct DependencySource {
     #[serde(rename = "type")]
     kind: String,
     dir: Option<PathBuf>,
+}
+
+#[derive(Deserialize)]
+struct LakeManifest {
+    packages: Vec<LockedPackage>,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum LockedPackage {
+    #[serde(rename_all = "camelCase")]
+    Path {
+        dir: PathBuf,
+        #[serde(default)]
+        copy: bool,
+        config_file: Option<PathBuf>,
+        manifest_file: Option<PathBuf>,
+    },
+    #[serde(other)]
+    Other,
+}
+
+fn hash_config(root: &Path, file: &Path, hashes: &mut Vec<String>) -> Option<String> {
+    let text = fs::read_to_string(file).ok()?;
+    let relative = normalize_path(file.strip_prefix(root).unwrap_or(file));
+    hashes.push(sha_hex(&[relative.as_bytes(), text.as_bytes()]));
+    Some(text)
+}
+
+fn package_config(
+    root: &Path,
+    dir: &Path,
+    file: Option<PathBuf>,
+    hashes: &mut Vec<String>,
+) -> Option<LakeConfig> {
+    let file = file.map_or_else(
+        || {
+            let lean = dir.join("lakefile.lean");
+            if lean.is_file() {
+                lean
+            } else {
+                dir.join("lakefile.toml")
+            }
+        },
+        |file| dir.join(file),
+    );
+    let text = hash_config(root, &file, hashes)?;
+    if file.extension().is_some_and(|ext| ext == "toml") {
+        toml::from_str(&text).ok()
+    } else {
+        None
+    }
 }
 
 impl Requirement {
@@ -116,39 +168,65 @@ fn matches_glob(module: &Path, glob: &str) -> bool {
 
 impl<'a> LocalLean<'a> {
     pub(super) fn new(root: &'a Path, files: &'a [PathBuf]) -> Self {
-        let toml = lakefile(root);
-        let config: Option<LakeConfig> = toml.as_ref().and_then(|text| toml::from_str(text).ok());
-        let config_text = toml.or_else(|| fs::read_to_string(root.join("lakefile.lean")).ok());
+        let mut config_hashes = Vec::new();
+        let config = package_config(root, root, None, &mut config_hashes);
         let mut packages = vec![(root.to_path_buf(), config)];
+        let manifest = hash_config(root, &root.join("lake-manifest.json"), &mut config_hashes);
         if let Ok(canonical_root) = root.canonicalize() {
             let mut visited = BTreeSet::from([root.to_path_buf()]);
-            let mut i = 0;
-            while let Some((dir, config)) = packages.get(i) {
-                let deps: Vec<_> = config
-                    .iter()
-                    .flat_map(|cfg| cfg.requires.iter().rev())
-                    .filter_map(Requirement::path)
-                    .filter_map(|dep| {
-                        let canonical = dir.join(dep).canonicalize().ok()?;
-                        let dep = root.join(canonical.strip_prefix(&canonical_root).ok()?);
-                        if !files.iter().any(|file| file.starts_with(&dep))
-                            || !visited.insert(dep.clone())
+            let mut local_dir = |path: PathBuf| {
+                let canonical = path.canonicalize().ok()?;
+                let dep = root.join(canonical.strip_prefix(&canonical_root).ok()?);
+                (files.iter().any(|file| file.starts_with(&dep)) && visited.insert(dep.clone()))
+                    .then_some(dep)
+            };
+            if let Some(manifest) = manifest {
+                if let Ok(manifest) = serde_json::from_str::<LakeManifest>(&manifest) {
+                    for entry in manifest.packages {
+                        if let LockedPackage::Path {
+                            dir,
+                            copy: false,
+                            config_file,
+                            manifest_file,
+                        } = entry
                         {
-                            return None;
+                            let Some(dir) = local_dir(root.join(dir)) else {
+                                continue;
+                            };
+                            let config =
+                                package_config(root, &dir, config_file, &mut config_hashes);
+                            if let Some(manifest_file) = manifest_file {
+                                hash_config(root, &dir.join(manifest_file), &mut config_hashes);
+                            }
+                            packages.push((dir, config));
                         }
-                        let config = lakefile(&dep).and_then(|text| toml::from_str(&text).ok());
-                        Some((dep, config))
-                    })
-                    .collect();
-                packages.extend(deps);
-                i += 1;
+                    }
+                }
+            } else {
+                // Before the first Lake build, use the declared paths until Lake writes its lock.
+                let mut i = 0;
+                while let Some((dir, config)) = packages.get(i) {
+                    let deps: Vec<_> = config
+                        .iter()
+                        .flat_map(|cfg| cfg.requires.iter().rev())
+                        .filter_map(Requirement::path)
+                        .filter_map(|dep| {
+                            let dep = local_dir(dir.join(dep))?;
+                            let config = package_config(root, &dep, None, &mut config_hashes);
+                            hash_config(root, &dep.join("lake-manifest.json"), &mut config_hashes);
+                            Some((dep, config))
+                        })
+                        .collect();
+                    packages.extend(deps);
+                    i += 1;
+                }
             }
         }
         Self {
             root,
             files,
             packages,
-            config_text,
+            config_hashes,
             modules: HashMap::new(),
         }
     }
@@ -220,8 +298,8 @@ impl<'a> LocalLean<'a> {
         for path in seen {
             hash.update(self.modules[&path].0.as_bytes());
         }
-        if let Some(text) = &self.config_text {
-            hash.update(text.as_bytes());
+        for config in &self.config_hashes {
+            hash.update(config.as_bytes());
         }
         Ok(Some(
             hash.finalize().iter().map(|b| format!("{b:02x}")).collect(),
