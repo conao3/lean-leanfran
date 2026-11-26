@@ -137,24 +137,22 @@ def Env.lean (env : Env) : Ty → String
   | .variant key => (env.variants[key]?.map (·.lean)).getD "Unit"
   | .members _ | .payload .. => "Unit"
 
-private def compatible : Ty → Ty → Bool
-  | .int _ _ w, .int _ _ v => w == v
-  | .enum _, .int _ _ 32 | .int _ _ 32, .enum _ => true
-  | a, b => a == b
-
-private def Env.members (env : Env) : Ty → Option (Array Ty)
-  | .record key => env.records[key]?.bind fun r => r.fields.toArray.mapM (·.2.ty)
+private partial def Env.leaves (env : Env) : Ty → Option (Array Ty)
+  | .int _ _ w => some #[.int "" false w]
+  | .enum _ => some #[.int "" false 32]
+  | .record key => env.records[key]?.bind fun r =>
+    (r.fields.toArray.mapM fun ((_, f) : String × Field) => f.ty >>= env.leaves).map Array.flatten
   | .variant key => env.variants[key]?.bind fun v => do
-    let fields ← (v.members.toArray.flatMap fun (_, m) => m.fields.toArray).mapM (·.2.ty)
-    return fields.push (← v.tag)
-  | _ => some #[]
-
-private partial def Env.contains (env : Env) (outer inner : Ty) : Bool :=
-  compatible outer inner || (env.members outer).all (·.any (env.contains · inner))
+    let fields := (v.members.toArray.flatMap fun (_, m) => m.fields.toArray).map (·.2.ty)
+    let leaves ← (fields.push v.tag).mapM (· >>= env.leaves)
+    return leaves.flatten
+  | ty => some #[ty]
 
 def Env.mayOverlap (env : Env) (a b : Ty) : Bool :=
   let char : Ty → Bool := fun | .int _ _ 8 => true | _ => false
-  char a || char b || env.contains a b || env.contains b a
+  char a || char b || match env.leaves a, env.leaves b with
+    | some xs, some ys => xs.any ys.contains
+    | _, _ => true
 
 private def boundaryOf (env : Env) (qual : String) (ty : Ty) : String :=
   if strip qual == "size_t" then "USize" else env.lean ty

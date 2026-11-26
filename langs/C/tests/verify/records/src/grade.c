@@ -6,6 +6,10 @@ inductive Level where
   | mid
   | high
 
+inductive Tone where
+  | warm
+  | cool
+
 def levelOf (x : Int32) : Level :=
   if x < 10 then .low else if x < 100 then .mid else .high
 
@@ -40,6 +44,9 @@ def lowLevel (_ : Array UInt32) : C.Status × Option Level :=
 
 def levelOne (_ : Array Level) : C.Status × Option Int32 :=
   (C.Status.ok, some 1)
+
+def toneLow (_ : Array Tone) : C.Status × Option Level :=
+  (C.Status.ok, some .low)
 */
 #include "grade.h"
 
@@ -126,5 +133,12 @@ LF_MODEL("refines=levelOne")
 lf_status level_one(const grade_level *restrict ls LF_ARRAY(n), size_t n,
                     int32_t *out) {
     *out = 1;
+    return LF_OK;
+}
+
+LF_MODEL("refines=toneLow")
+lf_status tone_low(const grade_tone *restrict ts LF_ARRAY(n), size_t n,
+                   grade_level *out) {
+    *out = grade_level_low;
     return LF_OK;
 }

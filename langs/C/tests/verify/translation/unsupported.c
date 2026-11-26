@@ -249,3 +249,15 @@ uint64_t self_init(uint64_t p0) {
         return p0;
     }
 }
+
+lf_status enum_pair(const shapes_geo_shade *hs LF_ARRAY(n), size_t n,
+                    shapes_geo_color *out) {
+    *out = shapes_geo_color_red;
+    return LF_OK;
+}
+
+lf_status struct_pair(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
+                      shapes_geo_point p, shapes_geo_point *out) {
+    *out = p;
+    return LF_OK;
+}

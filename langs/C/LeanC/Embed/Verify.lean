@@ -14,7 +14,7 @@ private def supportHeader := include_str "../../support/leanfran.h"
 def releaseVersion : String :=
   ((supportHeader.splitOn "#define LEANFRAN_VERSION \"")[1]!.splitOn "\"").head!
 
-def generatorVersion : String := "1"
+def generatorVersion : String := "2"
 
 def compilerKey : String := s!"{generatorVersion}/{Lean.versionString}"
 
