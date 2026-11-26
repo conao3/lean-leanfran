@@ -131,6 +131,8 @@ def emitPrimitive (ty : CType) : String := Id.run do
   | .string =>
     toBody := "    if (in->ptr == NULL && in->len != 0) {\n" ++
       "        return lf_set_error(err, LF_INVALID, \"String buffer is null\");\n    }\n" ++
+      "    if (in->ptr != NULL && !lf_valid_utf8(in->ptr, in->len)) {\n" ++
+      "        return lf_set_error(err, LF_INVALID, \"Invalid UTF-8 string\");\n    }\n" ++
       "    *out = lean_mk_string_from_bytes(in->ptr == NULL ? \"\" : in->ptr, in->len);\n    return LF_OK;\n"
     fromBody := "    return lf_copy_string(in, out, err);\n"
   | .char =>

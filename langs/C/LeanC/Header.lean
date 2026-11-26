@@ -45,7 +45,9 @@ def emitScalarWrapper (entry : Export) : String := Id.run do
     match entry.args[i]! with
     | .string =>
       lines := lines ++ #[s!"    if (a{i}.ptr == NULL && a{i}.len != 0) \{",
-        "        return lf_set_error(err, LF_INVALID, \"String buffer is null\");", "    }"]
+        "        return lf_set_error(err, LF_INVALID, \"String buffer is null\");", "    }",
+        s!"    if (a{i}.ptr != NULL && !lf_valid_utf8(a{i}.ptr, a{i}.len)) \{",
+        "        return lf_set_error(err, LF_INVALID, \"Invalid UTF-8 string\");", "    }"]
     | .char =>
       lines := lines ++ #[s!"    if (a{i} > 0x10ffff || (a{i} >= 0xd800 && a{i} <= 0xdfff)) \{",
         "        return lf_set_error(err, LF_INVALID, \"Invalid Unicode scalar value\");", "    }"]
@@ -156,17 +158,26 @@ private def emitInitializer (cPrefix init : String) : String :=
     "        return lf_set_error(err, init_error.status, message);\n" ++
     "    }\n    return LF_OK;\n}\n\n"
 
+def leanVersionCheck : String :=
+  "#include <lean/version.h>\n" ++
+    s!"#if LEAN_VERSION_MAJOR != {Lean.version.major} || LEAN_VERSION_MINOR != {Lean.version.minor} || " ++
+    s!"LEAN_VERSION_PATCH != {Lean.version.patch}\n" ++
+    s!"#error \"This file was generated for Lean {Lean.versionString}; compile it with that version's lean.h\"\n#endif\n\n"
+
 def emitProjectInitializer (init : String) : String :=
-  "#include \"leanfran.h\"\n#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n\n" ++
+  "#include \"leanfran.h\"\n#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n" ++
+    leanVersionCheck ++
     "extern lf_status lf_set_error(lf_error *, lf_status, const char *);\n" ++
     emitInitializer "leanfran" init
 
 def emitSource (mod : Name) (cPrefix : String) (exports : Array Export) (descs : Array Desc)
     (apis : Array JsonApi) (projectInit : Bool := false) : String :=
   s!"#include \"{cPrefix}.h\"\n" ++
-    "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <stdlib.h>\n#include <string.h>\n\n" ++
+    "#include <lean/lean.h>\n#include <pthread.h>\n#include <stdatomic.h>\n#include <stdlib.h>\n#include <string.h>\n" ++
+    leanVersionCheck ++
     "extern lf_status lf_set_error(lf_error *, lf_status, const char *);\n" ++
     "extern lf_status lf_copy_string(b_lean_obj_arg, lf_str *, lf_error *);\n" ++
+    "extern bool lf_valid_utf8(const char *, size_t);\n" ++
     "extern lf_status lf_copy_io_error(b_lean_obj_arg, lf_error *);\n" ++
     (if projectInit then
       "extern atomic_bool lf_project_initialized;\n" ++

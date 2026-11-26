@@ -29,7 +29,7 @@ private def makeManifest (config : Config) (blocks : Array Block) (models : Mode
   let hashes : Array BlockHash ← blocks.mapM fun block => do
     let sha256 ← sha256 (Json.compress (toJson (block.imports, block.source)))
     pure {name := block.name, file := block.file.toString, line := block.line, sha256}
-  let compiler ← sha256 s!"{releaseVersion}/{Lean.versionString}"
+  let compiler ← sha256 compilerKey
   let mut inputs := #[models.source]
   for path in models.inputs do
     inputs := inputs.push s!"{path}:{← sha256 (← IO.FS.readFile path)}"
@@ -74,7 +74,17 @@ private def blockPath (dir : FilePath) (block : Block) : FilePath :=
 private def imports (modules : Array String) : String :=
   String.join (modules.toList.map (fun name => s!"import {name}\n"))
 
+private def duplicateDefinition (blocks : Array Block) (line : String) : Option String := do
+  let [_, rest] := line.splitOn "import LeanfranBlocks." | none
+  let [later, rest] := rest.splitOn " failed, environment already contains '" | none
+  let [name, earlier] := rest.splitOn "' from LeanfranBlocks." | none
+  let later ← blocks.find? (·.name == later)
+  let earlier ← blocks.find? (·.name == earlier.trimAscii.toString)
+  return s!"{later.file}:{later.line}:1: error: Lean blocks '{earlier.name}' ({earlier.file}:{earlier.line}) " ++
+    s!"and '{later.name}' both define '{name}'; the definitions of all Lean blocks share one namespace"
+
 private def remapDiagnostic (dir : FilePath) (blocks : Array Block) (models : Models) (line : String) : String := Id.run do
+  if let some message := duplicateDefinition blocks line then return message
   for block in blocks do
     let generated := (blockPath "." block).toString
     let relative := (generated.drop 2).toString

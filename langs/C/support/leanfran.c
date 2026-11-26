@@ -30,6 +30,7 @@ void lf_thread_detach(void) {
 
 static pthread_mutex_t initialization_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool task_manager_started;
+static lf_error initialization_error;
 
 void lf_free(void *ptr) { free(ptr); }
 
@@ -72,6 +73,52 @@ lf_status lf_copy_string(b_lean_obj_arg value, lf_str *out, lf_error *err) {
     return LF_OK;
 }
 
+bool lf_valid_utf8(const char *ptr, size_t len) {
+    const unsigned char *bytes = (const unsigned char *)ptr;
+    size_t i = 0;
+    while (i < len) {
+        unsigned char c = bytes[i];
+        if (c < 0x80) {
+            i += 1;
+            continue;
+        }
+        size_t width;
+        uint32_t min;
+        uint32_t value;
+        if (c >= 0xc2 && c <= 0xdf) {
+            width = 2;
+            min = 0x80;
+            value = c & 0x1f;
+        } else if (c >= 0xe0 && c <= 0xef) {
+            width = 3;
+            min = 0x800;
+            value = c & 0x0f;
+        } else if (c >= 0xf0 && c <= 0xf4) {
+            width = 4;
+            min = 0x10000;
+            value = c & 0x07;
+        } else {
+            return false;
+        }
+        if (len - i < width) {
+            return false;
+        }
+        for (size_t k = 1; k < width; k++) {
+            unsigned char next = bytes[i + k];
+            if ((next & 0xc0) != 0x80) {
+                return false;
+            }
+            value = (value << 6) | (next & 0x3f);
+        }
+        if (value < min || value > 0x10ffff ||
+            (value >= 0xd800 && value <= 0xdfff)) {
+            return false;
+        }
+        i += width;
+    }
+    return true;
+}
+
 lf_status lf_copy_io_error(b_lean_obj_arg result, lf_error *err) {
     lean_object *error = lean_io_result_get_error(result);
     lean_inc(error);
@@ -83,9 +130,20 @@ lf_status lf_copy_io_error(b_lean_obj_arg result, lf_error *err) {
 
 void lf_initialize(lean_object *(*initialize)(void), lf_error *err) {
     pthread_mutex_lock(&initialization_lock);
+    if (initialization_error.status != LF_OK) {
+        lf_set_error(err, initialization_error.status,
+                     initialization_error.message == NULL
+                         ? "Lean initialization failed"
+                         : initialization_error.message);
+        pthread_mutex_unlock(&initialization_lock);
+        return;
+    }
     lean_object *result = initialize();
     if (lean_io_result_is_error(result)) {
         lf_copy_io_error(result, err);
+        lf_set_error(&initialization_error, err->status,
+                     err->message == NULL ? "Lean initialization failed"
+                                          : err->message);
     } else if (!task_manager_started) {
         lean_io_mark_end_initialization();
         lean_init_task_manager();

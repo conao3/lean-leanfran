@@ -139,7 +139,7 @@ Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to
 | Clojure    | [Setup and first block](langs/Clojure/README.md)    | [Types, verification and CLI](docs/clojure-guide.md)      | [Clojure samples](langs/Clojure/samples/README.md)       |
 | PHP        | [Setup and first block](langs/PHP/README.md)       | [Embedding, types, verification and CLI](docs/php-guide.md)     | [PHP samples](langs/PHP/samples/README.md)               |
 | Go         | [Setup and first block](langs/Go/README.md)         | [Embedding, types, verification and CLI](docs/go-guide.md) | [Go samples](langs/Go/samples/) |
-| C          | [Setup and generation](langs/C/README.md)           | [Embedding, types, verification and linking](docs/c-guide.md) | [Embedded C test project](langs/C/tests/embed/app/) |
+| C          | [Setup and generation](langs/C/README.md)           | [Embedding, types, verification and linking](docs/c-guide.md) | [C samples](langs/C/samples/) |
 
 ## Contribution
 
