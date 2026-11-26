@@ -203,13 +203,16 @@ mkdir -p "$copied_imports"
 cp -r tests/embed/fixtures/local-imports/. "$copied_imports/"
 cp "$local_imports/"{Cargo.toml,build.rs} "$copied_imports/"
 copied_lean="$copied_imports/lean"
-sed '/^path = "dep"$/a copy = true' "$copied_lean/lakefile.toml" > "$copied_lean/lakefile.new"
+sed -e 's/"dependency"/"my-lib"/' -e '/^path = "dep"$/a copy = true' "$copied_lean/lakefile.toml" > "$copied_lean/lakefile.new"
 mv "$copied_lean/lakefile.new" "$copied_lean/lakefile.toml"
+sed 's/"dependency"/"my-lib"/' "$copied_lean/dep/lakefile.toml" > "$copied_lean/dep/lakefile.new"
+mv "$copied_lean/dep/lakefile.new" "$copied_lean/dep/lakefile.toml"
 test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 11
+test -f "$copied_lean/downloaded/my-lib/Dependency.lean"
 cp "$copied_lean/lake-manifest.json" "$copied_imports/manifest.before"
 printf 'def dependencyValue : UInt32 := 1\n' > "$copied_lean/dep/Dependency.lean"
 test "$(cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 11
-(cd "$copied_lean" && lake update dependency)
+(cd "$copied_lean" && lake update my-lib)
 cmp "$copied_imports/manifest.before" "$copied_lean/lake-manifest.json"
 if LEANFRAN_OFFLINE=1 cargo run -q --manifest-path "$copied_imports/Cargo.toml" > "$copied_imports/offline.log" 2>&1; then
   echo "embed-test: a stale copy=true cache was accepted offline" >&2

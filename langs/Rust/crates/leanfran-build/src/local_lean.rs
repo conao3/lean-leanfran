@@ -116,6 +116,20 @@ fn is_local_git_url(url: &str) -> bool {
     url.starts_with("file://") || Path::new(url).is_absolute() || !url.contains(':')
 }
 
+fn package_dir_name(mut name: &str) -> String {
+    let mut dir = String::new();
+    while let Some((prefix, rest)) = name.split_once('«') {
+        let Some((component, suffix)) = rest.split_once('»') else {
+            break;
+        };
+        dir.push_str(prefix);
+        dir.push_str(component);
+        name = suffix;
+    }
+    dir.push_str(name);
+    dir
+}
+
 fn rebase_copied_path(
     mut path: PathBuf,
     copies: &[(PathBuf, PathBuf)],
@@ -298,7 +312,7 @@ impl<'a> LocalLean<'a> {
                                 dir,
                                 copy: true,
                                 ..
-                            } => Some((packages_dir.join(name), root.join(dir))),
+                            } => Some((packages_dir.join(package_dir_name(name)), root.join(dir))),
                             _ => None,
                         })
                         .collect();
@@ -316,7 +330,7 @@ impl<'a> LocalLean<'a> {
                             let identity = rebase_copied_path(source.clone(), &copies, false);
                             let (dir, identity) = if copy || source != identity {
                                 let materialized = if copy {
-                                    packages_dir.join(&name)
+                                    packages_dir.join(package_dir_name(&name))
                                 } else {
                                     source
                                 };
