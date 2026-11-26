@@ -5,7 +5,7 @@ c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/t
 	tests/embed/app/src/*.c tests/embed/app/src/*.h tests/embed/app/src/nested/*.h \
 	tests/verify/*.c tests/verify/translation/*.c tests/verify/translation/*.h \
 	tests/verify/states/src/*.c tests/verify/random/src/*.c \
-	tests/verify/records/src/*.c tests/verify/records/src/*.h)
+	tests/verify/records/src/*.c tests/verify/records/src/*.h tests/verify/files/src/*.c)
 clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
 
 build:

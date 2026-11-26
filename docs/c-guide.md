@@ -255,6 +255,8 @@ Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a 
 
 `check` writes the translation of each function and its callees to the module `LeanCModel.<block>` in `.leanfran/workspace`. Each obligation is an abbreviation such as `clamp.obligation.refines`. It quantifies over the arguments, assumes for each `LF_ARRAY` argument that its size fits the length argument's type (`xs.size < 2 ^ 64` for `size_t`, `2 ^ 31` for `int32_t`), and then assumes `requires`. Prove it in `lean/Proofs/*.lean` with a declaration named `clamp.proof.refines` in the namespace `LeanCModel.<block>`.
 
+When two or more C files that use the same block define functions with the same name, such as `static` helpers, each of those functions goes into a namespace for its file, `LeanCModel.<block>.<file>`. `<file>` is the C file's path relative to the project root, prefixed with `File_`, with `_` written as `__`, `/` as `_s`, `.` as `_d`, `-` as `_h`, and any other character that is not a letter or digit as `_x<hex code>_`. For `static uint32_t twin(uint32_t)` with `LF_MODEL` in both `src/a.c` and `src/b.c`, `check` reports `dup.File_src_sa_dc.twin [refines]` and `dup.File_src_sb_dc.twin [refines]`, and the proofs are `File_src_sa_dc.twin.proof.refines` and `File_src_sb_dc.twin.proof.refines` in the namespace `LeanCModel.dup`.
+
 ```lean
 import LeanCModel.clamp
 
