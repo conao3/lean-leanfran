@@ -25,35 +25,157 @@ private def width : CType → Nat
   | .int32 | .uint32 => 32
   | _ => 64
 
-private def generator (ty : CType) (pick : String) : String :=
-  match ty with
-  | .bool => s!"lf_model_bool(&lf_rng, {pick})"
-  | .float => s!"lf_model_double(&lf_rng, {pick})"
-  | ty => if ty.isSignedInt then s!"({ty.cName})lf_model_signed(&lf_rng, {width ty}, {pick})"
-    else s!"({ty.cName})lf_model_unsigned(&lf_rng, {width ty}, {pick})"
-
-private def caseCount (ty : CType) : String :=
-  match ty with
-  | .bool => "LF_MODEL_BOOL_CASES"
-  | .float => "LF_MODEL_DOUBLE_CASES"
-  | ty => if ty.isSignedInt then "LF_MODEL_SIGNED_CASES" else "LF_MODEL_UNSIGNED_CASES"
-
 private def cString (text : String) : String :=
   "\"" ++ ((text.replace "\\" "\\\\").replace "\"" "\\\"") ++ "\""
 
-private def printValue (ty : CType) (value : String) : String :=
-  match ty with
-  | .bool => s!"fprintf(stderr, \"%s\", {value} ? \"true\" : \"false\");"
-  | .float => s!"fprintf(stderr, \"%.17g\", {value});"
-  | ty => if ty.isSignedInt then s!"fprintf(stderr, \"%\" PRId64, (int64_t){value});"
-    else s!"fprintf(stderr, \"%\" PRIu64, (uint64_t){value});"
+private inductive VTy where
+  | scalar (ty : CType)
+  | enum (desc : Desc)
+  | variant (desc : Desc)
+  deriving Inhabited
 
-private def same (ty : CType) (a b : String) : String :=
-  if ty == .float then s!"lf_model_same_double({a}, {b})" else s!"{a} == {b}"
+private def VTy.cName : VTy → String
+  | .scalar ty => ty.cName
+  | .enum desc | .variant desc => desc.name
+
+private def VTy.cType : VTy → CType
+  | .scalar ty => ty
+  | .enum desc | .variant desc => .named desc.name
+
+private def VTy.byPointer (ty : VTy) : Bool := ty.cType.byPointer
+
+private def VTy.generator (ty : VTy) (rng pick : String) : String :=
+  match ty with
+  | .scalar .bool => s!"lf_model_bool({rng}, {pick})"
+  | .scalar .float => s!"lf_model_double({rng}, {pick})"
+  | .scalar ty => if ty.isSignedInt then s!"({ty.cName})lf_model_signed({rng}, {width ty}, {pick})"
+    else s!"({ty.cName})lf_model_unsigned({rng}, {width ty}, {pick})"
+  | .enum desc | .variant desc => s!"lf_model_gen_{desc.name}({rng}, {pick})"
+
+private def VTy.caseCount : VTy → String
+  | .scalar .bool => "LF_MODEL_BOOL_CASES"
+  | .scalar .float => "LF_MODEL_DOUBLE_CASES"
+  | .scalar ty => if ty.isSignedInt then "LF_MODEL_SIGNED_CASES" else "LF_MODEL_UNSIGNED_CASES"
+  | .enum desc | .variant desc => s!"LF_MODEL_CASES_{desc.name}"
+
+private def VTy.print (ty : VTy) (value : String) : String :=
+  match ty with
+  | .scalar .bool => s!"fprintf(stderr, \"%s\", {value} ? \"true\" : \"false\");"
+  | .scalar .float => s!"fprintf(stderr, \"%.17g\", {value});"
+  | .scalar ty => if ty.isSignedInt then s!"fprintf(stderr, \"%\" PRId64, (int64_t){value});"
+    else s!"fprintf(stderr, \"%\" PRIu64, (uint64_t){value});"
+  | .enum desc | .variant desc => s!"lf_model_print_{desc.name}({value});"
+
+private def VTy.same (ty : VTy) (a b : String) : String :=
+  match ty with
+  | .scalar .float => s!"lf_model_same_double({a}, {b})"
+  | .variant desc => s!"lf_model_same_{desc.name}({a}, {b})"
+  | _ => s!"{a} == {b}"
+
+private def VTy.ref (ty : VTy) (value : String) : String :=
+  if ty.byPointer then s!"&{value}" else value
+
+private abbrev Types := Std.HashMap String Desc
+
+private def stripTag (name : String) : String :=
+  if name.startsWith "struct " then (name.drop 7).toString
+  else if name.startsWith "enum " then (name.drop 5).toString
+  else name
+
+private def fieldType (types : Types) (field : Field) : Option VTy :=
+  if field.indirect then none else
+  match field.type with
+  | .named name => types[name]?.bind fun desc => if desc.shape == .enum then some (.enum desc) else none
+  | .char | .float32 | .string | .unit | .nat | .int | .bytes => none
+  | ty => some (.scalar ty)
+
+private def resolve (types : Types) (cName boundary : String) : Option VTy :=
+  match boundaryType boundary with
+  | some ty => some (.scalar ty)
+  | none => types[stripTag cName]?.bind fun desc =>
+    if desc.externalType.isSome then none
+    else if desc.shape == .enum then some (.enum desc)
+    else if desc.shape == .variant &&
+        desc.ctors.all fun c => c.fields.all fun f => (fieldType types f).isSome then some (.variant desc)
+    else none
+
+private def generated (desc : Desc) : Array Constructor :=
+  desc.ctors.filter (·.invariants.isEmpty)
+
+private def ctorCases (types : Types) (ctor : Constructor) : String :=
+  ctor.fields.foldl (init := "UINT64_C(1)") fun acc f =>
+    s!"{acc} * {((fieldType types f).get!).caseCount}"
+
+private def typeSupport (types : Types) (ty : VTy) : String :=
+  match ty with
+  | .scalar _ => ""
+  | .enum desc =>
+    let n := desc.ctors.size
+    let tags := ", ".intercalate (desc.ctors.toList.map (·.tag desc))
+    s!"#define LF_MODEL_CASES_{desc.name} {n}\n\n" ++
+    s!"static inline {desc.name} lf_model_gen_{desc.name}(lf_model_rng *lf_rng, uint64_t *lf_pick) \{\n" ++
+    s!"    static const {desc.name} lf_values[{n}] = \{{tags}};\n" ++
+    "    uint64_t lf_index;\n" ++
+    s!"    if (!lf_model_pick(lf_pick, {n}, &lf_index))\n" ++
+    s!"        lf_index = lf_model_next(lf_rng) % {n};\n" ++
+    "    return lf_values[lf_index];\n}\n\n" ++
+    s!"static inline void lf_model_print_{desc.name}({desc.name} lf_value) \{\n" ++
+    "    switch (lf_value) {\n" ++
+    String.join (desc.ctors.toList.map fun c =>
+      s!"    case {c.tag desc}:\n        fprintf(stderr, \"{c.tag desc}\");\n        return;\n") ++
+    "    }\n    fprintf(stderr, \"%d\", (int)lf_value);\n}\n\n"
+  | .variant desc =>
+    let ctors := generated desc
+    let field := fun (c : Constructor) (f : Field) => s!"lf_value.as.{c.name}.{f.name}"
+    let total := if ctors.isEmpty then "UINT64_C(1)"
+      else " + ".intercalate (ctors.toList.map fun c => s!"({ctorCases types c})")
+    let gen := if ctors.isEmpty then "" else
+      s!"static inline {desc.name} lf_model_gen_{desc.name}(lf_model_rng *lf_rng, uint64_t *lf_pick) \{\n" ++
+      s!"    static const uint64_t lf_counts[{ctors.size}] = \{{", ".intercalate (ctors.toList.map (ctorCases types))}};\n" ++
+      s!"    {desc.name} lf_value;\n" ++
+      "    memset(&lf_value, 0, sizeof lf_value);\n" ++
+      "    uint64_t lf_index;\n    uint64_t *lf_sub = NULL;\n    size_t lf_ctor = 0;\n" ++
+      s!"    if (lf_model_pick(lf_pick, LF_MODEL_CASES_{desc.name}, &lf_index)) \{\n" ++
+      "        while (lf_index >= lf_counts[lf_ctor])\n            lf_index -= lf_counts[lf_ctor++];\n" ++
+      "        lf_sub = &lf_index;\n" ++
+      s!"    } else \{\n        lf_ctor = (size_t)(lf_model_next(lf_rng) % {ctors.size});\n    }\n" ++
+      "    switch (lf_ctor) {\n" ++
+      String.join (ctors.toList.zipIdx.map fun (c, i) =>
+        s!"    case {i}:\n        lf_value.tag = {c.tag desc};\n" ++
+        String.join (c.fields.toList.map fun f =>
+          s!"        {field c f} = {((fieldType types f).get!).generator "lf_rng" "lf_sub"};\n") ++
+        "        break;\n") ++
+      "    }\n    (void)lf_sub;\n    return lf_value;\n}\n\n"
+    s!"#define LF_MODEL_CASES_{desc.name} ({total})\n\n" ++ gen ++
+    s!"static inline void lf_model_print_{desc.name}({desc.name} lf_value) \{\n" ++
+    "    switch (lf_value.tag) {\n" ++
+    String.join (desc.ctors.toList.map fun c =>
+      s!"    case {c.tag desc}:\n        fprintf(stderr, \"{c.tag desc}\");\n" ++
+      (if c.fields.isEmpty then "" else
+        "        fprintf(stderr, \"{\");\n" ++
+        String.join (c.fields.toList.zipIdx.map fun (f, i) =>
+          s!"        fprintf(stderr, \"{if i == 0 then "" else ", "}{f.name}=\");\n" ++
+          s!"        {((fieldType types f).get!).print (field c f)}\n") ++
+        "        fprintf(stderr, \"}\");\n") ++
+      "        return;\n") ++
+    "    }\n    fprintf(stderr, \"tag=%d\", (int)lf_value.tag);\n}\n\n" ++
+    s!"static inline bool lf_model_same_{desc.name}({desc.name} lf_a, {desc.name} lf_b) \{\n" ++
+    "    if (lf_a.tag != lf_b.tag)\n        return false;\n" ++
+    "    switch (lf_a.tag) {\n" ++
+    String.join (desc.ctors.toList.map fun c =>
+      let checks := c.fields.toList.map fun f =>
+        let ty := (fieldType types f).get!
+        ty.same s!"lf_a.as.{c.name}.{f.name}" s!"lf_b.as.{c.name}.{f.name}"
+      s!"    case {c.tag desc}:\n        return {if checks.isEmpty then "true" else " && ".intercalate (checks.map (s!"({·})"))};\n") ++
+    "    }\n    return true;\n}\n\n"
+
+private def dependencies (types : Types) : VTy → Array VTy
+  | .variant desc => (desc.ctors.flatMap fun c => c.fields.filterMap (fieldType types)) |>.push (.variant desc)
+  | ty => #[ty]
 
 private structure Input where
   param : Param
-  ty : CType
+  ty : VTy
   array : Bool
 
 private def findExport (exports : Std.HashMap String (Array Export)) (blocks : Array String)
@@ -70,22 +192,26 @@ private def checkExport (blocks : Array String) (exports : Std.HashMap String (A
   return (block, entry)
 
 private def leanArgs (inputs : Array Input) (cPrefix : String) : Array CType :=
-  inputs.map fun input => if input.array then arrayType cPrefix input.ty else input.ty
+  inputs.map fun input => if input.array then arrayType cPrefix input.ty.cType else input.ty.cType
 
 private def testFunction (m : ModelFunction) (fn : Verify.Function) (blocks : Array String)
-    (exports : Std.HashMap String (Array Export)) : Except String (String × String × Array String) := do
+    (exports : Std.HashMap String (Array Export)) (types : Types) :
+    Except String (String × String × Array String × Array VTy) := do
   if m.isStatic then throw "static functions are not visible to the model test"
   let .value _ resultBoundary := fn.result | throw "lf_status results are not generated"
-  let some result := boundaryType resultBoundary | throw s!"unsupported result type {resultBoundary}"
+  let some result := resolve types fn.resultType resultBoundary | throw s!"unsupported result type {resultBoundary}"
   let mut inputs : Array Input := #[]
   for p in fn.params do
     match p.kind with
     | .value =>
-      let some ty := boundaryType p.boundary | throw s!"unsupported parameter type {p.boundary} of '{p.name}'"
+      let some ty := resolve types p.cType p.boundary | throw s!"unsupported parameter type {p.boundary} of '{p.name}'"
+      if let .variant desc := ty then
+        if (generated desc).isEmpty then
+          throw s!"every constructor of {p.boundary} of '{p.name}' has proof fields"
       inputs := inputs.push {param := p, ty, array := false}
     | .array _ boundary _ =>
       let some ty := boundaryType boundary | throw s!"unsupported element type {boundary} of '{p.name}'"
-      inputs := inputs.push {param := p, ty, array := true}
+      inputs := inputs.push {param := p, ty := .scalar ty, array := true}
     | .length _ => pure ()
     | .out => throw "out parameters are not generated"
   let mut headers := #[]
@@ -95,8 +221,8 @@ private def testFunction (m : ModelFunction) (fn : Verify.Function) (blocks : Ar
     let args := inputs.map fun i =>
       if i.array then
         let name := argName i.param
-        s!"&({(arrayType block i.ty).cName})\{{name}, {name}_len}"
-      else argName i.param
+        s!"&({(arrayType block i.ty.cType).cName})\{{name}, {name}_len}"
+      else i.ty.ref (argName i.param)
     s!"{symbol}({", ".intercalate (args ++ extra ++ #[out, "&lf_err"]).toList})"
   let mut body := ""
   let mut requiresCode := ""
@@ -114,39 +240,40 @@ private def testFunction (m : ModelFunction) (fn : Verify.Function) (blocks : Ar
       s!"            {sep}fprintf(stderr, \"{i.param.name}=[\");\n" ++
       s!"            for (size_t lf_i = 0; lf_i < {name}_len; lf_i++) \{\n" ++
       s!"                if (lf_i) fprintf(stderr, \", \");\n" ++
-      s!"                {printValue i.ty s!"{name}[lf_i]"}\n            }\n" ++
+      s!"                {i.ty.print s!"{name}[lf_i]"}\n            }\n" ++
       "            fprintf(stderr, \"]\");\n"
-    else s!"            {sep}fprintf(stderr, \"{i.param.name}=\"); {printValue i.ty name}\n")
+    else s!"            {sep}fprintf(stderr, \"{i.param.name}=\"); {i.ty.print name}\n")
   let failure := fun (label message : String) (extra : String) =>
     s!"            fprintf(stderr, \"%s [%s]: {message} (seed %\" PRIu64 \", run %\" PRIu64 \")\\n  input: \", {cString display}, {cString label}, lf_seed, lf_run);\n" ++
     printInput ++ "            fprintf(stderr, \"\\n\");\n" ++ extra ++ "            return 1;\n"
   for check in m.checks do
     if check.label == "refines" then
-      let (block, entry) ← checkExport blocks exports check.predicate (leanArgs inputs) result
+      let (block, entry) ← checkExport blocks exports check.predicate (leanArgs inputs) result.cType
       headers := headers.push block
       body := body ++ s!"        {result.cName} lf_expected;\n" ++
         s!"        if ({call block entry.symbol #[] "&lf_expected"} != LF_OK)\n" ++
         s!"            return lf_model_lean_error({cString display}, {cString check.predicate}, &lf_err);\n" ++
-        s!"        if (!({same result "lf_expected" "lf_actual"})) \{\n" ++
+        s!"        if (!({result.same "lf_expected" "lf_actual"})) \{\n" ++
         failure "refines" "mismatch"
-          (s!"            fprintf(stderr, \"  expected: \"); {printValue result "lf_expected"}\n" ++
-           s!"            fprintf(stderr, \", got: \"); {printValue result "lf_actual"}\n" ++
+          (s!"            fprintf(stderr, \"  expected: \"); {result.print "lf_expected"}\n" ++
+           s!"            fprintf(stderr, \", got: \"); {result.print "lf_actual"}\n" ++
            "            fprintf(stderr, \"\\n\");\n") ++ "        }\n"
     else
       let (block, entry) ← checkExport blocks exports check.predicate
-        (fun b => leanArgs inputs b |>.push result) .bool
+        (fun b => leanArgs inputs b |>.push result.cType) .bool
       headers := headers.push block
       body := body ++ "        {\n            bool lf_holds = false;\n" ++
-        s!"            if ({call block entry.symbol #["lf_actual"] "&lf_holds"} != LF_OK)\n" ++
+        s!"            if ({call block entry.symbol #[result.ref "lf_actual"] "&lf_holds"} != LF_OK)\n" ++
         s!"                return lf_model_lean_error({cString display}, {cString check.predicate}, &lf_err);\n" ++
         "            if (!lf_holds) {\n" ++
         failure check.label s!"{check.predicate} does not hold"
-          (s!"            fprintf(stderr, \"  result: \"); {printValue result "lf_actual"}\n" ++
+          (s!"            fprintf(stderr, \"  result: \"); {result.print "lf_actual"}\n" ++
            "            fprintf(stderr, \"\\n\");\n") ++ "            }\n        }\n"
+  let inputType := fun (p : Param) => (inputs.find? (·.param.name == p.name)).map (·.ty.cName)
   let cParams := fn.params.map fun p =>
     match p.kind with
-    | .array .. => s!"const {(boundaryType p.boundary).get!.cName} *"
-    | _ => ((boundaryType p.boundary).map (·.cName)).getD "size_t"
+    | .array .. => s!"const {(inputType p).get!} *"
+    | _ => (inputType p).getD (((boundaryType p.boundary).map (·.cName)).getD "size_t")
   let prototype := s!"{result.cName} {m.name}({if cParams.isEmpty then "void" else ", ".intercalate cParams.toList});\n"
   let cArgs := fn.params.map fun p =>
     match p.kind with
@@ -154,15 +281,15 @@ private def testFunction (m : ModelFunction) (fn : Verify.Function) (blocks : Ar
       let owner := (fn.params.find? (·.lean == array)).get!
       s!"({((boundaryType p.boundary).map (·.cName)).getD "size_t"}){argName owner}_len"
     | _ => argName p
-  let cases := inputs.filter (!·.array) |>.foldl (init := "1") fun acc i => s!"lf_model_cases({acc}, {caseCount i.ty})"
+  let cases := inputs.filter (!·.array) |>.foldl (init := "1") fun acc i => s!"lf_model_cases({acc}, {i.ty.caseCount})"
   let generate := String.join (inputs.toList.map fun i =>
     let name := argName i.param
     if i.array then
       s!"        {i.ty.cName} {name}[LF_MODEL_MAX_LENGTH];\n" ++
       s!"        size_t {name}_len = lf_model_length(&lf_rng);\n" ++
       s!"        for (size_t lf_i = 0; lf_i < {name}_len; lf_i++)\n" ++
-      s!"            {name}[lf_i] = {generator i.ty "NULL"};\n"
-    else s!"        {i.ty.cName} {name} = {generator i.ty "lf_pick"};\n")
+      s!"            {name}[lf_i] = {i.ty.generator "&lf_rng" "NULL"};\n"
+    else s!"        {i.ty.cName} {name} = {i.ty.generator "&lf_rng" "lf_pick"};\n")
   let fnName := s!"lf_model_test_{m.block}_{m.name}"
   let source :=
     s!"static int {fnName}(uint64_t lf_runs, uint64_t lf_seed) \{\n" ++
@@ -171,6 +298,7 @@ private def testFunction (m : ModelFunction) (fn : Verify.Function) (blocks : Ar
     "    for (uint64_t lf_run = 0; lf_run < lf_runs; lf_run++) {\n" ++
     "        uint64_t lf_index = lf_run;\n" ++
     "        uint64_t *lf_pick = lf_run < lf_cases && lf_run < lf_runs / 2 ? &lf_index : NULL;\n" ++
+    "        (void)lf_pick;\n" ++
     "        lf_error lf_err = {0};\n" ++
     generate ++ requiresCode ++
     "        lf_accepted++;\n" ++
@@ -181,10 +309,14 @@ private def testFunction (m : ModelFunction) (fn : Verify.Function) (blocks : Ar
     "        return 1;\n    }\n" ++
     s!"    printf(\"%s: %\" PRIu64 \" inputs passed (seed %\" PRIu64 \")\\n\", {cString display}, lf_accepted, lf_seed);\n" ++
     "    return 0;\n}\n"
-  return (prototype, source, headers)
+  let used := (inputs.filter (!·.array) |>.map (·.ty)).push result
+  return (prototype, source, headers, used.flatMap (dependencies types))
 
 def modelTest (models : Array ModelFunction) (allBlocks : Array Block)
-    (exports : Std.HashMap String (Array Export)) : String × Array FilePath := Id.run do
+    (exports : Std.HashMap String (Array Export)) (descs : Array Desc) : String × Array FilePath := Id.run do
+  let types : Types := descs.foldl (init := {}) fun acc d => acc.insert d.name d
+  let mut support := ""
+  let mut supported : Std.HashSet String := {}
   let mut sources : Array FilePath := #[]
   let mut prototypes := ""
   let mut functions := ""
@@ -197,9 +329,13 @@ def modelTest (models : Array ModelFunction) (allBlocks : Array Block)
     let result : Except String _ := do
       if let some error := m.error then throw error
       let some fn := m.closure.find? (·.name == m.name) | throw "not translated"
-      testFunction m fn blocks exports
+      testFunction m fn blocks exports types
     match result with
-    | .ok (prototype, source, used) =>
+    | .ok (prototype, source, used, tys) =>
+      for ty in tys do
+        unless supported.contains ty.cName do
+          supported := supported.insert ty.cName
+          support := support ++ typeSupport types ty
       prototypes := prototypes ++ prototype
       functions := functions ++ "\n" ++ source
       calls := calls ++ s!"    lf_failed |= lf_model_test_{m.block}_{m.name}(lf_runs, lf_seed);\n"
@@ -209,7 +345,7 @@ def modelTest (models : Array ModelFunction) (allBlocks : Array Block)
       calls := calls ++ s!"    printf(\"%s: skipped: %s\\n\", {cString display}, {cString reason});\n"
   let includes := String.join ((headers.qsort (· < ·)).toList.map (s!"#include \"{·}.h\"\n"))
   return (·, sources) <| "#include \"leanfran.h\"\n#include \"leanfran_model_test.h\"\n" ++ includes ++ "\n" ++
-    prototypes ++ functions ++
+    prototypes ++ (if support.isEmpty then "" else "\n" ++ (support.dropEnd 1).toString) ++ functions ++
     "\nint main(void) {\n" ++
     "    uint64_t lf_runs = lf_model_env(\"LEANFRAN_RUNS\", 200);\n" ++
     "    uint64_t lf_seed = lf_model_env(\"LEANFRAN_SEED\", 1);\n" ++

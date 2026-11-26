@@ -9,6 +9,7 @@ trap 'rm -rf "$scratch"' EXIT
 cp -R "$backend/tests/verify/random" "$scratch/random"
 app="$scratch/random"
 source="$app/src/random.c"
+kinds="$app/src/kinds.c"
 mk="$app/leanfran/leanfran.mk"
 export NIX_HARDENING_ENABLE=""
 
@@ -47,6 +48,10 @@ for cc in "${compilers[@]}"; do
     done
     grep -Fxq 'random.add: 40 inputs passed (seed 1)' "$scratch/out"
     grep -Fxq 'random.hidden: skipped: static functions are not visible to the model test' "$scratch/out"
+    for fn in level_of weight wide bigger; do
+        grep -Fxq "kinds.$fn: 200 inputs passed (seed 1)" "$scratch/out"
+    done
+    grep -Fxq "kinds.proven_value: skipped: every constructor of «Proven» of 'p' has proof fields" "$scratch/out"
 done
 
 model_test 0 clang LEANFRAN_RUNS=6 LEANFRAN_SEED=7
@@ -87,6 +92,38 @@ for cc in "${compilers[@]}"; do
     fi
 done
 
+cp "$scratch/random.c" "$source"
+cp "$kinds" "$scratch/kinds.c"
+kinds_mismatch() {
+    local edit=$1 fn=$2 run=$3 input=$4 results=$5
+    sed "$edit" "$scratch/kinds.c" >"$kinds"
+    if cmp -s "$kinds" "$scratch/kinds.c"; then
+        echo "the edit '$edit' did not change kinds.c" >&2
+        exit 1
+    fi
+    "$compiler" sync --dir "$app" >/dev/null
+    for cc in "${compilers[@]}"; do
+        model_test 2 "$cc"
+        grep -Fxq "kinds.$fn [refines]: mismatch (seed 1, run $run)" "$scratch/err"
+        grep -Fxq "  input: $input" "$scratch/err"
+        grep -Fxq "  $results" "$scratch/err"
+        if grep -q 'runtime error' "$scratch/err"; then
+            echo "an off-by-one implementation must not stop in UBSan" >&2
+            exit 1
+        fi
+    done
+}
+kinds_mismatch 's/if (x < 10)/if (x <= 10)/' level_of 172 'x=10' \
+    'expected: kinds_level_mid, got: kinds_level_low'
+kinds_mismatch 's/    case kinds_level_mid:/    case kinds_level_high:/' weight 1 'l=kinds_level_mid' \
+    'expected: 5, got: 9'
+kinds_mismatch 's/s.as.rect.w > s.as.rect.h/s.as.rect.w >= s.as.rect.h/' wide 9 \
+    's=kinds_shape_rect{w=0, h=0, level=kinds_level_low}' 'expected: false, got: true'
+kinds_mismatch 's/shape_size(b) > shape_size(a)/shape_size(b) >= shape_size(a)/' bigger 9 \
+    'a=kinds_shape_rect{w=0, h=0, level=kinds_level_low}, b=kinds_shape_circle{r=0}' \
+    'expected: kinds_shape_rect{w=0, h=0, level=kinds_level_low}, got: kinds_shape_circle{r=0}'
+cp "$scratch/kinds.c" "$kinds"
+
 sed 's/"refines=addSpec", "requires=small"/"refines=addSpec"/' "$scratch/random.c" >"$source"
 check 1
 grep -Fxq 'random.add [refines]: failed' "$scratch/check"
@@ -98,4 +135,4 @@ for cc in "${compilers[@]}"; do
         exit 1
     fi
 done
-echo "random: model tests passed, an off-by-one implementation and a signed overflow failed"
+echo "random: model tests passed, off-by-one implementations and a signed overflow failed"

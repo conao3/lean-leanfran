@@ -67,6 +67,7 @@ structure Param where
   ty : Ty
   boundary : String
   kind : ParamKind
+  cType : String := ""
   deriving Inhabited
 
 inductive Result where
@@ -81,6 +82,7 @@ structure Function where
   result : Result
   fallible : Bool
   source : String
+  resultType : String := ""
   deriving Inhabited
 
 structure Env where
@@ -1021,18 +1023,18 @@ private def translateFunction (node : Node) : M Function := do
         let some elem := (← read).resolve pointee | fail param s!"unsupported element type '{pointee}'"
         if elem == .unit then fail param s!"unsupported element type '{pointee}'"
         let boundary := boundaryOf (← read) pointee elem
-        out := out.push {name := pname, id, lean, ty := elem, boundary, kind := .array elem boundary length}
+        out := out.push {name := pname, id, lean, ty := elem, boundary, kind := .array elem boundary length, cType := strip pointee}
       else if isStatus && index + 1 == params.size && !pointee.startsWith "const " then
         let some ty := (← read).resolve pointee | fail param s!"unsupported out type '{pointee}'"
         if ty == .unit then fail param s!"unsupported out type '{pointee}'"
         let boundary := boundaryOf (← read) pointee ty
         result := .status ty boundary
-        out := out.push {name := pname, id, lean, ty, boundary, kind := .out}
+        out := out.push {name := pname, id, lean, ty, boundary, kind := .out, cType := strip pointee}
       else fail param s!"pointer parameter '{pname}'"
     else
       let ty ← resolve param qual (param.typeName "desugaredQualType")
       let boundary := boundaryOf (← read) qual ty
-      out := out.push {name := pname, id, lean, ty, boundary, kind := .value}
+      out := out.push {name := pname, id, lean, ty, boundary, kind := .value, cType := strip qual}
   if isStatus && !(out.any fun p => match p.kind with | .out => true | _ => false) then
     fail node "lf_status result without an out parameter"
   let mut params := out
@@ -1087,7 +1089,7 @@ private def translateFunction (node : Node) : M Function := do
     | .value ty boundary => Result.value ty boundary
     | .status ty boundary => Result.status ty boundary
   let source := source ++ "\n".intercalate st.lines.toList ++ "\n"
-  return {name := name, lean := lean, params := params, result := resultValue, fallible := st.fallible, source := source}
+  return {name := name, lean := lean, params := params, result := resultValue, fallible := st.fallible, source := source, resultType := strip resultQual}
 
 def callees (node : Node) : Array String :=
   (node.walk.filterMap fun n => do
