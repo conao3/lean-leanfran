@@ -17,7 +17,7 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 - Runtime externs follow Lean's C symbols, argument order, erased arguments and ownership conventions. Inspect the toolchain's Lean sources and `lean.h` when implementing an extern.
 - Add runtime behavior to the backend's native-oracle differential tests; compare the generated program with Lean's C backend.
 - Regenerate runtime extern lists with the backend's `make gen-externs` where available.
-- When generated code changes, update both the emitter's generator version and its host-side freshness version together. The C backend has one `generatorVersion`, which keys `leanfran.manifest.json` and `leanfran.lock`; raise it when the generated C, the C translation, or the obligations change.
+- When generated code changes, update both the emitter's generator version and its host-side freshness version together. The C backend has one `generatorVersion`, which keys `leanfran.manifest.json` and `leanfran.lock`; raise it when the generated C, the block workspace, the C translation, or the obligations change.
 - Keep shared development rules here and backend implementation details in `docs/`.
 
 ## Verification and releases
