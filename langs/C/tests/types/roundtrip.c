@@ -212,6 +212,115 @@ static void check_except(lf_error *err) {
     assert(strcmp(err->message, "\"unit error\"") == 0);
 }
 
+static void check_trivial(lf_error *err) {
+    public_types_typed_wrap_text text = {.tag = public_types_typed_wrap_text_mk,
+                                         .as.mk.text = {"雪", 3}};
+    public_types_typed_wrap_text text_out;
+    assert(public_types_wrap_text(&text, &text_out, err) == LF_OK);
+    assert(text_out.tag == public_types_typed_wrap_text_mk &&
+           strcmp(text_out.as.mk.text.ptr, "雪!") == 0);
+    public_types_typed_wrap_text_free(&text_out);
+    public_types_typed_wrap_text_ref text_ref, text_ref_out;
+    assert(public_types_typed_wrap_text_ref_from(&text, &text_ref, err) ==
+           LF_OK);
+    assert(public_types_wrap_text_ref(text_ref, &text_ref_out, err) == LF_OK);
+    assert(public_types_typed_wrap_text_ref_get(text_ref_out, &text_out, err) ==
+           LF_OK);
+    assert(strcmp(text_out.as.mk.text.ptr, "雪!") == 0);
+    public_types_typed_wrap_text_free(&text_out);
+    public_types_typed_wrap_text_ref_release(text_ref);
+    public_types_typed_wrap_text_ref_release(text_ref_out);
+
+    for (unsigned i = 0; i < 256; ++i) {
+        public_types_typed_wrap_byte byte = {
+            .tag = public_types_typed_wrap_byte_mk, .as.mk.byte = (uint8_t)i};
+        public_types_typed_wrap_byte byte_out;
+        assert(public_types_wrap_byte(&byte, &byte_out, err) == LF_OK);
+        assert(byte_out.tag == public_types_typed_wrap_byte_mk &&
+               byte_out.as.mk.byte == (uint8_t)(i + 1));
+    }
+    const public_types_typed_wrap_byte bad_byte = {
+        .tag = (public_types_typed_wrap_byte_tag)1};
+    public_types_typed_wrap_byte byte_out;
+    assert(public_types_wrap_byte(&bad_byte, &byte_out, err) == LF_INVALID);
+
+    lf_nat nat_in;
+    assert(lf_nat_from_dec("123456789012345678901234567890", &nat_in, err) ==
+           LF_OK);
+    public_types_typed_wrap_nat nat = {.tag = public_types_typed_wrap_nat_mk,
+                                       .as.mk.a0 = nat_in};
+    public_types_typed_wrap_nat nat_out;
+    lf_str decimal;
+    assert(public_types_wrap_nat(&nat, &nat_out, err) == LF_OK);
+    assert(lf_nat_to_dec(&nat_out.as.mk.a0, &decimal, err) == LF_OK);
+    assert(strcmp(decimal.ptr, "246913578024691357802469135780") == 0);
+    lf_free(decimal.ptr);
+    public_types_typed_wrap_nat_free(&nat_out);
+    public_types_typed_wrap_nat_free(&nat);
+    nat.as.mk.a0 = lf_nat_from_u64(21);
+    assert(public_types_wrap_nat(&nat, &nat_out, err) == LF_OK);
+    assert(nat_out.as.mk.a0.value == 42 && nat_out.as.mk.a0.decimal == NULL);
+    public_types_typed_wrap_nat_free(&nat_out);
+
+    public_types_typed_wrap_float weight = {
+        .tag = public_types_typed_wrap_float_mk, .as.mk.value = -8.25};
+    public_types_typed_wrap_float weight_out;
+    assert(public_types_wrap_float(&weight, &weight_out, err) == LF_OK);
+    assert(weight_out.as.mk.value == -7.75);
+
+    public_types_typed_wrap_point point = {
+        .tag = public_types_typed_wrap_point_mk,
+        .as.mk.point = {UINT32_MAX - 1, {"点", 3}}};
+    public_types_typed_wrap_point point_out;
+    assert(public_types_wrap_point(&point, &point_out, err) == LF_OK);
+    assert(point_out.as.mk.point.x == UINT32_MAX &&
+           strcmp(point_out.as.mk.point.label.ptr, "点?") == 0);
+    public_types_typed_wrap_point_free(&point_out);
+
+    public_types_option_typed_bounded bounded;
+    assert(public_types_bounded(9, &bounded, err) == LF_OK);
+    assert(bounded.has_value &&
+           bounded.value.tag == public_types_typed_bounded_mk &&
+           bounded.value.as.mk.byte == 9);
+    uint8_t byte_value = 0;
+    assert(public_types_bounded_byte(&bounded.value, &byte_value, err) ==
+               LF_OK &&
+           byte_value == 9);
+    assert(public_types_bounded(10, &bounded, err) == LF_OK &&
+           !bounded.has_value);
+    const public_types_typed_bounded too_large = {
+        .tag = public_types_typed_bounded_mk, .as.mk.byte = 10};
+    assert(public_types_bounded_byte(&too_large, &byte_value, err) ==
+           LF_INVALID);
+    assert(strcmp(err->message, "Invalid Typed.Bounded.small") == 0);
+
+    public_types_typed_wrapped wrapped = {
+        .text = text,
+        .byte = {.tag = public_types_typed_wrap_byte_mk, .as.mk.byte = 200},
+        .nat = {.tag = public_types_typed_wrap_nat_mk,
+                .as.mk.a0 = lf_nat_from_u64(7)},
+        .weight = weight,
+        .point = point,
+        .bounded = {.tag = public_types_typed_bounded_mk, .as.mk.byte = 3}};
+    public_types_array_typed_wrapped all;
+    assert(public_types_wrapped(&wrapped, &all, err) == LF_OK && all.len == 2);
+    assert(strcmp(all.items[0].text.as.mk.text.ptr, "雪") == 0 &&
+           strcmp(all.items[1].text.as.mk.text.ptr, "雪!") == 0);
+    assert(all.items[0].byte.as.mk.byte == 200 &&
+           all.items[1].byte.as.mk.byte == 201);
+    assert(all.items[0].nat.as.mk.a0.value == 7 &&
+           all.items[1].nat.as.mk.a0.value == 14);
+    assert(all.items[0].weight.as.mk.value == -8.25 &&
+           all.items[1].weight.as.mk.value == -7.75);
+    assert(all.items[1].point.as.mk.point.x == UINT32_MAX &&
+           strcmp(all.items[1].point.as.mk.point.label.ptr, "点?") == 0);
+    assert(all.items[0].bounded.as.mk.byte == 3 &&
+           all.items[1].bounded.as.mk.byte == 3);
+    public_types_array_typed_wrapped_free(&all);
+    wrapped.bounded.as.mk.byte = 11;
+    assert(public_types_wrapped(&wrapped, &all, err) == LF_INVALID);
+}
+
 int main(void) {
     lf_error error = {0};
     assert(public_types_init(&error) == LF_OK);
@@ -221,6 +330,7 @@ int main(void) {
     check_trees(&error);
     check_collections(&error);
     check_except(&error);
+    check_trivial(&error);
     lf_error_clear(&error);
     return 0;
 }

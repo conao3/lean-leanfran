@@ -102,6 +102,70 @@ def positional (ok : Bool) : Except Positional UInt8 :=
 def checkUnit (ok : Bool) : Except String Unit :=
   if ok then .ok () else .error "unit error"
 
+inductive WrapText where
+  | mk (text : String)
+  deriving BEq
+
+inductive WrapByte where
+  | mk (byte : UInt8)
+  deriving BEq
+
+inductive WrapNat where
+  | mk : Nat → WrapNat
+  deriving BEq
+
+inductive WrapFloat where
+  | mk (value : Float)
+  deriving BEq
+
+structure Point where
+  x : UInt32
+  label : String
+  deriving BEq
+
+inductive WrapPoint where
+  | mk (point : Point)
+  deriving BEq
+
+inductive Bounded where
+  | mk (byte : UInt8) (small : byte < 10)
+  deriving BEq
+
+structure Wrapped where
+  text : WrapText
+  byte : WrapByte
+  nat : WrapNat
+  weight : WrapFloat
+  point : WrapPoint
+  bounded : Bounded
+  deriving BEq
+
+def wrapText (value : WrapText) : WrapText :=
+  match value with | .mk text => .mk (text ++ "!")
+
+def wrapByte (value : WrapByte) : WrapByte :=
+  match value with | .mk byte => .mk (byte + 1)
+
+def wrapNat (value : WrapNat) : WrapNat :=
+  match value with | .mk n => .mk (n * 2)
+
+def wrapFloat (value : WrapFloat) : WrapFloat :=
+  match value with | .mk x => .mk (x + 0.5)
+
+def wrapPoint (value : WrapPoint) : WrapPoint :=
+  match value with | .mk p => .mk { p with x := p.x + 1, label := p.label ++ "?" }
+
+def bounded (byte : UInt8) : Option Bounded :=
+  if h : byte < 10 then some (.mk byte h) else none
+
+def boundedByte (value : Bounded) : UInt8 :=
+  match value with | .mk byte _ => byte
+
+def wrapped (value : Wrapped) : Array Wrapped :=
+  #[value, { value with
+    text := wrapText value.text, byte := wrapByte value.byte, nat := wrapNat value.nat,
+    weight := wrapFloat value.weight, point := wrapPoint value.point }]
+
 def unsupported (f : Nat → Nat) : Nat := f 1
 
 end Typed
