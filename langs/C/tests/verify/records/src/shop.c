@@ -29,3 +29,31 @@ shop_size parcel_size(shop_parcel p) {
         return shop_size_large;
     return shop_size_small;
 }
+
+LF_MODEL("refines=keepPoint", "spec=shop")
+lf_status keep_point(const int32_t *xs LF_ARRAY(n), size_t n, shop_point p,
+                     shop_point *restrict out) {
+    *out = p;
+    return LF_OK;
+}
+
+LF_MODEL("refines=pointOne", "spec=shop")
+lf_status point_one(const shop_point *restrict ps LF_ARRAY(n), size_t n,
+                    int32_t *out) {
+    *out = 1;
+    return LF_OK;
+}
+
+LF_MODEL("refines=keepParcel", "spec=shop")
+lf_status keep_parcel(const uint32_t *xs LF_ARRAY(n), size_t n, shop_parcel p,
+                      shop_parcel *restrict out) {
+    *out = p;
+    return LF_OK;
+}
+
+LF_MODEL("refines=parcelOne", "spec=shop")
+lf_status parcel_one(const shop_parcel *restrict ps LF_ARRAY(n), size_t n,
+                     int32_t *out) {
+    *out = 1;
+    return LF_OK;
+}

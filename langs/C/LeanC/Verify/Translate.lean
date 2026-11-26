@@ -46,6 +46,7 @@ structure Variant where
   lean : String
   ctors : Nat
   members : Std.HashMap String Member
+  tag : Option Ty := none
   deriving Inhabited
 
 structure Problem where
@@ -135,6 +136,25 @@ def Env.lean (env : Env) : Ty → String
   | .enum key => (env.enums[key]?.map (·.lean)).getD "Unit"
   | .variant key => (env.variants[key]?.map (·.lean)).getD "Unit"
   | .members _ | .payload .. => "Unit"
+
+private def compatible : Ty → Ty → Bool
+  | .int _ _ w, .int _ _ v => w == v
+  | .enum _, .int _ _ 32 | .int _ _ 32, .enum _ => true
+  | a, b => a == b
+
+private def Env.members (env : Env) : Ty → Option (Array Ty)
+  | .record key => env.records[key]?.bind fun r => r.fields.toArray.mapM (·.2.ty)
+  | .variant key => env.variants[key]?.bind fun v => do
+    let fields ← (v.members.toArray.flatMap fun (_, m) => m.fields.toArray).mapM (·.2.ty)
+    return fields.push (← v.tag)
+  | _ => some #[]
+
+private partial def Env.contains (env : Env) (outer inner : Ty) : Bool :=
+  compatible outer inner || (env.members outer).all (·.any (env.contains · inner))
+
+def Env.mayOverlap (env : Env) (a b : Ty) : Bool :=
+  let char : Ty → Bool := fun | .int _ _ 8 => true | _ => false
+  char a || char b || env.contains a b || env.contains b a
 
 private def boundaryOf (env : Env) (qual : String) (ty : Ty) : String :=
   if strip qual == "size_t" then "USize" else env.lean ty
@@ -245,6 +265,8 @@ def readRecords (nodes : Array Node) : Env := Id.run do
     let tagEnum := (node.children.find? fun c => c.kind == "FieldDecl" && c.string "name" == "tag").bind fun f =>
       env.names[strip (f.typeName "desugaredQualType")]? <|> env.names[strip f.typeName]?
     let ctors := (tagEnum.bind (env.enums[·]?)).map (·.count) |>.getD 0
+    let tag := (node.children.find? fun c => c.kind == "FieldDecl" && c.string "name" == "tag").bind fun f =>
+      env.resolve f.typeName (f.typeName "desugaredQualType")
     let mut members := {}
     for union in node.children.filter (fun c => c.kind == "RecordDecl" && c.string "tagUsed" == "union") do
       for member in union.children.filter (·.kind == "FieldDecl") do
@@ -260,7 +282,7 @@ def readRecords (nodes : Array Node) : Env := Id.run do
           let boundary := ty.map (boundaryOf env qual) |>.getD ""
           fields := fields.insert (field.string "name") {lean := key, ty, boundary}
         members := members.insert (member.string "name") {ctor, fields}
-    env := {env with variants := env.variants.insert id {variant with ctors, members}}
+    env := {env with variants := env.variants.insert id {variant with ctors, members, tag}}
   return env
 
 structure Code where
@@ -1047,8 +1069,8 @@ private def translateFunction (node : Node) : M Function := do
   | some o =>
     for p in out do
       if let .array elem _ _ := p.kind then
-        if elem == o.ty && !restricted.contains p.name && !restricted.contains o.name then
-          fail node s!"out parameter '{o.name}' may point into LF_ARRAY parameter '{p.name}' of the same element type; declare one of them restrict"
+        if (← read).mayOverlap o.ty elem && !restricted.contains p.name && !restricted.contains o.name then
+          fail node s!"out parameter '{o.name}' of type '{o.cType} *' may point into LF_ARRAY parameter '{p.name}' of element type '{p.cType}'; declare one of them restrict"
   let mut params := out
   for p in out do
     if let .array _ _ length := p.kind then

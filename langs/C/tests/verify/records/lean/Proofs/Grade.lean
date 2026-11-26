@@ -61,4 +61,34 @@ theorem first_at.proof.refines : first_at.obligation.refines := by
     simp [first_at, firstAt, hz, C.index, C.IntType.toInt, hp]
     rfl
 
+theorem first_pos.proof.refines : first_pos.obligation.refines := by
+  intro xs h
+  by_cases hn : xs.size = 0
+  · have : xs = #[] := Array.eq_empty_of_size_eq_zero hn
+    subst this
+    rfl
+  · have hz : ¬(C.IntType.ofInt (xs.size : Int) : UInt64) = 0 := fun e => by
+      have := congrArg UInt64.toNat e
+      rw [ofNat64 _ h] at this
+      exact hn this
+    have hp : 0 < xs.size := by omega
+    simp [first_pos, posAt, hz, C.index, C.IntType.toInt, hp]
+    by_cases hx : (0 : Int32) < xs[0] <;> simp [hx, bind, Except.bind, pure, Except.pure]
+
+theorem byte_one.proof.refines : byte_one.obligation.refines := by
+  intro bs h
+  rfl
+
+theorem sign_one.proof.refines : sign_one.obligation.refines := by
+  intro xs h
+  rfl
+
+theorem low_level.proof.refines : low_level.obligation.refines := by
+  intro xs h
+  rfl
+
+theorem level_one.proof.refines : level_one.obligation.refines := by
+  intro ls h
+  rfl
+
 end LeanCModel.grade

@@ -23,6 +23,23 @@ def firstAt (xs : Array Int32) : C.Status × Option Int32 :=
 
 def levelAtOr (xs : Array Int32) (i : UInt32) : Level :=
   if h : i.toNat < xs.size then levelOf xs[i.toNat] else .high
+
+def posAt (xs : Array Int32) : C.Status × Option UInt8 :=
+  if h : 0 < xs.size then
+    (C.Status.ok, some (if (0 : Int32) < xs[0] then 1 else 0))
+  else (C.Status.invalid, none)
+
+def byteOne (_ : Array UInt8) : C.Status × Option Int32 :=
+  (C.Status.ok, some 1)
+
+def signOne (_ : Array Int32) : C.Status × Option UInt32 :=
+  (C.Status.ok, some 1)
+
+def lowLevel (_ : Array UInt32) : C.Status × Option Level :=
+  (C.Status.ok, some .low)
+
+def levelOne (_ : Array Level) : C.Status × Option Int32 :=
+  (C.Status.ok, some 1)
 */
 #include "grade.h"
 
@@ -49,7 +66,7 @@ grade_level first_level(const int32_t *xs LF_ARRAY(n), size_t n) {
 
 LF_MODEL("refines=levelAt")
 lf_status level_at(const int32_t *xs LF_ARRAY(n), size_t n, uint32_t i,
-                   grade_level *out) {
+                   grade_level *restrict out) {
     if (i >= n)
         return LF_INVALID;
     *out = level_of(xs[i]);
@@ -70,5 +87,44 @@ lf_status first_at(const int32_t *restrict xs LF_ARRAY(n), size_t n,
         return LF_INVALID;
     *out = 0;
     *out = xs[0];
+    return LF_OK;
+}
+
+LF_MODEL("refines=posAt")
+lf_status first_pos(const int32_t *xs LF_ARRAY(n), size_t n,
+                    uint8_t *restrict out) {
+    if (n == 0)
+        return LF_INVALID;
+    *out = 0;
+    if (xs[0] > 0)
+        *out = 1;
+    return LF_OK;
+}
+
+LF_MODEL("refines=byteOne")
+lf_status byte_one(const uint8_t *restrict bs LF_ARRAY(n), size_t n,
+                   int32_t *out) {
+    *out = 1;
+    return LF_OK;
+}
+
+LF_MODEL("refines=signOne")
+lf_status sign_one(const int32_t *xs LF_ARRAY(n), size_t n,
+                   uint32_t *restrict out) {
+    *out = 1;
+    return LF_OK;
+}
+
+LF_MODEL("refines=lowLevel")
+lf_status low_level(const uint32_t *xs LF_ARRAY(n), size_t n,
+                    grade_level *restrict out) {
+    *out = grade_level_low;
+    return LF_OK;
+}
+
+LF_MODEL("refines=levelOne")
+lf_status level_one(const grade_level *restrict ls LF_ARRAY(n), size_t n,
+                    int32_t *out) {
+    *out = 1;
     return LF_OK;
 }

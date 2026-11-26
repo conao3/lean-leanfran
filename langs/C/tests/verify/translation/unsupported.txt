@@ -32,5 +32,14 @@ local_array 135:17 array argument other than an LF_ARRAY parameter
 to_color 138:47 conversion from an integer to enum 'shapes_geo_color'
 far_color 140:43 value 7 has no constructor in enum 'shapes_geo_color'
 rect_of 142:30 unsupported result type 'shapes_geo_shape_rect_fields'
-overlap 144:11 out parameter 'out' may point into LF_ARRAY parameter 'xs' of the same element type; declare one of them restrict
-self_init 154:23 'p0' read in its own initializer
+overlap 144:11 out parameter 'out' of type 'int32_t *' may point into LF_ARRAY parameter 'xs' of element type 'int32_t'; declare one of them restrict
+byte_out 152:11 out parameter 'out' of type 'uint8_t *' may point into LF_ARRAY parameter 'xs' of element type 'int32_t'; declare one of them restrict
+byte_array 161:11 out parameter 'out' of type 'int32_t *' may point into LF_ARRAY parameter 'bs' of element type 'uint8_t'; declare one of them restrict
+sign_out 166:11 out parameter 'out' of type 'uint32_t *' may point into LF_ARRAY parameter 'xs' of element type 'int32_t'; declare one of them restrict
+enum_out 171:11 out parameter 'out' of type 'shapes_geo_color *' may point into LF_ARRAY parameter 'xs' of element type 'uint32_t'; declare one of them restrict
+enum_array 177:11 out parameter 'out' of type 'int32_t *' may point into LF_ARRAY parameter 'cs' of element type 'shapes_geo_color'; declare one of them restrict
+struct_out 183:11 out parameter 'out' of type 'shapes_geo_point *' may point into LF_ARRAY parameter 'xs' of element type 'int32_t'; declare one of them restrict
+struct_array 189:11 out parameter 'out' of type 'int32_t *' may point into LF_ARRAY parameter 'ps' of element type 'shapes_geo_point'; declare one of them restrict
+union_out 195:11 out parameter 'out' of type 'shapes_geo_shape *' may point into LF_ARRAY parameter 'xs' of element type 'int64_t'; declare one of them restrict
+union_array 201:11 out parameter 'out' of type 'shapes_geo_color *' may point into LF_ARRAY parameter 'ss' of element type 'shapes_geo_shape'; declare one of them restrict
+self_init 248:23 'p0' read in its own initializer
