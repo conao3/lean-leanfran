@@ -29,21 +29,22 @@ lake env leanfran-c generate --module-name Pricing.Core --roots Pricing.total \
 lake env leanfran-c build --out-dir out
 ```
 
-Pass a comma-separated list of fully qualified declarations to `--roots`. Omit it to select supported public definitions declared in the module. The default prefix is the last component of the module name in snake case, such as `core` for `Pricing.Core`. Use the same output directory for generation and build.
+Pass a comma-separated list of fully qualified declarations to `--roots`. Omit it to select supported public definitions declared in the module. The default prefix is the last component of the module name in snake case, such as `core` for `Pricing.Core`. Use the same output directory for generation and build. `generate` writes `<prefix>.h`, `<prefix>.c`, `leanfran.h`, `leanfran.c`, `leanfran.json`, the Lean export module under `LeanfranExport/`, and the JSON runtime under `LeanfranC/`, which `build` compiles, together with `<prefix>.externs.txt`, `<prefix>.implemented-by.txt`, and `<prefix>.schema.json`, described in [Generation checks](#generation-checks) and [Validation and JSON](#validation-and-json).
 
 Save this consumer as `main.c` in the Lake workspace.
 
 ```c
+#include "pricing.h"
 #include <inttypes.h>
 #include <stdio.h>
-#include "pricing.h"
 
 int main(void) {
     lf_error error = {0};
     uint64_t total;
     if (pricing_init(&error) != LF_OK ||
         pricing_total(3, 1200, &total, &error) != LF_OK) {
-        fprintf(stderr, "%s\n", error.message ? error.message : "Lean call failed");
+        fprintf(stderr, "%s\n",
+                error.message ? error.message : "Lean call failed");
         lf_error_clear(&error);
         return 1;
     }
@@ -160,10 +161,16 @@ theorem total_empty : total #[] = 0 := rfl
 
 A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks, and the importing block uses their definitions by their unqualified names. The definitions of all blocks share one namespace, so two blocks cannot define the same name. `sync` reports such a pair at the second block, as in `src/b.c:1:1: error: Lean blocks 'a' (src/a.c:1) and 'b' both define 'spec'; …`. Put a block's helper definitions in a `namespace` to keep their names apart. The block's Lean code can begin with `import` lines for modules of the `[[require]]` packages and for `LeanCLib.C`, which defines the C operations and `C.Status` used in [Verify a C function in Lean](#verify-a-c-function-in-lean). A Lean string that needs `*/` can write it as `"*" ++ "/"`.
 
-Put `leanfran.toml` in the project root. The commands stop with status 254 when it is missing, and a file with only `sources` is enough.
+Put `leanfran.toml` in the project root. The commands stop with status 254 when it is missing. A file with only `sources` is enough.
 
 ```toml
 # leanfran.toml
+sources = ["src/**/*.c", "src/**/*.h"]
+```
+
+The other keys are optional. The following file uses every key. `sync` stops with status 254 when a `[[require]]` path does not contain a Lake package.
+
+```toml
 sources = ["src/**/*.c", "src/**/*.h"]
 lean-files = ["lean/*.lean"]
 out-dir = "leanfran"
@@ -256,7 +263,7 @@ int32_t clamp(int32_t lo, int32_t hi, int32_t x) {
 | `ensures=<label>:<name>` | A Lean function returning `Bool` that takes the arguments followed by the result. Use a distinct label for each postcondition. |
 | `spec=<block>` | The Lean block that contains the names. The default is the only block in the file that contains `LF_MODEL`. |
 
-Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads `LF_MODEL` functions to generate the [model test](#model-test), so `sync`, `status`, and `check` need clang on `PATH`.
+Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads `LF_MODEL` functions to generate the [model test](#model-test), so `sync`, `status`, and `check` need clang on `PATH`. `leanfran-c --help` also lists `translate`, which writes the translation of one C file to a Lean file, and `obligations check`, which checks proof modules against an obligations file. `check` runs both steps for a project, and the two commands help to inspect a translation.
 
 ### Obligations and proof status
 
@@ -277,7 +284,7 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
 end LeanCModel.clamp
 ```
 
-A function whose body can hit undefined behavior returns `C.M α`, which is `Except C.Exc α`. Signed overflow, division by zero, a shift count that is negative or not less than the width, a `double` to integer conversion out of range, an out-of-range array index, a read of an inactive tagged-union member, a non-terminating loop, and reaching the end of a function that returns a value are modeled failures. Refinement then means the translated function returns `Except.ok` with the specified value, so a proof also shows that the failures do not occur on inputs that satisfy `requires`. A postcondition for such a function states that a successful result exists and satisfies the predicate.
+A function whose body can hit undefined behavior returns `C.M α`, which is `Except C.Exc α`. Signed overflow, division by zero, a shift count that is negative or not less than the width, a `double` to integer conversion out of range, an out-of-range array index, a read of an inactive tagged-union member, a non-terminating loop, and reaching the end of a function that returns a value are modeled failures. Refinement then means the translated function returns `Except.ok` with the specified value, so a proof also shows that the translated definition reaches none of these modeled failures on inputs that satisfy `requires`. A postcondition for such a function states that a successful result exists and satisfies the predicate.
 
 ```sh
 leanfran-c check --require proved
@@ -305,7 +312,7 @@ The translator accepts `static` and external functions with these parts.
 
 - Types: `int8_t` to `int64_t`, `uint8_t` to `uint64_t`, `int` and `unsigned` (32 bits), `long` and `unsigned long` (64 bits), `size_t` (64 bits), `bool`, `double`, `LF_STRUCT` structs and the generated record types passed by value, the generated enums and tagged unions passed by value, other C enums as their underlying integer type (`unsigned int`, or `int` when an enumerator is negative), and `LF_ARRAY` arrays. An `LF_ARRAY` element and the `out` pointee can be any of these value types, including generated enums and tagged unions. A function returns one value, or `lf_status` with a final `out` pointer. An `LF_ARRAY` parameter and the `out` pointer can be `restrict` (`const T *restrict xs LF_ARRAY(n)`, `T *restrict out`). A function whose `out` pointee may overlap the elements of an `LF_ARRAY` parameter must declare that parameter or `out` `restrict`. Following C's aliasing rule (C11 6.5p7), `check` reduces each type to its scalar leaves: an integer counts as its width regardless of sign, a generated enum as a 32-bit integer (it is compatible with `unsigned int`), and a struct or tagged union as the leaves of its fields, nested fields, and tag. The two types may overlap when either is a character type (`int8_t`, `uint8_t`, `signed char`, `unsigned char`) or when they share a leaf, because both may then access an object of that leaf type. Two different enums share the 32-bit leaf, and so do a struct and a tagged union that both have a 32-bit field. Integers of different widths, an integer and `double`, `bool` and an integer, and a struct whose fields are all of other widths do not overlap.
 - Generated enums: a value is the Lean constructor. Conversions to integers give the constructor number, so comparisons and `switch` on enumerators work. A conversion from an integer to a generated enum must be an enumerator or a constant that names a constructor.
-- Generated tagged unions: a value is the Lean value. `x.tag` is the constructor number. `x.as.<constructor>.<field>` reads a field of the active constructor; reading a member of another constructor fails the translated definition with `C.Exc.inactiveMember`, so a `refines` proof also shows that the function reads only the active member.
+- Generated tagged unions: a value is the Lean value. `x.tag` is the constructor number. `x.as.<constructor>.<field>` reads a field of the active constructor; reading a member of another constructor fails the translated definition with `C.Exc.inactiveMember`, so a `refines` proof also shows that the translated definition reads only the active member. The tests do not compare this with the compiled C.
 - Statements: local declarations with initializers, assignment, compound assignment, `++`, `--`, `if`, `switch` with `break`-terminated cases, `for`, `while`, `do while`, `break`, `continue`, and `return`.
 - Expressions: integer and `double` arithmetic, comparisons, bitwise operators and shifts, `&&`, `||`, `!`, `?:`, array and field reads, integer conversions, and calls to other translated functions.
 - Calls with arrays: pass one of the caller's `LF_ARRAY` parameters as an array argument. If the length argument is that parameter's own length argument and the caller never assigns it, the callee receives the whole array. Any other length `n` passes the first `n` elements. A negative `n` or an `n` larger than the array is an out-of-range index.
@@ -315,11 +322,18 @@ Keep other pointers, array arguments other than `LF_ARRAY` parameters, `lf_statu
 
 The translation needs an LP64 target: `short` has 2 bytes, `int` 4, and `long`, `long long`, and `size_t` 8. clang reads the target's sizes with the file's compile flags, and on another target every function is `unextracted`. Compile the C functions that use `double` with `-ffp-contract=off` and without `-ffast-math`, because a compiler that fuses `a * b + c` into one FMA instruction rounds once and returns a different result. A function that uses `double` is `unextracted` when its flags contain `-ffast-math`, `-Ofast`, another unsafe floating-point flag, or `-ffp-contract=` with a value other than `off`, and when the target has FMA instructions (such as arm64, or x86-64 with `-mfma`) and the flags do not contain `-ffp-contract=off`. Put the flag in `cflags` in `leanfran.toml` or in `compile_commands.json`, and build your program with the same flags.
 
-A `proved` obligation is a theorem about the translated definition. The translated definition reads each array as an immutable Lean `Array`, so a write through `out` does not reach it, and the obligation holds for calls whose `out` overlaps no `LF_ARRAY` argument. `check` reports a function as `unextracted` when C allows its `out` to overlap one of its `LF_ARRAY` parameters, unless one of them is `restrict`. With `restrict`, a call that writes memory through `out` and reads it through the array is undefined behavior in C, so the caller keeps `out` apart from every `LF_ARRAY` argument. For the other type pairs, an overlapping access is undefined behavior in C. The trusted pieces outside each proof are the translator, clang's AST, [the operation model](../langs/C/lean/LeanCLib/C.lean), the Lean kernel, the C compiler, and the Lean blocks. `check` checks each proof again with the kernel, so a proof file cannot skip it. The translated definition is elaborated with the block's module imported, so an instance that a block declares for its own types, such as `BEq` for an enum, gives the meaning of operators on those types. The repository tests them. The operation tests compare `LeanCLib.C` with GCC and Clang at `-O0` and `-O2` and match each modeled failure with the UBSan diagnostic. The translation tests compare translated functions with the compiled C. Inputs that make a translation fail must stop the C function under UBSan, and inputs that make it fail with a first out-of-range index at most 16 elements outside the array must stop the C function under ASan, which reads arrays allocated with their exact length. ASan does not detect a read that lands in another live allocation, and UBSan does not detect a read of an inactive tagged-union member, so the tests do not compare those reads with C. The model test below runs your implementation against the spec.
+A `proved` obligation is a theorem about the translated definition. It applies to a call of the C function when the call keeps the following calling contract, which C does not check.
+
+- Each `LF_STRUCT` argument meets the `LF_FIELD` constraints of its fields, each argument of a generated type meets its proof fields, and each generated enum argument holds one of its enumerators. The translated definition takes the argument as a Lean value, which carries these facts, and a proof can use them. Check a value with the generated `<prefix>_<type>_valid` before the call. For the `order` struct in [Use C structs in Lean](#use-c-structs-in-lean), `pricing_order_valid(&o, &error)` after `pricing_init` returns `false` with `Invalid order.qty_le` when `qty` is above 1000. An enum's `_valid` returns `false` with `Invalid <prefix>_<enum> tag` for a value that is not an enumerator.
+- Each `LF_ARRAY` length argument equals the number of elements that the array pointer can read. The translated definition derives the length from the array's size.
+- `out` points into no `LF_ARRAY` argument. The translated definition reads each array as an immutable Lean `Array`, so a write through `out` does not reach it. `check` reports a function as `unextracted` when C allows its `out` to overlap one of its `LF_ARRAY` parameters and neither of them is `restrict`. With `restrict`, a call that writes memory through `out` and reads it through the array is undefined behavior in C. For the other type pairs, any overlapping access is undefined behavior in C.
+- The program is compiled with the macros, target, and floating-point flags that clang read from `compile_commands.json` or `cflags`. `check` checks the target's sizes and the floating-point flags it reads, and your build must use the same flags.
+
+The trusted pieces outside each proof are the translator, clang's AST, [the operation model](../langs/C/lean/LeanCLib/C.lean), which gives each C operation its meaning, the Lean kernel, the C compiler, the Lean blocks, and the `refines`, `ensures`, and `requires` definitions you wrote, which must state what you intend. `check` checks each proof again with the kernel, so a proof file cannot skip it. The translated definition is elaborated with the block's module imported, so an instance that a block declares for its own types, such as `BEq` for an enum, gives the meaning of operators on those types. The repository tests the translator and the operation model on its own fixtures. The operation tests compare `LeanCLib.C` with GCC and Clang at `-O0` and `-O2` and match each modeled failure with the UBSan diagnostic. The translation tests compare translated functions with the compiled C. Inputs that make a translation fail must stop the C function under UBSan, and inputs that make it fail with a first out-of-range index at most 16 elements outside the array must stop the C function under ASan, which reads arrays allocated with their exact length. ASan does not detect a read that lands in another live allocation, and UBSan does not detect a read of an inactive tagged-union member, so the tests do not compare those reads with C. The model test below runs your implementation against the spec.
 
 ### Model test
 
-When the sources contain `LF_MODEL`, `sync` also writes `leanfran_model_test.c` and `leanfran_model_test.h` to the output directory and a `leanfran-model-test` target to `leanfran.mk`. The test calls the spec through the block's public C function and compares it with your C function. It enumerates boundary values first and then uses seeded random inputs, and it discards inputs that `requires` rejects. The test fails when no generated input satisfies `requires`. Random `double` inputs include values from 1/16 to 32 with random mantissas. NaN results match each other, and other `double` results are compared bit for bit.
+When the sources contain `LF_MODEL`, `sync` also writes `leanfran_model_test.c` and `leanfran_model_test.h` to the output directory and a `leanfran-model-test` target to `leanfran.mk`. The test calls the spec through the block's public C function and compares it with your C function. It enumerates boundary values first and then uses seeded random inputs, and it discards inputs that `requires` rejects. The test fails when no generated input satisfies `requires`. The test is generated by `sync`, so run `sync` or `check` after you add, change, or remove an `LF_MODEL` function. Until then the target runs the previous test, and `status` exits with status 1. Random `double` inputs include values from 1/16 to 32 with random mantissas. NaN results match each other, and other `double` results are compared bit for bit.
 
 ```sh
 make -f leanfran/leanfran.mk leanfran-model-test
