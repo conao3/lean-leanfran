@@ -11,6 +11,6 @@ name = "Support"
 srcDir = "local"
 
 [[lean_lib]]
-name = "Nested"
+name = "NestedLibrary"
 srcDir = "local"
-globs = ["Nested.+"]
+roots = ["Nested"]

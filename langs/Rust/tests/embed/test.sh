@@ -78,6 +78,8 @@ mkdir "$local_imports/lean/Proofs"
 printf 'theorem correct : True := True.intro\n' > "$local_imports/lean/Proofs/Answer.lean"
 mkdir -p "$local_imports/lean/downloaded/dep/Nested"
 printf 'def downloaded := 0\n' > "$local_imports/lean/downloaded/dep/Nested/Values.lean"
+mkdir "$local_imports/lean/MyApp"
+printf 'not valid Lean\n' > "$local_imports/lean/MyApp/Std.lean"
 test "$(cargo run -q --manifest-path "$manifest")" = 11
 mv "$local_imports/lean/downloaded" "$local_imports/downloaded"
 test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
@@ -85,6 +87,9 @@ echo "embed-test: a checkout without downloaded Lean packages reuses the cache"
 printf 'theorem correct : True := by trivial\n' > "$local_imports/lean/Proofs/Answer.lean"
 test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
 echo "embed-test: a proof-only edit reuses the local-import cache"
+printf 'still not valid Lean\n' > "$local_imports/lean/MyApp/Std.lean"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
+echo "embed-test: a file with the same suffix as an external import does not affect the cache"
 printf 'def nestedValue : UInt32 := 2\n' > "$local_imports/lean/local/Nested/Values.lean"
 if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$manifest" > "$local_imports/offline.log" 2>&1; then
   echo "embed-test: a stale local Lean dependency was accepted offline" >&2

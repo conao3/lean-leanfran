@@ -1,11 +1,20 @@
 use crate::{sha_hex, syntax::normalize_path, Error};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn lakefile(root: &Path) -> Option<String> {
+    // Lake prefers a Lean configuration when both files exist.
+    if root.join("lakefile.lean").is_file() {
+        return None;
+    }
+    fs::read_to_string(root.join("lakefile.toml")).ok()
+}
+
 pub(super) fn packages_dir(root: &Path) -> Option<PathBuf> {
-    let text = fs::read_to_string(root.join("lakefile.toml")).ok()?;
+    let text = lakefile(root)?;
     let table: toml::Table = toml::from_str(&text).ok()?;
     root.join(table.get("packagesDir")?.as_str()?)
         .canonicalize()
@@ -13,19 +22,115 @@ pub(super) fn packages_dir(root: &Path) -> Option<PathBuf> {
 }
 
 pub(super) struct LocalLean<'a> {
-    pub(super) root: &'a Path,
-    pub(super) files: &'a [PathBuf],
-    pub(super) modules: HashMap<PathBuf, (String, Vec<PathBuf>)>,
+    root: &'a Path,
+    files: &'a [PathBuf],
+    config: Option<LakeConfig>,
+    config_text: Option<String>,
+    modules: HashMap<PathBuf, (String, Vec<PathBuf>)>,
 }
 
-impl LocalLean<'_> {
-    fn resolve(&self, import: &str) -> Option<PathBuf> {
-        let path = module_path(&mut import.trim())?;
-        self.files.iter().find(|f| f.ends_with(&path)).cloned()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LakeConfig {
+    #[serde(default)]
+    src_dir: PathBuf,
+    #[serde(default, rename = "lean_lib")]
+    libs: Vec<Library>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Library {
+    name: String,
+    #[serde(default)]
+    src_dir: PathBuf,
+    roots: Option<Vec<String>>,
+    globs: Option<Vec<String>>,
+}
+
+impl Library {
+    fn builds(&self, path: &Path) -> bool {
+        let roots = self
+            .roots
+            .as_deref()
+            .unwrap_or(std::slice::from_ref(&self.name));
+        let module = path.with_extension("");
+        let Some(globs) = &self.globs else {
+            return roots.iter().any(|root| {
+                module_path(&mut root.as_str())
+                    .is_some_and(|root| module.starts_with(root.with_extension("")))
+            });
+        };
+        globs.iter().any(|glob| matches_glob(&module, glob))
+            || roots.iter().any(|root| {
+                let Some(root) = module_path(&mut root.as_str()).map(|p| p.with_extension(""))
+                else {
+                    return false;
+                };
+                module.starts_with(&root) && globs.iter().any(|glob| matches_glob(&root, glob))
+            })
+    }
+}
+
+fn matches_glob(module: &Path, glob: &str) -> bool {
+    let (name, descendants, include_root) = if let Some(name) = glob.strip_suffix(".*") {
+        (name, true, true)
+    } else if let Some(name) = glob.strip_suffix(".+") {
+        (name, true, false)
+    } else {
+        (glob, false, true)
+    };
+    let Some(root) = module_path(&mut name.trim()).map(|p| p.with_extension("")) else {
+        return false;
+    };
+    if module == root {
+        include_root
+    } else {
+        descendants && module.starts_with(root)
+    }
+}
+
+impl<'a> LocalLean<'a> {
+    pub(super) fn new(root: &'a Path, files: &'a [PathBuf]) -> Self {
+        let toml = lakefile(root);
+        let config = toml.as_ref().and_then(|text| toml::from_str(text).ok());
+        let config_text = toml.or_else(|| fs::read_to_string(root.join("lakefile.lean")).ok());
+        Self {
+            root,
+            files,
+            config,
+            config_text,
+            modules: HashMap::new(),
+        }
+    }
+
+    fn resolve(&self, path: &Path) -> Option<PathBuf> {
+        if let Some(config) = &self.config {
+            // Lake searches the workspace's own libraries in reverse declaration order.
+            let library = config.libs.iter().rev().find(|lib| lib.builds(path))?;
+            let dir = self
+                .root
+                .join(&config.src_dir)
+                .join(&library.src_dir)
+                .canonicalize()
+                .ok()?;
+            let root = self.root.canonicalize().ok()?;
+            let source = self.root.join(dir.strip_prefix(root).ok()?).join(path);
+            return self
+                .files
+                .binary_search(&source)
+                .ok()
+                .map(|i| self.files[i].clone());
+        }
+        // Executable Lake configurations cannot be evaluated on an offline cache hit.
+        self.files.iter().find(|f| f.ends_with(path)).cloned()
     }
 
     pub(super) fn fingerprint(&mut self, imports: &[String]) -> Result<Option<String>, Error> {
-        let mut pending: Vec<_> = imports.iter().filter_map(|m| self.resolve(m)).collect();
+        let mut pending: Vec<_> = imports
+            .iter()
+            .filter_map(|m| module_path(&mut m.trim()).and_then(|p| self.resolve(&p)))
+            .collect();
         if pending.is_empty() {
             return Ok(None);
         }
@@ -39,7 +144,7 @@ impl LocalLean<'_> {
                     .map_err(|e| Error::new(format!("{}: {e}", path.display())))?;
                 let deps = header_imports(&source)
                     .into_iter()
-                    .filter_map(|p| self.files.iter().find(|f| f.ends_with(&p)).cloned())
+                    .filter_map(|p| self.resolve(&p))
                     .collect();
                 let rel = normalize_path(path.strip_prefix(self.root).unwrap_or(&path));
                 self.modules.insert(
@@ -53,9 +158,8 @@ impl LocalLean<'_> {
         for path in seen {
             hash.update(self.modules[&path].0.as_bytes());
         }
-        let lakefile = self.root.join("lakefile.toml");
-        if self.files.contains(&lakefile) {
-            hash.update(fs::read(&lakefile)?);
+        if let Some(text) = &self.config_text {
+            hash.update(text.as_bytes());
         }
         Ok(Some(
             hash.finalize().iter().map(|b| format!("{b:02x}")).collect(),

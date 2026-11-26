@@ -15,5 +15,13 @@ leanfran::lean! {
 }
 
 fn main() {
-    println!("{}", policy::answer(10));
+    println!("{}", policy::answer(10) + external::stdlib_value());
+}
+
+leanfran::lean! {
+    #[lean(imports = ["Std"])]
+    mod external;
+    r#"
+    def stdlib_value : UInt32 := 0
+    "#
 }

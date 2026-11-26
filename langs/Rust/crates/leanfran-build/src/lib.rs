@@ -477,11 +477,8 @@ impl Builder {
         extra: &str,
         files: &[PathBuf],
     ) -> Result<Vec<String>, Error> {
-        let mut local = local_lean::LocalLean {
-            root: &self.lean_dir(),
-            files,
-            modules: HashMap::new(),
-        };
+        let lean = self.lean_dir();
+        let mut local = local_lean::LocalLean::new(&lean, files);
         let digests = blocks
             .iter()
             .map(|b| local.fingerprint(&b.imports))
