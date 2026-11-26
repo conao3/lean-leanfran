@@ -42,7 +42,7 @@ root = "Oracle"
 LAKE
     cd "$dir"
     python "$generator" generate "$seed" "$functions" ${mode:+"$mode"}
-    "$compiler" translate --block fixture --out LeanCModel/Fixture.lean fixture.c \
+    "$compiler" translate --block fixture --out LeanCModel/Fixture.lean fixture.c -- -ffp-contract=off \
         >translated.txt 2>translate.err
     if [[ -s translate.err ]] || [[ $(wc -l <translated.txt) -ne $functions ]]; then
         cat translate.err >&2

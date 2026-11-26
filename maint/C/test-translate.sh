@@ -39,7 +39,7 @@ lake build FixtureTypes LeanCLib
 grep -Fq 'struct LF_LEAN("Geo.Point") shapes_geo_point' "$scratch/shapes/shapes.h"
 grep -Fq 'struct LF_LEAN("Geo.Shape") shapes_geo_shape' "$scratch/shapes/shapes.h"
 
-clang_args=(-I "$scratch/shapes" -I "$fixtures")
+clang_args=(-I "$scratch/shapes" -I "$fixtures" -ffp-contract=off)
 "$compiler" translate --block fixture --import FixtureTypes \
     --out "$project/LeanCModel/Fixture.lean" "$fixtures/fixture.c" -- "${clang_args[@]}" \
     >"$scratch/translated.txt" 2>"$scratch/translate.err"
