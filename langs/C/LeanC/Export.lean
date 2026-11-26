@@ -42,7 +42,9 @@ def readExport (cPrefix : String) (renames : Renames) (name : Name)
   let mut type := info.type
   let mut args := #[]
   let mut argTypes := #[]
-  while let .forallE _ domain body _ := type do
+  while let .forallE binder domain body _ := type do
+    if body.hasLooseBVars then
+      throwError "'{name}' has a parameter or result type that depends on parameter '{binder}'"
     let domain := domain.consumeMData
     let arg ← try readType cPrefix renames domain externalTypes catch e =>
       let message ← e.toMessageData.toString

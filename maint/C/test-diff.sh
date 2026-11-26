@@ -26,6 +26,25 @@ status=0
 test "$status" -eq 254
 grep -F 'unsupported parameter type' "$scratch/rejected"
 test ! -e "$scratch/invalid"
+for root in safeHalf lastIndex; do
+    status=0
+    "$compiler" generate --module-name Examples.Dependent --roots "Dependent.$root" \
+        --out-dir "$scratch/dependent" >"$scratch/rejected" 2>&1 || status=$?
+    test "$status" -eq 254
+    grep -Fx "leanfran-c: 'Dependent.$root' has a parameter or result type that depends on parameter 'n'" \
+        "$scratch/rejected"
+    if grep -E 'PANIC|backtrace' "$scratch/rejected"; then
+        exit 1
+    fi
+    test ! -e "$scratch/dependent"
+done
+"$compiler" generate --module-name Examples.Dependent --out-dir "$scratch/dependent" 2>"$scratch/skipped"
+grep -F 'dependent_half(' "$scratch/dependent/dependent.h"
+test "$(grep -c "^leanfran-c: skipping 'Dependent\.[a-zA-Z]*' has a parameter or result type that depends on parameter 'n'$" \
+    "$scratch/skipped")" -eq 2
+if grep -E 'PANIC|backtrace' "$scratch/skipped"; then
+    exit 1
+fi
 "$compiler" generate --module-name Examples.PublicApi --roots Example.lookup \
     --prefix selected --out-dir "$scratch/selected"
 grep -F 'lf_status selected_lookup(' "$scratch/selected/selected.h"
