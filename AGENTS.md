@@ -24,7 +24,7 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 
 For PHP models, maintain proof and translation fixtures alongside the native-oracle comparisons. Run property tests against the generated specs in the shared verification fixture. `make check BACKENDS=PHP` runs the PHP checks under PHP 8.4 and 8.5. `make check BACKENDS=Go` runs the Go checks under Go 1.27 and 1.26, including a local mirror publish and consumer install.
 
-`make check BACKENDS=C` tests the C API, initialization, ownership, and static and shared linking. Its `check-model`, `check-translate`, `check-verify`, `check-random`, and `check-samples` targets compare the C operation model and the translation with compiled C, check the obligation states and the lock, run the model tests, and run the samples.
+`make check BACKENDS=C` tests the C API, initialization, ownership, and static and shared linking. Its `check-model`, `check-translate`, `check-fuzz`, `check-verify`, `check-random`, and `check-samples` targets compare the C operation model, the translation, and the translation of generated functions with compiled C, check the obligation states and the lock, run the model tests, and run the samples.
 
 Run `make check` from the repository root, or `make check BACKENDS=Python` for selected backends. Run `make format` before committing.
 
