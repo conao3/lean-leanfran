@@ -17,14 +17,66 @@ def ObligationRef.theorem (o : ObligationRef) : Name := o.model ++ `proof ++ .mk
 private def moduleFile (mod : Name) : String :=
   "/".intercalate (mod.components.map toString) ++ ".lean"
 
-def checkObligation (o : ObligationRef) : MetaM Json := do
+partial def untrustedClosure (env : Environment) (trusted : NameSet) (roots : List Name) :
+    Std.HashMap Name ConstantInfo := Id.run do
+  let isTrusted := fun (n : Name) => match env.getModuleIdxFor? n with
+    | some idx => trusted.contains env.header.moduleNames[idx.toNat]!
+    | none => false
+  let mut todo := roots
+  let mut found : Std.HashMap Name ConstantInfo := {}
+  while let n :: rest := todo do
+    todo := rest
+    if found.contains n || isTrusted n then continue
+    let some ci := env.find? n | continue
+    found := found.insert n ci
+    todo := ci.getUsedConstantsAsSet.toList ++ todo
+    match ci with
+    | .inductInfo info => todo := info.all ++ info.ctors ++ todo
+    | .ctorInfo info => todo := info.induct :: todo
+    | .recInfo info => todo := info.all ++ todo
+    | _ => pure ()
+  return found
+
+def replayProblem (env : Environment) (trusted : NameSet) (base : Kernel.Environment) (names : List Name) :
+    IO (Option String) := do
+  try
+    discard <| base.replay (untrustedClosure env trusted names)
+    return none
+  catch e => return some (" ".intercalate ((e.toString.take 1000).toString.splitOn "\n" |>.map (·.trimAscii.toString)))
+
+def orphanInstance (trusted : NameSet) (stmt : Name) : MetaM (Option (Name × Name)) := do
   let env ← getEnv
-  let base := [("model", toJson o.model.toString), ("label", toJson o.label)]
+  let moduleOf := fun (n : Name) => (env.getModuleIdxFor? n).map fun idx => env.header.moduleNames[idx.toNat]!
+  let ours := fun (n : Name) => match moduleOf n with
+    | some m => trusted.contains m || (`LeanCLib).isPrefixOf m
+    | none => false
+  let translated := fun (n : Name) => match moduleOf n with
+    | some m => (`LeanCModel).isPrefixOf m
+    | none => true
+  let mut todo := [stmt]
+  let mut seen : NameSet := {}
+  while let n :: rest := todo do
+    todo := rest
+    if seen.contains n then continue
+    seen := seen.insert n
+    let some ci := env.find? n | continue
+    for c in ci.getUsedConstantsAsSet do
+      if translated c then todo := c :: todo
+      else if !ours c && (← isInstance c) then
+        let some info := env.find? c | continue
+        let args := info.type.getForallBody.getAppArgs
+        unless args.any fun a => a.getUsedConstants.any fun t => !ours t do
+          return some (c, (moduleOf c).getD .anonymous)
+  return none
+
+def checkObligation (trusted : NameSet) (base : Kernel.Environment) (o : ObligationRef) : MetaM Json := do
+  let env ← getEnv
+  let base' := [("model", toJson o.model.toString), ("label", toJson o.label)]
   let stmt := o.statement
   let thm := o.theorem
   unless env.contains stmt do
-    return Json.mkObj (base ++ [("status", toJson "unextracted"), ("detail", toJson s!"{stmt} is not defined")])
-  let some ci := env.find? thm | return Json.mkObj (base ++ [("status", toJson "missing")])
+    return Json.mkObj (base' ++ [("status", toJson "unextracted"), ("detail", toJson s!"{stmt} is not defined")])
+  let some ci := env.find? thm | return Json.mkObj (base' ++ [("status", toJson "missing")])
   let mod := match env.getModuleIdxFor? thm with
     | some idx => moduleFile env.header.moduleNames[idx.toNat]!
     | none => ""
@@ -36,13 +88,19 @@ def checkObligation (o : ObligationRef) : MetaM Json := do
   let same ← if ci.type == expected then pure true
     else try withTransparency .default (isDefEq ci.type expected) catch _ => pure false
   unless same do
-    return Json.mkObj (base ++ place ++ [("status", toJson "mismatch"), ("detail", toJson s!"{thm} : {← ppExpr ci.type}")])
+    return Json.mkObj (base' ++ place ++ [("status", toJson "mismatch"), ("detail", toJson s!"{thm} : {← ppExpr ci.type}")])
+  if let some problem ← replayProblem env trusted base [thm, stmt] then
+    return Json.mkObj (base' ++ place ++ [("status", toJson "failed"),
+      ("detail", toJson s!"the kernel rejected {thm} or a declaration it uses: {problem}")])
+  if let some (inst, mod) ← orphanInstance trusted stmt then
+    return Json.mkObj (base' ++ place ++ [("status", toJson "unextracted"),
+      ("detail", toJson s!"the translated definition uses the instance {inst} from {mod} on standard types")])
   let axioms := (← collectAxioms thm).toList.map (·.toString) |>.mergeSort (· ≤ ·)
   let status :=
     if axioms.contains "sorryAx" then "sorry"
     else if axioms.all (fun a => standardAxioms.contains a.toName) then "proved"
     else "axioms"
-  return Json.mkObj (base ++ place ++ [("status", toJson status), ("axioms", toJson axioms)])
+  return Json.mkObj (base' ++ place ++ [("status", toJson status), ("axioms", toJson axioms)])
 
 def parseObligations (j : Json) : Except String (Array ObligationRef) := do
   let arr ← j.getArr?
@@ -74,8 +132,13 @@ unsafe def obligationsMain (args : List String) : IO UInt32 := do
     if (← searchPath.findWithExt "olean" m).isNone then
       return ← fail s!"module not found: {m}"
   let env ← importModules (names.map fun m => { module := m }) {} (loadExts := true)
+  let toolchain := (← findSysroot) / "lib" / "lean"
+  let trusted ← env.header.moduleNames.filterM fun m => do
+    return (← findOLean m).toString.startsWith (toolchain.toString ++ "/")
+  let baseEnv ← importModules (trusted.map fun m => { module := m }) {}
+  let trustedSet := trusted.foldl (init := {}) NameSet.insert
   let ctx : Core.Context := { fileName := file, fileMap := default, maxHeartbeats := 0 }
-  let (results, _) ← ((refs.mapM checkObligation).run').toIO ctx { env }
+  let (results, _) ← ((refs.mapM (checkObligation trustedSet baseEnv.toKernelEnv)).run').toIO ctx { env }
   IO.println (Json.arr results).compress
   return 0
 

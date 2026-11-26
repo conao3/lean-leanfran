@@ -197,4 +197,66 @@ cmp "$scratch/shop.h" "$app/leanfran/shop.h"
 cp "$scratch/shop.c" "$app/src/shop.c"
 run 0 status
 
-echo "verify: obligation states, stale results and --require proved checked"
+cp -R "$backend/tests/verify/trust" "$scratch/trust"
+app="$scratch/trust"
+run 1 check
+expect_model 'ch.inc [refines]' failed
+grep -Fq "error: lean/Proofs/Ch.lean:13: the kernel rejected LeanCModel.ch.inc.proof.refines or a declaration it uses: while replaying declaration 'LeanCModel.ch.unchecked'" \
+    "$scratch/err"
+expect_model 'inst.bump [refines]' unextracted
+grep -Fq 'error: lean/Proofs/Inst.lean:5: the translated definition uses the instance instHAddUInt32_leanfranBlocks from LeanfranBlocks.inst on standard types' \
+    "$scratch/err"
+for model in fp.muladd fp.widen lim.below; do
+    expect_model "$model [refines]" proved
+done
+run 0 status
+
+cp "$app/src/lim.c" "$scratch/lim.c"
+sed 's/LIMIT = 10/LIMIT = 11/' "$scratch/lim.c" >"$app/src/lim.c"
+run 1 status
+expect_model 'lim.below [refines]' stale
+expect_model 'fp.muladd [refines]' proved
+run 1 check
+expect_model 'lim.below [refines]' failed
+cp "$scratch/lim.c" "$app/src/lim.c"
+run 1 check
+run 0 status
+
+flags_case() {
+    local flags=$1
+    printf '[{"directory": ".", "file": "src/fp.c", "arguments": ["cc", %s"-c", "src/fp.c"]}]\n' "$flags" \
+        >"$app/compile_commands.json"
+    run 1 status
+}
+flags_case '"-ffast-math", '
+expect_model 'fp.muladd [refines]' stale
+expect_model 'fp.widen [refines]' proved
+run 1 check
+expect_model 'fp.muladd [refines]' unextracted
+grep -Fq 'src/fp.c:8:8: unextracted muladd: compiled with -ffast-math, which changes double results' "$scratch/err"
+flags_case '"-ffp-contract=fast", '
+run 1 check
+grep -Fq 'src/fp.c:8:8: unextracted muladd: compiled with -ffp-contract=fast, which can contract double operations' \
+    "$scratch/err"
+if [[ $(uname -s) == Linux ]]; then
+    flags_case '"-mfma", '
+else
+    flags_case ''
+fi
+run 1 check
+grep -Fq 'src/fp.c:8:8: unextracted muladd: the target has FMA instructions and the flags do not contain -ffp-contract=off' \
+    "$scratch/err"
+if [[ $(uname -s) == Linux ]]; then
+    flags_case '"-m32", "-ffreestanding", "-ffp-contract=off", '
+    expect_model 'fp.widen [refines]' stale
+    run 1 check
+    grep -Fq 'src/fp.c:11:15: unextracted widen: the target is not LP64: long has 4 bytes, the translation needs 8' \
+        "$scratch/err"
+    expect_model 'fp.widen [refines]' unextracted
+fi
+rm "$app/compile_commands.json"
+run 1 check
+expect_model 'fp.muladd [refines]' proved
+expect_model 'fp.widen [refines]' proved
+
+echo "verify: obligation states, stale results, kernel replay, instances, target and floating-point flags checked"

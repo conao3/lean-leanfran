@@ -1119,7 +1119,35 @@ private partial def visit (byName : Std.HashMap String Node) (name : String) (pa
   modify fun (order, done, recursive) =>
     if done.contains name then (order, done, recursive) else (order.push name, done.insert name, recursive)
 
-def translate (root : Node) (file : FilePath) (directory : FilePath) : Output := Id.run do
+def targetProblem (macros : Std.HashMap String String) : Option String :=
+  [("__SIZEOF_SHORT__", "short", "2"), ("__SIZEOF_INT__", "int", "4"), ("__SIZEOF_LONG__", "long", "8"),
+    ("__SIZEOF_LONG_LONG__", "long long", "8"), ("__SIZEOF_SIZE_T__", "size_t", "8")].findSome?
+    fun (key, name, size) =>
+      let actual := macros[key]?.getD "unknown"
+      if actual == size then none
+      else some s!"the target is not LP64: {name} has {actual} bytes, the translation needs {size}"
+
+private def unsafeFloatFlags : List String :=
+  ["-Ofast", "-funsafe-math-optimizations", "-fassociative-math", "-freciprocal-math", "-fno-signed-zeros",
+    "-ffinite-math-only", "-fno-honor-nans", "-fno-honor-infinities", "-fapprox-func"]
+
+def floatProblem (flags : Array String) (macros : Std.HashMap String String) : Option String :=
+  let contract := (flags.filter (·.startsWith "-ffp-contract=")).back?
+  if macros.contains "__FAST_MATH__" then some "compiled with -ffast-math, which changes double results"
+  else if let some flag := flags.find? unsafeFloatFlags.contains then
+    some s!"compiled with {flag}, which changes double results"
+  else if let some flag := contract.filter (· != "-ffp-contract=off") then
+    some s!"compiled with {flag}, which can contract double operations"
+  else if contract.isNone && (macros.contains "__FP_FAST_FMA" || macros.contains "__FMA__") then
+    some "the target has FMA instructions and the flags do not contain -ffp-contract=off"
+  else none
+
+def usesDouble (node : Node) : Bool :=
+  node.walk.any fun n => (n.typeName.splitOn "double").length > 1 ||
+    ((n.typeName "desugaredQualType").splitOn "double").length > 1
+
+def translate (root : Node) (file : FilePath) (directory : FilePath) (target : Option String := none)
+    (float : Option String := none) : Output := Id.run do
   let nodes := root.walk
   let mut env := readRecords nodes
   let defs := root.children.filter fun n =>
@@ -1132,6 +1160,12 @@ def translate (root : Node) (file : FilePath) (directory : FilePath) : Output :=
   let mut unextracted := #[]
   for name in order do
     let some node := byName[name]? | continue
+    if let some reason := target then
+      unextracted := unextracted.push (name, {location := node.location, reason})
+      continue
+    if let some reason := float.filter fun _ => usesDouble node then
+      unextracted := unextracted.push (name, {location := node.location, reason})
+      continue
     if recursive.contains name then
       unextracted := unextracted.push (name, {location := node.location, reason := "recursion"})
       continue
