@@ -94,6 +94,8 @@ roots+=,Typed.arrays,Typed.lists,Typed.bytes,Typed.naturals,Typed.integers,Typed
 roots+=,Checked.echo,Checked.batch,Schema.sample
 roots+=,Typed.multiple,Typed.checked,Typed.checkUnit,Typed.sampleArray,Typed.empty,Typed.positional
 roots+=,Typed.floats,Typed.floatSum,Typed.floatMake,Typed.samples
+roots+=,Typed.wrapText,Typed.wrapByte,Typed.wrapNat,Typed.wrapFloat,Typed.wrapPoint,Typed.bounded
+roots+=,Typed.boundedByte,Typed.wrapped
 "$compiler" generate --module-name PublicTypes --roots "$roots" --out-dir "$types"
 "$compiler" build --out-dir "$types"
 

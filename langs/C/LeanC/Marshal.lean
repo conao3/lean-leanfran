@@ -304,14 +304,15 @@ def Desc.emitCtors (desc : Desc) : String := Id.run do
     let selector := if desc.shape == .enum then "*in" else if desc.shape == .option then "(int)in->has_value" else "in->tag"
     let tag := if desc.shape == .enum then "lean_unbox(in)" else "lean_obj_tag(in)"
     toBody := toBody ++ s!"switch ({selector}) \{\n"
-    fromBody := fromBody ++ s!"switch ({tag}) \{\n"
+    unless desc.trivial do fromBody := fromBody ++ s!"switch ({tag}) \{\n"
     for ctor in desc.ctors do
       let idx := toString ctor.layout.ctorInfo.cidx
       let label := if desc.shape == .option then idx else ctor.tag desc
       toBody := toBody ++ s!"case {label}:\n" ++ ctor.emitTo desc
-      fromBody := fromBody ++ s!"case {idx}:\n" ++ ctor.emitFrom desc
+      fromBody := fromBody ++ (if desc.trivial then "" else s!"case {idx}:\n") ++ ctor.emitFrom desc
     toBody := toBody ++ s!"default: return lf_set_error(err, LF_INVALID, \"Invalid {desc.name} tag\");\n}\n"
-    fromBody := fromBody ++ s!"default: return lf_set_error(err, LF_IO, \"Invalid Lean {desc.name} tag\");\n}\n"
+    unless desc.trivial do
+      fromBody := fromBody ++ s!"default: return lf_set_error(err, LF_IO, \"Invalid Lean {desc.name} tag\");\n}\n"
   else
     unless hasFields do
       toBody := toBody ++ "(void)in;\n"
