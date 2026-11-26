@@ -49,6 +49,8 @@ downloaded packages. The fingerprint includes the root and local packages' Lake 
 manifest files. Keep these files alongside the cache for offline builds.
 For Git dependencies from local repositories, a changed locked revision also invalidates
 blocks with explicit imports, even if the Git checkout is absent.
+When all requirements can be read from local TOML configurations, unused entries in the lock
+file cannot claim an import from a package still in use.
 Executable `lakefile.lean` configurations are not evaluated on a cache hit; their local imports
 are matched by path suffix instead.
 

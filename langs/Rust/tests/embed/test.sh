@@ -178,3 +178,21 @@ fi
 grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$git_imports/offline.log"
 test "$(cargo run -q --manifest-path "$git_imports/Cargo.toml")" = 11
 echo "embed-test: updating a local Git dependency invalidates Rust without hashing its checkout"
+
+removed_imports=test-out/fixtures/removed-imports
+rm -rf "$removed_imports"
+mkdir -p "$removed_imports"
+cp -r tests/embed/fixtures/local-imports/. "$removed_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$removed_imports/"
+cp -r "$removed_imports/lean/dep" "$removed_imports/lean/replacement"
+printf 'name = "replacement"\n\n[[lean_lib]]\nname = "Dependency"\n' > "$removed_imports/lean/replacement/lakefile.toml"
+sed '/^\[\[require\]\]$/,+2d' tests/embed/fixtures/local-imports/lean/lakefile.toml > "$removed_imports/lean/lakefile.toml"
+printf '\n[[require]]\nname = "replacement"\npath = "replacement"\n' >> "$removed_imports/lean/lakefile.toml"
+cp "$removed_imports/lean/lakefile.toml" "$removed_imports/lean/lakefile.active"
+printf '\n[[require]]\nname = "dependency"\npath = "dep"\n' >> "$removed_imports/lean/lakefile.toml"
+(cd "$removed_imports/lean" && lake update)
+mv "$removed_imports/lean/lakefile.active" "$removed_imports/lean/lakefile.toml"
+test "$(cargo run -q --manifest-path "$removed_imports/Cargo.toml")" = 11
+printf 'def dependencyValue : UInt32 := 1\n' > "$removed_imports/lean/replacement/Dependency.lean"
+test "$(cargo run -q --manifest-path "$removed_imports/Cargo.toml")" = 12
+echo "embed-test: Rust tracks the active provider even when the removed provider remains locked"

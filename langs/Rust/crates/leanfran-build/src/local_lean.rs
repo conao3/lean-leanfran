@@ -43,6 +43,7 @@ struct LakeConfig {
 
 #[derive(Deserialize)]
 struct Requirement {
+    name: String,
     path: Option<PathBuf>,
     source: Option<DependencySource>,
 }
@@ -67,6 +68,7 @@ enum LockedPackage {
     },
     #[serde(rename_all = "camelCase")]
     Path {
+        name: String,
         dir: PathBuf,
         #[serde(default)]
         copy: bool,
@@ -75,6 +77,23 @@ enum LockedPackage {
     },
     #[serde(other)]
     Other,
+}
+
+fn reachable_paths<'a>(
+    root: Option<&'a LakeConfig>,
+    configs: impl IntoIterator<Item = (&'a str, Option<&'a LakeConfig>)>,
+) -> Option<BTreeSet<&'a str>> {
+    let configs: HashMap<_, _> = configs.into_iter().collect();
+    let mut visited = BTreeSet::new();
+    let mut pending = vec![root?];
+    while let Some(config) = pending.pop() {
+        for require in &config.requires {
+            if visited.insert(require.name.as_str()) {
+                pending.push(configs.get(require.name.as_str()).copied().flatten()?);
+            }
+        }
+    }
+    Some(visited)
 }
 
 fn is_local_git_url(url: &str) -> bool {
@@ -196,8 +215,10 @@ impl<'a> LocalLean<'a> {
                     ) {
                         local_git_manifest_hash = config_hashes.last().cloned();
                     }
+                    let mut locked = Vec::new();
                     for entry in manifest.packages {
                         if let LockedPackage::Path {
+                            name,
                             dir,
                             copy: false,
                             config_file,
@@ -207,12 +228,33 @@ impl<'a> LocalLean<'a> {
                             let Some(dir) = local_dir(root.join(dir)) else {
                                 continue;
                             };
-                            let config =
-                                package_config(root, &dir, config_file, &mut config_hashes);
+                            let mut hashes = Vec::new();
+                            let config = package_config(root, &dir, config_file, &mut hashes);
                             if let Some(manifest_file) = manifest_file {
-                                hash_config(root, &dir.join(manifest_file), &mut config_hashes);
+                                hash_config(root, &dir.join(manifest_file), &mut hashes);
                             }
+                            locked.push((name, dir, config, hashes));
+                        }
+                    }
+                    // An opaque or absent configuration can require a path package transitively.
+                    let reachable = reachable_paths(
+                        packages[0].1.as_ref(),
+                        locked
+                            .iter()
+                            .map(|(name, _, config, _)| (name.as_str(), config.as_ref())),
+                    );
+                    let active: Vec<_> = locked
+                        .iter()
+                        .map(|(name, ..)| {
+                            reachable
+                                .as_ref()
+                                .is_none_or(|set| set.contains(name.as_str()))
+                        })
+                        .collect();
+                    for ((_, dir, config, hashes), active) in locked.into_iter().zip(active) {
+                        if active {
                             packages.push((dir, config));
+                            config_hashes.extend(hashes);
                         }
                     }
                 }
