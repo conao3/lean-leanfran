@@ -248,6 +248,13 @@ void lf_byte_array_free(lf_byte_array *value) {
     }
 }
 
+void lf_float_array_free(lf_float_array *value) {
+    if (value != NULL) {
+        free(value->items);
+        *value = (lf_float_array){0};
+    }
+}
+
 lf_status lf_nat_to_lean(const lf_nat *in, lean_object **out, lf_error *err) {
     if (in->decimal != NULL && !valid_decimal(in->decimal, false)) {
         return lf_set_error(err, LF_INVALID, "Invalid Nat decimal");
@@ -292,6 +299,36 @@ lf_status lf_byte_array_from_lean(b_lean_obj_arg in, lf_byte_array *out,
         memcpy(items, lean_sarray_cptr(in), len);
     }
     *out = (lf_byte_array){items, len};
+    return LF_OK;
+}
+
+lf_status lf_float_array_to_lean(const lf_float_array *in, lean_object **out,
+                                 lf_error *err) {
+    if ((in->len != 0 && in->items == NULL) ||
+        lean_alloc_sarray_would_overflow(sizeof(double), in->len)) {
+        return lf_set_error(err, LF_INVALID,
+                            "Invalid FloatArray buffer or length");
+    }
+    *out = lean_alloc_sarray(sizeof(double), in->len, in->len);
+    if (in->len != 0) {
+        memcpy(lean_float_array_cptr(*out), in->items,
+               in->len * sizeof(double));
+    }
+    return LF_OK;
+}
+
+lf_status lf_float_array_from_lean(b_lean_obj_arg in, lf_float_array *out,
+                                   lf_error *err) {
+    size_t len = lean_sarray_size(in);
+    double *items = NULL;
+    if (len != 0) {
+        items = malloc(len * sizeof(double));
+        if (items == NULL) {
+            return lf_set_error(err, LF_IO, "Could not allocate a FloatArray");
+        }
+        memcpy(items, lean_float_array_cptr(in), len * sizeof(double));
+    }
+    *out = (lf_float_array){items, len};
     return LF_OK;
 }
 

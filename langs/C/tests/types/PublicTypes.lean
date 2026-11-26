@@ -168,6 +168,31 @@ def wrapped (value : Wrapped) : Array Wrapped :=
 
 def unsupported (f : Nat → Nat) : Nat := f 1
 
+def floats (values : FloatArray) : FloatArray := values
+
+def floatSum (values : FloatArray) : Float := values.foldl (· + ·) 0
+
+def floatMake (n : UInt8) : FloatArray := (FloatArray.empty.push 1.5).push n.toFloat
+
+structure Samples where
+  values : FloatArray
+  label : String
+  deriving BEq
+
+def samples (value : Samples) : Samples := { value with values := value.values.push value.values.size.toFloat }
+
+def taskGet (task : Task UInt8) : UInt8 := task.get
+
+def taskPure (n : UInt8) : Task UInt8 := Task.pure n
+
+def thunkGet (thunk : Thunk UInt8) : UInt8 := thunk.get
+
+structure Pending where
+  label : String
+  task : Task UInt8
+
+def pendingGet (value : Pending) : UInt8 := value.task.get
+
 end Typed
 
 namespace Collision

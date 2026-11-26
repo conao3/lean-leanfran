@@ -69,8 +69,9 @@ Initialize each `lf_error` with `{0}` and call `lf_error_clear` to release its m
 - `Nat` and `Int` use `lf_nat` and `lf_int`. Initialize small values with `lf_nat_from_u64` or `lf_int_from_i64`. Use `_from_dec` to parse a decimal string and `_to_dec` to obtain an owned `lf_str`. `lf_nat_to_u64` and `lf_int_to_i64` return false for values outside their respective ranges.
 - Structures use C structs with data fields in declaration order. Each proof field is checked when C supplies the value. `Fin n` uses an alias for `lf_nat`, and `Subtype` uses an alias for the C type of its underlying value.
 - A Lean inductive with only nullary constructors uses a C enum. Each enumerator's value is its Lean constructor number. An inductive with payloads uses a struct with a `tag` and an `as` union. The tag selects the active union member. Recursive fields that would make a C value infinitely large use pointers. A structure or inductive with one constructor and one non-proof field keeps its C shape, and its conversion follows Lean's representation of the value as that field alone.
-- `Option α` uses a struct with `has_value` and `value`. `Array α` and `List α` use a typed `items` pointer and a `len` element count. An empty sequence has length zero. `ByteArray` uses `lf_byte_array` with the same fields. `Prod α β` uses a pair struct with `fst` and `snd`.
+- `Option α` uses a struct with `has_value` and `value`. `Array α` and `List α` use a typed `items` pointer and a `len` element count. An empty sequence has length zero. `ByteArray` uses `lf_byte_array` and `FloatArray` uses `lf_float_array` (`double *items`) with the same fields. `Prod α β` uses a pair struct with `fst` and `snd`.
 - `Except ε α` in a return type writes the success value to `out`. An error returns `LF_EXCEPT` and stores a UTF-8 JSON representation of the payload in `lf_error.message` when an error pointer is provided. An enclosing `IO` failure returns `LF_IO`.
+- Types that the Lean runtime stores in a dedicated object rather than a constructor, such as `Task` and `Thunk`, are not public types. Generation stops with status 254 when a definition in `--roots` uses one, naming the definition and, for a nested use, the field. Without `--roots`, generation skips such definitions and prints the same reason.
 
 Public function names use the module prefix and the snake case form of the final component of the Lean declaration name. Type names use the module prefix, the snake case form of the qualified Lean name, and the concrete type arguments. Pairs use `pair` as the base name. Generated identifiers that match a C keyword get a trailing underscore. A collision stops generation. Repeat `--rename Lean.Name=c_name` to choose names for individual functions, types, constructors, or fields using their qualified Lean names.
 
@@ -78,7 +79,7 @@ Public function names use the module prefix and the snake case form of the final
 
 Generated functions borrow inputs, including all pointed-to data, for the duration of the call. Pass a pointer to a borrowed value for each composite argument. For output, provide writable storage and release any owned value in that storage before a new call writes to it.
 
-On a successful call, the caller owns the output's nested allocations. Pass the output to the generated `<type>_free` function to release its nested strings, arrays, and recursive fields and clear the value in place. The function leaves the outer storage available to its owner. Use `lf_nat_free`, `lf_int_free`, or `lf_byte_array_free` for the common types and `lf_free(out.ptr)` for a top-level `lf_str`.
+On a successful call, the caller owns the output's nested allocations. Pass the output to the generated `<type>_free` function to release its nested strings, arrays, and recursive fields and clear the value in place. The function leaves the outer storage available to its owner. Use `lf_nat_free`, `lf_int_free`, `lf_byte_array_free`, or `lf_float_array_free` for the common types and `lf_free(out.ptr)` for a top-level `lf_str`.
 
 ## Validation and JSON
 
@@ -213,9 +214,9 @@ def cartTotal (c : cart) : Int :=
 | Constraint | Field types | Lean proposition |
 | --- | --- | --- |
 | `ge=n`, `gt=n`, `le=n`, `lt=n` | Integer scalars, `lf_nat`, `lf_int` | The field's integer value compared with `n` |
-| `min_len=n`, `max_len=n` | `lf_str`, `lf_byte_array`, arrays | `String.length` or `size` compared with `n` |
+| `min_len=n`, `max_len=n` | `lf_str`, `lf_byte_array`, `lf_float_array`, arrays | `String.length` or `size` compared with `n` |
 
-Fields use `bool`, the fixed-width integer types, `size_t`, `float`, `double`, `lf_str`, `lf_nat`, `lf_int`, `lf_byte_array`, another `LF_STRUCT` struct, or a struct with exactly `T *items` and `size_t len` for `Array T`. Any other field type, an unknown block, or a constraint that does not fit the field type stops `sync` with status 254 at the field's position.
+Fields use `bool`, the fixed-width integer types, `size_t`, `float`, `double`, `lf_str`, `lf_nat`, `lf_int`, `lf_byte_array`, `lf_float_array`, another `LF_STRUCT` struct, or a struct with exactly `T *items` and `size_t len` for `Array T`. Any other field type, an unknown block, or a constraint that does not fit the field type stops `sync` with status 254 at the field's position.
 
 Declare `LF_STRUCT` structs in a header that includes `leanfran.h`. The block's generated header includes that header by a path relative to the output directory and defines `<prefix>_<name>` as an alias, so the C program passes its own struct to the generated functions. The wrappers check each constraint and return `LF_INVALID` with the type and proof field, as in `Invalid order.qty_ge`.
 
