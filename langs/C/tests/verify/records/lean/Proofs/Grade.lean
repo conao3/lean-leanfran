@@ -47,4 +47,18 @@ theorem level_at_or.proof.refines : level_at_or.obligation.refines := by
   simp only [level_at_or, levelAtOr, level_at.proof.refines xs i h, levelAt]
   by_cases hs : i.toNat < xs.size <;> simp [hs] <;> rfl
 
+theorem first_at.proof.refines : first_at.obligation.refines := by
+  intro xs h
+  by_cases hn : xs.size = 0
+  · have : xs = #[] := Array.eq_empty_of_size_eq_zero hn
+    subst this
+    rfl
+  · have hz : ¬(C.IntType.ofInt (xs.size : Int) : UInt64) = 0 := fun e => by
+      have := congrArg UInt64.toNat e
+      rw [ofNat64 _ h] at this
+      exact hn this
+    have hp : 0 < xs.size := by omega
+    simp [first_at, firstAt, hz, C.index, C.IntType.toInt, hp]
+    rfl
+
 end LeanCModel.grade
