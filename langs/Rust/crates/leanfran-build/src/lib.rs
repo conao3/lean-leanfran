@@ -456,7 +456,8 @@ impl Builder {
         let mut out = Vec::new();
         let lean = self.lean_dir();
         if lean.is_dir() {
-            collect_user_files(&lean, &lean, &mut out);
+            let packages = local_lean::packages_dir(&lean);
+            collect_user_files(&lean, &lean, packages.as_deref(), &mut out);
         }
         out.sort();
         out
@@ -1082,7 +1083,7 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-fn collect_user_files(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
+fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -1096,7 +1097,10 @@ fn collect_user_files(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
             continue;
         }
         if p.is_dir() {
-            collect_user_files(root, &p, out);
+            if packages.is_some_and(|packages| p.canonicalize().is_ok_and(|p| p == packages)) {
+                continue;
+            }
+            collect_user_files(root, &p, packages, out);
         } else {
             out.push(p);
         }

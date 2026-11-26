@@ -4,6 +4,14 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub(super) fn packages_dir(root: &Path) -> Option<PathBuf> {
+    let text = fs::read_to_string(root.join("lakefile.toml")).ok()?;
+    let table: toml::Table = toml::from_str(&text).ok()?;
+    root.join(table.get("packagesDir")?.as_str()?)
+        .canonicalize()
+        .ok()
+}
+
 pub(super) struct LocalLean<'a> {
     pub(super) root: &'a Path,
     pub(super) files: &'a [PathBuf],

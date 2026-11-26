@@ -1,5 +1,6 @@
 name = "fixture"
 defaultTargets = ["LeanRustGen"]
+packagesDir = "downloaded"
 
 [[lean_lib]]
 name = "LeanRustGen"

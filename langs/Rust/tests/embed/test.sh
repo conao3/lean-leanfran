@@ -76,7 +76,12 @@ echo "embed-test: lean! without a build script reports how to add one"
 manifest="$local_imports/Cargo.toml"
 mkdir "$local_imports/lean/Proofs"
 printf 'theorem correct : True := True.intro\n' > "$local_imports/lean/Proofs/Answer.lean"
+mkdir -p "$local_imports/lean/downloaded/dep/Nested"
+printf 'def downloaded := 0\n' > "$local_imports/lean/downloaded/dep/Nested/Values.lean"
 test "$(cargo run -q --manifest-path "$manifest")" = 11
+mv "$local_imports/lean/downloaded" "$local_imports/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
+echo "embed-test: a checkout without downloaded Lean packages reuses the cache"
 printf 'theorem correct : True := by trivial\n' > "$local_imports/lean/Proofs/Answer.lean"
 test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
 echo "embed-test: a proof-only edit reuses the local-import cache"
