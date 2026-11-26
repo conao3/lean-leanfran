@@ -340,6 +340,7 @@ impl<'a> LocalLean<'a> {
                                     &dir,
                                     &dir,
                                     nested_packages.as_deref(),
+                                    false,
                                     &mut extra_files,
                                 );
                                 copied_dirs.push((dir.clone(), identity.clone()));

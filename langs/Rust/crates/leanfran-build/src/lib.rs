@@ -484,7 +484,7 @@ impl Builder {
         let lean = self.lean_dir();
         if lean.is_dir() {
             let packages = local_lean::packages_dir(&lean);
-            collect_user_files(&lean, &lean, packages.as_deref(), &mut out);
+            collect_user_files(&lean, &lean, packages.as_deref(), true, &mut out);
         }
         out
     }
@@ -1116,7 +1116,13 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mut Vec<PathBuf>) {
+fn collect_user_files(
+    root: &Path,
+    dir: &Path,
+    packages: Option<&Path>,
+    skip_generated: bool,
+    out: &mut Vec<PathBuf>,
+) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -1124,8 +1130,8 @@ fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mu
         let p = e.path();
         let rel = p.strip_prefix(root).unwrap_or(&p);
         let first = rel.components().next().map(|c| c.as_os_str().to_owned());
-        if first.as_deref() == Some("LeanRustGen".as_ref())
-            || first.as_deref() == Some(".lake".as_ref())
+        if first.as_deref() == Some(".lake".as_ref())
+            || (skip_generated && first.as_deref() == Some("LeanRustGen".as_ref()))
         {
             continue;
         }
@@ -1133,7 +1139,7 @@ fn collect_user_files(root: &Path, dir: &Path, packages: Option<&Path>, out: &mu
             if packages.is_some_and(|packages| p.canonicalize().is_ok_and(|p| p == packages)) {
                 continue;
             }
-            collect_user_files(root, &p, packages, out);
+            collect_user_files(root, &p, packages, skip_generated, out);
         } else {
             out.push(p);
         }

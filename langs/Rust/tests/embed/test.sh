@@ -248,6 +248,26 @@ for child_copy in false true; do
 done
 echo "embed-test: Rust tracks ordinary and copied path dependencies of a copied parent"
 
+copy_source_dir=test-out/fixtures/copied-source-dir
+rm -rf "$copy_source_dir"
+mkdir -p "$copy_source_dir"
+cp -r tests/embed/fixtures/local-imports/. "$copy_source_dir/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$copy_source_dir/"
+source_lean="$copy_source_dir/lean"
+sed '/^path = "dep"$/a copy = true' "$source_lean/lakefile.toml" > "$source_lean/lakefile.new"
+mv "$source_lean/lakefile.new" "$source_lean/lakefile.toml"
+mkdir "$source_lean/dep/LeanRustGen"
+printf '\n[[lean_lib]]\nname = "CopiedValue"\nsrcDir = "LeanRustGen"\n' >> "$source_lean/dep/lakefile.toml"
+printf 'import CopiedValue\ndef dependencyValue : UInt32 := copiedValue\n' > "$source_lean/dep/Dependency.lean"
+printf 'def copiedValue : UInt32 := 0\n' > "$source_lean/dep/LeanRustGen/CopiedValue.lean"
+test "$(cargo run -q --manifest-path "$copy_source_dir/Cargo.toml")" = 11
+printf 'def copiedValue : UInt32 := 1\n' > "$source_lean/dep/LeanRustGen/CopiedValue.lean"
+(cd "$source_lean" && lake update dependency)
+test "$(cargo run -q --manifest-path "$copy_source_dir/Cargo.toml")" = 12
+mv "$source_lean/downloaded" "$copy_source_dir/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$copy_source_dir/Cargo.toml")" = 12
+echo "embed-test: Rust tracks a copied package's own LeanRustGen source directory"
+
 override_imports=test-out/fixtures/override-imports
 rm -rf "$override_imports"
 mkdir -p "$override_imports"
