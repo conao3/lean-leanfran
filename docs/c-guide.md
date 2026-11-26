@@ -6,6 +6,8 @@
 
 From the leanfran repository root, run `nix build .#c` and add `result/bin` to your PATH. To build with elan, run `lake build leanfran-c` in `langs/C` and add its `.lake/build/bin` to your PATH. Use Lean 4.35.0 and a C compiler in the consuming workspace. The clang bundled with an elan toolchain does not find the system C headers on NixOS, so build there inside `nix develop .#c`. The linking examples use pkg-config, GNU Make, or CMake.
 
+`leanfran-c --version` prints the release and the Lean version, as in `leanfran-c <version> (Lean 4.35.0)`. `leanfran-c --generator-version` prints the version of the generated code and the C translation; `sync`, `status`, and `check` record it with the Lean version, so outputs and proof results stay current across releases that keep it. `leanfran-c --help` lists the commands and the exit codes: 0 for success, 1 when `status` finds out-of-date output or `check` finds obligations that did not pass, 252 for invalid parameters, 254 for input that cannot be converted, and 255 for other errors.
+
 ## Generate and build
 
 In a Lake workspace with a library that contains `Pricing/Core.lean`, define a function to call from C.
@@ -61,11 +63,13 @@ The program prints `3600`.
 
 Call `<prefix>_init` before using the exported functions. Initialization runs once per generated module, and callers may invoke its initializer concurrently. Each wrapper returns an `lf_status` and writes its result through the output pointer on success. An `IO Unit` wrapper takes no output pointer, and failed Lean I/O returns `LF_IO`.
 
+The Lean runtime and its modules exist once per process. When a program links the output of several `generate` runs, the first `<prefix>_init` that succeeds ends Lean's initialization phase, so the `initialize` declarations of the modules that later initializers run see `IO.initializing` as `false`. A failed initialization leaves the modules it reached partly initialized, so after one `<prefix>_init` returns an error, every later `<prefix>_init` in the process returns the same status and message without running Lean code. To combine several Lean modules in one program, embed them as blocks and call `leanfran_init`, which initializes all blocks before ending the initialization phase ([Embed Lean in C sources](#embed-lean-in-c-sources)).
+
 Initialize each `lf_error` with `{0}` and call `lf_error_clear` to release its message before reusing it. Pass `NULL` when you only need the status code.
 
 ## Public types
 
-- Lean scalars use the corresponding C scalar types, including `uint32_t` for `Char` and `size_t` for `USize`. C passes scalar and `lf_str` arguments by value. `lf_str` borrows a UTF-8 byte range on input and owns an allocated, NUL-terminated byte range on output. The length counts bytes, including any embedded zero bytes.
+- Lean scalars use the corresponding C scalar types, including `uint32_t` for `Char` and `size_t` for `USize`. C passes scalar and `lf_str` arguments by value. `lf_str` borrows a UTF-8 byte range on input and owns an allocated, NUL-terminated byte range on output. The length counts bytes, including any embedded zero bytes. An input that is not valid UTF-8, such as a truncated sequence, an overlong encoding, or an encoded surrogate, returns `LF_INVALID`, as an invalid `Char` does.
 - `Nat` and `Int` use `lf_nat` and `lf_int`. Initialize small values with `lf_nat_from_u64` or `lf_int_from_i64`. Use `_from_dec` to parse a decimal string and `_to_dec` to obtain an owned `lf_str`. `lf_nat_to_u64` and `lf_int_to_i64` return false for values outside their respective ranges.
 - Structures use C structs with data fields in declaration order. Each proof field is checked when C supplies the value. `Fin n` uses an alias for `lf_nat`, and `Subtype` uses an alias for the C type of its underlying value.
 - A Lean inductive with only nullary constructors uses a C enum. Each enumerator's value is its Lean constructor number. An inductive with payloads uses a struct with a `tag` and an `as` union. The tag selects the active union member. Recursive fields that would make a C value infinitely large use pointers. A structure or inductive with one constructor and one non-proof field keeps its C shape, and its conversion follows Lean's representation of the value as that field alone.
@@ -118,7 +122,7 @@ On an Intel Core i5-8400 with the standard Nix C development shell and Lean 4.35
 
 ## Generation checks
 
-- If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning.
+- If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning. The `generate` commands of the other leanfran backends accept such definitions.
 - If the module imports the Lean compiler directly or indirectly, generation reports the import chain and exits with status 254. `--allow-lean-import` enables the compiler dependency in the generated link configuration.
 - Supply the C symbols listed in `<prefix>.externs.txt` when linking the consumer. An extern for another backend, such as `go:foreign.Increment`, is rejected during generation. `<prefix>.implemented-by.txt` lists Lean declarations that call a replacement implementation.
 
@@ -131,6 +135,8 @@ The default build produces `lib<prefix>.a`. Use `leanfran-c build --shared --out
 - **CMake** can use `find_package(pricing CONFIG REQUIRED)` and `target_link_libraries(pricing-demo PRIVATE pricing::pricing)`. Set `-Dpricing_DIR=/absolute/path/to/out` when configuring.
 
 The generated settings use absolute paths to the output directory and the active Lean toolchain. Run generation and build again if either moves. Keep the shared library and its Lean runtime dependencies available at the recorded paths when running a dynamically linked executable.
+
+The generated `<prefix>.c` holds field offsets and constructor numbers of the Lean version that generated it. It includes `<lean/version.h>` and stops compilation with `#error` when you compile it against the headers of another Lean version.
 
 ### GMP when distributing binaries
 
@@ -152,7 +158,7 @@ theorem total_empty : total #[] = 0 := rfl
 #include "pricing.h"
 ```
 
-A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks, and the importing block uses their definitions by their unqualified names. The block's Lean code can begin with `import` lines for modules of the `[[require]]` packages and for `LeanCLib.C`, which defines the C operations and `C.Status` used in [Verify a C function in Lean](#verify-a-c-function-in-lean). A Lean string that needs `*/` can write it as `"*" ++ "/"`.
+A block starts at a `/* leanfran:lean <name>` line and ends at the next `*/`. The name is an ASCII C identifier other than `lf` or `leanfran`, in any letter case. It becomes the C prefix and the Lean module `LeanfranBlocks.<name>`. A line `imports: <name>, …` directly after the first line imports other blocks, and the importing block uses their definitions by their unqualified names. The definitions of all blocks share one namespace, so two blocks cannot define the same name. `sync` reports such a pair at the second block, as in `src/b.c:1:1: error: Lean blocks 'a' (src/a.c:1) and 'b' both define 'spec'; …`. Put a block's helper definitions in a `namespace` to keep their names apart. The block's Lean code can begin with `import` lines for modules of the `[[require]]` packages and for `LeanCLib.C`, which defines the C operations and `C.Status` used in [Verify a C function in Lean](#verify-a-c-function-in-lean). A Lean string that needs `*/` can write it as `"*" ++ "/"`.
 
 Put `leanfran.toml` in the project root. The commands stop with status 254 when it is missing, and a file with only `sources` is enough.
 
@@ -179,7 +185,7 @@ path = "../pricing-rules"
 The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, `leanfran-config.cmake`, and `leanfran.manifest.json`. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
 
 - `leanfran-c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: …`. A failure leaves the previous output directory unchanged.
-- `leanfran-c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, the compiler version, or a missing output file. It exits with status 0 when the output is current.
+- `leanfran-c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, a change of the compiler's generator version or Lean version (`leanfran-c`), or a missing output file. It exits with status 0 when the output is current.
 - `leanfran-c check` runs `sync`, checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean), and then runs `status`.
 
 ### Use C structs in Lean
@@ -289,7 +295,7 @@ leanfran-c status
 | `mismatch` | The declaration's type differs from the obligation. |
 | `failed` | A proof file that declares the proof fails to build, or the kernel rejects the proof or a declaration it uses, such as one added with `debug.skipKernelTC`. |
 | `unextracted` | The function is outside the translated subset, its translation does not elaborate, its compile flags do not match the translation (below), or the translated definition uses an instance that a Lean block declares for types it does not define. The diagnostic gives the file, position, and reason. |
-| `stale` | `status` found a change to the function, a function it calls, a struct or enum it uses, the spec block, the proofs, `leanfran.toml`, the compiler, or the verdict on its compile flags since the lock was written. |
+| `stale` | `status` found a change to the function, a function it calls, a struct or enum it uses, the spec block, the proofs, `leanfran.toml`, the compiler's generator version or Lean version, or the verdict on its compile flags since the lock was written. |
 
 `check --require proved` exits with status 1 unless every obligation is `proved`. Plain `check` exits with status 1 when a function is `unextracted` or a proof fails to build. `status` reads the lock and exits with status 1 when an obligation is stale.
 

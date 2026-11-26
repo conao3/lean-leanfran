@@ -75,6 +75,15 @@ for cc in gcc clang; do
         main.c -o "$scratch/test-cc"
     "$scratch/test-cc"
 done
+mkdir -p "$scratch/other-lean/lean"
+sed -E 's/^(#define LEAN_VERSION_MINOR ).*/\1999/' "$include/lean/version.h" \
+    >"$scratch/other-lean/lean/version.h"
+status=0
+cc -std=c11 -I"$scratch/other-lean" -isystem "$include" -c "$out/public_api.c" \
+    -o "$scratch/other-lean.o" >"$scratch/other-lean.log" 2>&1 || status=$?
+test "$status" -ne 0
+grep -F "This file was generated for Lean $(lean --version | sed -E 's/^Lean \(version ([0-9.]+).*/\1/')" \
+    "$scratch/other-lean.log"
 link_from_pc "$out/public_api.pc" g++ -std=c++17 -Wall -Wextra -Werror -pedantic \
     -x c++ main.c -x none -o "$scratch/test-cpp"
 "$scratch/test-cpp"

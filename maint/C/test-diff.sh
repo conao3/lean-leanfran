@@ -7,6 +7,12 @@ mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/check.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
+release=$(sed -nE 's/^#define LEANFRAN_VERSION "([^"]*)"$/\1/p' "$backend/support/leanfran.h")
+lean_version=$(lean --version | sed -E 's/^Lean \(version ([0-9.]+).*/\1/')
+test "$("$compiler" --version)" = "leanfran-c $release (Lean $lean_version)"
+"$compiler" --generator-version | grep -Eqx '[0-9]+'
+"$compiler" --help | grep -Fx 'exit codes: 0 success, 1 out-of-date output or unmet obligations (status, check), 252 invalid parameters, 254 input that cannot be converted, 255 other errors'
+
 cd "$backend/tests/cases"
 out="$scratch/public"
 "$compiler" generate --module-name Examples.PublicApi --out-dir "$out"
@@ -74,6 +80,16 @@ done
 leanc -UNDEBUG -I"$scratch/broken" "$backend/tests/initialization_failure.c" \
     "$scratch/broken/libbroken.a" -o "$scratch/initialization_failure"
 LEANFRAN_TEST_INIT_ERROR=1 "$scratch/initialization_failure" </dev/null
+
+for module in SharedFirst SharedSecond; do
+    "$compiler" generate --module-name "Examples.$module" --out-dir "$scratch/$module"
+    "$compiler" build --out-dir "$scratch/$module"
+done
+leanc -UNDEBUG -I"$scratch/SharedFirst" -I"$scratch/SharedSecond" \
+    "$backend/tests/shared_initialization.c" "$scratch/SharedFirst/libshared_first.a" \
+    "$scratch/SharedSecond/libshared_second.a" -o "$scratch/shared_initialization"
+test "$("$scratch/shared_initialization" </dev/null)" = "7 7"
+LEANFRAN_TEST_SHARED_INIT_ERROR=1 "$scratch/shared_initialization" </dev/null
 
 if [[ $(uname -s) == Linux ]]; then
     export ASAN_OPTIONS=detect_leaks=1:abort_on_error=1

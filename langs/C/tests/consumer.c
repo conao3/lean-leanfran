@@ -62,6 +62,19 @@ int main(int argc, char **argv) {
     lf_free(string.ptr);
     assert(public_api_repeat_string((lf_str){NULL, 1}, &string, NULL) ==
            LF_INVALID);
+    const char *invalid_utf8[] = {"a\xff"
+                                  "b",
+                                  "a\xc3", "\xc0\xaf", "\xed\xa0\x80",
+                                  "\xf4\x90\x80\x80"};
+    for (size_t i = 0; i < sizeof invalid_utf8 / sizeof invalid_utf8[0]; i++) {
+        lf_str bytes = {invalid_utf8[i], strlen(invalid_utf8[i])};
+        assert(public_api_repeat_string(bytes, &string, NULL) == LF_INVALID);
+        assert(public_api_greeting(bytes, &string, NULL) == LF_INVALID);
+    }
+    assert(public_api_repeat_string((lf_str){"\xf0\x9f\x99\x82", 4}, &string,
+                                    NULL) == LF_OK &&
+           string.len == 8);
+    lf_free(string.ptr);
     assert(public_api_empty_string(&string, NULL) == LF_OK);
     printf("%zu\n", string.len);
     lf_free(string.ptr);

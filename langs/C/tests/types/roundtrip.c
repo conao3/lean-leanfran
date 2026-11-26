@@ -265,6 +265,10 @@ static void check_trivial(lf_error *err) {
     assert(text_out.tag == public_types_typed_wrap_text_mk &&
            strcmp(text_out.as.mk.text.ptr, "雪!") == 0);
     public_types_typed_wrap_text_free(&text_out);
+    public_types_typed_wrap_text invalid = {
+        .tag = public_types_typed_wrap_text_mk, .as.mk.text = {"a\xff", 2}};
+    assert(public_types_wrap_text(&invalid, &text_out, err) == LF_INVALID);
+    assert(strcmp(err->message, "Invalid UTF-8 string") == 0);
     public_types_typed_wrap_text_ref text_ref, text_ref_out;
     assert(public_types_typed_wrap_text_ref_from(&text, &text_ref, err) ==
            LF_OK);

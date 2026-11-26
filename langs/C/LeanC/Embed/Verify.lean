@@ -14,6 +14,10 @@ private def supportHeader := include_str "../../support/leanfran.h"
 def releaseVersion : String :=
   ((supportHeader.splitOn "#define LEANFRAN_VERSION \"")[1]!.splitOn "\"").head!
 
+def generatorVersion : String := "1"
+
+def compilerKey : String := s!"{generatorVersion}/{Lean.versionString}"
+
 def sha256 (text : String) : IO String := do
   let args : IO.Process.SpawnArgs := if Platform.isOSX then
     {cmd := "shasum", args := #["-a", "256"]}
@@ -344,7 +348,7 @@ def proofSources (root : FilePath) : IO (Array (String × FilePath × String)) :
 
 def inputHash (config : Config) (proofs : Array (String × FilePath × String)) : IO String := do
   sha256 (Json.compress (Lean.toJson #[
-    Json.str s!"{releaseVersion}/{Lean.versionString}", Json.str (← sha256 cLibSource),
+    Json.str compilerKey, Json.str (← sha256 cLibSource),
     Json.str config.source, Lean.toJson (proofs.map fun (m, _, s) => (m, s))]))
 
 private def qualified (name : String) : String :=

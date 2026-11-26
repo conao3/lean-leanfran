@@ -84,9 +84,23 @@ diff -r "$scratch/previous" "$out"
 rm "$app/src/duplicate.h"
 
 manifest="$out/leanfran.manifest.json"
+lean_version=$(lean --version | sed -E 's/^Lean \(version ([0-9.]+).*/\1/')
+compiler_key="$("$compiler" --generator-version)/$lean_version"
+if [[ $(uname -s) == Darwin ]]; then
+    compiler_hash=$(printf '%s' "$compiler_key" | shasum -a 256 | cut -d ' ' -f 1)
+else
+    compiler_hash=$(printf '%s' "$compiler_key" | sha256sum | cut -d ' ' -f 1)
+fi
+grep -F "\"compiler\": \"$compiler_hash\"" "$scratch/previous/leanfran.manifest.json"
 sed -E 's/("compiler": ")[a-f0-9]+/\1different/' "$scratch/previous/leanfran.manifest.json" >"$manifest"
 expect_status 1 status
 grep -F 'stale: leanfran-c' "$scratch/diagnostics"
+
+printf '/* leanfran:lean twin\ndef basePrice : UInt32 := 1\n*/\n' >"$app/src/twin.h"
+expect_status 254 sync
+grep -F "src/twin.h:1:1: error: Lean blocks 'catalog' (src/nested/catalog.h:1) and 'twin' both define 'basePrice'" \
+    "$scratch/diagnostics"
+rm "$app/src/twin.h"
 
 printf '/* leanfran:lean extra\ndef extraPrice : UInt32 := 0\n*/\n' >"$app/src/extra.h"
 "$compiler" check --dir "$app"
