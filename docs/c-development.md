@@ -35,7 +35,9 @@ nix shell nixpkgs#gnumake -c make check BACKENDS=C
 nix build .#c
 ```
 
-CI builds the Nix package and runs the C checks on Linux and macOS arm64. To run the macOS check directly in the C shell, use `nix develop .#c -c make -C langs/C check`.
+CI builds the Nix package and runs the C checks on Linux and macOS arm64. On macOS, CI runs
+`check-verify` in parallel with the rest of `check`. To run the full check locally in the C shell,
+use `nix develop .#c -c make -C langs/C check`.
 
 The differential check (`maint/C/test-diff.sh`) compares stdout, stderr, and process status with the native Lean oracle for successful and failing I/O. It tests calls before initialization, repeat and concurrent initialization, and initialization errors, including two generated outputs linked into one program whose shared module fails to initialize. It also checks `--version`, `--generator-version`, and the exit codes in `--help`, and that `generate` stops with one diagnostic and status 254 for a definition in `Examples.Dependent` whose parameter or result type depends on a parameter, and skips such definitions without `--roots`. To detect ownership errors in Lean objects, it counts live mimalloc blocks across repeated calls and checks that intentionally missing or extra decrements change the count. Linux also runs ASan, LeakSanitizer, and UBSan on the C conversion and support code. The type round trip in `tests/types/roundtrip.c` passes `FloatArray` values with signed zeros, infinities, and NaN through `lf_float_array` and checks their bits, and the script checks that definitions using `Task` or `Thunk`, directly or in a structure field, stop generation with the definition and field in the diagnostic.
 
