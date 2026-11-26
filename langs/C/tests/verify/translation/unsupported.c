@@ -140,3 +140,11 @@ shapes_geo_color to_color(int32_t x) { return x; }
 shapes_geo_color far_color(void) { return 7; }
 
 shapes_geo_shape_rect_fields rect_of(shapes_geo_shape s) { return s.as.rect; }
+
+lf_status overlap(const int32_t *xs LF_ARRAY(n), size_t n, int32_t *out) {
+    if (n == 0)
+        return LF_INVALID;
+    *out = 0;
+    *out = xs[0];
+    return LF_OK;
+}

@@ -51,7 +51,7 @@ def publicName (renames : Renames) (name : Name) (fallback : String) : String :=
 inductive CType where
   | bool | uint8 | uint16 | uint32 | uint64 | int8 | int16 | int32 | int64
   | usize | float | float32 | char | string | unit
-  | nat | int | bytes | named (name : String)
+  | nat | int | bytes | floats | named (name : String)
   deriving BEq, Inhabited
 
 def CType.ofName : Name → Option CType
@@ -73,6 +73,7 @@ def CType.ofName : Name → Option CType
   | `Nat => some .nat
   | `Int => some .int
   | `ByteArray => some .bytes
+  | `FloatArray => some .floats
   | _ => none
 
 def CType.cName : CType → String
@@ -93,10 +94,11 @@ def CType.cName : CType → String
   | .nat => "lf_nat"
   | .int => "lf_int"
   | .bytes => "lf_byte_array"
+  | .floats => "lf_float_array"
   | .named name => name
 
 def CType.byPointer : CType → Bool
-  | .nat | .int | .bytes | .named _ => true
+  | .nat | .int | .bytes | .floats | .named _ => true
   | _ => false
 
 def CType.isSignedInt : CType → Bool
@@ -108,7 +110,7 @@ def CType.abiName : CType → String
   | .int16 => "uint16_t"
   | .int32 => "uint32_t"
   | .int64 => "uint64_t"
-  | .string | .unit | .nat | .int | .bytes | .named _ => "lean_object *"
+  | .string | .unit | .nat | .int | .bytes | .floats | .named _ => "lean_object *"
   | ty => ty.cName
 
 structure Field where
@@ -175,6 +177,7 @@ def CType.typeStem (ty : CType) (cPrefix : String) : String :=
   | .nat => "nat"
   | .int => "int"
   | .bytes => "byte_array"
+  | .floats => "float_array"
   | .unit => "unit"
   | .usize => "usize"
   | .float => "float"
@@ -204,6 +207,7 @@ private def boundOf (v : Lean.Expr) (p : Lean.Expr) : MetaM (Option (String × I
     | (``String.length, #[x]) => if x == v then some "Length" else none
     | (``List.length, #[_, x]) => if x == v then some "Items" else none
     | (``ByteArray.size, #[x]) => if x == v then some "Items" else none
+    | (``FloatArray.size, #[x]) => if x == v then some "Items" else none
     | (``Array.size, #[_, x]) => if x == v then some "Items" else none
     | _ => none
   let flip : String → String
@@ -274,6 +278,10 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr)
     if ind.numIndices != 0 || ind.ctors.isEmpty || isClass env name || isPrivateName name ||
         (← isProp type) then
       throwError "unsupported type {type}"
+    let projections := (getStructureInfo? env name).map (·.fieldNames.map (name ++ ·)) |>.getD #[]
+    if name != `Array && (ind.ctors.toArray ++ projections).any (isExtern env ·) then
+      let shown := (← ppExpr type).pretty (width := 10000)
+      throwError "unsupported type {shown}: the Lean runtime does not represent it as a constructor object"
     let params := type.getAppArgs
     if params.size != ind.numParams then throwError "unsupported type {type}"
     let mut stems := #[]
@@ -334,7 +342,10 @@ partial def readType (cPrefix : String) (renames : Renames) (type : Expr)
               let leanName := if anonymous then s!"a{result.size}" else lastComponent rawName
               let fieldKey := (if isStruct then name else ctorName) ++ leanName.toName
               let fieldName := if externalType.isSome && isStruct then leanName else publicName renames fieldKey leanName
-              let fieldType ← readType cPrefix renames localDecl.type externalTypes
+              let fieldType ← try readType cPrefix renames localDecl.type externalTypes catch e =>
+                let message ← e.toMessageData.toString
+                unless message.startsWith "unsupported type" do throw e
+                throwError "{message} (field {fieldKey})"
               let indirect := (← get).any fun t => t.name == fieldType.cName &&
                 t.ctors.isEmpty && t.shape == .record
               if result.any (·.name == fieldName) then
