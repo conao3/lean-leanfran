@@ -32,4 +32,5 @@ local_array 135:17 array argument other than an LF_ARRAY parameter
 to_color 138:47 conversion from an integer to enum 'shapes_geo_color'
 far_color 140:43 value 7 has no constructor in enum 'shapes_geo_color'
 rect_of 142:30 unsupported result type 'shapes_geo_shape_rect_fields'
-self_init 146:23 'p0' read in its own initializer
+overlap 144:11 out parameter 'out' may point into LF_ARRAY parameter 'xs' of the same element type; declare one of them restrict
+self_init 154:23 'p0' read in its own initializer

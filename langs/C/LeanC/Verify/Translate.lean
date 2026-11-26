@@ -1010,6 +1010,7 @@ private def translateFunction (node : Node) : M Function := do
     let env ← read
     result := .value ty (if ty == .unit then "Unit" else boundaryOf env resultQual ty)
   let mut out : Array Param := #[]
+  let mut restricted : Array String := #[]
   modify fun s => {s with assigned := assignedIds bodyNode}
   for (param, index) in params.zipIdx do
     let pname := param.string "name"
@@ -1017,8 +1018,12 @@ private def translateFunction (node : Node) : M Function := do
     let qual := param.typeName
     let lean ← localName pname
     let id := param.string "id"
-    if (strip qual).endsWith "*" then
-      let pointee := ((strip qual).dropEnd 1).trimAscii.toString
+    let pointer := strip qual
+    let isRestrict := pointer.endsWith "*restrict"
+    let pointer := if isRestrict then (pointer.dropEnd 8).toString else pointer
+    if pointer.endsWith "*" then
+      if isRestrict then restricted := restricted.push pname
+      let pointee := (pointer.dropEnd 1).trimAscii.toString
       let arrays := annotations param "array"
       if let some #[length] := arrays[0]? then
         unless qual.trimAscii.startsWith "const " do fail param s!"LF_ARRAY parameter '{pname}' must point to const"
@@ -1037,8 +1042,13 @@ private def translateFunction (node : Node) : M Function := do
       let ty ← resolve param qual (param.typeName "desugaredQualType")
       let boundary := boundaryOf (← read) qual ty
       out := out.push {name := pname, id, lean, ty, boundary, kind := .value, cType := strip qual}
-  if isStatus && !(out.any fun p => match p.kind with | .out => true | _ => false) then
-    fail node "lf_status result without an out parameter"
+  match out.find? fun p => match p.kind with | .out => true | _ => false with
+  | none => if isStatus then fail node "lf_status result without an out parameter"
+  | some o =>
+    for p in out do
+      if let .array elem _ _ := p.kind then
+        if elem == o.ty && !restricted.contains p.name && !restricted.contains o.name then
+          fail node s!"out parameter '{o.name}' may point into LF_ARRAY parameter '{p.name}' of the same element type; declare one of them restrict"
   let mut params := out
   for p in out do
     if let .array _ _ length := p.kind then

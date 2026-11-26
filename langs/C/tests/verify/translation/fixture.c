@@ -234,7 +234,8 @@ int32_t countdown(int32_t a, int32_t b) {
     return steps;
 }
 
-lf_status checked_sum(const int64_t *xs LF_ARRAY(n), size_t n, int64_t *out) {
+lf_status checked_sum(const int64_t *xs LF_ARRAY(n), size_t n,
+                      int64_t *restrict out) {
     if (n == 0)
         return LF_INVALID;
     *out = sum(xs, n);
@@ -428,7 +429,7 @@ int64_t area_tail(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
 }
 
 lf_status color_at(const shapes_geo_color *cs LF_ARRAY(n), size_t n, int32_t i,
-                   shapes_geo_color *out) {
+                   shapes_geo_color *restrict out) {
     if (i < 0 || (size_t)i >= n)
         return LF_INVALID;
     *out = cs[i];
@@ -443,7 +444,7 @@ shapes_geo_color color_or(const shapes_geo_color *cs LF_ARRAY(n), size_t n,
 }
 
 lf_status largest(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
-                  shapes_geo_shape *out) {
+                  shapes_geo_shape *restrict out) {
     if (n == 0)
         return LF_INVALID;
     shapes_geo_shape best = ss[0];
