@@ -156,7 +156,7 @@ expect_model 'div.safe_div [refines]' proved
 expect_model 'shop.size_weight [refines]' proved
 expect_model 'shop.parcel_size [refines]' proved
 for model in level_of first_or first_level level_at level_at_or first_at first_pos byte_one sign_one \
-    low_level level_one; do
+    low_level level_one tone_low; do
     expect_model "grade.$model [refines]" proved
 done
 for model in keep_point point_one keep_parcel parcel_one; do
@@ -190,7 +190,7 @@ printf 'int broken(void) { return }\n' >>"$app/src/shop.c"
 run 1 status
 for model in 'shop.line_total' 'shop.point_sum' 'shop.size_weight' 'shop.parcel_size' 'div.safe_div' \
     'grade.level_of' 'grade.first_or' 'grade.first_level' 'grade.level_at' 'grade.level_at_or' 'grade.first_at' \
-    'grade.first_pos' 'grade.byte_one' 'grade.sign_one' 'grade.low_level' 'grade.level_one' \
+    'grade.first_pos' 'grade.byte_one' 'grade.sign_one' 'grade.low_level' 'grade.level_one' 'grade.tone_low' \
     'shop.keep_point' 'shop.point_one' 'shop.keep_parcel' 'shop.parcel_one'; do
     expect_model "$model [refines]" stale
 done

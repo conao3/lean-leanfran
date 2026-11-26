@@ -22,6 +22,12 @@ def paint (s : Shape) (c : Color) : Shape := match c with
   | .red => s
   | _ => .dot
 
+inductive Shade where
+  | light
+  | dark
+
+def shade (s : Shade) : Shade := s
+
 end Geo
 
 structure «item» where

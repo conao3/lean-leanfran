@@ -34,7 +34,7 @@ LAKE
 
 cd "$project"
 lake build FixtureTypes LeanCLib
-"$compiler" generate --module-name FixtureTypes --roots Geo.norm1,Geo.paint --prefix shapes \
+"$compiler" generate --module-name FixtureTypes --roots Geo.norm1,Geo.paint,Geo.shade --prefix shapes \
     --out-dir "$scratch/shapes"
 grep -Fq 'struct LF_LEAN("Geo.Point") shapes_geo_point' "$scratch/shapes/shapes.h"
 grep -Fq 'struct LF_LEAN("Geo.Shape") shapes_geo_shape' "$scratch/shapes/shapes.h"

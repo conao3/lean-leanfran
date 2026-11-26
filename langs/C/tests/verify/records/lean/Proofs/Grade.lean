@@ -91,4 +91,8 @@ theorem level_one.proof.refines : level_one.obligation.refines := by
   intro ls h
   rfl
 
+theorem tone_low.proof.refines : tone_low.obligation.refines := by
+  intro ts h
+  rfl
+
 end LeanCModel.grade
