@@ -132,7 +132,8 @@ def jsonSupportSource : String := include_str "../lean/LeanfranC/Json.lean"
 
 private def generateFiles (env : Environment) (lean : LeanInstall) (target : Target)
     (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames)
-    (projectInit : Bool) (externalTypes : ExternalTypes) : ExceptT String IO (Array String × Array Export) := do
+    (projectInit : Bool) (externalTypes : ExternalTypes) :
+    ExceptT String IO (Array String × Array Export × Array Desc) := do
   if projectInit then
     if let some idx := env.getModuleIdx? target.moduleName.toName then
       for info in env.header.moduleData[idx.toNat]!.constants do
@@ -163,7 +164,7 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
     IO.FS.createDirAll (out / "LeanfranC")
     IO.FS.writeFile (out / "LeanfranC" / "Json.lean") jsonSupportSource
   IO.FS.writeFile (out / "leanfran.json") ((toJson {target with jsonSupport}).compress ++ "\n")
-  return (·, exports) <| #[s!"{target.cPrefix}_init", s!"lf_{target.cPrefix}_nat_decimal",
+  return (·, exports, descs) <| #[s!"{target.cPrefix}_init", s!"lf_{target.cPrefix}_nat_decimal",
     s!"lf_{target.cPrefix}_int_decimal"] ++ (descs.toList.flatMap fun d => d.names ++ d.deciderNames).toArray ++
     (apis.toList.flatMap JsonApi.names).toArray ++
     ((refTypes exports descs).flatMap (refNames target.cPrefix)).toArray ++
@@ -172,7 +173,7 @@ private def generateFiles (env : Environment) (lean : LeanInstall) (target : Tar
 unsafe def generate (ws : Workspace) (target : Target) (out : FilePath) (roots : Array Name)
     (checks : Checks := {}) (renames : Renames := {}) (projectInit : Bool := false)
     (externalTypes : ExternalTypes := {}) :
-    IO (Except String (Array String × Array Export)) := do
+    IO (Except String (Array String × Array Export × Array Desc)) := do
   let mod ← findModule ws target
   discard <| ws.runBuild mod.olean.fetch
   Lean.initSearchPath ws.lakeEnv.lean.sysroot ws.leanPath
