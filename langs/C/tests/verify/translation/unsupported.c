@@ -148,3 +148,10 @@ lf_status overlap(const int32_t *xs LF_ARRAY(n), size_t n, int32_t *out) {
     *out = xs[0];
     return LF_OK;
 }
+
+uint64_t self_init(uint64_t p0) {
+    {
+        uint64_t p0 = p0 + 1;
+        return p0;
+    }
+}
