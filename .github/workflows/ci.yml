@@ -8,11 +8,42 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    name: Select CI backends
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backends: ${{ steps.select.outputs.backends }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+      - run: bash maint/test-ci-backends.sh
+      - id: select
+        shell: bash
+        run: |
+          if [[ $GITHUB_EVENT_NAME == pull_request ]] &&
+             git rev-parse --verify HEAD^2 >/dev/null 2>&1 &&
+             backends=$(git diff --name-only --no-renames -z HEAD^1 HEAD | bash maint/ci-backends.sh); then
+            :
+          else
+            backends=$(bash maint/ci-backends.sh --all)
+          fi
+          echo "Selected backends: $backends"
+          echo "backends=$backends" >> "$GITHUB_OUTPUT"
+
   check:
     name: make check (${{ matrix.dir }})
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      RUN_BACKEND: ${{ contains(fromJSON(needs.changes.outputs.backends), matrix.dir) }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,28 +67,30 @@ jobs:
             build: true
     steps:
       - uses: actions/checkout@v7.0.1
+        if: env.RUN_BACKEND == 'true'
       - uses: cachix/install-nix-action@v32.0.0
-      - if: matrix.nix-shells
+        if: env.RUN_BACKEND == 'true'
+      - if: env.RUN_BACKEND == 'true' && matrix.nix-shells
         id: nix-cache
         uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ runner.temp }}/nix-cache
           key: nix-store-${{ runner.os }}-${{ matrix.dir }}-${{ hashFiles('flake.nix', 'flake.lock') }}
           restore-keys: nix-store-${{ runner.os }}-${{ matrix.dir }}-
-      - if: matrix.nix-shells
+      - if: env.RUN_BACKEND == 'true' && matrix.nix-shells
         run: maint/ci-nix-cache.sh restore "$RUNNER_TEMP/nix-cache" $SHELLS
         env:
           SHELLS: ${{ matrix.nix-shells }}
-      - if: matrix.nix-shells && steps.nix-cache.outputs.cache-hit != 'true'
+      - if: env.RUN_BACKEND == 'true' && matrix.nix-shells && steps.nix-cache.outputs.cache-hit != 'true'
         run: maint/ci-nix-cache.sh save "$RUNNER_TEMP/nix-cache" $SHELLS
         env:
           SHELLS: ${{ matrix.nix-shells }}
-      - if: matrix.nix-shells && steps.nix-cache.outputs.cache-hit != 'true'
+      - if: env.RUN_BACKEND == 'true' && matrix.nix-shells && steps.nix-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6.1.0
         with:
           path: ${{ runner.temp }}/nix-cache
           key: ${{ steps.nix-cache.outputs.cache-primary-key }}
-      - if: matrix.maven
+      - if: env.RUN_BACKEND == 'true' && matrix.maven
         uses: actions/cache@v6.1.0
         with:
           path: |
@@ -65,15 +98,18 @@ jobs:
             ~/.gitlibs
           key: maven-${{ runner.os }}-${{ hashFiles('langs/Clojure/**/deps.edn') }}
           restore-keys: maven-${{ runner.os }}-
-      - run: make check BACKENDS=${{ matrix.dir }}
-      - if: matrix.dir == 'C'
+      - if: env.RUN_BACKEND == 'true'
+        run: make check BACKENDS=${{ matrix.dir }}
+      - if: env.RUN_BACKEND == 'true' && matrix.dir == 'C'
         run: nix develop .#c -c maint/C/test-publish.sh
-      - if: matrix.build
+      - if: env.RUN_BACKEND == 'true' && matrix.build
         run: nix build ".#${BACKEND,,}"
         env:
           BACKEND: ${{ matrix.dir }}
   check-go-macos:
     name: make check (Go, macOS arm64)
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.backends), 'Go')
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -83,6 +119,8 @@ jobs:
       - run: nix develop .#go -c make -k -C langs/Go check
   check-c-macos:
     name: make check (C, macOS arm64)
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.backends), 'C')
     runs-on: macos-15
     timeout-minutes: 60
     steps:

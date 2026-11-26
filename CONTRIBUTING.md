@@ -29,6 +29,8 @@ Keep native-oracle differential tests, host-language tests, and sample verificat
 
 The Rust and PHP environments contain store paths that cache.nixos.org lacks: Aeneas with Charon, and PHPStan built for the selected PHP. `maint/ci-nix-cache.sh save` exports those paths from the realised shells, and `maint/ci-nix-cache.sh restore` imports them before the CI and Release checks enter the shells. The GitHub Actions cache keeps the export under a key derived from `flake.nix` and `flake.lock`. Paths over 500 MB, the unpacked Rust toolchain parts, are rebuilt from their downloads instead of exported. The checks themselves start from clean build outputs. The version step and the crates.io and Packagist publish jobs use only the tools they need, through `nix shell --inputs-from`, without entering the development environments.
 
+Pull requests run the checks for affected backends, including cross-backend test inputs listed in `maint/ci-backends.sh`. Shared or unrecognized paths trigger all checks. A new commit cancels the previous CI run for that pull request. Runs on `master` and release tags still check every backend.
+
 ## Packaging
 
 [LICENSE](LICENSE) applies to all backends. Cargo inherits its path from the Rust workspace. Hatch includes it in Python wheels and source distributions. The TypeScript `make pack` target copies it into `dist/LICENSE`, and the Clojure JAR builder includes it as `META-INF/LICENSE`. The PHP runtime declares the repository's Apache-2.0 license in its Composer manifest.
