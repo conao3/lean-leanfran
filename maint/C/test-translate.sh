@@ -70,7 +70,7 @@ grep -q '^circle_radius .* = !inactiveMember$' "$scratch/lean.txt"
 if grep -qE '= !(diverged|missingReturn)$' "$scratch/lean.txt"; then
     exit 1
 fi
-awk '{ n[$1]++ } n[$1] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \
+awk '{ n[$1 " " $NF]++ } n[$1 " " $NF] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \
     >"$scratch/undefined-inputs.txt"
 grep '= !indexOutOfRange$' "$scratch/lean.txt" | sed 's/ = .*//' |
     awk '($1 == "at" && $NF >= -16 && $NF < $3 + 16) || $1 == "sum_prefix"' \
