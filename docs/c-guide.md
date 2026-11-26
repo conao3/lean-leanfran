@@ -121,7 +121,7 @@ On an Intel Core i5-8400 with the standard Nix C development shell and Lean 4.35
 
 ## Generation checks
 
-- If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning. The `generate` commands of the other leanfran backends accept such definitions and report `sorry` only as an obligation state.
+- If a selected definition depends on `sorryAx`, generation reports the declaration and exits with status 254. `--allow-sorry` turns this check into a warning. The `generate` commands of the other leanfran backends accept such definitions.
 - If the module imports the Lean compiler directly or indirectly, generation reports the import chain and exits with status 254. `--allow-lean-import` enables the compiler dependency in the generated link configuration.
 - Supply the C symbols listed in `<prefix>.externs.txt` when linking the consumer. An extern for another backend, such as `go:foreign.Increment`, is rejected during generation. `<prefix>.implemented-by.txt` lists Lean declarations that call a replacement implementation.
 
