@@ -137,7 +137,7 @@ for row in 'inc refines missing' 'lost refines unextracted' 'add refines missing
 done
 grep -Fxq 'include/header.h:13:10: unextracted lost: LF_MODEL function has no definition in the configured sources' \
     "$scratch/err"
-model="$app/.leanfran/workspace/LeanCModel/header/Fn_add.lean"
+model="$app/.leanfran/workspace/LeanCModel/header/File_src_simpl_dc/Fn_add.lean"
 grep -Fq '= true → «add» «a» «b» = Except.ok (_root_.«addSpec» «a» «b»)' "$model"
 grep -Fq '= true → ∃ r, «add» «a» «b» = Except.ok r ∧ _root_.«addOk» «a» «b» r = true' "$model"
 
@@ -159,7 +159,7 @@ for model in level_of first_or first_level level_at level_at_or; do
     expect_model "grade.$model [refines]" proved
 done
 grep -Fq '∀ («xs» : Array Int32) («d» : Int32), «xs».size < 2 ^ 64 → «first_or» «xs» «d» = Except.ok' \
-    "$app/.leanfran/workspace/LeanCModel/grade/Fn_first_or.lean"
+    "$app/.leanfran/workspace/LeanCModel/grade/File_src_sgrade_dc/Fn_first_or.lean"
 run 0 status
 
 db="$app/compile_commands.json"
@@ -196,6 +196,29 @@ cmp "$scratch/records.lock" "$app/leanfran.lock"
 cmp "$scratch/shop.h" "$app/leanfran/shop.h"
 cp "$scratch/shop.c" "$app/src/shop.c"
 run 0 status
+
+app="$scratch/files"
+cp -R "$backend/tests/verify/files" "$app"
+run 0 check --require proved
+for model in fa fb File_src_sa_dc.twin File_src_sb_dc.twin; do
+    expect_model "dup.$model [refines]" proved
+done
+test "$(grep -c '^dup\.' "$scratch/out")" -eq 4
+workspace="$app/.leanfran/workspace/LeanCModel/dup"
+grep -Fq '(«x» + (1 : UInt32))' "$workspace/File_src_sa_dc/Fn_helper.lean"
+grep -Fq '(«x» + (2 : UInt32))' "$workspace/File_src_sb_dc/Fn_helper.lean"
+grep -Fxq 'namespace LeanCModel.«dup».File_src_sb_dc' "$workspace/File_src_sb_dc/Fn_twin.lean"
+grep -Fxq 'open LeanCModel.«dup».File_src_sb_dc' "$workspace/File_src_sb_dc/Fn_fb.lean"
+run 0 status
+for model in fa fb File_src_sa_dc.twin File_src_sb_dc.twin; do
+    expect_model "dup.$model [refines]" proved
+done
+perl -pi -e 's/^def bSpec \(x : UInt32\) : UInt32 := x \+ 2$/def bSpec (x : UInt32) : UInt32 := x + 1/' "$app/src/a.c"
+run 1 status
+expect_model 'dup.fb [refines]' stale
+run 1 check --require proved
+expect_model 'dup.fb [refines]' failed
+grep -Fq "lean/Proofs/Dup.lean:11:2: Tactic \`rfl\` failed" "$scratch/err"
 
 cp -R "$backend/tests/verify/trust" "$scratch/trust"
 app="$scratch/trust"
@@ -259,4 +282,4 @@ run 1 check
 expect_model 'fp.muladd [refines]' proved
 expect_model 'fp.widen [refines]' proved
 
-echo "verify: obligation states, stale results, kernel replay, instances, target and floating-point flags checked"
+echo "verify: obligation states, stale results, same-named functions in two files, kernel replay, instances, target and floating-point flags checked"

@@ -39,9 +39,23 @@ structure ModelFunction where
   callees : Std.HashMap String (Array String) := {}
   declaration : Bool := false
   isStatic : Bool := false
+  scope : String := ""
+  fileScoped : Array String := #[]
+
+def fileIdent (path : FilePath) : String :=
+  "File_" ++ String.join (path.toString.toList.map fun c =>
+    if c.isAlphanum then c.toString
+    else match c with
+      | '_' => "__"
+      | '/' => "_s"
+      | '.' => "_d"
+      | '-' => "_h"
+      | c => s!"_x{String.ofList (Nat.toDigits 16 c.toNat)}_")
 
 def ModelFunction.model (m : ModelFunction) : String :=
-  if m.block.isEmpty then s!"LeanCModel.{m.name}" else s!"LeanCModel.{m.block}.{m.name}"
+  if m.block.isEmpty then s!"LeanCModel.{m.name}"
+  else if m.scope.isEmpty then s!"LeanCModel.{m.block}.{m.name}"
+  else s!"LeanCModel.{m.block}.{m.scope}.{m.name}"
 
 def ModelFunction.labels (m : ModelFunction) : Array String :=
   if m.checks.isEmpty then #["model"] else m.checks.map (·.label)
@@ -301,7 +315,18 @@ def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (s
         if defined.contains m.name || seen.contains m.name then continue
         seen := seen.insert m.name
       result := result.push m
-    return result
+    let mut files : Std.HashMap (String × String) (Array FilePath) := {}
+    for m in result do
+      if m.declaration || m.block.isEmpty then continue
+      for name in (m.closure.map (·.name)).push m.name do
+        let known := files[(m.block, name)]?.getD #[]
+        unless known.contains m.file do files := files.insert (m.block, name) (known.push m.file)
+    let clashes := fun (m : ModelFunction) (name : String) => (files[(m.block, name)]?.getD #[]).size > 1
+    return result.map fun m =>
+      if m.declaration || m.block.isEmpty then m
+      else {m with
+        scope := if clashes m m.name then fileIdent m.file else ""
+        fileScoped := m.closure.map (·.name) |>.filter (clashes m ·)}
 
 def proofSources (root : FilePath) : IO (Array (String × FilePath × String)) := do
   let dir := root / "lean" / "Proofs"
@@ -366,7 +391,8 @@ private def lakeOutput (dir : FilePath) (args : Array String) : IO (UInt32 × St
   let result ← IO.Process.output {cmd := "lake", cwd := some dir, args := #["--no-ansi"] ++ args}
   return (result.exitCode, result.stdout ++ result.stderr)
 
-private def functionModule (block name : String) : String := s!"LeanCModel.{block}.Fn_{name}"
+private def functionModule (m : ModelFunction) (name : String) : String :=
+  s!"LeanCModel.{m.block}.{fileIdent m.file}.Fn_{name}"
 
 private def removeTree (path : FilePath) : IO Unit := do
   if ← path.pathExists then IO.FS.removeDirAll path
@@ -387,22 +413,26 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
     let mut error := m.error
     if error.isNone then
       for fn in m.closure do
-        let mod := functionModule m.block fn.name
+        let mod := functionModule m fn.name
         if built.contains mod then continue
         if failedModules.contains mod then
           error := some s!"{m.file}:{m.line}:{m.column}: cannot elaborate dependency {fn.name}"
           break
-        let deps := (m.callees[fn.name]?.getD #[]).map (functionModule m.block)
+        let callees := m.callees[fn.name]?.getD #[]
+        let deps := callees.map (functionModule m)
         if let some dep := deps.find? (!built.contains ·) then
           failedModules := failedModules.insert mod
           error := some s!"{m.file}:{m.line}:{m.column}: cannot elaborate dependency {dep}"
           break
         let imports := #["LeanCLib.C", Block.moduleName m.block] ++
           (if hasModels then #["LeanfranModels"] else #[]) ++ deps
-        let ns := s!"LeanCModel.{leanIdent m.block}"
+        let blockNs := s!"LeanCModel.{leanIdent m.block}"
+        let fileNs := s!"{blockNs}.{fileIdent m.file}"
+        let ns := if m.fileScoped.contains fn.name then fileNs else blockNs
+        let opens := if ns == blockNs && callees.any m.fileScoped.contains then s!"open {fileNs}\n\n" else ""
         let checks := if fn.name == m.name then obligations m fn else ""
         let source := String.join (imports.toList.map (s!"import {·}\n")) ++
-          s!"\nnamespace {ns}\n\n{fn.source}\n{checks}\nend {ns}\n"
+          s!"\nnamespace {ns}\n\n{opens}{fn.source}\n{checks}\nend {ns}\n"
         writeChanged (modulePath dir mod) source
         let (code, output) ← lakeOutput dir #["build", s!"+{mod}"]
         if code != 0 then
