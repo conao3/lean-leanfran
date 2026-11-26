@@ -460,3 +460,13 @@ int64_t largest_area(const shapes_geo_shape *ss LF_ARRAY(n), size_t n,
         return -shape_area(b);
     return shape_area(b);
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
+int32_t sign_end(int32_t x) {
+    if (x > 0)
+        return 1;
+    if (x < 0)
+        return -1;
+}
+#pragma GCC diagnostic pop

@@ -61,13 +61,15 @@ cc "${flags[@]}" "$fixtures/driver.c" -o "$scratch/inputs"
 test "$(wc -l <"$scratch/lean.txt")" -eq "$(wc -l <"$scratch/inputs.txt")"
 grep -v ' = !' "$scratch/lean.txt" >"$scratch/lean-ok.txt"
 sed 's/ = .*//' "$scratch/lean-ok.txt" >"$scratch/ok-inputs.txt"
-grep ' = !' "$scratch/lean.txt" | grep -vE '= !(indexOutOfRange|inactiveMember)$' >"$scratch/undefined.txt"
+grep ' = !' "$scratch/lean.txt" | grep -vE '= !(indexOutOfRange|inactiveMember|missingReturn)$' >"$scratch/undefined.txt"
 for exc in signedOverflow divByZero shiftOutOfRange floatToIntOutOfRange; do
     grep -q "= !$exc\$" "$scratch/undefined.txt"
 done
 grep -q '= !indexOutOfRange$' "$scratch/lean.txt"
 grep -q '^circle_radius .* = !inactiveMember$' "$scratch/lean.txt"
-if grep -qE '= !(diverged|missingReturn)$' "$scratch/lean.txt"; then
+grep -q '^sign_end .* = !missingReturn$' "$scratch/lean.txt"
+if grep -E '= !missingReturn$' "$scratch/lean.txt" | grep -qv '^sign_end ' ||
+    grep -qE '= !diverged$' "$scratch/lean.txt"; then
     exit 1
 fi
 awk '{ n[$1 " " $NF]++ } n[$1 " " $NF] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \

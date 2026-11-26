@@ -162,6 +162,7 @@ def evaluate (name : String) : P String := do
   | "color_or" => return result (toString ·.ctorIdx) («color_or» (← array color) (← i32))
   | "largest" => return result (outcome showShape) («largest» (← array shape))
   | "largest_area" => return result toString («largest_area» (← array shape) (← shape))
+  | "sign_end" => return result toString («sign_end» (← i32))
   | _ => return s!"unknown function {name}"
 
 partial def main : IO Unit := do

@@ -33,7 +33,7 @@ static const spec specs[] = {
     {"circle_radius", "S"}, {"shape_tag", "S"},   {"bigger", "SS"},
     {"color_sum", "E"},     {"area_sum", "U"},    {"area_tail", "UN"},
     {"color_at", "En"},     {"color_or", "En"},   {"largest", "U"},
-    {"largest_area", "US"},
+    {"largest_area", "US"}, {"sign_end", "i"},
 };
 
 static uint64_t state = 1;
@@ -547,6 +547,8 @@ static void evaluate(char *line) {
         shapes_geo_shape s = read_shape();
         printf("%" PRId64, largest_area(ss, n, s));
         free(ss);
+    } else if (NAME("sign_end")) {
+        printf("%" PRId32, sign_end(read_int()));
     } else if (NAME("lits")) {
         print_double(lits());
     } else {
