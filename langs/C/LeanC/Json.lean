@@ -222,7 +222,7 @@ def emitJsonWrappers (apis : Array JsonApi) : String :=
     "if (in == NULL) { lf_set_error(err, LF_INVALID, \"Input pointer is null\"); return false; }\n" ++
     "lean_object *value = NULL;\n" ++
     s!"if ({api.type.converter}_to_lean(in, &value, err) != LF_OK) return false;\n" ++
-    "lean_dec(value);\nreturn true;\n}\n\n" ++
+    "if (value != NULL) lean_dec(value);\nreturn true;\n}\n\n" ++
     s!"{api.toJsonPrototype} \{\n" ++ requireInitialized ++
     "if (in == NULL || out == NULL) return lf_set_error(err, LF_INVALID, \"Input or output pointer is null\");\n" ++
     "lean_object *value = NULL;\n" ++
