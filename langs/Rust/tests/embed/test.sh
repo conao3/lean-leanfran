@@ -248,6 +248,26 @@ for child_copy in false true; do
 done
 echo "embed-test: Rust tracks ordinary and copied path dependencies of a copied parent"
 
+sibling_imports=test-out/fixtures/copied-sibling
+rm -rf "$sibling_imports"
+mkdir -p "$sibling_imports"
+cp -r tests/embed/fixtures/local-imports/. "$sibling_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$sibling_imports/"
+sibling_lean="$sibling_imports/lean"
+sed '/^path = "dep"$/a copy = true' "$sibling_lean/lakefile.toml" > "$sibling_lean/lakefile.new"
+mv "$sibling_lean/lakefile.new" "$sibling_lean/lakefile.toml"
+mkdir -p "$sibling_lean/sibling-src/child"
+printf '\n[[require]]\nname = "sibling"\npath = "sibling-src"\ncopy = true\n' >> "$sibling_lean/lakefile.toml"
+printf 'name = "sibling"\n' > "$sibling_lean/sibling-src/lakefile.toml"
+printf '\n[[require]]\nname = "child"\npath = "../sibling/child"\n' >> "$sibling_lean/dep/lakefile.toml"
+printf 'name = "child"\n\n[[lean_lib]]\nname = "Child"\n' > "$sibling_lean/sibling-src/child/lakefile.toml"
+printf 'import Child\ndef dependencyValue : UInt32 := childValue\n' > "$sibling_lean/dep/Dependency.lean"
+printf 'def childValue : UInt32 := 0\n' > "$sibling_lean/sibling-src/child/Child.lean"
+test "$(cargo run -q --manifest-path "$sibling_imports/Cargo.toml")" = 11
+mv "$sibling_lean/downloaded" "$sibling_imports/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$sibling_imports/Cargo.toml")" = 11
+echo "embed-test: offline cache reuse follows parent traversal into a sibling copy"
+
 copy_source_dir=test-out/fixtures/copied-source-dir
 rm -rf "$copy_source_dir"
 mkdir -p "$copy_source_dir"

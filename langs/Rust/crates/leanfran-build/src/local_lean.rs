@@ -3,7 +3,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 fn lakefile(root: &Path) -> Option<String> {
     // Lake prefers a Lean configuration when both files exist.
@@ -130,21 +130,41 @@ fn package_dir_name(mut name: &str) -> String {
     dir
 }
 
-fn rebase_copied_path(
-    mut path: PathBuf,
-    copies: &[(PathBuf, PathBuf)],
-    missing_only: bool,
-) -> PathBuf {
+fn collapse_parent_dirs(path: &Path) -> PathBuf {
+    let mut collapsed = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir if collapsed.file_name().is_some() => {
+                collapsed.pop();
+            }
+            Component::ParentDir if collapsed.has_root() && collapsed.parent().is_none() => {}
+            _ => collapsed.push(component),
+        }
+    }
+    collapsed
+}
+
+fn rebase_copied_path(path: PathBuf, copies: &[(PathBuf, PathBuf)], missing_only: bool) -> PathBuf {
+    let mut collapsed = collapse_parent_dirs(&path);
+    let mut matched_copy = false;
     for _ in copies {
-        let Some(source) = copies.iter().find_map(|(copy, source)| {
-            let relative = path.strip_prefix(copy).ok()?;
-            (!missing_only || !copy.is_dir()).then(|| source.join(relative))
-        }) else {
+        let Some((copy, source, relative)) = copies
+            .iter()
+            .find_map(|(copy, source)| Some((copy, source, collapsed.strip_prefix(copy).ok()?)))
+        else {
             break;
         };
-        path = source;
+        matched_copy = true;
+        if missing_only && copy.is_dir() {
+            break;
+        }
+        collapsed = collapse_parent_dirs(&source.join(relative));
     }
-    path
+    if matched_copy {
+        collapsed
+    } else {
+        path
+    }
 }
 
 fn hash_config(
@@ -312,7 +332,10 @@ impl<'a> LocalLean<'a> {
                                 dir,
                                 copy: true,
                                 ..
-                            } => Some((packages_dir.join(package_dir_name(name)), root.join(dir))),
+                            } => Some((
+                                collapse_parent_dirs(&packages_dir.join(package_dir_name(name))),
+                                root.join(dir),
+                            )),
                             _ => None,
                         })
                         .collect();
