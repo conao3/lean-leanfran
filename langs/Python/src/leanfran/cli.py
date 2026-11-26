@@ -1,7 +1,4 @@
-"""``leanfran``: the command line of the Python package.
-
-usage: leanfran sync --package <dir> [--leanfran-python <path>]
-"""
+"""The command line of the Python package."""
 
 import argparse
 import os
@@ -29,6 +26,11 @@ exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converte
 """
 
 
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise argparse.ArgumentError(None, message)
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("help", "--help", "-h"):
@@ -38,15 +40,22 @@ def main(argv=None):
     if command not in ("sync", "check", "status"):
         print(f"leanfran: unknown command {command!r} (see `leanfran help`)", file=sys.stderr)
         return 252
-    p = argparse.ArgumentParser(prog=f"leanfran {command}", add_help=False, exit_on_error=False)
-    p.add_argument("--package", required=True)
-    p.add_argument("--leanfran-python")
-    p.add_argument("--require", choices=["proved"])
+    p = _ArgumentParser(prog=f"leanfran {command}", exit_on_error=False)
+    p.add_argument("--package", required=True, help="Python package directory containing __init__.py")
+    p.add_argument("--leanfran-python", help=argparse.SUPPRESS if command == "status" else "path to the Lean compiler")
+    p.add_argument(
+        "--require",
+        choices=["proved"],
+        help=argparse.SUPPRESS if command == "sync" else "require all reported obligations to be proved",
+    )
     try:
         args = p.parse_args(argv[1:])
-    except (argparse.ArgumentError, SystemExit) as e:
+    except argparse.ArgumentError as e:
+        p.print_usage(sys.stderr)
         print(f"leanfran: {e}", file=sys.stderr)
         return 252
+    except SystemExit as e:
+        return e.code
     from leanfran import check, sync
 
     cli = args.leanfran_python or os.environ.get("LEANFRAN_PYTHON_CLI")

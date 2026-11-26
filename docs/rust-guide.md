@@ -38,6 +38,12 @@ runs `lake build`, and runs `leanfran module generate`. Lean errors are reported
 file and line of the source. `imports` are Lean modules to import; `uses` are other `lean!`
 blocks of the crate, whose module is imported and opened and whose generated types are shared.
 
+If an import names a handwritten module in `lean/`, leanfran fingerprints the local Lean
+sources and Lake configuration so that changes to transitive local imports also invalidate the
+block's cache and proof hashes. This is conservative: changing another local Lean source can
+also invalidate those blocks. Regenerate their cache online and commit it alongside the source
+changes before building with `LEANFRAN_OFFLINE=1`.
+
 | Variable                  | Effect                                                                                                                             |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `LEANFRAN_CLI`            | the `leanfran` executable (default: `leanfran` on `PATH`; `lake` is always taken from `PATH`)                                      |

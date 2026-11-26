@@ -235,7 +235,8 @@ impl Builder {
         if src.is_dir() {
             println!("cargo:rerun-if-changed={}", src.display());
         }
-        let keys = cache_keys(&self.crate_name, &blocks, &self.csimp_key())?;
+        let lean_files = self.lean_user_files();
+        let keys = self.block_keys_with_files(&blocks, &self.csimp_key(), &lean_files)?;
         let cache = self.cache_dir();
         let mut missing = Vec::new();
         for (i, b) in blocks.iter().enumerate() {
@@ -270,7 +271,7 @@ impl Builder {
         if cache.is_dir() {
             println!("cargo:rerun-if-changed={}", cache.display());
         }
-        for f in self.lean_user_files() {
+        for f in lean_files {
             println!("cargo:rerun-if-changed={}", f.display());
         }
         println!("cargo:rerun-if-changed={}", self.lock_path().display());
@@ -297,7 +298,7 @@ impl Builder {
         blocks: &[Block],
         select: impl Fn(&Block) -> bool,
     ) -> Result<(), Error> {
-        let keys = cache_keys(&self.crate_name, blocks, &self.csimp_key())?;
+        let keys = self.block_keys(blocks, &self.csimp_key())?;
         let cache = self.cache_dir();
         let missing: Vec<usize> = (0..blocks.len())
             .filter(|&i| select(&blocks[i]) && !cache.join(format!("{}.rs", keys[i])).is_file())
@@ -344,7 +345,7 @@ impl Builder {
         blocks: &[Block],
         items: &model::CrateItems,
     ) -> Result<BTreeMap<String, String>, Error> {
-        let keys = cache_keys(&self.crate_name, blocks, "")?;
+        let keys = self.block_keys(blocks, "")?;
         let mut out: BTreeMap<String, String> = items.hashes.clone();
         for (b, k) in blocks.iter().zip(&keys) {
             out.insert(module_path_string(&b.path), format!("sha256:{k}"));
@@ -457,6 +458,66 @@ impl Builder {
         }
         out.sort();
         out
+    }
+
+    /// Cache keys including local Lean sources for blocks importing modules from `lean/`.
+    pub fn block_keys(&self, blocks: &[Block], extra: &str) -> Result<Vec<String>, Error> {
+        if blocks.iter().all(|b| b.imports.is_empty()) {
+            return cache_keys(&self.crate_name, blocks, extra);
+        }
+        self.block_keys_with_files(blocks, extra, &self.lean_user_files())
+    }
+
+    fn block_keys_with_files(
+        &self,
+        blocks: &[Block],
+        extra: &str,
+        files: &[PathBuf],
+    ) -> Result<Vec<String>, Error> {
+        let lean = self.lean_dir();
+        let sources: Vec<_> = files
+            .iter()
+            .filter(|f| f.extension().is_some_and(|s| s == "lean"))
+            .collect();
+        let local: Vec<_> = blocks
+            .iter()
+            .map(|b| {
+                b.imports.iter().any(|module| {
+                    let path = format!("{}.lean", module.replace('.', "/"));
+                    sources.iter().any(|f| f.ends_with(&path))
+                })
+            })
+            .collect();
+        if !local.contains(&true) {
+            return cache_keys(&self.crate_name, blocks, extra);
+        }
+
+        let mut h = Sha256::new();
+        let lakefile = lean.join("lakefile.toml");
+        for f in sources
+            .into_iter()
+            .chain(files.iter().filter(|f| **f == lakefile))
+        {
+            let path = normalize_path(f.strip_prefix(&lean).unwrap_or(f));
+            let bytes = fs::read(f).map_err(|e| Error::new(format!("{}: {e}", f.display())))?;
+            h.update((path.len() as u64).to_le_bytes());
+            h.update(path.as_bytes());
+            h.update((bytes.len() as u64).to_le_bytes());
+            h.update(bytes);
+        }
+        let digest: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        let fingerprints: Vec<_> = local
+            .into_iter()
+            .map(|is_local| is_local.then_some(digest.as_str()))
+            .collect();
+        cache_keys_with_inputs(
+            &self.crate_name,
+            blocks,
+            CacheInputs {
+                extra,
+                fingerprints: &fingerprints,
+            },
+        )
     }
 
     fn ensure_package(&self) -> Result<(), Error> {
@@ -784,6 +845,27 @@ pub fn module_path_string(path: &[String]) -> String {
 /// imports, the source, the keys of the used blocks, `extra` (the hash of the `@[csimp]`
 /// replacements) and [`GENERATOR_VERSION`].
 pub fn cache_keys(crate_name: &str, blocks: &[Block], extra: &str) -> Result<Vec<String>, Error> {
+    cache_keys_with_inputs(
+        crate_name,
+        blocks,
+        CacheInputs {
+            extra,
+            fingerprints: &[],
+        },
+    )
+}
+
+#[derive(Clone, Copy)]
+struct CacheInputs<'a> {
+    extra: &'a str,
+    fingerprints: &'a [Option<&'a str>],
+}
+
+fn cache_keys_with_inputs(
+    crate_name: &str,
+    blocks: &[Block],
+    inputs: CacheInputs<'_>,
+) -> Result<Vec<String>, Error> {
     let index: HashMap<&[String], usize> = blocks
         .iter()
         .enumerate()
@@ -793,7 +875,7 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block], extra: &str) -> Result<Vec
     fn key_of(
         i: usize,
         crate_name: &str,
-        extra: &str,
+        inputs: CacheInputs<'_>,
         blocks: &[Block],
         index: &HashMap<&[String], usize>,
         keys: &mut Vec<Option<String>>,
@@ -834,13 +916,17 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block], extra: &str) -> Result<Vec
                     module_path_string(u)
                 )));
             };
-            h.update(key_of(j, crate_name, extra, blocks, index, keys, stack)?.as_bytes());
+            h.update(key_of(j, crate_name, inputs, blocks, index, keys, stack)?.as_bytes());
             h.update([1]);
         }
         h.update([0]);
-        h.update(extra.as_bytes());
+        h.update(inputs.extra.as_bytes());
         h.update([0]);
         h.update(GENERATOR_VERSION.as_bytes());
+        if let Some(Some(fingerprint)) = inputs.fingerprints.get(i) {
+            h.update(b"\0local-lean\0");
+            h.update(fingerprint.as_bytes());
+        }
         stack.pop();
         let k: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
         keys[i] = Some(k.clone());
@@ -848,7 +934,7 @@ pub fn cache_keys(crate_name: &str, blocks: &[Block], extra: &str) -> Result<Vec
     }
     let mut stack = Vec::new();
     (0..blocks.len())
-        .map(|i| key_of(i, crate_name, extra, blocks, &index, &mut keys, &mut stack))
+        .map(|i| key_of(i, crate_name, inputs, blocks, &index, &mut keys, &mut stack))
         .collect()
 }
 

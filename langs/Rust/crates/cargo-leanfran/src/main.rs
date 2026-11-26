@@ -314,7 +314,7 @@ impl Specs {
     pub fn new(c: &Crate) -> Result<Specs, String> {
         let b = c.builder();
         let (blocks, _) = b.scan().map_err(|e| e.to_string())?;
-        let keys = leanfran_build::cache_keys(&c.name, &blocks, "").map_err(|e| e.to_string())?;
+        let keys = b.block_keys(&blocks, "").map_err(|e| e.to_string())?;
         Ok(Specs {
             blocks,
             keys,

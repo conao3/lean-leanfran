@@ -44,6 +44,13 @@ fn main() {
 }
 RS
 export CARGO_TARGET_DIR="$root/test-out/fixtures/target"
+local_imports=test-out/fixtures/local-imports
+rm -rf "$local_imports"
+mkdir -p "$local_imports"
+cp -r tests/embed/fixtures/local-imports/. "$local_imports/"
+sed 's/name = "bad-proof"/name = "local-imports"/' "$fixture/Cargo.toml" > "$local_imports/Cargo.toml"
+cp "$fixture/build.rs" "$local_imports/"
+
 if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$fixture/Cargo.toml" > "$fixture/offline.log" 2>&1; then
   echo "embed-test: LEANFRAN_OFFLINE=1 built without a cache" >&2
   exit 1
@@ -65,3 +72,16 @@ if cargo build -q --manifest-path "$fixture/Cargo.toml" > "$fixture/no-build.log
 fi
 grep -q "lean!: the crate has no build script" "$fixture/no-build.log"
 echo "embed-test: lean! without a build script reports how to add one"
+
+manifest="$local_imports/Cargo.toml"
+test "$(cargo run -q --manifest-path "$manifest")" = 11
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
+printf 'def nestedValue : UInt32 := 2\n' > "$local_imports/lean/local/Nested/Values.lean"
+if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$manifest" > "$local_imports/offline.log" 2>&1; then
+  echo "embed-test: a stale local Lean dependency was accepted offline" >&2
+  exit 1
+fi
+grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$local_imports/offline.log"
+test "$(cargo run -q --manifest-path "$manifest")" = 12
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 12
+echo "embed-test: changing a transitive local Lean import rejects the old offline cache and regenerates online"
