@@ -117,14 +117,32 @@ jobs:
       - uses: cachix/install-nix-action@v32.0.0
       - run: nix build .#go
       - run: nix develop .#go -c make -k -C langs/Go check
-  check-c-macos:
-    name: make check (C, macOS arm64)
+  check-c-macos-shards:
+    name: C macOS arm64 (${{ matrix.suite }})
     needs: changes
     if: contains(fromJSON(needs.changes.outputs.backends), 'C')
     runs-on: macos-15
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [checks, verification]
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v32.0.0
-      - run: nix build .#c
-      - run: nix develop .#c -c make -C langs/C check
+      - if: matrix.suite == 'checks'
+        run: nix build .#c
+      - if: matrix.suite == 'checks'
+        run: nix develop .#c -c make -C langs/C check VERIFY_TARGET=
+      - if: matrix.suite == 'verification'
+        run: nix develop .#c -c make -C langs/C check-verify
+  check-c-macos:
+    name: make check (C, macOS arm64)
+    needs: [changes, check-c-macos-shards]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.backends), 'C') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "$SHARDS_RESULT" = success
+        env:
+          SHARDS_RESULT: ${{ needs.check-c-macos-shards.result }}

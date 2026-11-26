@@ -8,11 +8,12 @@ c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/t
 	tests/verify/records/*.c tests/verify/records/src/*.c tests/verify/records/src/*.h tests/verify/files/src/*.c \
 	samples/pricing/*.c samples/verified-clamp/src/*.c)
 clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
+VERIFY_TARGET ?= check-verify
 
 build:
 	lake build
 
-check: build format-check check-model check-translate check-fuzz check-verify check-random check-samples
+check: build format-check check-model check-translate check-fuzz $(VERIFY_TARGET) check-random check-samples
 	../../maint/C/test-diff.sh
 	../../maint/C/test-link.sh
 	../../maint/C/test-embed.sh
