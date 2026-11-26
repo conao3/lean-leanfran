@@ -152,6 +152,18 @@ def dump (command : CompileCommand) (extra : Array String := #[]) : IO Node := d
     throw <| IO.userError s!"{command.file}: clang exited with {output.exitCode}\n{output.stderr}"
   IO.ofExcept ((parse command.file output.stdout).mapError fun message => s!"{command.file}: {message}")
 
+def predefined (command : CompileCommand) (extra : Array String := #[]) :
+    IO (Std.HashMap String String) := do
+  let output ← IO.Process.output {
+    cmd := "clang", cwd := some command.directory
+    args := extra ++ command.flags ++ #["-dM", "-E", "-x", "c", "/dev/null"] }
+  unless output.exitCode == 0 do
+    throw <| IO.userError s!"{command.file}: clang exited with {output.exitCode}\n{output.stderr}"
+  return (output.stdout.splitOn "\n").foldl (init := {}) fun macros line =>
+    match line.splitOn " " with
+    | "#define" :: name :: value => macros.insert name (" ".intercalate value)
+    | _ => macros
+
 def dependencies (command : CompileCommand) (extra : Array String := #[]) : IO (Array FilePath) := do
   let result ← IO.Process.output {
     cmd := "clang", cwd := some command.directory

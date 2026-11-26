@@ -42,3 +42,4 @@ struct_out 183:11 out parameter 'out' of type 'shapes_geo_point *' may point int
 struct_array 189:11 out parameter 'out' of type 'int32_t *' may point into LF_ARRAY parameter 'ps' of element type 'shapes_geo_point'; declare one of them restrict
 union_out 195:11 out parameter 'out' of type 'shapes_geo_shape *' may point into LF_ARRAY parameter 'xs' of element type 'int64_t'; declare one of them restrict
 union_array 201:11 out parameter 'out' of type 'shapes_geo_color *' may point into LF_ARRAY parameter 'ss' of element type 'shapes_geo_shape'; declare one of them restrict
+self_init 248:23 'p0' read in its own initializer

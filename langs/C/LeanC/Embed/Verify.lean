@@ -196,7 +196,10 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
     n.kind == "FunctionDecl" && n.children.any (·.kind == "CompoundStmt") &&
       absolute command.directory n.location.file == file
   let byName : Std.HashMap String Node := defs.foldl (init := {}) fun m n => m.insert (n.string "name") n
-  let output := Verify.translate ast file command.directory
+  let macros ← predefined command extra
+  let target := Verify.targetProblem macros
+  let float := Verify.floatProblem command.flags macros
+  let output := Verify.translate ast file command.directory target float
   let translated : Std.HashMap String Verify.Function :=
     output.functions.foldl (init := {}) fun m fn => m.insert fn.name fn
   let records := ast.walk.filter fun n =>
@@ -246,11 +249,23 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
             s!"{relative}:{lineOf source problem.location.offset}:{problem.location.column}: unextracted {name}: {problem.reason}"
           pure {model with error := some (reason.getD s!"{place}: unextracted {name}: not translated")}
     let names := calleeClosure byName name {}
-    let asts := defs.filter (names.contains <| ·.string "name") |>.map (normalize ·.json)
+    let closureDefs := defs.filter (names.contains <| ·.string "name")
+    let asts := closureDefs.map (normalize ·.json)
+    let enumerators : Std.HashSet String := closureDefs.foldl (init := {}) fun acc fn =>
+      fn.walk.foldl (init := acc) fun acc n => Id.run do
+        let some decl := n.get? "referencedDecl" | return acc
+        unless (decl.getObjValAs? String "kind").toOption == some "EnumConstantDecl" do return acc
+        let some id := (decl.getObjValAs? String "id").toOption | return acc
+        return acc.insert id
+    let enumJson := ast.walk.filter (fun n => n.kind == "EnumDecl" &&
+      n.children.any fun c => c.kind == "EnumConstantDecl" && enumerators.contains (c.string "id"))
+      |>.map (normalize ·.json)
+    let asts := asts ++ enumJson
     let specBlocks := if model.block.isEmpty then #[] else blockClosure blocks model.block
     let hash ← sha256 (Json.compress (Lean.toJson #[
       Json.str (Json.compress (Lean.toJson (attrs.map Lean.toJson))), Json.arr asts, Json.arr recordJson,
-      Lean.toJson (specBlocks.map fun b => (b.name, b.imports, b.source)), Json.str modelSource]))
+      Lean.toJson (specBlocks.map fun b => (b.name, b.imports, b.source)), Json.str modelSource,
+      Lean.toJson target, Lean.toJson (float.filter fun _ => closureDefs.any Verify.usesDouble)]))
     result := result.push {model with hash}
   for node in ast.children do
     unless node.kind == "FunctionDecl" && !node.children.any (·.kind == "CompoundStmt") &&
@@ -465,6 +480,7 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
     unless checked.size == refs.size do throw <| IO.userError s!"invalid obligations check response: {output.stdout}"
     for o in checked do
       let o := if o.file.startsWith "Proofs/" then {o with file := "lean/" ++ o.file} else o
+      if (o.status == "failed" || o.status == "unextracted") && !o.detail.isEmpty then IO.eprintln s!"error: {o.file}{if o.line == 0 then "" else s!":{o.line}"}: {o.detail}"
       let fn := (o.model.splitOn ".").getLast!
       let proof := s!"{fn}.proof.{o.label}"
       let failed := o.status == "missing" &&

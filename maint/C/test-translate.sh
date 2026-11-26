@@ -39,7 +39,7 @@ lake build FixtureTypes LeanCLib
 grep -Fq 'struct LF_LEAN("Geo.Point") shapes_geo_point' "$scratch/shapes/shapes.h"
 grep -Fq 'struct LF_LEAN("Geo.Shape") shapes_geo_shape' "$scratch/shapes/shapes.h"
 
-clang_args=(-I "$scratch/shapes" -I "$fixtures")
+clang_args=(-I "$scratch/shapes" -I "$fixtures" -ffp-contract=off)
 "$compiler" translate --block fixture --import FixtureTypes \
     --out "$project/LeanCModel/Fixture.lean" "$fixtures/fixture.c" -- "${clang_args[@]}" \
     >"$scratch/translated.txt" 2>"$scratch/translate.err"
@@ -61,16 +61,18 @@ cc "${flags[@]}" "$fixtures/driver.c" -o "$scratch/inputs"
 test "$(wc -l <"$scratch/lean.txt")" -eq "$(wc -l <"$scratch/inputs.txt")"
 grep -v ' = !' "$scratch/lean.txt" >"$scratch/lean-ok.txt"
 sed 's/ = .*//' "$scratch/lean-ok.txt" >"$scratch/ok-inputs.txt"
-grep ' = !' "$scratch/lean.txt" | grep -vE '= !(indexOutOfRange|inactiveMember)$' >"$scratch/undefined.txt"
+grep ' = !' "$scratch/lean.txt" | grep -vE '= !(indexOutOfRange|inactiveMember|missingReturn)$' >"$scratch/undefined.txt"
 for exc in signedOverflow divByZero shiftOutOfRange floatToIntOutOfRange; do
     grep -q "= !$exc\$" "$scratch/undefined.txt"
 done
 grep -q '= !indexOutOfRange$' "$scratch/lean.txt"
 grep -q '^circle_radius .* = !inactiveMember$' "$scratch/lean.txt"
-if grep -qE '= !(diverged|missingReturn)$' "$scratch/lean.txt"; then
+grep -q '^sign_end .* = !missingReturn$' "$scratch/lean.txt"
+if grep -E '= !missingReturn$' "$scratch/lean.txt" | grep -qv '^sign_end ' ||
+    grep -qE '= !diverged$' "$scratch/lean.txt"; then
     exit 1
 fi
-awk '{ n[$1]++ } n[$1] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \
+awk '{ n[$1 " " $NF]++ } n[$1 " " $NF] <= 20' "$scratch/undefined.txt" | sed 's/ = .*//' \
     >"$scratch/undefined-inputs.txt"
 grep '= !indexOutOfRange$' "$scratch/lean.txt" | sed 's/ = .*//' |
     awk '($1 == "at" && $NF >= -16 && $NF < $3 + 16) || $1 == "sum_prefix"' \

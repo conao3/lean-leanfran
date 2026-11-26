@@ -138,4 +138,40 @@ for cc in "${compilers[@]}"; do
         exit 1
     fi
 done
-echo "random: model tests passed, off-by-one implementations and a signed overflow failed"
+sed 's/^def negate (b : Bool) : Bool := !b$/&\ndef never (_x : Int32) : Bool := false\ndef same (x : Int32) : Int32 := x/' \
+    "$scratch/random.c" >"$source"
+cat >>"$source" <<'C'
+
+LF_MODEL("refines=same", "requires=never")
+int32_t vacuous(int32_t x) {
+    return x + 1;
+}
+C
+"$compiler" sync --dir "$app" >/dev/null
+for cc in "${compilers[@]}"; do
+    model_test 2 "$cc"
+    grep -Fxq 'random.vacuous: no input satisfied requires' "$scratch/err"
+done
+cp "$scratch/random.c" "$source"
+
+if [[ $(uname -s) == Linux ]]; then
+    cp "$app/leanfran.toml" "$scratch/leanfran.toml"
+    printf 'sources = ["src/*.c"]\n' >"$app/leanfran.toml"
+    sed 's/^def negate (b : Bool) : Bool := !b$/&\ndef muladdSpec (a b c : Float) : Float := a * b + c/' \
+        "$scratch/random.c" >"$source"
+    cat >>"$source" <<'C'
+
+LF_MODEL("refines=muladdSpec")
+double muladd(double a, double b, double c) {
+    return a * b + c;
+}
+C
+    "$compiler" sync --dir "$app" >/dev/null
+    model_test 2 clang CFLAGS="-O2 -mfma"
+    grep -Eq '^random\.muladd \[refines\]: mismatch \(seed 1, run [0-9]+\)$' "$scratch/err"
+    model_test 0 clang CFLAGS="-O2 -mfma -ffp-contract=off"
+    grep -Eq '^random\.muladd: [0-9]+ inputs passed \(seed 1\)$' "$scratch/out"
+    cp "$scratch/leanfran.toml" "$app/leanfran.toml"
+    cp "$scratch/random.c" "$source"
+fi
+echo "random: model tests passed, off-by-one implementations, a signed overflow, an unsatisfiable requires and a contracted multiply-add failed"

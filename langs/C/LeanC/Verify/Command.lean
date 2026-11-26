@@ -57,8 +57,11 @@ def translateMain (args : List String) : IO UInt32 := do
   try
     IO.FS.withTempDir fun tmp => do
       IO.FS.writeFile (tmp / "leanfran.h") supportHeader
-      let root ← dump {directory := cwd, file, flags := opts.clangArgs} #["-I", tmp.toString, "-x", "c"]
-      let output := translate root file cwd
+      let command : CompileCommand := {directory := cwd, file, flags := opts.clangArgs}
+      let extra := #["-I", tmp.toString, "-x", "c"]
+      let root ← dump command extra
+      let macros ← predefined command extra
+      let output := translate root file cwd (targetProblem macros) (floatProblem opts.clangArgs macros)
       let source ← IO.FS.readBinFile file
       for (name, problem) in output.unextracted do
         let line := lineOf source problem.location.offset

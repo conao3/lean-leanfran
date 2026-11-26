@@ -130,6 +130,13 @@ static inline double lf_model_double(lf_model_rng *rng, uint64_t *pick) {
         return cases[(bits >> 8) % LF_MODEL_DOUBLE_CASES];
     case 1:
         return (double)((int64_t)((bits >> 8) % 65) - 32) / 4.0;
+    case 2: {
+        uint64_t raw = (lf_model_next(rng) & 0x800fffffffffffffULL) |
+                       ((uint64_t)(1019 + (bits >> 8) % 9) << 52);
+        double value;
+        memcpy(&value, &raw, sizeof value);
+        return value;
+    }
     default: {
         uint64_t raw = lf_model_next(rng);
         double value;

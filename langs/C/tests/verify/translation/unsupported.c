@@ -242,3 +242,10 @@ lf_status wide_struct(const int64_t *xs LF_ARRAY(n), size_t n,
     *out = p;
     return LF_OK;
 }
+
+uint64_t self_init(uint64_t p0) {
+    {
+        uint64_t p0 = p0 + 1;
+        return p0;
+    }
+}
