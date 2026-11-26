@@ -820,10 +820,12 @@ private partial def stmt (node : Node) : M Unit := do
         fail decl s!"'{decl.string "storageClass"}' local variable '{name}'"
       let some init := decl.children.find? (·.kind != "AnnotateAttr")
         | fail decl s!"local variable '{name}' without an initializer"
+      let id := decl.string "id"
+      if let some self := init.walk.find? fun n => (referenced n).any (·.1 == id) then
+        fail self s!"'{name}' read in its own initializer"
       let ty ← resolve decl decl.typeName (decl.typeName "desugaredQualType")
       let value ← castCode init (← topExpr init) ty
       let lean ← localName name
-      let id := decl.string "id"
       modify fun s => {s with locals := s.locals.insert id {lean, ty}}
       let keyword := if (← get).assigned.contains id then "let mut" else "let"
       emit s!"{keyword} {lean} : {← leanOf ty} := {value.text}"

@@ -140,3 +140,10 @@ shapes_geo_color to_color(int32_t x) { return x; }
 shapes_geo_color far_color(void) { return 7; }
 
 shapes_geo_shape_rect_fields rect_of(shapes_geo_shape s) { return s.as.rect; }
+
+uint64_t self_init(uint64_t p0) {
+    {
+        uint64_t p0 = p0 + 1;
+        return p0;
+    }
+}
