@@ -1,0 +1,20 @@
+name = "fixture"
+defaultTargets = ["LeanRustGen"]
+packagesDir = "downloaded"
+
+[[require]]
+name = "dependency"
+path = "dep"
+
+[[lean_lib]]
+name = "LeanRustGen"
+globs = ["LeanRustGen.+"]
+
+[[lean_lib]]
+name = "Support"
+srcDir = "local"
+
+[[lean_lib]]
+name = "NestedLibrary"
+srcDir = "local"
+roots = ["Nested"]

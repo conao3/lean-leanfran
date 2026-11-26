@@ -38,6 +38,22 @@ runs `lake build`, and runs `leanfran module generate`. Lean errors are reported
 file and line of the source. `imports` are Lean modules to import; `uses` are other `lean!`
 blocks of the crate, whose module is imported and opened and whose generated types are shared.
 
+If an import names a handwritten module in `lean/`, leanfran fingerprints that module, its
+transitive local imports, and the Lake configuration. Changes to these inputs invalidate the
+block's cache and proof hashes; edits to unrelated Lean files, including proof files that the
+block does not import, do not. Regenerate the cache online and commit it alongside the source
+changes before building with `LEANFRAN_OFFLINE=1`.
+With `lakefile.toml`, imports are resolved against configured libraries and source directories,
+including Lake path dependencies under `lean/` as locked by `lake-manifest.json`, but excluding
+downloaded packages. The fingerprint includes the root and local packages' Lake configuration and
+manifest files. Keep these files alongside the cache for offline builds.
+For Git dependencies from local repositories, a changed locked revision also invalidates
+blocks with explicit imports, even if the Git checkout is absent.
+When there are no Lake package overrides and all requirements can be read from local TOML
+configurations, unused lockfile entries cannot claim an import from a package still in use.
+Executable `lakefile.lean` configurations are not evaluated on a cache hit; their local imports
+are matched by path suffix instead.
+
 | Variable                  | Effect                                                                                                                             |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `LEANFRAN_CLI`            | the `leanfran` executable (default: `leanfran` on `PATH`; `lake` is always taken from `PATH`)                                      |

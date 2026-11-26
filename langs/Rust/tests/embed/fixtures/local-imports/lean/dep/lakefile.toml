@@ -1,0 +1,4 @@
+name = "dependency"
+
+[[lean_lib]]
+name = "Dependency"
