@@ -74,8 +74,12 @@ grep -q "lean!: the crate has no build script" "$fixture/no-build.log"
 echo "embed-test: lean! without a build script reports how to add one"
 
 manifest="$local_imports/Cargo.toml"
+mkdir "$local_imports/lean/Proofs"
+printf 'theorem correct : True := True.intro\n' > "$local_imports/lean/Proofs/Answer.lean"
 test "$(cargo run -q --manifest-path "$manifest")" = 11
+printf 'theorem correct : True := by trivial\n' > "$local_imports/lean/Proofs/Answer.lean"
 test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 11
+echo "embed-test: a proof-only edit reuses the local-import cache"
 printf 'def nestedValue : UInt32 := 2\n' > "$local_imports/lean/local/Nested/Values.lean"
 if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$manifest" > "$local_imports/offline.log" 2>&1; then
   echo "embed-test: a stale local Lean dependency was accepted offline" >&2

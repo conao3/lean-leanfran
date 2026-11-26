@@ -27,6 +27,8 @@ pub mod model;
 pub mod syntax;
 pub mod verify;
 
+mod local_lean;
+
 use model::file_module;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -474,42 +476,16 @@ impl Builder {
         extra: &str,
         files: &[PathBuf],
     ) -> Result<Vec<String>, Error> {
-        let lean = self.lean_dir();
-        let sources: Vec<_> = files
+        let mut local = local_lean::LocalLean {
+            root: &self.lean_dir(),
+            files,
+            modules: HashMap::new(),
+        };
+        let digests = blocks
             .iter()
-            .filter(|f| f.extension().is_some_and(|s| s == "lean"))
-            .collect();
-        let local: Vec<_> = blocks
-            .iter()
-            .map(|b| {
-                b.imports.iter().any(|module| {
-                    let path = format!("{}.lean", module.replace('.', "/"));
-                    sources.iter().any(|f| f.ends_with(&path))
-                })
-            })
-            .collect();
-        if !local.contains(&true) {
-            return cache_keys(&self.crate_name, blocks, extra);
-        }
-
-        let mut h = Sha256::new();
-        let lakefile = lean.join("lakefile.toml");
-        for f in sources
-            .into_iter()
-            .chain(files.iter().filter(|f| **f == lakefile))
-        {
-            let path = normalize_path(f.strip_prefix(&lean).unwrap_or(f));
-            let bytes = fs::read(f).map_err(|e| Error::new(format!("{}: {e}", f.display())))?;
-            h.update((path.len() as u64).to_le_bytes());
-            h.update(path.as_bytes());
-            h.update((bytes.len() as u64).to_le_bytes());
-            h.update(bytes);
-        }
-        let digest: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
-        let fingerprints: Vec<_> = local
-            .into_iter()
-            .map(|is_local| is_local.then_some(digest.as_str()))
-            .collect();
+            .map(|b| local.fingerprint(&b.imports))
+            .collect::<Result<Vec<_>, _>>()?;
+        let fingerprints: Vec<_> = digests.iter().map(Option::as_deref).collect();
         cache_keys_with_inputs(
             &self.crate_name,
             blocks,
