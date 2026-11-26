@@ -122,6 +122,9 @@ kinds_mismatch 's/s.as.rect.w > s.as.rect.h/s.as.rect.w >= s.as.rect.h/' wide 9 
 kinds_mismatch 's/shape_size(b) > shape_size(a)/shape_size(b) >= shape_size(a)/' bigger 9 \
     'a=kinds_shape_rect{w=0, h=0, level=kinds_level_low}, b=kinds_shape_circle{r=0}' \
     'expected: kinds_shape_rect{w=0, h=0, level=kinds_level_low}, got: kinds_shape_circle{r=0}'
+kinds_mismatch 's/        return b;/        return a;/' bigger 2 \
+    'a=kinds_shape_circle{r=-1}, b=kinds_shape_circle{r=0}' \
+    'expected: kinds_shape_circle{r=0}, got: kinds_shape_circle{r=-1}'
 cp "$scratch/kinds.c" "$kinds"
 
 sed 's/"refines=addSpec", "requires=small"/"refines=addSpec"/' "$scratch/random.c" >"$source"
