@@ -58,9 +58,8 @@ static void check_floats(lf_error *err) {
     assert(public_types_float_array_from_json(json.ptr, json.len, &decoded,
                                               err) == LF_OK);
     assert(decoded.len == count);
-    const size_t exact[] = {0, 1, 5, 6};
-    for (size_t i = 0; i < sizeof(exact) / sizeof(*exact); ++i) {
-        assert(decoded.items[exact[i]] == raw[exact[i]]);
+    for (size_t i = 0; i + 1 < count; ++i) {
+        assert(decoded.items[i] == raw[i]);
     }
     assert(isnan(decoded.items[count - 1]));
     lf_str again;
