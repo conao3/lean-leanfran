@@ -304,7 +304,7 @@ leanfran-c status
 | `unextracted` | The function is outside the translated subset, its translation does not elaborate, its compile flags do not match the translation (below), or the translated definition uses an instance on types from the Lean toolchain or `LeanCLib` that a module outside them declares, such as a Lean block or a Lake dependency. The diagnostic gives the file, position, and reason. |
 | `stale` | `status` found a change to the function, a function it calls, a struct or enum it uses, the spec block, the proofs, `leanfran.toml`, the compiler's generator version or Lean version, or the verdict on its compile flags since the lock was written. |
 
-`check --require proved` exits with status 1 unless every obligation is `proved`. Plain `check` exits with status 1 when a function is `unextracted` or a proof fails to build. `status` reads the lock and exits with status 1 when an obligation is stale.
+`check --require proved` exits with status 1 unless every obligation is `proved`. Plain `check` exits with status 1 when a function is `unextracted` or a proof fails to build. `status` reads the lock and exits with status 1 when an obligation is stale. When every `LF_MODEL` function of a Lean block is `unextracted`, there is no `LeanCModel.<block>` module, and `check` skips the proof files whose `LeanCModel` imports, direct or through other proof files, name only such blocks.
 
 ### C subset and proof scope
 

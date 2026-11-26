@@ -104,6 +104,53 @@ run 0 check
 test "$(grep -c '^states\.' "$scratch/out")" -eq 0
 run 0 status
 
+app="$scratch/dead"
+mkdir -p "$app/src" "$app/lean/Proofs"
+printf 'sources = ["src/*.c"]\n' >"$app/leanfran.toml"
+cat >"$app/src/dead.c" <<'C'
+/* leanfran:lean dead
+def incSpec (n : UInt32) : UInt32 := n + 1
+*/
+#include "leanfran.h"
+
+static int counter;
+
+LF_MODEL("refines=incSpec")
+uint32_t unsupported(uint32_t n) { return n + (uint32_t)counter; }
+C
+cat >"$app/lean/Proofs/Dead.lean" <<'LEAN'
+import LeanCModel.dead
+
+namespace LeanCModel.dead
+
+theorem unsupported.proof.refines : unsupported.obligation.refines := by
+  intro n
+  rfl
+
+end LeanCModel.dead
+LEAN
+printf 'import Proofs.Dead\n' >"$app/lean/Proofs/Uses.lean"
+expect_dead() {
+    run 1 check
+    grep -Fxq "$1: unextracted" "$scratch/out"
+    test "$(grep -c '\]: ' "$scratch/out")" -eq 1
+    if grep -E 'no such file or directory|bad import' "$scratch/out" "$scratch/err"; then
+        echo "expected no module errors for a block without translated functions" >&2
+        exit 1
+    fi
+    run 0 status
+    grep -Fxq "$1: unextracted" "$scratch/out"
+    test "$(grep -c '\]: ' "$scratch/out")" -eq 1
+    if grep -E 'no such file or directory|bad import' "$scratch/out" "$scratch/err"; then
+        echo "expected no module errors in status" >&2
+        exit 1
+    fi
+}
+expect_dead 'dead.unsupported [refines]'
+sed 's/"refines=incSpec")/"refines=incSpec", "bogus=1")/' "$app/src/dead.c" >"$scratch/dead.c"
+cp "$scratch/dead.c" "$app/src/dead.c"
+expect_dead 'unsupported [model]'
+
 app="$scratch/header"
 mkdir -p "$app/src" "$app/include"
 printf 'sources = ["src/*.c", "include/*.h"]\n' >"$app/leanfran.toml"
@@ -298,4 +345,4 @@ run 1 check
 expect_model 'fp.muladd [refines]' proved
 expect_model 'fp.widen [refines]' proved
 
-echo "verify: obligation states, stale results, same-named functions in two files, kernel replay, instances, target and floating-point flags checked"
+echo "verify: obligation states, blocks without translated functions, stale results, same-named functions in two files, kernel replay, instances, target and floating-point flags checked"

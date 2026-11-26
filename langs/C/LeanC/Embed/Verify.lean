@@ -44,6 +44,7 @@ structure ModelFunction where
   declaration : Bool := false
   isStatic : Bool := false
   scope : String := ""
+  home : String := ""
   fileScoped : Array String := #[]
 
 def fileIdent (path : FilePath) : String :=
@@ -238,7 +239,11 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
           pure block.name
       return (block, requires, checks)
     let model ← match parsed with
-      | .error message => pure {base with error := some s!"{place}: unextracted {name}: {message}"}
+      | .error message =>
+        let home := match localBlocks with
+          | #[block] => block.name
+          | _ => ""
+        pure {base with home, error := some s!"{place}: unextracted {name}: {message}"}
       | .ok (block, requires, checks) =>
         let model := {base with block, requires, checks}
         match translated[name]? with
@@ -401,6 +406,27 @@ private def functionModule (m : ModelFunction) (name : String) : String :=
 private def removeTree (path : FilePath) : IO Unit := do
   if ← path.pathExists then IO.FS.removeDirAll path
 
+private def deadProofs (proofs : Array (String × FilePath × String)) (dead : Array String) :
+    IO (Std.HashSet String) := do
+  let mut imports : Std.HashMap Name (Array Name) := {}
+  for (mod, path, source) in proofs do
+    let header ← (parseImports' source path.toString).toBaseIO
+    imports := imports.insert mod.toName ((header.toOption.map (·.imports.map (·.module))).getD #[])
+  let mut result := {}
+  for (mod, _) in proofs do
+    let mut pending := #[mod.toName]
+    let mut seen : NameSet := {}
+    let mut models := #[]
+    while let some next := pending.back? do
+      pending := pending.pop
+      if seen.contains next then continue
+      seen := seen.insert next
+      if (`LeanCModel).isPrefixOf next then models := models.push next
+      pending := pending ++ (imports[next]?.getD #[])
+    if !models.isEmpty && models.all (fun m => dead.any fun block => (Name.str `LeanCModel block).isPrefixOf m) then
+      result := result.insert mod
+  return result
+
 def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (String × FilePath × String))
     (hasModels : Bool) : IO (Array Obligation) := do
   for path in [dir / "LeanCModel", dir / "Proofs", dir / ".lake" / "build" / "lib" / "lean" / "LeanCModel",
@@ -413,6 +439,8 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
   let mut built : Std.HashSet String := {}
   let mut failedModules : Std.HashSet String := {}
   let mut byBlock : Std.HashMap String (Array String) := {}
+  let mut live : Std.HashSet String := {}
+  let mut unextracted := #[]
   for m in models do
     let mut error := m.error
     if error.isNone then
@@ -452,8 +480,12 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
         IO.eprintln detail
         results := results.push {model := m.model, label, status := "unextracted", detail}
       | none => refs := refs.push ({model := m.model, label, status := ""} : Obligation)
+    if error.isNone then live := live.insert m.block
+    else unextracted := unextracted.push (if m.block.isEmpty then m.home else m.block)
+  let dead := unextracted.filter fun block => !block.isEmpty && !live.contains block
   let mut modules := #[]
   for (block, mods) in byBlock.toArray.qsort (·.1 < ·.1) do
+    unless live.contains block do continue
     let mod := s!"LeanCModel.{block}"
     writeChanged (modulePath dir mod) (String.join (mods.toList.map (s!"import {·}\n")))
     let (code, output) ← lakeOutput dir #["build", s!"+{mod}"]
@@ -461,8 +493,12 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
     modules := modules.push mod
   let mut failedSources := #[]
   let workProofs := (dir / "Proofs").toString ++ "/"
+  let skipped ← deadProofs proofs dead
   for (mod, _, source) in proofs do
     writeChanged (modulePath dir mod) source
+    if skipped.contains mod then
+      failedSources := failedSources.push source
+      continue
     let (code, output) ← lakeOutput dir #["build", s!"+{mod}"]
     if code != 0 then
       IO.eprint ((output.replace workProofs "lean/Proofs/").replace "Proofs/" "lean/Proofs/"
