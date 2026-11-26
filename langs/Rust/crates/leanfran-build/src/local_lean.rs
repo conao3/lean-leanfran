@@ -170,11 +170,13 @@ impl<'a> LocalLean<'a> {
             let Some(library) = config.libs.iter().rev().find(|lib| lib.builds(path)) else {
                 continue;
             };
-            let dir = package
-                .join(&config.src_dir)
-                .join(&library.src_dir)
-                .canonicalize()
-                .ok()?;
+            let dir = package.join(&config.src_dir).join(&library.src_dir);
+            // The file scan keeps the path through symlinks, even for targets outside lean/.
+            let source = dir.join(path);
+            if self.files.binary_search(&source).is_ok() {
+                return Some(source);
+            }
+            let dir = dir.canonicalize().ok()?;
             let root = self.root.canonicalize().ok()?;
             let source = self.root.join(dir.strip_prefix(root).ok()?).join(path);
             return self

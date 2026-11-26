@@ -115,3 +115,10 @@ echo "embed-test: changing a transitive local Lean import rejects the old offlin
 printf 'def dependencyValue : UInt32 := 1\n' > "$local_imports/lean/dep/Dependency.lean"
 test "$(cargo run -q --manifest-path "$manifest")" = 13
 echo "embed-test: changing an imported Lake path dependency regenerates Rust"
+
+mv "$local_imports/lean/local" "$local_imports/lean-src"
+ln -s ../lean-src "$local_imports/lean/local"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 13
+printf 'def nestedValue : UInt32 := 3\n' > "$local_imports/lean-src/Nested/Values.lean"
+test "$(cargo run -q --manifest-path "$manifest")" = 14
+echo "embed-test: changing a Lean import through a symlinked source directory regenerates Rust"
