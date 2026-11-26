@@ -116,6 +116,23 @@ fn is_local_git_url(url: &str) -> bool {
     url.starts_with("file://") || Path::new(url).is_absolute() || !url.contains(':')
 }
 
+fn rebase_copied_path(
+    mut path: PathBuf,
+    copies: &[(PathBuf, PathBuf)],
+    missing_only: bool,
+) -> PathBuf {
+    for _ in copies {
+        let Some(source) = copies.iter().find_map(|(copy, source)| {
+            let relative = path.strip_prefix(copy).ok()?;
+            (!missing_only || !copy.is_dir()).then(|| source.join(relative))
+        }) else {
+            break;
+        };
+        path = source;
+    }
+    path
+}
+
 fn hash_config(
     root: &Path,
     file: &Path,
@@ -272,6 +289,19 @@ impl<'a> LocalLean<'a> {
                             .packages_dir
                             .unwrap_or_else(|| lake_dir.join("packages")),
                     );
+                    let copies: Vec<_> = manifest
+                        .packages
+                        .iter()
+                        .filter_map(|entry| match entry {
+                            LockedPackage::Path {
+                                name,
+                                dir,
+                                copy: true,
+                                ..
+                            } => Some((packages_dir.join(name), root.join(dir))),
+                            _ => None,
+                        })
+                        .collect();
                     let mut locked = Vec::new();
                     for entry in manifest.packages {
                         if let LockedPackage::Path {
@@ -282,14 +312,15 @@ impl<'a> LocalLean<'a> {
                             manifest_file,
                         } = entry
                         {
-                            let (dir, identity) = if copy {
-                                let identity = root.join(dir);
-                                let materialized = packages_dir.join(&name);
-                                let dir = if materialized.is_dir() {
-                                    materialized
+                            let source = root.join(dir);
+                            let identity = rebase_copied_path(source.clone(), &copies, false);
+                            let (dir, identity) = if copy || source != identity {
+                                let materialized = if copy {
+                                    packages_dir.join(&name)
                                 } else {
-                                    identity.clone()
+                                    source
                                 };
+                                let dir = rebase_copied_path(materialized, &copies, true);
                                 let nested_packages = self::packages_dir(&dir);
                                 collect_user_files(
                                     &dir,
@@ -300,7 +331,7 @@ impl<'a> LocalLean<'a> {
                                 copied_dirs.push((dir.clone(), identity.clone()));
                                 (dir, identity)
                             } else {
-                                let Some(dir) = local_dir(root.join(dir)) else {
+                                let Some(dir) = local_dir(source) else {
                                     continue;
                                 };
                                 (dir.clone(), dir)

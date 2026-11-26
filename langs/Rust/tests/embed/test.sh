@@ -222,6 +222,29 @@ mv "$copied_lean/downloaded" "$copied_imports/downloaded"
 test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$copied_imports/Cargo.toml")" = 12
 echo "embed-test: Rust tracks refreshed Lake copies and reuses the cache without the copied directory"
 
+for child_copy in false true; do
+  nested_imports="test-out/fixtures/copied-parent-$child_copy"
+  rm -rf "$nested_imports"
+  mkdir -p "$nested_imports"
+  cp -r tests/embed/fixtures/local-imports/. "$nested_imports/"
+  cp "$local_imports/"{Cargo.toml,build.rs} "$nested_imports/"
+  nested_lean="$nested_imports/lean"
+  sed '/^path = "dep"$/a copy = true' "$nested_lean/lakefile.toml" > "$nested_lean/lakefile.new"
+  mv "$nested_lean/lakefile.new" "$nested_lean/lakefile.toml"
+  mkdir "$nested_lean/dep/child"
+  printf '\n[[require]]\nname = "child"\npath = "child"\ncopy = %s\n' "$child_copy" >> "$nested_lean/dep/lakefile.toml"
+  printf 'name = "child"\n\n[[lean_lib]]\nname = "Child"\n' > "$nested_lean/dep/child/lakefile.toml"
+  printf 'import Child\ndef dependencyValue : UInt32 := childValue\n' > "$nested_lean/dep/Dependency.lean"
+  printf 'def childValue : UInt32 := 0\n' > "$nested_lean/dep/child/Child.lean"
+  test "$(cargo run -q --manifest-path "$nested_imports/Cargo.toml")" = 11
+  printf 'def childValue : UInt32 := 1\n' > "$nested_lean/dep/child/Child.lean"
+  (cd "$nested_lean" && lake update)
+  test "$(cargo run -q --manifest-path "$nested_imports/Cargo.toml")" = 12
+  mv "$nested_lean/downloaded" "$nested_imports/downloaded"
+  test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$nested_imports/Cargo.toml")" = 12
+done
+echo "embed-test: Rust tracks ordinary and copied path dependencies of a copied parent"
+
 override_imports=test-out/fixtures/override-imports
 rm -rf "$override_imports"
 mkdir -p "$override_imports"
