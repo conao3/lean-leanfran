@@ -19,6 +19,7 @@ private def CType.primitiveLeanType (ty : CType) : String :=
   | .int => "Int"
   | .char => "Char"
   | .bytes => "ByteArray"
+  | .floats => "FloatArray"
   | .float => "Float"
   | .float32 => "Float32"
   | .unit => "Unit"
@@ -45,6 +46,7 @@ private def CType.encodeJson (ty : CType) (value : String) : String :=
   | .int => s!"Json.int {value}"
   | .char => s!"Json.char {value}"
   | .bytes => s!"Json.bytes {value}"
+  | .floats => s!"Json.floats {value}"
   | .float => s!"Json.float {value}"
   | .float32 => s!"Json.float (Float32.toFloat {value})"
   | .unit => "Json.obj []"
@@ -61,6 +63,7 @@ private def CType.decodeJson (ty : CType) (value : String) : String :=
   | .int => s!"Json.getInt {value}"
   | .char => s!"Json.getChar {value}"
   | .bytes => s!"Json.getBytes {value}"
+  | .floats => s!"Json.getFloats {value}"
   | .float => s!"Json.getFloat {value}"
   | .float32 => s!"Float.toFloat32 <$> Json.getFloat {value}"
   | .unit => s!"(fun _ : Unit => ⟨⟩) <$> Json.getUnit {value}"
@@ -219,7 +222,7 @@ def emitJsonWrappers (apis : Array JsonApi) : String :=
     "if (in == NULL) { lf_set_error(err, LF_INVALID, \"Input pointer is null\"); return false; }\n" ++
     "lean_object *value = NULL;\n" ++
     s!"if ({api.type.converter}_to_lean(in, &value, err) != LF_OK) return false;\n" ++
-    "lean_dec(value);\nreturn true;\n}\n\n" ++
+    "if (value != NULL) lean_dec(value);\nreturn true;\n}\n\n" ++
     s!"{api.toJsonPrototype} \{\n" ++ requireInitialized ++
     "if (in == NULL || out == NULL) return lf_set_error(err, LF_INVALID, \"Input or output pointer is null\");\n" ++
     "lean_object *value = NULL;\n" ++

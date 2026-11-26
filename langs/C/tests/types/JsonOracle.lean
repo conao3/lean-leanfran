@@ -27,3 +27,4 @@ def main : IO Unit := do
   unless (Lean.toJson decoded).compress == json.compress do
     throw (IO.userError "Native JSON did not roundtrip")
   IO.println json.compress
+  IO.println (Lean.toJson #[1.5, -0.25, 0.1, 1e300, -0.0, 1.0 / 0.0, -1.0 / 0.0, 0.0 / 0.0]).compress

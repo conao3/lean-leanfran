@@ -1,6 +1,7 @@
 #include "public_types.h"
 #include <assert.h>
 #include <lean/mimalloc.h>
+#include <math.h>
 #include <string.h>
 
 static bool count_blocks(const mi_heap_t *heap, const mi_heap_area_t *area,
@@ -212,6 +213,50 @@ static void check_except(lf_error *err) {
     assert(strcmp(err->message, "\"unit error\"") == 0);
 }
 
+static void check_floats(lf_error *err) {
+    double raw[] = {1.5, -0.0, 0.1, 1e300, -1e-300, INFINITY, -INFINITY, NAN};
+    size_t count = sizeof(raw) / sizeof(*raw);
+    lf_float_array values = {raw, count}, out;
+    assert(public_types_floats(&values, &out, err) == LF_OK);
+    assert(out.len == count && memcmp(out.items, raw, sizeof(raw)) == 0);
+    lf_float_array_free(&out);
+    assert(out.items == NULL && out.len == 0);
+
+    lf_float_array empty = {NULL, 0};
+    assert(public_types_floats(&empty, &out, err) == LF_OK);
+    assert(out.len == 0 && out.items == NULL);
+    double sum = -1;
+    assert(public_types_float_sum(&empty, &sum, err) == LF_OK && sum == 0);
+
+    double addends[] = {1.0, 2.0, 4.0};
+    lf_float_array three = {addends, 3};
+    assert(public_types_float_sum(&three, &sum, err) == LF_OK && sum == 7);
+
+    assert(public_types_float_make(9, &out, err) == LF_OK);
+    assert(out.len == 2 && out.items[0] == 1.5 && out.items[1] == 9);
+    lf_float_array_free(&out);
+
+    public_types_typed_samples samples = {{addends, 3}, {"σ", 2}}, grown;
+    assert(public_types_samples(&samples, &grown, err) == LF_OK);
+    assert(grown.values.len == 4 && grown.values.items[0] == 1 &&
+           grown.values.items[2] == 4 && grown.values.items[3] == 3);
+    assert(grown.label.len == 2 && memcmp(grown.label.ptr, "σ", 2) == 0);
+    public_types_typed_samples_free(&grown);
+
+    lf_float_array dangling = {NULL, 3};
+    assert(public_types_floats(&dangling, &out, err) == LF_INVALID);
+    assert(strcmp(err->message, "Invalid FloatArray buffer or length") == 0);
+
+    size_t before = live_blocks();
+    for (size_t i = 0; i < 1000; ++i) {
+        assert(public_types_floats(&values, &out, err) == LF_OK);
+        lf_float_array_free(&out);
+        assert(public_types_samples(&samples, &grown, err) == LF_OK);
+        public_types_typed_samples_free(&grown);
+    }
+    assert(live_blocks() == before);
+}
+
 static void check_trivial(lf_error *err) {
     public_types_typed_wrap_text text = {.tag = public_types_typed_wrap_text_mk,
                                          .as.mk.text = {"雪", 3}};
@@ -330,6 +375,7 @@ int main(void) {
     check_trees(&error);
     check_collections(&error);
     check_except(&error);
+    check_floats(&error);
     check_trivial(&error);
     lf_error_clear(&error);
     return 0;

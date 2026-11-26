@@ -323,6 +323,12 @@ def getFloat : Json → Except String Float
       OfScientific.ofScientific n.mantissa.natAbs (n.exponent < 0) n.exponent.natAbs)
   | _ => throw "Expected a JSON number or a special floating-point value"
 
+def floats (value : FloatArray) : Json :=
+  .arr (value.data.map float)
+
+def getFloats (value : Json) : Except String FloatArray := do
+  FloatArray.mk <$> (← value.getArray).mapM getFloat
+
 def omitNull (key : String) : Json → List (String × Json)
   | .null => []
   | value => [(key, value)]

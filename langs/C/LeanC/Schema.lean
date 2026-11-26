@@ -109,6 +109,7 @@ private def primitive (ty : CType) : Json :=
   | .int32 => signed 32
   | .int64 => signed 64
   | .bytes => array (unsigned 8)
+  | .floats => array (jsType "number")
   | .unit => obj [("type", "object"), ("additionalProperties", toJson false)]
   | .named _ => obj []
 
