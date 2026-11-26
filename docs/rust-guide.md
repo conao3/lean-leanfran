@@ -43,9 +43,10 @@ transitive local imports, and the Lake configuration. Changes to these inputs in
 block's cache and proof hashes; edits to unrelated Lean files, including proof files that the
 block does not import, do not. Regenerate the cache online and commit it alongside the source
 changes before building with `LEANFRAN_OFFLINE=1`.
-With `lakefile.toml`, imports are resolved against the project's configured libraries and source
-directories, excluding downloaded packages. Executable `lakefile.lean` configurations are not
-evaluated on a cache hit; their local imports are matched by path suffix instead.
+With `lakefile.toml`, imports are resolved against configured libraries and source directories,
+including Lake path dependencies under `lean/` but excluding downloaded packages.
+Executable `lakefile.lean` configurations are not evaluated on a cache hit; their local imports
+are matched by path suffix instead.
 
 | Variable                  | Effect                                                                                                                             |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

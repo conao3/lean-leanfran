@@ -111,3 +111,7 @@ grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$local_imports/o
 test "$(cargo run -q --manifest-path "$manifest")" = 12
 test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$manifest")" = 12
 echo "embed-test: changing a transitive local Lean import rejects the old offline cache and regenerates online"
+
+printf 'def dependencyValue : UInt32 := 1\n' > "$local_imports/lean/dep/Dependency.lean"
+test "$(cargo run -q --manifest-path "$manifest")" = 13
+echo "embed-test: changing an imported Lake path dependency regenerates Rust"

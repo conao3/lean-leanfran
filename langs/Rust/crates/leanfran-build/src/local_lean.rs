@@ -24,7 +24,7 @@ pub(super) fn packages_dir(root: &Path) -> Option<PathBuf> {
 pub(super) struct LocalLean<'a> {
     root: &'a Path,
     files: &'a [PathBuf],
-    config: Option<LakeConfig>,
+    packages: Vec<(PathBuf, Option<LakeConfig>)>,
     config_text: Option<String>,
     modules: HashMap<PathBuf, (String, Vec<PathBuf>)>,
 }
@@ -36,6 +36,30 @@ struct LakeConfig {
     src_dir: PathBuf,
     #[serde(default, rename = "lean_lib")]
     libs: Vec<Library>,
+    #[serde(default, rename = "require")]
+    requires: Vec<Requirement>,
+}
+
+#[derive(Deserialize)]
+struct Requirement {
+    path: Option<PathBuf>,
+    source: Option<DependencySource>,
+}
+
+#[derive(Deserialize)]
+struct DependencySource {
+    #[serde(rename = "type")]
+    kind: String,
+    dir: Option<PathBuf>,
+}
+
+impl Requirement {
+    fn path(&self) -> Option<&Path> {
+        self.path.as_deref().or_else(|| {
+            let source = self.source.as_ref()?;
+            source.dir.as_deref().filter(|_| source.kind == "path")
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -93,23 +117,60 @@ fn matches_glob(module: &Path, glob: &str) -> bool {
 impl<'a> LocalLean<'a> {
     pub(super) fn new(root: &'a Path, files: &'a [PathBuf]) -> Self {
         let toml = lakefile(root);
-        let config = toml.as_ref().and_then(|text| toml::from_str(text).ok());
+        let config: Option<LakeConfig> = toml.as_ref().and_then(|text| toml::from_str(text).ok());
         let config_text = toml.or_else(|| fs::read_to_string(root.join("lakefile.lean")).ok());
+        let mut packages = vec![(root.to_path_buf(), config)];
+        if let Ok(canonical_root) = root.canonicalize() {
+            let mut visited = BTreeSet::from([root.to_path_buf()]);
+            let mut i = 0;
+            while let Some((dir, config)) = packages.get(i) {
+                let deps: Vec<_> = config
+                    .iter()
+                    .flat_map(|cfg| cfg.requires.iter().rev())
+                    .filter_map(Requirement::path)
+                    .filter_map(|dep| {
+                        let canonical = dir.join(dep).canonicalize().ok()?;
+                        let dep = root.join(canonical.strip_prefix(&canonical_root).ok()?);
+                        if !files.iter().any(|file| file.starts_with(&dep))
+                            || !visited.insert(dep.clone())
+                        {
+                            return None;
+                        }
+                        let config = lakefile(&dep).and_then(|text| toml::from_str(&text).ok());
+                        Some((dep, config))
+                    })
+                    .collect();
+                packages.extend(deps);
+                i += 1;
+            }
+        }
         Self {
             root,
             files,
-            config,
+            packages,
             config_text,
             modules: HashMap::new(),
         }
     }
 
     fn resolve(&self, path: &Path) -> Option<PathBuf> {
-        if let Some(config) = &self.config {
+        for (package, config) in &self.packages {
+            let Some(config) = config else {
+                // Executable Lake configurations cannot be evaluated on an offline cache hit.
+                if let Some(file) = self
+                    .files
+                    .iter()
+                    .find(|f| f.starts_with(package) && f.ends_with(path))
+                {
+                    return Some(file.clone());
+                }
+                continue;
+            };
             // Lake searches the workspace's own libraries in reverse declaration order.
-            let library = config.libs.iter().rev().find(|lib| lib.builds(path))?;
-            let dir = self
-                .root
+            let Some(library) = config.libs.iter().rev().find(|lib| lib.builds(path)) else {
+                continue;
+            };
+            let dir = package
                 .join(&config.src_dir)
                 .join(&library.src_dir)
                 .canonicalize()
@@ -122,8 +183,7 @@ impl<'a> LocalLean<'a> {
                 .ok()
                 .map(|i| self.files[i].clone());
         }
-        // Executable Lake configurations cannot be evaluated on an offline cache hit.
-        self.files.iter().find(|f| f.ends_with(path)).cloned()
+        None
     }
 
     pub(super) fn fingerprint(&mut self, imports: &[String]) -> Result<Option<String>, Error> {
