@@ -149,3 +149,32 @@ if cargo build -q --manifest-path "$manifest" > "$local_imports/options.log" 2>&
 fi
 grep -Fq 'Unknown identifier `α`' "$local_imports/options.log"
 echo "embed-test: changing a local dependency lakefile invalidates Rust"
+
+git_imports=test-out/fixtures/local-git-imports
+rm -rf "$git_imports"
+mkdir -p "$git_imports"
+cp -r tests/embed/fixtures/local-imports/. "$git_imports/"
+cp "$local_imports/"{Cargo.toml,build.rs} "$git_imports/"
+git_dep="$root/$git_imports/git-dep"
+mv "$git_imports/lean/dep" "$git_dep"
+git -C "$git_dep" init -q -b main
+git -C "$git_dep" add Dependency.lean lakefile.toml
+git -C "$git_dep" -c user.name=Fixture -c user.email=fixture@example.com commit -qm initial
+sed "s|path = \"dep\"|git = \"file://$git_dep\"\nrev = \"main\"|" "$git_imports/lean/lakefile.toml" > "$git_imports/lean/lakefile.new"
+mv "$git_imports/lean/lakefile.new" "$git_imports/lean/lakefile.toml"
+sed -e 's/imports = \["Support"\]/imports = ["Dependency"]/' -e 's/supportValue/dependencyValue/' "$git_imports/src/main.rs" > "$git_imports/src/main.new"
+mv "$git_imports/src/main.new" "$git_imports/src/main.rs"
+test "$(cargo run -q --manifest-path "$git_imports/Cargo.toml")" = 10
+mv "$git_imports/lean/downloaded" "$git_imports/downloaded"
+test "$(LEANFRAN_OFFLINE=1 LEANFRAN_CLI=/nonexistent/leanfran cargo run -q --manifest-path "$git_imports/Cargo.toml")" = 10
+mv "$git_imports/downloaded" "$git_imports/lean/downloaded"
+printf 'def dependencyValue : UInt32 := 1\n' > "$git_dep/Dependency.lean"
+git -C "$git_dep" -c user.name=Fixture -c user.email=fixture@example.com commit -qam updated
+(cd "$git_imports/lean" && lake update dependency)
+if LEANFRAN_OFFLINE=1 cargo build -q --manifest-path "$git_imports/Cargo.toml" > "$git_imports/offline.log" 2>&1; then
+  echo "embed-test: a stale cache for the updated local Git dependency was accepted offline" >&2
+  exit 1
+fi
+grep -q "LEANFRAN_OFFLINE=1 and these lean! blocks are not in" "$git_imports/offline.log"
+test "$(cargo run -q --manifest-path "$git_imports/Cargo.toml")" = 11
+echo "embed-test: updating a local Git dependency invalidates Rust without hashing its checkout"

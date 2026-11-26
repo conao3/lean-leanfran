@@ -47,6 +47,8 @@ With `lakefile.toml`, imports are resolved against configured libraries and sour
 including Lake path dependencies under `lean/` as locked by `lake-manifest.json`, but excluding
 downloaded packages. The fingerprint includes the root and local packages' Lake configuration and
 manifest files. Keep these files alongside the cache for offline builds.
+For Git dependencies from local repositories, a changed locked revision also invalidates
+blocks with explicit imports, even if the Git checkout is absent.
 Executable `lakefile.lean` configurations are not evaluated on a cache hit; their local imports
 are matched by path suffix instead.
 

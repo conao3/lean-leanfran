@@ -26,6 +26,7 @@ pub(super) struct LocalLean<'a> {
     files: &'a [PathBuf],
     packages: Vec<(PathBuf, Option<LakeConfig>)>,
     config_hashes: Vec<String>,
+    local_git_manifest_hash: Option<String>,
     modules: HashMap<PathBuf, (String, Vec<PathBuf>)>,
 }
 
@@ -61,6 +62,9 @@ struct LakeManifest {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum LockedPackage {
+    Git {
+        url: String,
+    },
     #[serde(rename_all = "camelCase")]
     Path {
         dir: PathBuf,
@@ -71,6 +75,10 @@ enum LockedPackage {
     },
     #[serde(other)]
     Other,
+}
+
+fn is_local_git_url(url: &str) -> bool {
+    url.starts_with("file://") || Path::new(url).is_absolute() || !url.contains(':')
 }
 
 fn hash_config(root: &Path, file: &Path, hashes: &mut Vec<String>) -> Option<String> {
@@ -172,6 +180,7 @@ impl<'a> LocalLean<'a> {
         let config = package_config(root, root, None, &mut config_hashes);
         let mut packages = vec![(root.to_path_buf(), config)];
         let manifest = hash_config(root, &root.join("lake-manifest.json"), &mut config_hashes);
+        let mut local_git_manifest_hash = None;
         if let Ok(canonical_root) = root.canonicalize() {
             let mut visited = BTreeSet::from([root.to_path_buf()]);
             let mut local_dir = |path: PathBuf| {
@@ -182,6 +191,11 @@ impl<'a> LocalLean<'a> {
             };
             if let Some(manifest) = manifest {
                 if let Ok(manifest) = serde_json::from_str::<LakeManifest>(&manifest) {
+                    if manifest.packages.iter().any(
+                        |entry| matches!(entry, LockedPackage::Git { url } if is_local_git_url(url)),
+                    ) {
+                        local_git_manifest_hash = config_hashes.last().cloned();
+                    }
                     for entry in manifest.packages {
                         if let LockedPackage::Path {
                             dir,
@@ -227,6 +241,7 @@ impl<'a> LocalLean<'a> {
             files,
             packages,
             config_hashes,
+            local_git_manifest_hash,
             modules: HashMap::new(),
         }
     }
@@ -272,7 +287,11 @@ impl<'a> LocalLean<'a> {
             .filter_map(|m| module_path(&mut m.trim()).and_then(|p| self.resolve(&p)))
             .collect();
         if pending.is_empty() {
-            return Ok(None);
+            return Ok(if imports.is_empty() {
+                None
+            } else {
+                self.local_git_manifest_hash.clone()
+            });
         }
         let mut seen = BTreeSet::new();
         while let Some(path) = pending.pop() {
