@@ -17,6 +17,10 @@ def levelAt (xs : Array Int32) (i : UInt32) : C.Status × Option Level :=
   if h : i.toNat < xs.size then (C.Status.ok, some (levelOf xs[i.toNat]))
   else (C.Status.invalid, none)
 
+def firstAt (xs : Array Int32) : C.Status × Option Int32 :=
+  if h : 0 < xs.size then (C.Status.ok, some xs[0])
+  else (C.Status.invalid, none)
+
 def levelAtOr (xs : Array Int32) (i : UInt32) : Level :=
   if h : i.toNat < xs.size then levelOf xs[i.toNat] else .high
 */
@@ -57,4 +61,14 @@ grade_level level_at_or(const int32_t *xs LF_ARRAY(n), size_t n, uint32_t i) {
     grade_level l = grade_level_high;
     level_at(xs, n, i, &l);
     return l;
+}
+
+LF_MODEL("refines=firstAt")
+lf_status first_at(const int32_t *restrict xs LF_ARRAY(n), size_t n,
+                   int32_t *out) {
+    if (n == 0)
+        return LF_INVALID;
+    *out = 0;
+    *out = xs[0];
+    return LF_OK;
 }
