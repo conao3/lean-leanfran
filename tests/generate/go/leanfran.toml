@@ -1,0 +1,16 @@
+[[generate]]
+lang = "go"
+lake-dir = "."
+out-dir = "go/external"
+path = "example.com/shapes/external"
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "go"
+lake-dir = "."
+out-dir = "go/generated"
+path = "example.com/shapes/generated"
+modules = [{ name = "Report", bind = { "Choice" = "example.com/shapes/external/choice" } }, "Shapes.Area", "Shapes", "Choice"]
+
+[generate.bind]
+"Settings" = "example.com/shapes/external/settings"

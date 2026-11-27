@@ -134,8 +134,36 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
     IO (PublicModule × Environment) := do
   let ctx : Core.Context := { fileName := "<leanfran --lang go>", fileMap := default, maxHeartbeats := 0 }
-  let ((r, _), st) ← ((((collectPublic types roots).run {}).run cfg).run').toIO ctx { env }
+  let ((r, _), st) ← ((((collectPublic types roots).run { foreignTypes := cfg.shared.defs }).run cfg).run').toIO ctx { env }
   return (r, st.env)
+
+private partial def qualifyDesc (qualify : String → Desc) : Desc → Desc
+  | .named name => qualify name
+  | .list d => .list (qualifyDesc qualify d)
+  | .array d => .array (qualifyDesc qualify d)
+  | .option d => .option (qualifyDesc qualify d)
+  | .prod a b => .prod (qualifyDesc qualify a) (qualifyDesc qualify b)
+  | .except e a => .except (qualifyDesc qualify e) (qualifyDesc qualify a)
+  | d => d
+
+def shareTypes (path : String) (st : MarshalState) (shared : SharedTypes) : SharedTypes := Id.run do
+  let qualify (ident : String) := Desc.foreign path ident
+  let qualifyField (f : FieldInfo) := { f with desc := qualifyDesc qualify f.desc }
+  let qualifyVariant (v : VariantInfo) := { v with fields := v.fields.map qualifyField }
+  let defs := st.types.foldl (fun defs t =>
+    let kind := match t.kind with
+      | .struct v trivial => .struct (qualifyVariant v) trivial
+      | .sum vs trivial => .sum (vs.map qualifyVariant) trivial
+      | .subtype base inv bounds => .subtype (qualifyDesc qualify base) inv bounds
+      | .enum cs => .enum cs
+    defs.insert (path, t.ident) { t with kind }) st.foreignTypes
+  let mut names := shared.names
+  for (type, desc) in st.byType.toArray do
+    if let .named ident := desc then
+      if let some t := defs[(path, ident)]? then
+        if !t.anonymous && t.model.isNone then
+          names := names.insert type (path, ident)
+  return { names, defs }
 
 structure RenderCfg where
   env : Environment
@@ -169,7 +197,11 @@ partial def Desc.go (cfg : RenderCfg) : Desc → String
   | .option d => "*" ++ d.go cfg
   | .prod a b => s!"leanfran.Pair[{a.go cfg}, {b.go cfg}]"
   | .except e a => s!"leanfran.Except[{e.go cfg}, {a.go cfg}]"
-  | .foreign path name => s!"{cfg.alias path}.{name}"
+  | .foreign path name =>
+    match cfg.state.foreignTypes[(path, name)]? with
+    | some { model := some m, .. } => if m.path == cfg.goPath then m.name else s!"{cfg.alias m.path}.{m.name}"
+    | some { anonymous := true, kind := .subtype d .., .. } => d.go cfg
+    | _ => s!"{cfg.alias path}.{name}"
   | .opaque name => name
   | .named name =>
     match cfg.findType name with
@@ -751,6 +783,7 @@ def packageCodecs (cfg : RenderCfg) (types : Array TypeDef) : String := Id.run d
 def publicSources (env : Environment) (mod : Name) (pkg version goPath : String) (collected : PublicModule) :
     Except String (Array (String × String)) := do
   let paths := collected.state.foreignTypes.toArray.map (·.1.1) ++
+    (collected.state.foreignTypes.toArray.filterMap (·.2.model.map (·.path))).filter (· != goPath) ++
     (collected.state.types.filterMap (·.model.map (·.path))).filter (· != goPath)
   let imports := paths.toList.eraseDups.toArray.qsort (· < ·)
   let types := collected.state.types.qsort (fun a b => a.ident < b.ident)

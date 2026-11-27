@@ -167,12 +167,17 @@ structure MarshalState where
   subtypes : Std.HashMap String String := {}
   /-- `import <module> as <alias>` lines of the external types. -/
   extImports : Array (String × String) := #[]
+  defined : Std.HashMap String Lean.Expr := {}
+
+abbrev SharedTypes := Std.HashMap Lean.Expr (String × String)
 
 structure MarshalCfg where
   strip : Name
   /-- Types in namespace `ns` are classes of the Python module `module` (named by their path
       under `ns`); `adopt` marks a module of the user's pydantic models. -/
   typeModules : Array (Name × String × Bool) := #[]
+  pythonPath : Option String := none
+  shared : SharedTypes := {}
 
 abbrev MarshalM := StateRefT MarshalState (ReaderT MarshalCfg MetaM)
 
@@ -232,6 +237,12 @@ def boundOf (v : Lean.Expr) (p : Lean.Expr) : MetaM (Option String) := do
   | "gt" => return some s!"Gt({c})"
   | _ => return some s!"Ge({c})"
 
+private def importAlias (pymod : String) : MarshalM String := do
+  if let some (alias, _) := (← get).extImports.find? (·.2 == pymod) then return alias
+  let alias := s!"_ext{(← get).extImports.size}"
+  modify fun s => { s with extImports := s.extImports.push (alias, pymod) }
+  return alias
+
 mutual
 
 partial def descOf (t : Lean.Expr) : MarshalM Desc := do
@@ -281,16 +292,13 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
   if ind.isRec && ind.ctors.length == 1 then throwError "recursive structure `{t}`"
   let cfg ← read
   let strip := cfg.strip
-  let mut py := "_".intercalate (pyPath strip c).toList
+  let typeStrip := if cfg.pythonPath.isSome && c == strip then .anonymous else strip
+  let mut py := "_".intercalate (pyPath typeStrip c).toList
   let ext := cfg.typeModules.find? fun (ns, _, _) => ns.isPrefixOf c && c != ns
   if let some (ns, pymod, _) := ext then
-    let alias ← match (← get).extImports.find? (·.2 == pymod) with
-      | some (a, _) => pure a
-      | none =>
-        let a := s!"_ext{(← get).extImports.size}"
-        modify fun s => { s with extImports := s.extImports.push (a, pymod) }
-        pure a
-    py := alias ++ "." ++ ".".intercalate (pyPath ns c).toList
+    py := (← importAlias pymod) ++ "." ++ ".".intercalate (pyPath ns c).toList
+  else if let some (pymod, name) := cfg.shared[t]? then
+    return .named ((← importAlias pymod) ++ "." ++ name)
   if c == ``Subtype then
     let key := toString (← ppExpr t)
     match (← get).subtypes[key]? with
@@ -302,6 +310,10 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
     for a in args[:ind.numParams] do
       unless ← isProof a do
         py := py ++ "_" ++ sanitize (toString (← ppExpr a))
+  if cfg.pythonPath.isSome && ext.isNone then
+    if let some previous := (← get).defined[py]? then
+      if previous != t then throwError "Python type name `{py}` is used by `{previous}` and `{t}`"
+    modify fun s => { s with defined := s.defined.insert py t }
   if (← get).index.contains py || (← get).inProgress.contains py then return .named py
   modify fun s => { s with inProgress := s.inProgress.insert py }
   let leanStr := toString (← ppExpr t)

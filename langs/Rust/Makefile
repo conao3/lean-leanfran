@@ -2,7 +2,7 @@
 
 export LEANFRAN_CLI := $(abspath ../../.lake/build/bin/leanfran)
 
-.PHONY: build leanfran gen-externs test format format-check lint wasm check aeneas-packages check-verify
+.PHONY: build leanfran gen-externs test test-generate format format-check lint wasm check aeneas-packages check-verify
 
 build: leanfran
 	lake build oracle LeanRustTest
@@ -23,6 +23,9 @@ test: leanfran
 	tests/embed/test.sh
 	$(MAKE) -C samples test
 
+test-generate: leanfran
+	../../maint/test-generate.sh "$(LEANFRAN_CLI)" rust
+
 format:
 	treefmt
 
@@ -37,7 +40,7 @@ wasm: leanfran
 	cargo clippy -p leanfran-runtime -p leanfran --no-default-features --target wasm32-unknown-unknown -- -D warnings
 	tests/wasm/test.sh
 
-check: format-check lint wasm test
+check: format-check lint wasm test test-generate
 
 # Lake's packages of the Lean packages of tests/verify and samples/ (Aeneas, Mathlib and its
 # build cache, 7.9 GB), shared through their `packagesDir`.

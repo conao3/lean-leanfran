@@ -1,0 +1,16 @@
+[[generate]]
+lang = "python"
+lake-dir = "."
+out-dir = "python/external"
+path = "external"
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "python"
+lake-dir = "."
+out-dir = "python/generated"
+path = "generated"
+modules = [{ name = "Report", bind = { "Choice" = "external.choice" } }, { name = "Shapes.Area", as = "area" }, "Shapes", "Choice"]
+
+[generate.bind]
+"Settings" = "external.settings"

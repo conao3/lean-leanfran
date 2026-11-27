@@ -136,10 +136,15 @@ structure TypeDef where
   model : Option ModelSpec := none
   deriving Inhabited
 
+structure SharedTypes where
+  names : Std.HashMap Lean.Expr (String × String) := {}
+  defs : Std.HashMap (String × String) TypeDef := {}
+
 structure MarshalCfg where
   strip : Name
   typeModules : Array (Name × String) := #[]
   models : Array ModelSpec := #[]
+  shared : SharedTypes := {}
 
 structure MarshalState where
   types : Array TypeDef := #[]
@@ -350,6 +355,8 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
       let td ← typeDef c t args ident alias? true
       modify fun s => { s with foreignTypes := s.foreignTypes.insert (spec, ident) td }
       return d
+  if let some (path, ident) := cfg.shared.names[key]? then
+    return .foreign path ident
   let base ← if c == ``Subtype then
       match alias? with
       | some n => pure (typeIdentOf cfg.strip n #[])

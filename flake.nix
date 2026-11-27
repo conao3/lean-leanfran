@@ -138,6 +138,7 @@
                   ./lakefile.toml
                   ./lake-manifest.json
                   ./Main.lean
+                  ./Leanfran
                   ./langs/Rust/LeanRust.lean
                   ./langs/Rust/LeanRust
                   ./langs/Python/LeanPython.lean

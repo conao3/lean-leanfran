@@ -24,6 +24,7 @@ leanfran --lang go obligations check --modules <Name> ... --obligations <file>
   --output-file <path>        Output path (default: stdout)
   --output json|text          Summary format (default: json)
   --batch <file>              JSON jobs with module and output_file or output_dir
+                              type_group and go_path enable type sharing for output_dir jobs
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 "
@@ -42,6 +43,7 @@ structure JobOpts where
 
 structure Job extends JobOpts where
   module : Name
+  typeGroup : Option Nat := none
 
 structure Opts extends JobOpts where
   moduleName : Option Name := none
@@ -123,8 +125,11 @@ def parseJobs (j : Json) (internalOnly : Bool) : Except String (Array Job) := do
       pure (ns.toName, path)
     let internalOnly := (← optionalField (α := Bool) e "internal_only").getD internalOnly
     let goPath := (← optionalField (α := String) e "go_path").getD ""
+    let typeGroup ← optionalField (α := Nat) e "type_group"
+    if typeGroup.isSome && (goPath.isEmpty || outputDir.isNone) then
+      throw s!"{module}: type_group requires go_path and output_dir"
     let models ← ((← optionalField (α := Array Json) e "models").getD #[]).mapM parseModel
-    return { module, roots, namespace?, package?, main?, outputFile, outputDir, typeModules, internalOnly, goPath, models }
+    return { module, roots, namespace?, package?, main?, outputFile, outputDir, typeModules, internalOnly, goPath, models, typeGroup }
 
 def goPackage (job : Job) : Except String String := do
   let moduleName := match job.module with
@@ -166,7 +171,8 @@ def publicDecls (env : Environment) (job : Job) : Array Name × Array Name := Id
     if publicName.isInternalDetail then continue
     if (declRangeExt.find? (level := .exported) env c).isNone && !isPrivateName c then continue
     match env.find? c with
-    | some (.inductInfo _) => types := types.push c
+    | some (.inductInfo i) =>
+      if job.typeGroup.isNone || i.numParams == 0 then types := types.push c
     | some (.defnInfo d) =>
       if d.type.isSort then types := types.push c
       else if isPrivateName c || (IR.findEnvDecl env (csimpTarget env c)).isSome then roots := roots.push c
@@ -213,7 +219,8 @@ def printSummary (o : Opts) (summary : Json) (toStderr : Bool) : IO Unit := do
         let reason := (skipped.getObjValD "reason").getStr?.toOption.getD ""
         print s!"  skipped {name}: {reason}"
 
-def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
+def runJob (env : Environment) (job : Job) (groups : IO.Ref (Std.HashMap Nat SharedTypes)) :
+    IO (Json × UInt32) := do
   let mod := toString job.module
   let failed (code : UInt32) (msg : String) : IO (Json × UInt32) :=
     pure (Json.mkObj [("module", mod), ("error", msg), ("code", code.toNat)], code)
@@ -226,12 +233,15 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
     let typeModules := job.typeModules.qsort (fun a b =>
       if a.1.components.length == b.1.components.length then Name.lt a.1 b.1
       else a.1.components.length > b.1.components.length)
-    let (publicModule, env) ← try inspectPublic env { strip, typeModules, models := job.models } types roots
+    let shared ← if let some group := job.typeGroup then do pure ((← groups.get).getD group {}) else pure {}
+    let (publicModule, env) ← try inspectPublic env { strip, typeModules, models := job.models, shared } types roots
       catch e => return ← failed 254 e.toString
     let sources ← match publicSources env job.module pkg generatorVersion job.goPath publicModule with
       | .ok sources => pure sources
       | .error reason => return ← failed 254 reason
     let files ← writePublic dir sources
+    if let some group := job.typeGroup then
+      groups.modify (·.insert group (shareTypes job.goPath publicModule.state shared))
     let skipped := publicModule.skipped.map fun s => Json.mkObj [("name", toString s.name), ("reason", s.reason)]
     let functions := Json.mkObj (publicModule.functions.toList.map fun f =>
       ((stripName strip f.source).toString, toJson f.ident))
@@ -289,12 +299,15 @@ unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
   let publicOutput := jobs.any (·.outputDir.isSome)
   if publicOutput then enableInitializersExecution
   let env ← importModules (mods.map fun m => { module := m }) {} (trustLevel := 1024) (loadExts := publicOutput)
-  let mut code : UInt32 := 0
-  let mut summaries := #[]
-  for job in jobs do
-    let (summary, status) ← runJob env job
-    summaries := summaries.push summary
-    if code == 0 then code := status
+  let groups ← IO.mkRef ({} : Std.HashMap Nat SharedTypes)
+  let rank (job : Job) := if job.typeGroup.isSome then (env.getModuleIdx? job.module).map (·.toNat + 1) |>.getD 0 else 0
+  let order := jobs.zipIdx.qsort fun (a, i) (b, j) =>
+    if rank a == rank b then i < j else rank a < rank b
+  let mut results := Array.replicate jobs.size (Json.null, (0 : UInt32))
+  for (job, i) in order do
+    results := results.set! i (← runJob env job groups)
+  let summaries := results.map Prod.fst
+  let code := (results.find? (·.2 != 0)).map Prod.snd |>.getD 0
   if o.batch.isSome && o.output == "json" then
     IO.println (Json.arr summaries).compress
   else

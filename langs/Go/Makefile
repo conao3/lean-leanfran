@@ -1,6 +1,6 @@
 .NOTPARALLEL:
 .DEFAULT_GOAL := check
-.PHONY: build check format format-check gen-externs externs-check
+.PHONY: build check test-generate format format-check gen-externs externs-check
 
 GO_SOURCES := leanfran.go value.go marshal.go json.go schema rt samples/sum-to/main.go samples/pricing/main.go ../../maint/Go/gen-externs ../../maint/Go/fuzz-gen ../../maint/Go/numeric
 CHECK_TARGETS :=
@@ -10,7 +10,10 @@ include make/*.mk
 build:
 	lake --dir ../.. build leanfran
 
-check: format-check externs-check $(CHECK_TARGETS)
+check: format-check externs-check $(CHECK_TARGETS) test-generate
+
+test-generate: build
+	../../maint/test-generate.sh ../../.lake/build/bin/leanfran go
 
 format:
 	gofumpt -w $(GO_SOURCES)

@@ -2,6 +2,9 @@ name = "leanfran"
 defaultTargets = ["leanfran"]
 
 [[lean_lib]]
+name = "Leanfran"
+
+[[lean_lib]]
 name = "LeanRust"
 srcDir = "langs/Rust"
 

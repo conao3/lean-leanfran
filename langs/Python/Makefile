@@ -1,6 +1,6 @@
 # Run the targets inside the dev shell: `nix develop ../..#python -c make check`.
 
-.PHONY: build gen-externs test samples format format-check bench check
+.PHONY: build gen-externs test test-generate samples format format-check bench check
 
 build:
 	lake --dir ../.. build leanfran
@@ -14,6 +14,9 @@ gen-externs:
 test: build
 	../../maint/Python/test-diff.sh
 	uv run pytest -q
+
+test-generate: build
+	../../maint/test-generate.sh ../../.lake/build/bin/leanfran python
 
 # Sync, run and compare every sample; the committed generated modules must be up to date.
 samples: build
@@ -29,4 +32,4 @@ format-check:
 bench: build
 	uv run python samples/bench/bench.py
 
-check: format-check test samples
+check: format-check test samples test-generate

@@ -118,6 +118,8 @@ leanfran --lang python module generate --module-name MyModule --search-path .lak
 
 `--lang` takes `rust`, `python`, `typescript`, `clojure`, `php`, `go` or `c`. The package also holds the Lean library of the Go backend and the C support files. The `#rust` package adds the Cargo CLI and the Aeneas verification tools to the compiler. Without Nix, build the compiler from a checkout of a release tag with `lake build leanfran`.
 
+To compile the modules of a Lake package to several languages, list them in `leanfran.toml` and run `leanfran generate`. It binds the types the generated modules share. See the [generate guide](docs/generate-guide.md).
+
 Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to your application, and the [C quick start](langs/C/README.md) to generate and link a C library. Follow the other language quick starts for their dependencies, project setup, and generation commands.
 
 ## Documentation

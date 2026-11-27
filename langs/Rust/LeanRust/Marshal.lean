@@ -143,6 +143,10 @@ structure TypeDef where
   external : Bool := false
   deriving Inhabited
 
+structure SharedTypes where
+  names : Std.HashMap Lean.Expr String := {}
+  defs : Std.HashMap String TypeDef := {}
+
 partial def Desc.rustType : Desc → String
   | .prim r | .named r => r
   | .list d | .array d => s!"Vec<{d.rustType}>"
@@ -204,6 +208,7 @@ structure MarshalState where
   inProgress : Std.HashSet String := {}
   /-- Lean type of each registered Rust type name, to detect collisions. -/
   leanOf : Std.HashMap String String := {}
+  defined : Std.HashMap Lean.Expr String := {}
 
 structure MarshalConfig where
   /-- Namespace removed from the Rust names. -/
@@ -214,6 +219,8 @@ structure MarshalConfig where
   modelNs : Option Name := none
   /-- The type parameters of a polymorphic function, as `Desc.tyVar` by position. -/
   typeVars : Array FVarId := #[]
+  rustPath : Option String := none
+  shared : SharedTypes := {}
 
 abbrev MarshalM := ReaderT MarshalConfig (StateRefT MarshalState MetaM)
 
@@ -326,6 +333,8 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
   if ind.numIndices != 0 then throwError "type family `{t}`"
   let cfg ← read
   let ext := cfg.typePaths.find? fun (ns, _) => ns.isPrefixOf c
+  if ext.isNone then
+    if let some rust := cfg.shared.names[t]? then return .named rust
   let mut rust := match ext with
     | some (ns, path) => path ++ "::" ++ rustTypeName ns c
     | none => rustTypeName cfg.strip c
@@ -384,7 +393,8 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
   modify fun s => { s with
     types := s.types.push td
     index := s.index.insert rust s.types.size
-    inProgress := s.inProgress.erase rust }
+    inProgress := s.inProgress.erase rust
+    defined := if cfg.rustPath.isSome && !td.external then s.defined.insert t rust else s.defined }
   return .named rust
 
 end
@@ -1027,6 +1037,37 @@ structure GenResult where
   decls : Array Decl
   publics : Array (Name × String)
   skipped : Array Skipped
+  shared : SharedTypes := {}
+
+private partial def qualifyDesc (qualify : String → String) : Desc → Desc
+  | .named name => .named (qualify name)
+  | .list d => .list (qualifyDesc qualify d)
+  | .array d => .array (qualifyDesc qualify d)
+  | .option d => .option (qualifyDesc qualify d)
+  | .except e a => .except (qualifyDesc qualify e) (qualifyDesc qualify a)
+  | .prod a b => .prod (qualifyDesc qualify a) (qualifyDesc qualify b)
+  | .boxed d => .boxed (qualifyDesc qualify d)
+  | .slice d => .slice (qualifyDesc qualify d)
+  | .result d => .result (qualifyDesc qualify d)
+  | .arrayN d n => .arrayN (qualifyDesc qualify d) n
+  | d => d
+
+private def shareTypes (path : String) (st : MarshalState) (shared : SharedTypes) : SharedTypes := Id.run do
+  let localNames : Std.HashSet String := st.types.foldl (fun names td =>
+    if td.external then names else names.insert td.rust) {}
+  let qualify name := if localNames.contains name then path ++ "::" ++ name else name
+  let qualifyVariant (v : Variant) := { v with fields := v.fields.map fun f =>
+    { f with desc := qualifyDesc qualify f.desc } }
+  let defs := st.types.foldl (fun defs td =>
+    let rust := qualify td.rust
+    let kind := match td.kind with
+      | .newtype name inner => .newtype name (qualifyDesc qualify inner)
+      | .struct v => .struct (qualifyVariant v)
+      | .sum vs => .sum (vs.map qualifyVariant)
+      | .enum cs => .enum cs
+    defs.insert rust { td with rust, kind, external := true }) shared.defs
+  let names := st.defined.fold (fun names ty name => names.insert ty (qualify name)) shared.names
+  return { names, defs }
 
 /-- Generates the module for `roots`: the internal functions they need, the generated types
     and a public function per root that can be marshalled (the others are `skipped`). A root
@@ -1034,21 +1075,33 @@ structure GenResult where
     module `__leanfran_spec`, which re-exports the other public functions. `modelNs` is the
     namespace of the crate's Aeneas model, whose types are the crate's Rust types. -/
 def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × String)) (facade : String) (internalOnly : Bool)
-    (modelNs : Option Name := none) :
+    (modelNs : Option Name := none) (declaredTypes : Array Name := #[])
+    (rustPath : Option String := none) (shared : SharedTypes := {}) :
     MetaM (Except String GenResult) := do
   let env ← getEnv
   if internalOnly then
     return (generateInternal env roots).map fun o =>
       { items := o.items, externs := o.externs, decls := o.decls, publics := #[], skipped := #[] }
-  let cfg : MarshalConfig := { strip, typePaths, modelNs }
+  let cfg : MarshalConfig := { strip, typePaths, modelNs, rustPath, shared }
   let mut instsOf : Std.HashMap Name (Array (Name × Array (Name × Lean.Expr))) := {}
   for (f, i, args) in rustInstanceEntries env do
     instsOf := instsOf.insert f ((instsOf.getD f #[]).push (i, args))
   let roots := roots ++ (roots.flatMap fun r => (instsOf.getD r #[]).map (·.1)).filter (!roots.contains ·)
-  let ((fns, copies, gens), st) ← (do
+  let ((fns, copies, gens, skipped), st) ← (do
       let mut fns : Array (Except Skipped PublicFn) := #[]
       let mut copies : Array PublicFn := #[]
       let mut gens : Array (Except Skipped (Name × (Array Name × Array Desc × Desc × Bool) × Array (Name × Array Desc))) := #[]
+      let mut skipped : Array Skipped := #[]
+      for name in declaredTypes do
+        let saved ← get
+        try
+          let ty ← mkConstWithLevelParams name
+          if ← isProp ty then throwError "proposition `{ty}`"
+          if isClass env name then throwError "type class `{ty}`"
+          discard <| descOf ty
+        catch e =>
+          set saved
+          skipped := skipped.push { name, reason := ← e.toMessageData.toString }
       for r in roots do
         if let some insts := instsOf[r]? then
           let saved ← get
@@ -1076,10 +1129,10 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
         catch e =>
           set saved
           fns := fns.push (.error { name := r, reason := ← e.toMessageData.toString })
-      return (fns, copies, gens) : MarshalM _).run cfg |>.run {}
-  let types0 : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
+      return (fns, copies, gens, skipped) : MarshalM _).run cfg |>.run {}
+  let types0 := st.types.foldl (fun m td => m.insert td.rust td) shared.defs
   let mut publics : Array PublicFn := #[]
-  let mut skipped : Array Skipped := #[]
+  let mut skipped := skipped
   for f in fns do
     match f with
     | .error s => skipped := skipped.push s
@@ -1149,7 +1202,7 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
           try out := out.push (← publicSig f ps)
           catch e => throwError "the Rust extern {f}: {e.toMessageData}"
         return out : MarshalM _).run cfg |>.run st
-    let types : Std.HashMap String TypeDef := st.types.foldl (fun m td => m.insert td.rust td) {}
+    let types := st.types.foldl (fun m td => m.insert td.rust td) shared.defs
     let callees : Std.HashMap Name RustCallee := rustFns.foldl (fun m (f, _, _, c) => m.insert f c) {}
     let mut items := o.items ++ emitResultHelpers declMap ++ "\n"
     for h : i in [0:rustFns.size] do
@@ -1194,6 +1247,7 @@ def generate (roots : Array Name) (strip : Name) (typePaths : Array (Name × Str
     unless copies.isEmpty do specMod := specMod ++ genericItems
     items := items ++ specMod ++ "}\n"
     return .ok { items, externs := o.externs, decls := o.decls,
-                 publics := publics.map (fun f => (f.lean, f.rust)) ++ generics.map (fun g => (g.lean, g.rust)), skipped }
+                 publics := publics.map (fun f => (f.lean, f.rust)) ++ generics.map (fun g => (g.lean, g.rust)), skipped,
+                 shared := rustPath.map (fun path => shareTypes path st shared) |>.getD shared }
 
 end LeanRust

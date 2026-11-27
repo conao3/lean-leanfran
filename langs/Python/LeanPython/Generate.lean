@@ -19,6 +19,7 @@ structure GenOutput where
   decls : Array IR.Decl
   publics : Array (Name × String) := #[]
   skipped : Array Skipped := #[]
+  shared : SharedTypes := {}
 
 structure PublicFn where
   lean : Name
@@ -102,7 +103,8 @@ def emitPublicFn (decls : Std.HashMap Name IR.Decl) (f : PublicFn) (tbl : DescTa
   return (src ++ leanSrc ++ localSrc ++ attach, tbl)
 
 def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
-    (typeModules : Array (Name × String × Bool) := #[]) : CoreM (Except String GenOutput) := do
+    (typeModules : Array (Name × String × Bool) := #[]) (declaredTypes : Array Name := #[])
+    (pythonPath : Option String := none) (shared : SharedTypes := {}) : CoreM (Except String GenOutput) := do
   let env ← getEnv
   if internalOnly then
     return match generateInternal env roots with
@@ -111,12 +113,25 @@ def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
   let mut publics : Array PublicFn := #[]
   let mut skipped : Array Skipped := #[]
   let mut st : MarshalState := {}
+  let cfg : MarshalCfg := { strip, typeModules, pythonPath, shared }
+  for name in declaredTypes do
+    let savedEnv ← getEnv
+    try
+      let (_, next) ← (((do
+        let ty ← mkConstWithLevelParams name
+        if ← isProp ty then throwError "proposition `{ty}`"
+        if isClass env name then throwError "type class `{ty}`"
+        descOf ty : MarshalM Desc).run st).run cfg).run'
+      st := next
+    catch e =>
+      setEnv savedEnv
+      skipped := skipped.push { name, reason := ← e.toMessageData.toString }
   for r in roots do
     let target := csimpTarget env r
     let some d := IR.findEnvDecl (← getEnv) target | skipped := skipped.push { name := r, reason := "no IR" }; continue
     let saved := st
     let res : Except String (PublicSig × MarshalState) ← try
-        let r ← (((publicSig r d.params).run st).run { strip, typeModules }).run'
+        let r ← (((publicSig r d.params).run st).run cfg).run'
         pure (.ok r)
       catch e => pure (.error (← e.toMessageData.toString))
     match res with
@@ -140,7 +155,9 @@ def generate (roots : Array Name) (strip : Name) (internalOnly : Bool)
     let imports := String.join (st.extImports.toList.map fun (a, m) => s!"import {m} as {a}  # noqa: E402\n")
     let pub := "\n# Public types and functions\n\nfrom typing import Annotated  # noqa: E402\n\nfrom annotated_types import Ge, Gt, Le, Lt, MaxLen, MinLen  # noqa: E402\n\nfrom leanfran import marshal as _m  # noqa: E402\nfrom leanfran.marshal import Err, Lean, Local, Ok  # noqa: E402\nfrom leanfran.types import Char, Int8, Int16, Int32, Int64, Nat, UInt8, UInt16, UInt32, UInt64  # noqa: E402\n" ++
       imports ++ "\n\n" ++ types ++ String.join (tbl.defs.toList.map (· ++ "\n")) ++ "\n\n" ++ fns ++ "_m.finish(globals())\n"
+    let shared := pythonPath.map (fun path =>
+      st.defined.fold (fun types name ty => types.insert ty (path, name)) shared) |>.getD shared
     return .ok { items := out.items, publicItems := pub, externs := out.externs, decls := out.decls,
-                 publics := publics.map fun f => (f.lean, ".".intercalate f.path.toList), skipped }
+                 publics := publics.map fun f => (f.lean, ".".intercalate f.path.toList), skipped, shared }
 
 end LeanPython
