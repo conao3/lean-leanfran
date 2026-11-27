@@ -1,0 +1,8 @@
+name = "generate-test"
+defaultTargets = ["Shapes", "Report"]
+
+[[lean_lib]]
+name = "Shapes"
+
+[[lean_lib]]
+name = "Report"
