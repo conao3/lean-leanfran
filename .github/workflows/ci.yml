@@ -49,20 +49,14 @@ jobs:
       matrix:
         include:
           - dir: Rust
-            build: false
             nix-shells: rust
           - dir: Python
-            build: true
           - dir: TypeScript
-            build: true
           - dir: Clojure
-            build: true
             maven: true
           - dir: PHP
-            build: true
             nix-shells: php php85
           - dir: Go
-            build: true
     steps:
       - uses: actions/checkout@v7.0.1
         if: env.RUN_BACKEND == 'true'
@@ -98,14 +92,14 @@ jobs:
           restore-keys: maven-${{ runner.os }}-
       - if: env.RUN_BACKEND == 'true'
         run: make check BACKENDS=${{ matrix.dir }}
-      - if: env.RUN_BACKEND == 'true' && matrix.build
-        run: nix build ".#${BACKEND,,}"
-        env:
-          BACKEND: ${{ matrix.dir }}
   check-compiler:
-    name: leanfran (all languages)
-    runs-on: ubuntu-latest
+    name: leanfran (all languages, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v32.0.0
@@ -122,7 +116,6 @@ jobs:
       - uses: cachix/install-nix-action@v32.0.0
       - run: nix develop .#c -c make -C langs/C check-models
       - run: nix develop .#c -c maint/C/test-publish.sh
-      - run: nix build .#c
   check-c-linux-verification:
     name: C Linux (verification)
     needs: changes
@@ -164,7 +157,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v32.0.0
-      - run: nix build .#go
       - run: nix develop .#go -c make -k -C langs/Go check
   check-c-macos-checks:
     name: C macOS arm64 (checks)
@@ -175,7 +167,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: cachix/install-nix-action@v32.0.0
-      - run: nix build .#c
       - run: nix develop .#c -c make -C langs/C check VERIFY_TARGET=
   check-c-macos-verification:
     name: C macOS arm64 (verification)

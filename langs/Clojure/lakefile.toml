@@ -1,12 +1,8 @@
 name = "leanfran"
-defaultTargets = ["leanfran"]
+defaultTargets = ["LeanClj"]
 
 [[lean_lib]]
 name = "LeanClj"
-
-[[lean_exe]]
-name = "leanfran"
-root = "Main"
 
 [[lean_lib]]
 name = "LeanCljTest"

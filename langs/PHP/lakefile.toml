@@ -1,13 +1,8 @@
 name = "leanfran-php"
-defaultTargets = ["leanfran-php"]
+defaultTargets = ["LeanPhp"]
 
 [[lean_lib]]
 name = "LeanPhp"
-
-[[lean_exe]]
-name = "leanfran-php"
-root = "Main"
-supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanPhpTest"

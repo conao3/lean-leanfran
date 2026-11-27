@@ -8,7 +8,8 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 - `docs/`: development documentation. Read `CONTRIBUTING.md` and the relevant backend guide before editing a backend.
 - `maint/`: repository maintenance, version management, differential tests and extern-list generators.
 - `.github/`: CI and release automation.
-- `flake.nix`, `flake.lock`, `lean-toolchain`: shared development dependencies, compiler packages and Lean version.
+- `lakefile.toml`, `Main.lean`: the Lake package of the compiler. It links the library of every backend into the one executable `leanfran`, and `Main.lean` passes the arguments to the backend that `--lang` names.
+- `flake.nix`, `flake.lock`, `lean-toolchain`: shared development dependencies, the compiler package and Lean version.
 - `LICENSE`: the Apache-2.0 text for the entire repository. Package builds include this file in their artifacts.
 
 ## Shared conventions
