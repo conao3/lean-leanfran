@@ -1,23 +1,23 @@
 # Samples
 
 Each sample is a package of the repository's pnpm workspace that depends on `leanfran` through
-`link:` (the packed `dist/`, so run `vp pack` first). `samples/run.sh <dir>` runs `leanfran sync`
+`link:` (the packed `dist/`, so run `vp pack` first). `samples/run.sh <dir>` runs `leanfran --lang typescript sync`
 on it (checking the proofs and regenerating `src/_lean/`), runs `node src/main.ts` and compares
 the output with `expected.txt`. The samples that verify TypeScript functions also have
 `lean/Proofs/` and a committed `leanfran.lock`; `make -C samples verify` runs
-`leanfran check --require proved` on them. `make samples` in the repository root runs both and
+`leanfran --lang typescript check --require proved` on them. `make samples` in the repository root runs both and
 checks that the committed generated modules are up to date. Run them inside `nix develop` of the
 repository root.
 
 ## Writing functions in Lean
 
-| sample                           | shows                                                                                                                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [word-count](word-count)         | strings and lists, a structure as a result, a proof by induction                                                                                                               |
-| [roman-numerals](roman-numerals) | an ordinary lake project (`lean/`) compiled with `leanfran generate` to a committed module, a round-trip theorem checked for every number below 1000 (`decide +kernel`)        |
-| [todo-cli](todo-cli)             | an invariant over a list (`∀ t ∈ items, t.id < nextId`) kept by every operation, JSON storage, tampered JSON rejected                                                          |
-| [generic-search](generic-search) | polymorphic functions proved once for every type, called through monomorphic definitions (the polymorphic ones are skipped)                                                    |
-| [pricing-api](pricing-api)       | Hono with a Lean structure holding a user's zod model and a Lean inductive type as request body (`@hono/standard-validator`), 400 for invalid input, OpenAPI from `jsonSchema` |
+| sample                           | shows                                                                                                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [word-count](word-count)         | strings and lists, a structure as a result, a proof by induction                                                                                                                          |
+| [roman-numerals](roman-numerals) | an ordinary lake project (`lean/`) compiled with `leanfran --lang typescript generate` to a committed module, a round-trip theorem checked for every number below 1000 (`decide +kernel`) |
+| [todo-cli](todo-cli)             | an invariant over a list (`∀ t ∈ items, t.id < nextId`) kept by every operation, JSON storage, tampered JSON rejected                                                                     |
+| [generic-search](generic-search) | polymorphic functions proved once for every type, called through monomorphic definitions (the polymorphic ones are skipped)                                                               |
+| [pricing-api](pricing-api)       | Hono with a Lean structure holding a user's zod model and a Lean inductive type as request body (`@hono/standard-validator`), 400 for invalid input, OpenAPI from `jsonSchema`            |
 
 ## Verifying TypeScript functions
 

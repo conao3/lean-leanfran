@@ -35,10 +35,10 @@ arith.double(21n) // 42n
 Generate modules from the package root:
 
 ```sh
-pnpm exec leanfran sync --package .
+leanfran --lang typescript sync --package .
 ```
 
-Commit `src/_lean/` and `.leanfran/blocks.json`. Run sync again when you change a block; `pnpm exec leanfran status --package .` checks whether generated code is current.
+Commit `src/_lean/` and `.leanfran/blocks.json`. Run sync again when you change a block; `leanfran --lang typescript status --package .` checks whether generated code is current.
 
 ## Next steps
 

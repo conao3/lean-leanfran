@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process"
-import { readFileSync } from "node:fs"
 import {
   findCompiler,
   readPackage,
@@ -11,7 +10,7 @@ import {
 } from "./sync.ts"
 import { checkPackage, csimpFiles, statusModels } from "./verify/check.ts"
 
-const USAGE = `usage: leanfran [--version] <command> [parameters]
+const USAGE = `usage: leanfran --lang typescript <command> [parameters]
 
 commands:
   sync       Check the Lean blocks of a package and generate their TypeScript modules
@@ -19,24 +18,21 @@ commands:
   status     List the blocks whose generated modules are stale (no Lean)
   generate   Emit a TypeScript module per Lean module of a lake project
 
-leanfran sync
+leanfran --lang typescript sync
   --package <dir>            The package (the directory with package.json and src/) (required)
-  --leanfran <path>          The Lean compiler (default: $LEANFRAN_CLI, then leanfran on PATH)
 
-leanfran check
+leanfran --lang typescript check
   --package <dir>            The package (required)
-  --leanfran <path>          as for sync
   --require proved           Exit with 254 unless every obligation is proved
   Writes <dir>/leanfran.lock and prints one line per obligation: <status> <module>:<function> <label>
 
-leanfran status
+leanfran --lang typescript status
   --package <dir>            The package (required); exits with 254 when a block or an obligation is stale
 
-leanfran generate
+leanfran --lang typescript generate
   --lake-dir <dir>           Lake project to build (required)
   --output-dir <dir>         Directory of the TypeScript modules (required)
   --modules <Name> ...       Modules to emit (default: every module the project builds)
-  --leanfran <path>          as for sync
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 `
@@ -75,39 +71,23 @@ function log(line: string): void {
   process.stderr.write(line.endsWith("\n") ? line : `${line}\n`)
 }
 
-function version(): string {
-  const pkg: unknown = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
-  const v: unknown =
-    typeof pkg === "object" && pkg !== null ? Reflect.get(pkg, "version") : undefined
-  if (typeof v !== "string") throw new SyncError("package.json has no version", 255)
-  return v
-}
-
 async function main(argv: readonly string[]): Promise<number> {
   const [command, ...rest] = argv
   if (command === undefined || command === "help" || command === "--help") {
     process.stdout.write(USAGE)
     return 0
   }
-  if (command === "--version") {
-    process.stdout.write(`${version()}\n`)
-    return 0
-  }
   if (command === "sync") {
-    const args = parseArgs(rest, ["--package", "--leanfran"])
-    await syncPackage(required(args, "--package"), args.single.get("--leanfran"), log, csimpFiles)
+    const args = parseArgs(rest, ["--package"])
+    await syncPackage(required(args, "--package"), findCompiler(), log, csimpFiles)
     return 0
   }
   if (command === "check") {
-    const args = parseArgs(rest, ["--package", "--leanfran", "--require"])
+    const args = parseArgs(rest, ["--package", "--require"])
     const req = args.single.get("--require")
     if (req !== undefined && req !== "proved")
       throw new SyncError(`--require takes proved (got ${req})`, 252)
-    const { rows } = await checkPackage(
-      required(args, "--package"),
-      args.single.get("--leanfran"),
-      log,
-    )
+    const { rows } = await checkPackage(required(args, "--package"), log)
     for (const r of rows) process.stdout.write(`${r.status.padEnd(12)}${r.fn} ${r.label}\n`)
     return req === undefined || rows.every((r) => r.status === "proved") ? 0 : 254
   }
@@ -124,8 +104,8 @@ async function main(argv: readonly string[]): Promise<number> {
       : 254
   }
   if (command === "generate") {
-    const args = parseArgs(rest, ["--lake-dir", "--output-dir", "--modules", "--leanfran"])
-    const cli = findCompiler(args.single.get("--leanfran"))
+    const args = parseArgs(rest, ["--lake-dir", "--output-dir", "--modules"])
+    const cli = findCompiler()
     const modules = args.modules.length === 0 ? [] : ["--modules", ...args.modules]
     const r = spawnSync(
       cli,
@@ -146,7 +126,7 @@ async function main(argv: readonly string[]): Promise<number> {
     if (r.error !== undefined) throw new SyncError(`cannot run ${cli}: ${r.error.message}`, 255)
     return r.status ?? 255
   }
-  throw new SyncError(`unknown command ${command} (see \`leanfran help\`)`, 252)
+  throw new SyncError(`unknown command ${command} (see \`leanfran --lang typescript help\`)`, 252)
 }
 
 try {

@@ -719,12 +719,8 @@ export interface Checked {
   readonly lock: Lock
 }
 
-export async function checkPackage(
-  dir: string,
-  cliPath: string | undefined,
-  log: Log,
-): Promise<Checked> {
-  const cli = findCompiler(cliPath)
+export async function checkPackage(dir: string, log: Log): Promise<Checked> {
+  const cli = findCompiler()
   const first = await syncPackage(dir, cli, log, csimpFiles)
   const { pkg, summaries } = first
   const before = canonicalJson(Object.fromEntries(csimpFiles(pkg)))

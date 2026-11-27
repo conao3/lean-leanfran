@@ -11,7 +11,7 @@ pnpm add leanfran
 nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
-Run the npm CLI with `pnpm exec leanfran`. Its `sync`, `check`, and `generate` commands use the compiler from `--leanfran <path>`, `LEANFRAN_CLI`, or `leanfran` on PATH, in that order.
+Run `leanfran --lang typescript` with the compiler executable on PATH.
 
 ## Lean blocks
 
@@ -34,12 +34,12 @@ arith.double(21n) // 42n
 ```
 
 ```
-pnpm exec leanfran sync --package <dir> [--leanfran <path>]
-pnpm exec leanfran status --package <dir>
-pnpm exec leanfran generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...] [--leanfran <path>]
+leanfran --lang typescript sync --package <dir>
+leanfran --lang typescript status --package <dir>
+leanfran --lang typescript generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
 ```
 
-- `leanfran sync` reads the `lean(...)` calls of `<dir>/src/**/*.ts` with oxc-parser
+- `leanfran --lang typescript sync` reads the `lean(...)` calls of `<dir>/src/**/*.ts` with oxc-parser
   (the name is a string literal, the source a template literal or `String.raw`, the
   options `imports`, `uses`, `models` and `output` an object literal), writes each
   block to `.leanfran/workspace/LeanTsEmbed/<module>/<name>.lean`, builds it with Lake
@@ -72,8 +72,8 @@ pnpm exec leanfran generate --lake-dir <dir> --output-dir <dir> [--modules <Name
   same name, source, options, model JSON Schemas and generator version, or (in Node,
   where it reads the `package.json` above the generated module) with the current
   settings. With `LEANFRAN_TS_AUTO_SYNC=1` it runs
-  `leanfran sync` instead, and the regenerated module is used from the next start.
-- `leanfran status` compares the keys (which also cover the module path and the
+  `leanfran --lang typescript sync` instead, and the regenerated module is used from the next start.
+- `leanfran --lang typescript status` compares the keys (which also cover the module path and the
   `"leanfran"` field of `package.json`) with `.leanfran/blocks.json` without Lean and
   exits with 254 when a block is stale.
 - Commit `_lean/` and `.leanfran/blocks.json`; ignore `.leanfran/workspace/`. The
@@ -213,14 +213,14 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
 ```
 
 ```
-pnpm exec leanfran check --package <dir> [--leanfran <path>] [--require proved]
-pnpm exec leanfran status --package <dir>
+leanfran --lang typescript check --package <dir> [--require proved]
+leanfran --lang typescript status --package <dir>
 ```
 
 - `model(fn, { refines?, requires?, ensures? })` (`leanfran/verify`) returns the function
   and records it; the specifications are public functions of `lean(...)` blocks (each
   generated function carries its Lean name as `__leanName`).
-- `leanfran check` syncs the package, reads the `model(...)` calls with oxc-parser,
+- `leanfran --lang typescript check` syncs the package, reads the `model(...)` calls with oxc-parser,
   translates each function (a `function` declaration or a `const` arrow function) into
   `LeanTsModel.<module>.<function>` in Lean `do` notation over `LeanTsLib.Ts`
   (`src/lean/LeanTsLib/Ts.lean`), states `<function>.obligation.refines`
@@ -236,7 +236,7 @@ pnpm exec leanfran status --package <dir>
   unless every obligation is proved. A construct outside the subset stops `check` with
   254 and the file, line and column. Commit `leanfran.lock` with `_lean/`; `status` and the
   replaced specifications read it.
-- `leanfran status` also prints the obligations of the lock and marks a function whose
+- `leanfran --lang typescript status` also prints the obligations of the lock and marks a function whose
   hash changed `stale` (exit code 254) without Lean.
 - The subset: parameters and results annotated with `number`, `bigint`, `boolean`,
   `string`, `T[]`, `readonly T[]`, `[A, B]`, `T | null`, `T | undefined`, `Nat` and `Int`
@@ -282,13 +282,13 @@ pnpm exec leanfran status --package <dir>
 
 [`samples/`](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples) holds packages with Lean blocks
 and verified TypeScript functions. `make samples` syncs each one, runs it, compares the output with
-its `expected.txt`, checks the proofs of the verified ones with `leanfran check --require proved`,
+its `expected.txt`, checks the proofs of the verified ones with `leanfran --lang typescript check --require proved`,
 and fails when a committed generated module is out of date.
 
 | sample                                                                                                            | shows                                                                                                                      |
 | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | [word-count](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/word-count)                   | strings and lists, a proof by induction                                                                                    |
-| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/roman-numerals)           | a lake project compiled with `leanfran generate`, a round-trip theorem checked for every number below 1000                 |
+| [roman-numerals](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/roman-numerals)           | a lake project compiled with `leanfran --lang typescript generate`, a round-trip theorem checked for every number below 1000                 |
 | [todo-cli](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/todo-cli)                       | an invariant over a list kept by every operation, JSON storage, tampered JSON rejected                                     |
 | [generic-search](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/generic-search)           | polymorphic functions proved for every type, called through monomorphic definitions                                        |
 | [pricing-api](https://github.com/conao3/lean-leanfran/tree/master/langs/TypeScript/samples/pricing-api)                 | Hono with a zod model and a Lean inductive type as request body, 400 for invalid input, OpenAPI                            |
@@ -301,6 +301,17 @@ feature at a time, from functions on `Nat` (01) to types shared between blocks w
 and the verification of TypeScript functions (10 to 14).
 
 ## The CLI
+
+The compiler runs the project's `node_modules/leanfran/dist/cli.js` with Node.js for `sync`, `check`, `status`, and `generate`. It looks up the npm package in the directory passed to `--package` or, for `generate`, in the current directory. It passes its own path to the package in `LEANFRAN_CLI`. Automatic sync (`LEANFRAN_TS_AUTO_SYNC=1`) runs from the npm package and uses `LEANFRAN_CLI` first, then `leanfran` on PATH.
+
+```text
+leanfran --lang typescript sync --package <dir>
+leanfran --lang typescript check --package <dir> [--require proved]
+leanfran --lang typescript status --package <dir>
+leanfran --lang typescript generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
+```
+
+The compiler also provides these lower-level commands:
 
 ```
 leanfran --lang typescript module generate --module-name Foo.Bar [--roots <Name> ...] [--main <Name>]
@@ -325,7 +336,7 @@ inductive types of the module (and those the public functions use) are exported 
 types and schemas (summary `types`). Exit codes: 0 success, 252 invalid parameters,
 254 input that cannot be converted (an extern the runtime does not provide, a name
 without IR, a constructor field named as the `--tag-key`, an invalid `--tag-key` or
-`--option`), 255 other errors. `--batch` runs a JSON array of jobs against one environment (`leanfran sync`
+`--option`), 255 other errors. `--batch` runs a JSON array of jobs against one environment (`leanfran --lang typescript sync`
 uses it); `project generate` builds a lake project and writes `<A>/<B>.ts` per module
 `A.B`.
 
@@ -360,9 +371,9 @@ export function double(n: bigint | number): bigint {
   (generated from `src/runtime` by `make gen-externs`).
 - `LeanTs/Check.lean` — `obligations check`: the state of each obligation from the type and the axioms of its proof.
 - `LeanTs/Cli.lean` — the CLI `leanfran --lang typescript`.
-- `src/verify/` — `leanfran/verify` (`model`, `checkModel`, `checkModule`), the translation of TypeScript functions to Lean (`translate.ts`) and `leanfran check` and `status` with `leanfran.lock` (`check.ts`); `src/lean/LeanTsLib/Ts.lean` — the meaning of the TypeScript operations; `src/schema/arbitrary.ts` — fast-check arbitraries of the descriptors.
+- `src/verify/` — `leanfran/verify` (`model`, `checkModel`, `checkModule`), the translation of TypeScript functions to Lean (`translate.ts`) and `leanfran --lang typescript check` and `status` with `leanfran.lock` (`check.ts`); `src/lean/LeanTsLib/Ts.lean` — the meaning of the TypeScript operations; `src/schema/arbitrary.ts` — fast-check arbitraries of the descriptors.
 - `src/index.ts`, `src/embed.ts` — `lean(...)`, `LeanBlockStale` and the block keys;
-  `src/scan.ts`, `src/sync.ts`, `src/cli.ts` — the CLI `leanfran` (`sync`, `status`,
+  `src/scan.ts`, `src/sync.ts`, `src/cli.ts` — the npm package implementation of the CLI (`sync`, `status`,
   `generate`); `src/runtime/block.ts` — the registry the generated modules register in;
   `src/models.ts` — the Lean structures of the user's models (`lean(..., { models })`).
 - `src/schema/` — `leanfran/schema`: `LeanSchema` (Standard Schema and Standard JSON
@@ -384,7 +395,7 @@ export function double(n: bigint | number): bigint {
   the 32-bit profile; `test/*.test.ts` — Vitest tests of the runtime and of the
   public functions and schemas with both generation settings (`test/public.test.ts`),
   the JSON against Lean's `ToJson` (`test/json.test.ts`), Standard Schema with Hono and
-  zod (`test/standard.test.ts`); `test/embed.test.ts` — `leanfran sync`,
+  zod (`test/standard.test.ts`); `test/embed.test.ts` — `leanfran --lang typescript sync`,
   `status` and `generate` on the fixtures `test/embed/app/` (with its committed
   `src/_lean/` and `.leanfran/blocks.json`) and `test/project/`.
 - `samples/` — the samples (pnpm workspace packages that link `leanfran`), `samples/run.sh` and
@@ -483,7 +494,7 @@ status` of the embedding and verification fixtures, `test/verify/test.sh` (copie
 `test/verify/app/` to `test-out/verify/<scene>/` and checks the states proved, sorry,
 axioms, missing, mismatch, failed and stale, `--require proved`, the TypeScript functions
 called through their specifications, an untranslatable function and a wrong
-implementation that `checkModel` rejects with a counterexample), `make samples` (`leanfran check
+implementation that `checkModel` rejects with a counterexample), `make samples` (`leanfran --lang typescript check
 --require proved` on the verified samples, `samples/run.sh` on every sample, and no difference in
 the committed generated modules), and `vp run check` (`vp check && vp test`, which
 includes `test/embed.test.ts`). `../../maint/TypeScript/test-diff.sh` covers: 136 function-level

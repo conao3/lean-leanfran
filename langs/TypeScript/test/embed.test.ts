@@ -14,7 +14,6 @@ import { beforeAll, describe, expect, test } from "vite-plus/test"
 import { GENERATOR_VERSION } from "../src/embed.ts"
 
 const ROOT = resolve(import.meta.dirname, "..")
-const CLI = join(ROOT, "src/cli.ts")
 const LEANFRAN_CLI = join(ROOT, "../../.lake/build/bin/leanfran")
 const FIXTURE = join(ROOT, "test/embed/app")
 const OUT = join(ROOT, "test-out/embed")
@@ -31,14 +30,14 @@ function run(cmd: string, args: readonly string[], cwd: string, env: NodeJS.Proc
   const r = spawnSync(cmd, args, {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, LEANFRAN_CLI, LEANFRAN_TS_AUTO_SYNC: "0", ...env },
+    env: { ...process.env, LEANFRAN_CLI: undefined, LEANFRAN_TS_AUTO_SYNC: "0", ...env },
   })
   if (r.error !== undefined) throw r.error
   return { status: r.status ?? -1, stdout: r.stdout, stderr: r.stderr }
 }
 
 function leanTs(args: readonly string[], cwd: string = ROOT, env: NodeJS.ProcessEnv = {}): Run {
-  return run(process.execPath, [CLI, ...args], cwd, env)
+  return run(LEANFRAN_CLI, ["--lang", "typescript", ...args], cwd, env)
 }
 
 function copyProject(from: string, name: string): string {
@@ -133,10 +132,10 @@ beforeAll(() => {
   mkdirSync(NODE_ONLY)
   symlinkSync(process.execPath, join(NODE_ONLY, "node"))
   app = copyProject(FIXTURE, "app")
-  appSync = sync(app)
+  appSync = leanTs(["sync", "--package", app], ROOT, { LEANFRAN_CLI: "unused" })
 }, TIMEOUT)
 
-describe("leanfran sync", () => {
+describe("leanfran --lang typescript sync", () => {
   test("checks the proofs and generates modules whose functions run", () => {
     expect(appSync.stderr).toContain("6 blocks of")
     expect(appSync.status).toBe(0)
@@ -148,30 +147,6 @@ describe("leanfran sync", () => {
   test("the committed fixture is what sync generates", () => {
     expect(generatedFiles(app)).toEqual(generatedFiles(FIXTURE))
   })
-
-  test(
-    "finds the compiler after the npm CLI on PATH",
-    () => {
-      const dir = copyProject(FIXTURE, "compiler-on-path")
-      const scripts = join(dir, "node_modules/.bin")
-      mkdirSync(scripts)
-      const npmCli = join(scripts, "leanfran")
-      symlinkSync(join(ROOT, "dist/cli.js"), npmCli)
-      const args = [npmCli, "sync", "--package", dir]
-      const missing = run(process.execPath, args, dir, { PATH: scripts, LEANFRAN_CLI: "" })
-      expect(missing.status).toBe(255)
-      expect(missing.stderr).toContain("the compiler `leanfran` is not on PATH (set LEANFRAN_CLI)")
-
-      const synced = run(process.execPath, args, dir, {
-        PATH: [scripts, dirname(LEANFRAN_CLI), process.env["PATH"]].join(delimiter),
-        LEANFRAN_CLI: "",
-      })
-      expect(synced.stderr).toContain("6 blocks of")
-      expect(synced.status).toBe(0)
-      expect(generatedFiles(dir)).toEqual(generatedFiles(FIXTURE))
-    },
-    TIMEOUT,
-  )
 
   test("a block shares the types of the block it uses", () => {
     expect(
@@ -285,7 +260,7 @@ describe("leanfran sync", () => {
 
 describe("stale blocks", () => {
   test(
-    "lean() throws LeanBlockStale and status lists the block without Lean",
+    "lean() throws LeanBlockStale and status lists the block without Lake",
     () => {
       const dir = copyProject(app, "stale")
       edit(join(dir, "src/arith.ts"), "xs.foldl (· + ·) 0", "xs.foldl (· + ·) 1")
@@ -317,7 +292,10 @@ describe("stale blocks", () => {
       edit(join(dir, "src/arith.ts"), "xs.foldl (· + ·) 0", "xs.foldl (· + ·) 100")
       const code =
         'const a = await import("./src/_lean/arith.ts"); await import("./src/arith.ts"); console.log(String(a.sum([1n])))'
-      const first = nodeEval(dir, code, { LEANFRAN_TS_AUTO_SYNC: "1" })
+      const first = nodeEval(dir, code, {
+        PATH: [dirname(LEANFRAN_CLI), process.env["PATH"]].join(delimiter),
+        LEANFRAN_TS_AUTO_SYNC: "1",
+      })
       expect(first.stderr).toContain('leanfran: regenerated the Lean block "arith"')
       expect(first.stdout).toBe("1\n")
       expect(first.status).toBe(0)
@@ -363,7 +341,7 @@ describe("stale blocks", () => {
       expect(leanTs(["status", "--package", dir]).stdout).toContain("stale   src/arith.ts:arith")
       const pkgStale = nodeEval(dir, 'await import("./src/arith.ts")')
       expect(pkgStale.stderr).toContain(
-        'LeanBlockStale: the Lean block "arith" is stale (the leanfran settings of its package.json changed since `leanfran sync` generated it)',
+        'LeanBlockStale: the Lean block "arith" is stale (the leanfran settings of its package.json changed since `leanfran --lang typescript sync` generated it)',
       )
       expect(sync(dir).status).toBe(0)
       expect(nodeEval(dir, 'await import("./src/arith.ts")').status).toBe(0)
@@ -386,12 +364,12 @@ describe("without Lean", () => {
   })
 })
 
-describe("leanfran generate", () => {
+describe("leanfran --lang typescript generate", () => {
   test(
     "emits a TypeScript module per module of a lake project",
     () => {
       const dir = copyProject(join(ROOT, "test/project"), "project")
-      const r = leanTs(["generate", "--lake-dir", dir, "--output-dir", join(dir, "ts")])
+      const r = leanTs(["generate", "--lake-dir", ".", "--output-dir", "ts"], dir)
       expect(r.status).toBe(0)
       expect(readdirSync(join(dir, "ts/Tally")).toSorted()).toEqual(["Basic.ts", "Format.ts"])
       const out = nodeEval(
@@ -427,6 +405,14 @@ describe("cli parameters", () => {
     const r = leanTs(["sync"])
     expect(r.status).toBe(252)
     expect(r.stderr).toContain("--package is required")
+  })
+
+  test("sync without the project's npm package exits with an installation hint", () => {
+    const dir = join(OUT, "missing-package")
+    mkdirSync(dir, { recursive: true })
+    const r = leanTs(["sync", "--package", dir])
+    expect(r.status).toBe(255)
+    expect(r.stderr).toContain("npm install leanfran")
   })
 
   test("leanfran --lang typescript --batch with an invalid file exits with 252", () => {

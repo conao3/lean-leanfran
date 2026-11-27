@@ -156,7 +156,7 @@ function autoSync(proc: NodeJS.Process, name: string, entries: readonly BlockEnt
     })
   if (r.status !== 0)
     throw new LeanBlockStale(
-      `leanfran: \`leanfran sync --package ${root}\` failed (exit ${r.status})`,
+      `leanfran: \`leanfran --lang typescript sync --package ${root}\` failed (exit ${r.status})`,
     )
   proc.stderr.write(
     `leanfran: regenerated the Lean block ${JSON.stringify(name)} of ${root}; the generated module takes effect when the program starts again\n`,
@@ -221,9 +221,9 @@ export function lean(name: string, source: string, options?: LeanBlockOptions): 
     entries.length === 0
       ? "its generated module was not imported"
       : same.length !== 0
-        ? "the leanfran settings of its package.json changed since `leanfran sync` generated it"
-        : "it has changed since `leanfran sync` generated it"
+        ? "the leanfran settings of its package.json changed since `leanfran --lang typescript sync` generated it"
+        : "it has changed since `leanfran --lang typescript sync` generated it"
   throw new LeanBlockStale(
-    `the Lean block ${JSON.stringify(name)} is stale (${where}); run \`leanfran sync\` (or set LEANFRAN_TS_AUTO_SYNC=1)`,
+    `the Lean block ${JSON.stringify(name)} is stale (${where}); run \`leanfran --lang typescript sync\` (or set LEANFRAN_TS_AUTO_SYNC=1)`,
   )
 }

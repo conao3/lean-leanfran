@@ -20,9 +20,6 @@
   "engines": {
     "node": ">=22.18.0"
   },
-  "bin": {
-    "leanfran": "./dist/cli.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

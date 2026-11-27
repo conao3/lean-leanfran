@@ -3,8 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="$root/test-out/verify"
-export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
-lts=(node "$root/src/cli.ts")
+lts=("$root/../../.lake/build/bin/leanfran" --lang typescript)
 
 fail() {
   printf 'test/verify: %s\n' "$*" >&2

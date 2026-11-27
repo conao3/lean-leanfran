@@ -7,15 +7,24 @@ namespace LeanTs.Cli
 def version : String := "0.13.3"
 
 /-- Version of the generated code. Raise it when the emitted code changes, together with
-    `GENERATOR_VERSION` of `src/embed.ts`; `leanfran sync` checks it and puts it into its keys. -/
+    `GENERATOR_VERSION` of `src/embed.ts`; `sync` checks it and puts it into its keys. -/
 def generatorVersion : String := "10"
 
-def usage : String := "usage: leanfran --lang typescript [--version] [--generator-version] <command> <subcommand> [parameters]
+def usage : String := "usage: leanfran --lang typescript [--version] [--generator-version] <command> [parameters]
 
 commands:
-  module generate      Emit a TypeScript module for functions of a Lean module
-  project generate     Build a lake project and emit a TypeScript module per Lean module
-  obligations check    Judge the proofs of obligations (used by `leanfran check`)
+  sync --package <dir>      Check the Lean blocks of a TypeScript package and generate their modules
+  check --package <dir> [--require proved]
+                            Translate the model(...) functions and judge their obligations
+  status --package <dir>    Show block freshness and the states recorded by check
+  generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
+                            Emit TypeScript modules from a Lake project
+  module generate           Emit a TypeScript module for functions of a Lean module
+  project generate          Build a Lake project and emit a TypeScript module per Lean module
+  obligations check         Judge the proofs of obligations (used by check)
+
+sync, check, status and generate use the project's npm package leanfran.
+Run generate from the TypeScript project directory.
 
 leanfran --lang typescript module generate
   --module-name <Name>        Lean module to import (required unless --batch)
@@ -409,12 +418,37 @@ def withOpts (rest : List String) (k : Opts → IO UInt32) : IO UInt32 :=
     try k o
     catch e => fail 255 (toString e)
 
+def packageCommand (command : String) (rest : List String) : IO UInt32 := do
+  let root ← if command == "generate" then
+    IO.currentDir
+  else
+    let packages := (rest.zip (rest.drop 1)).filterMap fun (flag, value) =>
+      if flag == "--package" && !value.startsWith "--" then some value else none
+    let some dir := packages.getLast? | return ← fail 252 "--package is required"
+    pure (System.FilePath.mk dir)
+  let cli := root / "node_modules" / "leanfran" / "dist" / "cli.js"
+  unless ← cli.pathExists do
+    return ← fail 255 s!"cannot find the TypeScript package `leanfran` in {root / "node_modules"}; run `npm install leanfran` or `pnpm add leanfran` in {root}"
+  try
+    let child ← IO.Process.spawn {
+      cmd := "node"
+      args := #["--", cli.toString, command] ++ rest.toArray
+      env := #[("LEANFRAN_CLI", some (← IO.appPath).toString)] }
+    child.wait
+  catch e => fail 255 s!"cannot run node: {e}"
+
 unsafe def main (args : List String) : IO UInt32 := do
   enableInitializersExecution
   match args with
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
   | [] | ["help"] | ["--help"] => IO.print usage; return 0
+  | ["sync", "--help"] | ["check", "--help"] | ["status", "--help"] | ["generate", "--help"] =>
+    IO.print usage; return 0
+  | "sync" :: rest => packageCommand "sync" rest
+  | "check" :: rest => packageCommand "check" rest
+  | "status" :: rest => packageCommand "status" rest
+  | "generate" :: rest => packageCommand "generate" rest
   | "module" :: "help" :: _ | "project" :: "help" :: _ => IO.print usage; return 0
   | "module" :: "generate" :: rest => withOpts rest moduleGenerate
   | "project" :: "generate" :: rest => withOpts rest projectGenerate

@@ -2,6 +2,8 @@
 
 .PHONY: install build pack gen-externs externs-check test test-public test-generate fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples bench check
 
+LEANFRAN := ../../.lake/build/bin/leanfran --lang typescript
+
 install:
 	pnpm install --frozen-lockfile
 
@@ -45,12 +47,12 @@ embed-links: install
 
 # Regenerate the committed modules of the embedding fixture.
 embed-fixture: build pack embed-links
-	LEANFRAN_CLI=$(abspath ../../.lake/build/bin/leanfran) node src/cli.ts sync --package test/embed/app
+	$(LEANFRAN) sync --package test/embed/app
 
-# The committed modules of the embedding fixture are fresh (no Lean).
-status: pack embed-links verify-links
-	node src/cli.ts status --package test/embed/app
-	node src/cli.ts status --package test/verify/app
+# The committed modules of the embedding fixture are fresh (without running Lake).
+status: build pack embed-links verify-links
+	$(LEANFRAN) status --package test/embed/app
+	$(LEANFRAN) status --package test/verify/app
 
 test-embed: build pack
 	vp test test/embed.test.ts
@@ -61,7 +63,7 @@ verify-links: install
 	ln -sfn ../../../../node_modules/zod test/verify/app/node_modules/zod
 
 verify-fixture: build pack verify-links
-	LEANFRAN_CLI=$(abspath ../../.lake/build/bin/leanfran) node src/cli.ts check --package test/verify/app
+	$(LEANFRAN) check --package test/verify/app
 
 test-verify: build pack
 	test/verify/test.sh

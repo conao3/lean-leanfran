@@ -11,4 +11,4 @@ test:
 	for s in $(STEPS) $(SAMPLES); do ./run.sh $$s || exit 1; done
 
 verify:
-	for s in $(VERIFY); do (cd $$s && node node_modules/leanfran/dist/cli.js check --package . --require proved) || exit 1; done
+	for s in $(VERIFY); do (cd $$s && "$$LEANFRAN_CLI" --lang typescript check --package . --require proved) || exit 1; done
