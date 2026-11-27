@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
 root=$PWD
-export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
+cli="$root/../../.lake/build/bin/leanfran"
 mkdir -p test-out
 out=$(mktemp -d "$root/test-out/embed-samples.XXXXXX")
 trap 'rm -rf "$out"' EXIT
@@ -17,8 +17,8 @@ for name in embed-range embed-models; do
     go mod edit -modfile "$dest/go.mod" -replace "github.com/conao3/leanfran-go=$root"
     (
         cd "$dest"
-        go tool leanfran status
-        go tool leanfran sync
+        "$cli" --lang go status
+        "$cli" --lang go sync
         go vet ./...
         test -z "$(gofmt -l .)"
         git -C "$root" ls-files "samples/$name" --cached --others --exclude-standard |

@@ -23,7 +23,7 @@ snapshot=$(mktemp -d "$(dirname "$output")/.leanfran-go.XXXXXXXX")
 trap 'rm -rf -- "$snapshot"' EXIT
 
 git ls-files -z -- langs/Go/go.mod ':(glob)langs/Go/*.go' \
-    langs/Go/rt langs/Go/schema langs/Go/cmd/leanfran langs/Go/internal \
+    langs/Go/rt langs/Go/schema langs/Go/cmd/leanfran-go langs/Go/internal \
     langs/Go/leanfrantest langs/Go/lean ':(exclude,glob)langs/Go/**/*_test.go' |
     while IFS= read -r -d '' file; do
         install -D -m 644 -- "$file" "$snapshot/${file#langs/Go/}"

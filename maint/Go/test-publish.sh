@@ -45,13 +45,13 @@ test "$first_commit" = "$(mirror_git rev-parse "refs/tags/$tag")"
     cp -- "$fixture"/{go.mod,main.go} "$temp/fixture/"
     cp -- "$fixture"/pricing/{*.go,leanfran.json} "$temp/fixture/pricing/"
     cd "$temp/fixture"
-    go mod edit -dropreplace "$module" -droprequire "$module" -droptool "$module/cmd/leanfran"
+    go mod edit -dropreplace "$module" -droprequire "$module" -droptool "$module/cmd/leanfran-go"
     go get "$module@$tag"
-    go get -tool "$module/cmd/leanfran@$tag"
+    go get -tool "$module/cmd/leanfran-go@$tag"
     test "$(go list -m -f '{{.Version}}' "$module")" = "$tag"
     CGO_ENABLED=0 go build -o "$temp/app" .
     test "$("$temp/app")" = 3
-    go tool leanfran status
+    "$source_dir/../../.lake/build/bin/leanfran" --lang go status
 )
 
 bash "$maint/mirror-snapshot.sh" "$tag" "$temp/retry"

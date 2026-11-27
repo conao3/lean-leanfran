@@ -13,7 +13,7 @@ Add `lean`, `lake`, and the `leanfran` compiler to your PATH. Use Lean and Lake 
 Use Go 1.26 or later. In your Go module, install the tool and add a top-level block to a Go file.
 
 ```sh
-go get -tool github.com/conao3/leanfran-go/cmd/leanfran
+go get -tool github.com/conao3/leanfran-go/cmd/leanfran-go
 ```
 
 ```go
@@ -35,7 +35,7 @@ theorem width_le (r : Range) : width r ≤ r.hi := by
 `)
 ```
 
-Run `go tool leanfran sync`. The Go package can now call `NewRange(big.NewInt(2), big.NewInt(5))` and `Width(r)`, which returns 3. See the [range sample](../langs/Go/samples/embed-range/) for the full call.
+Run `leanfran --lang go sync`. The Go package can now call `NewRange(big.NewInt(2), big.NewInt(5))` and `Width(r)`, which returns 3. See the [range sample](../langs/Go/samples/embed-range/) for the full call.
 
 Each package has one block, identified by its Go import path. Use a raw or interpreted string literal with `Lean`, or place the source in the same package directory and pass its filename to `LeanFile`. `Imports("Std.Data.HashMap")` imports a Lean module. `Uses("example.com/app/orders")` opens another block's Lean namespace and shares the Go types generated for it. Pass the options after the source. The options return `leanfran.BlockOption`.
 
@@ -68,13 +68,13 @@ Run `nix develop` from the application's flake directory. Pin `leanfran.url` to 
 
 | Command | Effect |
 | --- | --- |
-| `go tool leanfran sync` | Scans the module, builds the Lean sources in `.leanfran/workspace`, and installs all generated packages after the build and generation succeed. |
-| `go tool leanfran status` | Checks freshness without Lean or Lake. Reports stale or removed blocks and missing generated files, with exit status 1 when work is needed. |
-| `go tool leanfran check` | Runs `sync` and verifies the result with `status`. |
+| `leanfran --lang go sync` | Scans the module, builds the Lean sources in `.leanfran/workspace`, and installs all generated packages after the build and generation succeed. |
+| `leanfran --lang go status` | Checks freshness without Lean or Lake. Reports stale or removed blocks and missing generated files, with exit status 1 when work is needed. |
+| `leanfran --lang go check` | Runs `sync` and verifies the result with `status`. |
 
-All three commands accept `--dir` to choose a directory within the Go module. The CLI reads the module from that directory and scans its packages.
+Run all three commands from the Go module where you registered the tool. They accept `--dir` to choose a directory within that module. The CLI reads the module from that directory and scans its packages.
 
-`sync` and `check` use the compiler specified by `LEANFRAN_CLI` or find `leanfran` on PATH, skipping the running Go CLI. Both commands invoke the compiler with `--lang go`. The compiler must match the Go module release and the tool's generator version. The compiler, `lean`, and `lake` must all match the module's `lean-toolchain`. The default is `leanprover/lean4:v4.35.0`. Use `--verbose` on `sync` or `check` to include Lake trace lines in build diagnostics.
+The compiler runs the project's `leanfran-go` tool through `go tool` and passes its own path in `LEANFRAN_CLI`. The tool uses that path for generation and looks up `leanfran` on PATH when the variable is unset. The compiler must match the Go module release and the tool's generator version. The compiler, `lean`, and `lake` must all match the module's `lean-toolchain`. The default is `leanprover/lean4:v4.35.0`. Use `--verbose` on `sync` or `check` to include Lake trace lines in build diagnostics.
 
 An optional `leanfran.config.json` at the module root takes a `paths` array of directories to scan and a `require` array of Lake dependencies. Dependency entries use the keys of Lake's `[[require]]` entries. Relative dependency paths start at the Go module root.
 
@@ -85,27 +85,27 @@ An optional `leanfran.config.json` at the module root takes a `paths` array of d
 }
 ```
 
-Commit each block's `leanfran_types_gen.go`, `leanfran_funcs_gen.go`, `leanfran_lean_gen.go`, and `leanfran.json`. Ignore the module's `.leanfran/` directory. The application and `status` work with the Go toolchain alone. Lean diagnostics point to the original Go literal or Lean file. When a build or proof fails, the previous generated files remain in place.
+Commit each block's `leanfran_types_gen.go`, `leanfran_funcs_gen.go`, `leanfran_lean_gen.go`, and `leanfran.json`. Ignore the module's `.leanfran/` directory. The application builds with the Go toolchain. Lean diagnostics point to the original Go literal or Lean file. When a build or proof fails, the previous generated files remain in place.
 
 ### Check generated files in CI
 
-The freshness check for committed files requires only Go.
+The freshness check for committed files requires Go and the `leanfran` compiler.
 
 ```sh
-go tool leanfran status
+leanfran --lang go status
 ```
 
 Use a clean checkout with Lean, Lake, and the compiler available to verify that `sync` reproduces the tracked files.
 
 ```sh
-go tool leanfran sync
+leanfran --lang go sync
 git diff --exit-code
 ```
 
 Add the following directive to a Go file so `go generate ./...` runs `sync`.
 
 ```go
-//go:generate go tool leanfran sync
+//go:generate leanfran --lang go sync
 ```
 
 ### Importing Go models
@@ -149,14 +149,14 @@ Specify at least one refinement or postcondition. Use Lean names relative to the
 
 ### Obligations and proof status
 
-Find the generated module `LeanGoModel.B<hex>` under `.leanfran/workspace/verification` after running `go tool leanfran check`. The suffix is the Go package import path encoded as hexadecimal UTF-8 bytes. Write the proofs in `lean/Proofs/` beside `go.mod` and import that module. Each obligation is an abbreviation such as `Nibble.obligation.refines`. Prove it with a declaration named `Nibble.proof.refines` in the model's namespace. The [nibble proof](../langs/Go/samples/verified-nibble/lean/Proofs/Nibble.lean) establishes the equality and range bound for every input. The [clamp proof](../langs/Go/samples/verified-clamp/lean/Proofs/Clamp.lean) compares early returns with nested Lean `min` and `max` under an ordered-bounds precondition.
+Find the generated module `LeanGoModel.B<hex>` under `.leanfran/workspace/verification` after running `leanfran --lang go check`. The suffix is the Go package import path encoded as hexadecimal UTF-8 bytes. Write the proofs in `lean/Proofs/` beside `go.mod` and import that module. Each obligation is an abbreviation such as `Nibble.obligation.refines`. Prove it with a declaration named `Nibble.proof.refines` in the model's namespace. The [nibble proof](../langs/Go/samples/verified-nibble/lean/Proofs/Nibble.lean) establishes the equality and range bound for every input. The [clamp proof](../langs/Go/samples/verified-clamp/lean/Proofs/Clamp.lean) compares early returns with nested Lean `min` and `max` under an ordered-bounds precondition.
 
 A refinement compares the translated return value with the specification for every input that satisfies `requires`. Where the model can fail, refinement requires `Except.ok` with the specified value. A postcondition for a fallible function constrains every successful return. General `for` loops use a partial fixed point. A diverging loop has no successful logical result.
 
 ```sh
-go tool leanfran check --require proved
+leanfran --lang go check --require proved
 go test ./...
-go tool leanfran status
+leanfran --lang go status
 ```
 
 `check` runs `sync`, type-checks Go with the generated files present, builds the translated models and proof modules, and writes `leanfran.lock` in the Go module root. It reports each obligation's state.
