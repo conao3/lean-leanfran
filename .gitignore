@@ -1,4 +1,5 @@
 /result
+/.lake/
 /.claude-dev/
 /langs/Rust/result
 /langs/Rust/.lake/

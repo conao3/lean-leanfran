@@ -350,7 +350,7 @@ export function double(n: bigint | number): bigint {
 - `LeanTs/RuntimeExterns.lean` — the runtime functions the generated code may call
   (generated from `src/runtime` by `make gen-externs`).
 - `LeanTs/Check.lean` — `obligations check`: the state of each obligation from the type and the axioms of its proof.
-- `Main.lean` — the CLI `leanfran-typescript`.
+- `LeanTs/Cli.lean` — the CLI `leanfran-typescript`.
 - `src/verify/` — `leanfran/verify` (`model`, `checkModel`, `checkModule`), the translation of TypeScript functions to Lean (`translate.ts`) and `leanfran check` and `status` with `leanfran.lock` (`check.ts`); `src/lean/LeanTsLib/Ts.lean` — the meaning of the TypeScript operations; `src/schema/arbitrary.ts` — fast-check arbitraries of the descriptors.
 - `src/index.ts`, `src/embed.ts` — `lean(...)`, `LeanBlockStale` and the block keys;
   `src/scan.ts`, `src/sync.ts`, `src/cli.ts` — the CLI `leanfran` (`sync`, `status`,
@@ -380,7 +380,7 @@ export function double(n: bigint | number): bigint {
   `src/_lean/` and `.leanfran/blocks.json`) and `test/project/`.
 - `samples/` — the samples (pnpm workspace packages that link `leanfran`), `samples/run.sh` and
   `samples/Makefile` (`test`, `verify`).
-- `../../maint/TypeScript/bump-version.sh` — sets the version of `package.json` and `Main.lean`;
+- `../../maint/TypeScript/bump-version.sh` — sets the version of `package.json` and `LeanTs/Cli.lean`;
   the `Release` workflow runs it, tags `vX.Y.Z` and starts the `Publish` workflow, which packs and
   publishes the tag to npm with trusted publishing.
 

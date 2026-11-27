@@ -1,6 +1,6 @@
 # Python development
 
-leanfran compiles Lean 4 IR to Python (`LeanPython/`, `Main.lean`), exposes Lean types as pydantic
+leanfran compiles Lean 4 IR to Python (`LeanPython/`, `LeanPython/Cli.lean`), exposes Lean types as pydantic
 models, and embeds Lean in Python (`src/leanfran/embed.py`, `sync.py`). See the [backend README](../langs/Python/README.md) for usage.
 
 Paths in this guide are relative to `langs/Python/`.
@@ -10,7 +10,7 @@ Paths in this guide are relative to `langs/Python/`.
 - `LeanPython/EmitPy.lean`: the emitter. Collects IR decls from roots and emits Python functions
   (join points as a `while True` state machine, reference counting as in C).
 - `LeanPython/Marshal.lean`: Lean types → descriptors, pydantic models, decision procedures of
-  proof fields. `LeanPython/Generate.lean`: public functions. `Main.lean`: the `leanfran-python` CLI.
+  proof fields. `LeanPython/Generate.lean`: public functions. `LeanPython/Cli.lean`: the `leanfran-python` CLI.
 - `src/leanfran/runtime.py`, `io_externs.py`: runtime. `lean_*` functions are named after the C
   symbols of Lean externs; `LeanPython/RuntimeExterns.lean` lists them (`make gen-externs`), and the
   CLI refuses to emit code calling a symbol not in the list.
@@ -31,7 +31,7 @@ Paths in this guide are relative to `langs/Python/`.
 - New runtime behaviour gets a case in `LeanPythonTest/Vectors.lean` or `Io.lean`; the diff test
   must match the C backend byte for byte. New public types get a test in `tests/test_public.py`, and
   a JSON case in `LeanPythonTest/Json.lean` when they derive `ToJson`.
-- Raise `generatorVersion` in `Main.lean` and `GENERATOR_VERSION` in `src/leanfran/embed.py`
+- Raise `generatorVersion` in `LeanPython/Cli.lean` and `GENERATOR_VERSION` in `src/leanfran/embed.py`
   together when the generated code changes.
 
 ## Verification

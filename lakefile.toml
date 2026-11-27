@@ -1,0 +1,51 @@
+name = "leanfran"
+defaultTargets = ["leanfran"]
+
+[[lean_lib]]
+name = "LeanRust"
+srcDir = "langs/Rust"
+
+[[lean_lib]]
+name = "LeanPython"
+srcDir = "langs/Python"
+
+[[lean_lib]]
+name = "LeanTs"
+srcDir = "langs/TypeScript"
+
+[[lean_lib]]
+name = "LeanClj"
+srcDir = "langs/Clojure"
+
+[[lean_lib]]
+name = "LeanPhp"
+srcDir = "langs/PHP"
+
+[[lean_lib]]
+name = "LeanGo"
+srcDir = "langs/Go"
+
+[[lean_lib]]
+name = "LeanC"
+srcDir = "langs/C"
+needs = ["support", "jsonSupport", "cLib"]
+
+[[input_dir]]
+name = "support"
+path = "langs/C/support"
+text = true
+
+[[input_dir]]
+name = "jsonSupport"
+path = "langs/C/lean/LeanfranC"
+text = true
+
+[[input_dir]]
+name = "cLib"
+path = "langs/C/lean/LeanCLib"
+text = true
+
+[[lean_exe]]
+name = "leanfran"
+root = "Main"
+supportInterpreter = true

@@ -10,10 +10,10 @@ tag=$1
 output=$(realpath -m -- "$2")
 cd "$(dirname "$0")/../.."
 
-lean_version=$(sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/Go/Main.lean)
+lean_version=$(sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/Go/LeanGo/Cli.lean)
 go_version=$(sed -n 's/^const Version = "\([0-9.]*\)"$/\1/p' langs/Go/leanfran.go)
 if [[ $lean_version != "$go_version" || $tag != "v$lean_version" ]]; then
-    printf 'Tag %s must match the Go release versions in Main.lean (%s) and leanfran.go (%s)\n' \
+    printf 'Tag %s must match the Go release versions in LeanGo/Cli.lean (%s) and leanfran.go (%s)\n' \
         "$tag" "$lean_version" "$go_version" >&2
     exit 1
 fi

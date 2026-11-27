@@ -2,7 +2,7 @@
 
 Paths in this guide are relative to `langs/Rust/`.
 
-- `LeanRust/` and `Main.lean`: Lean IR emitter and compiler CLI.
+- `LeanRust/` and `LeanRust/Cli.lean`: Lean IR emitter and compiler CLI.
 - `crates/leanfran-runtime/`: runtime and C-symbol externs.
 - `crates/leanfran-build/`: embedding, generation and verification.
 - `crates/leanfran-macros/`: host-language macros.

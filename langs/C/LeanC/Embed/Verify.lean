@@ -510,7 +510,7 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
     IO.FS.writeFile request (Json.compress (Json.arr (refs.map fun o =>
       Json.mkObj [("model", Lean.toJson o.model), ("label", Lean.toJson o.label)])))
     let self ← IO.appPath
-    let args := #["env", self.toString, "obligations", "check", "--modules"] ++ modules ++
+    let args := #["env", self.toString, "--lang", "c", "obligations", "check", "--modules"] ++ modules ++
       #["--obligations", request.toString]
     let output ← IO.Process.output {cmd := "lake", cwd := some dir, args}
     unless output.exitCode == 0 do

@@ -1,6 +1,6 @@
 # Clojure development
 
-leanfran compiles Lean 4 IR to Clojure (`LeanClj/`, `Main.lean`) and embeds Lean
+leanfran compiles Lean 4 IR to Clojure (`LeanClj/`, `LeanClj/Cli.lean`) and embeds Lean
 in Clojure (`src/leanfran/core.clj`). See the [backend README](../langs/Clojure/README.md) for usage.
 
 Paths in this guide are relative to `langs/Clojure/`.
@@ -10,7 +10,7 @@ Paths in this guide are relative to `langs/Clojure/`.
 - `LeanClj/EmitClj.lean`: the emitter. Collects IR decls from roots, emits
   Clojure forms, and derives the marshalling descriptors of public functions.
 - `LeanClj/Sx.lean`: S-expression tree and layout.
-- `Main.lean`: the `leanfran` CLI.
+- `LeanClj/Cli.lean`: the `leanfran` CLI.
 - `src/leanfran/runtime.clj`: runtime. `lean_*` functions are named after the C
   symbols of Lean externs; generated code checks at load time that every
   symbol it uses exists (`check-symbols!`).

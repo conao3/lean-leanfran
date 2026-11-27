@@ -6,7 +6,7 @@ new="$1"
 old=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 sed -i "/^\[workspace.package\]/,/^\[/s/^version = \"$old\"/version = \"$new\"/" Cargo.toml
 sed -i "s/\(leanfran-[a-z]* = { path = \"[^\"]*\", version = \"\)$old\"/\1$new\"/" crates/*/Cargo.toml
-sed -i "s/^def version : String := \"$old\"/def version : String := \"$new\"/" Main.lean
+sed -i "s/^def version : String := \"$old\"/def version : String := \"$new\"/" LeanRust/Cli.lean
 sed -i "s/^\(leanfran\(-build\)\? = \"\)$old\"/\1$new\"/" README.md
 sed -i "s/^\(leanfran = { version = \"\)$old\"/\1$new\"/" README.md ../../docs/rust-guide.md
 cargo update --workspace --offline >/dev/null 2>&1 || cargo update --workspace >/dev/null

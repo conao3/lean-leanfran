@@ -8,6 +8,6 @@ const p = JSON.parse(readFileSync("package.json", "utf8"))
 p.version = process.argv[1]
 writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n")
 ' "$v"
-sed -i "s/^def version : String := \".*\"/def version : String := \"$v\"/" Main.lean
+sed -i "s/^def version : String := \".*\"/def version : String := \"$v\"/" LeanTs/Cli.lean
 grep -q "\"version\": \"$v\"" package.json
-grep -q "def version : String := \"$v\"" Main.lean
+grep -q "def version : String := \"$v\"" LeanTs/Cli.lean

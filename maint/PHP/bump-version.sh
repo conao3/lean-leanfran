@@ -8,8 +8,8 @@ fi
 
 cd "$(dirname "$0")/../../langs/PHP"
 pattern='^def version : String := "[0-9]+\.[0-9]+\.[0-9]+"$'
-if ! grep -Eq "$pattern" Main.lean; then
-    echo 'bump-version.sh: version declaration missing from Main.lean' >&2
+if ! grep -Eq "$pattern" LeanPhp/Cli.lean; then
+    echo 'bump-version.sh: version declaration missing from LeanPhp/Cli.lean' >&2
     exit 1
 fi
-sed -Ei "s/$pattern/def version : String := \"$1\"/" Main.lean
+sed -Ei "s/$pattern/def version : String := \"$1\"/" LeanPhp/Cli.lean

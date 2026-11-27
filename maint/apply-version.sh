@@ -32,8 +32,8 @@ check_version() {
   done <<< "$versions"
 }
 
-for backend in Rust Python TypeScript Clojure PHP Go; do
-  check_version "langs/$backend/Main.lean" 's/^def version : String := "([^"]*)"$/\1/p'
+for cli in Rust/LeanRust Python/LeanPython TypeScript/LeanTs Clojure/LeanClj PHP/LeanPhp Go/LeanGo; do
+  check_version "langs/$cli/Cli.lean" 's/^def version : String := "([^"]*)"$/\1/p'
 done
 
 check_version langs/Rust/Cargo.toml '/^\[workspace\.package\]/,/^\[/s/^version = "([^"]*)"$/\1/p'

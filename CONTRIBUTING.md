@@ -49,6 +49,6 @@ Start the `Release` workflow once per release. It chooses the next version from 
 
 `Publish` distributes the `vX.Y.Z` tag to crates.io, PyPI, npm, Clojars, Packagist, and the Go module mirror. PHP and Go carry the shared release version in their compiler entry points. Go also records it in the root Go package. Generator versions track emitted-code compatibility separately from release versions. The C backend keys its sync manifest and proof lock on its generator version and the Lean version.
 
-The PHP Publish job checks the shared tag against `Main.lean`, pushes the snapshot and the same tag to the mirror, then requests and verifies the Packagist update. For the registry and required environment secrets, see the [PHP publishing guide](docs/php-development.md#publishing).
+The PHP Publish job checks the shared tag against `LeanPhp/Cli.lean`, pushes the snapshot and the same tag to the mirror, then requests and verifies the Packagist update. For the registry and required environment secrets, see the [PHP publishing guide](docs/php-development.md#publishing).
 
-The Go Publish job checks the shared tag against `Main.lean` and `leanfran.go`, pushes the snapshot and tag to the mirror, and verifies that Go resolves the tag. See the [Go publishing guide](docs/go-development.md#publishing) for the deployment environment and local consumer check.
+The Go Publish job checks the shared tag against `LeanGo/Cli.lean` and `leanfran.go`, pushes the snapshot and tag to the mirror, and verifies that Go resolves the tag. See the [Go publishing guide](docs/go-development.md#publishing) for the deployment environment and local consumer check.

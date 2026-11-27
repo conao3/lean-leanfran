@@ -185,6 +185,55 @@
             php = mkCompiler "PHP" "LeanPhp" "leanfran-php";
             go = mkCompiler "Go" "LeanGo" "leanfran-go";
             c = mkCompiler "C" "LeanC" "leanfran-c";
+            leanfran = pkgs.stdenv.mkDerivation {
+              pname = "leanfran";
+              inherit version;
+              src = pkgs.lib.fileset.toSource {
+                root = ./.;
+                fileset = pkgs.lib.fileset.unions [
+                  ./lean-toolchain
+                  ./lakefile.toml
+                  ./lake-manifest.json
+                  ./Main.lean
+                  ./langs/Rust/LeanRust.lean
+                  ./langs/Rust/LeanRust
+                  ./langs/Python/LeanPython.lean
+                  ./langs/Python/LeanPython
+                  ./langs/TypeScript/LeanTs.lean
+                  ./langs/TypeScript/LeanTs
+                  ./langs/Clojure/LeanClj.lean
+                  ./langs/Clojure/LeanClj
+                  ./langs/PHP/LeanPhp.lean
+                  ./langs/PHP/LeanPhp
+                  ./langs/Go/LeanGo.lean
+                  ./langs/Go/LeanGo
+                  ./langs/Go/lean/LeanGoLib
+                  ./langs/C/LeanC.lean
+                  ./langs/C/LeanC
+                  ./langs/C/support
+                  ./langs/C/lean/LeanfranC
+                  ./langs/C/lean/LeanCLib
+                ];
+              };
+              nativeBuildInputs = [
+                pkgs.lean4
+                pkgs.makeWrapper
+              ];
+              buildPhase = ''
+                runHook preBuild
+                lake build leanfran
+                runHook postBuild
+              '';
+              installPhase = ''
+                runHook preInstall
+                install -Dm755 .lake/build/bin/leanfran $out/bin/leanfran
+                wrapProgram $out/bin/leanfran --set-default LEAN_SYSROOT ${pkgs.lean4}
+                install -Dm644 langs/Go/lean/LeanGoLib/Go.lean $out/share/leanfran-go/LeanGoLib/Go.lean
+                install -Dm644 -t $out/share/leanfran-c langs/C/support/leanfran.h langs/C/support/leanfran.c
+                runHook postInstall
+              '';
+              meta.mainProgram = "leanfran";
+            };
             cargo-leanfran = pkgs.rustPlatform.buildRustPackage {
               pname = "cargo-leanfran";
               inherit version;
