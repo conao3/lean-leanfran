@@ -126,6 +126,6 @@ def lean(name, source, *, imports=(), uses=(), models=()):
         if _registry(pkg).get(block.qualname) != block.key:
             raise LeanBlockStale(
                 f"the Lean block {name!r} of {block.module} has changed since `leanfran sync` generated it;"
-                " run `leanfran sync` (or set LEANFRAN_PYTHON_AUTO_SYNC=1)"
+                " run `leanfran --lang python sync` (or set LEANFRAN_PYTHON_AUTO_SYNC=1)"
             )
     return importlib.import_module(f"{pkg}._lean.{block.stem}")

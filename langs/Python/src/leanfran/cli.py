@@ -3,22 +3,21 @@
 import argparse
 import sys
 
-USAGE = """usage: leanfran <command> [parameters]
+USAGE = """usage: leanfran --lang python <command> [parameters]
 
 commands:
   sync     Check the Lean blocks of a package and generate their Python modules
   check    Translate the @model functions to Lean and judge the proofs of their obligations
   status   Show the states recorded by `check`, marking functions changed since then (no Lean)
 
-leanfran sync
+leanfran --lang python sync
   --package <dir>        The Python package (the directory with __init__.py) (required)
-  --leanfran <path>      The Lean executable (default: $LEANFRAN_CLI, then `leanfran` on PATH)
 
-leanfran check
-  --package <dir>, --leanfran <path>   as for sync
+leanfran --lang python check
+  --package <dir>        as for sync
   --require proved       Exit with 254 unless every obligation is proved
 
-leanfran status
+leanfran --lang python status
   --package <dir>        The Python package (required)
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
@@ -37,11 +36,10 @@ def main(argv=None):
         return 0
     command = argv[0]
     if command not in ("sync", "check", "status"):
-        print(f"leanfran: unknown command {command!r} (see `leanfran help`)", file=sys.stderr)
+        print(f"leanfran: unknown command {command!r} (see `leanfran --lang python help`)", file=sys.stderr)
         return 252
-    p = _ArgumentParser(prog=f"leanfran {command}", exit_on_error=False)
+    p = _ArgumentParser(prog=f"leanfran --lang python {command}", exit_on_error=False)
     p.add_argument("--package", required=True, help="Python package directory containing __init__.py")
-    p.add_argument("--leanfran", help=argparse.SUPPRESS if command == "status" else "path to the Lean compiler")
     p.add_argument(
         "--require",
         choices=["proved"],
@@ -57,13 +55,12 @@ def main(argv=None):
         return e.code
     from leanfran import check, sync
 
-    cli = args.leanfran
     try:
         if command == "sync":
-            sync.sync_package(args.package, cli=cli)
+            sync.sync_package(args.package)
             return 0
         if command == "check":
-            lock, _ = check.check_package(args.package, cli=cli)
+            lock, _ = check.check_package(args.package)
             rows = [(q, label, st) for q, e in sorted(lock.items()) for label, st in e["obligations"].items()]
         else:
             rows = check.status(args.package)

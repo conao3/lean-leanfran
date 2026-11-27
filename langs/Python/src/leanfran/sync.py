@@ -9,7 +9,6 @@ import re
 import shutil
 import subprocess
 import sys
-import sysconfig
 
 from leanfran import embed, models
 
@@ -153,19 +152,12 @@ def lake_messages(output, offsets):
 
 
 def find_cli(cli=None):
-    """The executable ``leanfran``: the given path, ``$LEANFRAN_CLI``, then ``leanfran`` on PATH.
-
-    The command of this package is also named ``leanfran``, so a candidate in the scripts
-    directory of this Python environment is passed over."""
-    cli = cli or os.environ.get("LEANFRAN_CLI")
-    if cli:
-        return cli
-    scripts = pathlib.Path(sysconfig.get_path("scripts")).resolve()
-    for d in os.environ.get("PATH", "").split(os.pathsep):
-        found = shutil.which("leanfran", path=d) if d else None
-        if found and pathlib.Path(found).resolve().parent != scripts:
-            return found
-    raise SyncError("the executable `leanfran` is not on PATH (set LEANFRAN_CLI)", 255)
+    """The executable ``leanfran``: the given path, ``$LEANFRAN_CLI`` (set by
+    ``leanfran --lang python sync``), then ``leanfran`` on PATH."""
+    cli = cli or os.environ.get("LEANFRAN_CLI") or shutil.which("leanfran")
+    if cli is None:
+        raise SyncError("the executable `leanfran` is not on PATH (set LEANFRAN_CLI)", 255)
+    return cli
 
 
 def sync_package(pkg_dir, cli=None, out=sys.stderr):

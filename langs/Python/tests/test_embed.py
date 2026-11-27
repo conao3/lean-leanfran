@@ -20,7 +20,7 @@ def project(tmp_path_factory):
     d = tmp_path_factory.mktemp("embed")
     shutil.copytree(ROOT / "tests/embed/pricing", d / "pricing")
     (d / "pyproject.toml").write_text('[project]\nname = "pricing"\nversion = "0"\n')
-    r = run([sys.executable, "-m", "leanfran.cli", "sync", "--package", "pricing"], d)
+    r = run([str(CLI), "--lang", "python", "sync", "--package", "pricing"], d)
     assert r.returncode == 0, r.stderr
     return d
 
@@ -108,7 +108,7 @@ def test_lean_error_points_at_python(tmp_path):
     (d / "bad/m.py").write_text(
         'from leanfran import lean\n\nm = lean("m", r"""\ndef f (n : Nat) : Nat := n\n\ntheorem wrong : f 1 = 2 := by rfl\n""")\n'
     )
-    r = run([sys.executable, "-m", "leanfran.cli", "sync", "--package", "bad"], d)
+    r = run([str(CLI), "--lang", "python", "sync", "--package", "bad"], d)
     assert r.returncode == 254
     assert f"{d / 'bad/m.py'}:6:" in r.stderr, r.stderr
     assert "lean block m" in r.stderr
