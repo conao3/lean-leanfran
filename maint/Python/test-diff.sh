@@ -6,10 +6,11 @@ cd "$(dirname "$0")/../../langs/Python"
 ulimit -s 65536
 export LEAN_BACKTRACE=0
 export LEANFRAN_PYTHON_TEST_VAR=from-the-environment
-lake build leanfran-python oracle oracle-io LeanPythonTest
+lake --dir ../.. build leanfran
+lake build oracle oracle-io LeanPythonTest
 mkdir -p test-out
 generate() {
-  .lake/build/bin/leanfran-python module generate \
+  ../../.lake/build/bin/leanfran --lang python module generate \
     --module-name "$1" --roots "$2" \
     --search-path .lake/build/lib/lean \
     --output-file "$3" --output text --internal-only

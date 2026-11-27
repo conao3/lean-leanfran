@@ -10,7 +10,7 @@ Paths in this guide are relative to `langs/Python/`.
 - `LeanPython/EmitPy.lean`: the emitter. Collects IR decls from roots and emits Python functions
   (join points as a `while True` state machine, reference counting as in C).
 - `LeanPython/Marshal.lean`: Lean types → descriptors, pydantic models, decision procedures of
-  proof fields. `LeanPython/Generate.lean`: public functions. `LeanPython/Cli.lean`: the `leanfran-python` CLI.
+  proof fields. `LeanPython/Generate.lean`: public functions. `LeanPython/Cli.lean`: the commands of `leanfran --lang python`.
 - `src/leanfran/runtime.py`, `io_externs.py`: runtime. `lean_*` functions are named after the C
   symbols of Lean externs; `LeanPython/RuntimeExterns.lean` lists them (`make gen-externs`), and the
   CLI refuses to emit code calling a symbol not in the list.

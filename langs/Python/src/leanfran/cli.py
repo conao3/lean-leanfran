@@ -1,7 +1,6 @@
 """The command line of the Python package."""
 
 import argparse
-import os
 import sys
 
 USAGE = """usage: leanfran <command> [parameters]
@@ -13,10 +12,10 @@ commands:
 
 leanfran sync
   --package <dir>        The Python package (the directory with __init__.py) (required)
-  --leanfran-python <path>   The Lean CLI (default: $LEANFRAN_PYTHON_CLI, then `leanfran-python` on PATH)
+  --leanfran <path>      The Lean executable (default: $LEANFRAN_CLI, then `leanfran` on PATH)
 
 leanfran check
-  --package <dir>, --leanfran-python <path>   as for sync
+  --package <dir>, --leanfran <path>   as for sync
   --require proved       Exit with 254 unless every obligation is proved
 
 leanfran status
@@ -42,7 +41,7 @@ def main(argv=None):
         return 252
     p = _ArgumentParser(prog=f"leanfran {command}", exit_on_error=False)
     p.add_argument("--package", required=True, help="Python package directory containing __init__.py")
-    p.add_argument("--leanfran-python", help=argparse.SUPPRESS if command == "status" else "path to the Lean compiler")
+    p.add_argument("--leanfran", help=argparse.SUPPRESS if command == "status" else "path to the Lean compiler")
     p.add_argument(
         "--require",
         choices=["proved"],
@@ -58,7 +57,7 @@ def main(argv=None):
         return e.code
     from leanfran import check, sync
 
-    cli = args.leanfran_python or os.environ.get("LEANFRAN_PYTHON_CLI")
+    cli = args.leanfran
     try:
         if command == "sync":
             sync.sync_package(args.package, cli=cli)
