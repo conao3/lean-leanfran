@@ -1,0 +1,19 @@
+[[generate]]
+lang = "typescript"
+lake-dir = "."
+out-dir = "typescript/external"
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "typescript"
+lake-dir = "."
+out-dir = "typescript/generated"
+modules = [
+  { name = "Report", bind = { "Choice" = "../external/Choice.ts" } },
+  "Shapes.+",
+  { name = "Shapes", as = "models/Shapes" },
+  "Choice",
+]
+
+[generate.bind]
+"Settings" = "../external/Settings.ts"

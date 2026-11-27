@@ -220,11 +220,14 @@ structure ModelRef where
   exportName : String := ""
   deriving Inhabited
 
+abbrev SharedTypes := Std.HashMap Lean.Expr (System.FilePath × String)
+
 structure MarshalCfg where
   strip : Name
   typeModules : Array (Name × String) := #[]
   modelModules : Array ModelRef := #[]
   settings : Settings := {}
+  shared : Option (System.FilePath × SharedTypes) := none
 
 structure MarshalState where
   types : Array TypeDef := #[]
@@ -339,6 +342,21 @@ def foreignAlias (spec : String) : MarshalM String := do
     modify fun s => { s with foreignImports := s.foreignImports.push (a, spec) }
     return a
 
+private def pathComponents (path : System.FilePath) : List String :=
+  (path.components.foldl (fun acc part =>
+    match part, acc with
+    | "", _ | ".", _ => acc
+    | "..", prev :: rest => if prev == ".." then part :: acc else rest
+    | _, _ => part :: acc) []).reverse
+
+private def relativeModule (fromFile toFile : System.FilePath) : String :=
+  let base := pathComponents (fromFile.parent.getD ".")
+  let target := pathComponents toFile
+  let common := ((base.zip target).takeWhile fun (a, b) => a == b).length
+  let dirs := (base.drop common).map fun _ => ".."
+  let path := "/".intercalate (dirs ++ target.drop common)
+  if dirs.isEmpty then "./" ++ path else path
+
 def modelTypes (m : ModelRef) : MarshalM (String × String) := do
   if m.module.isEmpty || m.exportName.isEmpty then return ("unknown", "unknown")
   let a ← match (← get).modelImports.find? (fun (_, s, e) => s == m.module && e == m.exportName) with
@@ -429,15 +447,19 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
       throw e
     return d
   let paramArgs ← args[:ind.numParams].toArray.filterM fun a => return !(← isProof a)
-  if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) => ns.isPrefixOf c && c != ns then
-    if paramArgs.isEmpty && c != ``Subtype then
-      let saved ← get
-      discard <| typeDef c t args (typeIdentOf ns c #[]) alias? true
-      set saved
-      let a ← foreignAlias spec
-      let d := Desc.foreign a (typeIdentOf ns c #[])
+  let paramNames := paramArgs.mapM fun a => return toString (← ppExpr a)
+  if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) => ns.isPrefixOf c && (c != ns || cfg.shared.isSome) then
+    if (paramArgs.isEmpty || cfg.shared.isSome) && c != ``Subtype then
+      let ident := typeIdentOf ns c (← paramNames)
+      let d := Desc.foreign (← foreignAlias spec) ident
       modify fun s => { s with byType := s.byType.insert t d }
+      let saved ← get
+      discard <| typeDef c t args ident alias? true
+      set saved
       return d
+  if let some (file, shared) := cfg.shared then
+    if let some (owner, ident) := shared[t]? then
+      return .foreign (← foreignAlias (relativeModule file owner)) ident
   let base ← if c == ``Subtype then
       match alias? with
       | some n => pure (typeIdentOf cfg.strip n #[])
@@ -446,8 +468,7 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
         modify fun s => { s with subtypes := k + 1 }
         pure s!"Subtype{k}"
     else
-      let names ← paramArgs.mapM fun a => return toString (← ppExpr a)
-      pure (typeIdentOf cfg.strip c names)
+      pure (typeIdentOf cfg.strip c (← paramNames))
   let ident ← freshIdent base
   let d := Desc.named ident
   modify fun s => { s with byType := s.byType.insert t d }

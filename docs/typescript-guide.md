@@ -79,6 +79,10 @@ pnpm exec leanfran generate --lake-dir <dir> --output-dir <dir> [--modules <Name
 - Commit `_lean/` and `.leanfran/blocks.json`; ignore `.leanfran/workspace/`. The
   package then runs without Lean.
 
+## Generate from Lake modules
+
+Run `leanfran generate` from the directory with `leanfran.toml` to build Lake modules and generate TypeScript. Set `lang = "typescript"` in a `[[generate]]` table to share types across its modules. See the [generation guide](generate-guide.md) for the table keys, output paths, and bindings.
+
 ## Values
 
 | Lean                                | TypeScript                                                                     |
