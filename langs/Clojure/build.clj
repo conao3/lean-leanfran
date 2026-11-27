@@ -63,7 +63,7 @@
   "Files holding the version, with a pattern whose group 2 is the version and
   the text written before the version, if any."
   [["deps.edn" #"(:version \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
-   ["Main.lean" #"(def version : String := \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
+   ["LeanClj/Cli.lean" #"(def version : String := \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["src/leanfran/core.clj" #"(\(def generator-version\n(?:  .*\n)*?  \")([0-9]+\.[0-9]+\.[0-9]+)(\")"]
    ["README.md" #"(\{:mvn/version \")([0-9]+\.[0-9]+\.[0-9]+)(\"\})"]])
 

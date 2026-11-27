@@ -382,9 +382,9 @@ describe("leanfran generate", () => {
 })
 
 describe("versions", () => {
-  test("GENERATOR_VERSION is the generatorVersion of Main.lean and of leanfran-typescript", () => {
+  test("GENERATOR_VERSION is the generatorVersion of LeanTs/Cli.lean and of leanfran-typescript", () => {
     const m = /^def generatorVersion : String := "([^"]*)"$/mu.exec(
-      readFileSync(join(ROOT, "Main.lean"), "utf8"),
+      readFileSync(join(ROOT, "LeanTs/Cli.lean"), "utf8"),
     )
     expect(m?.[1]).toBe(GENERATOR_VERSION)
     expect(run(LEANFRAN_TYPESCRIPT, ["--generator-version"], ROOT).stdout).toBe(

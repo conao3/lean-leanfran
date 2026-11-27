@@ -326,7 +326,7 @@ nix develop ../..#python -c make bench
 ```
 
 - `LeanPython/EmitPy.lean`: IR → Python. `LeanPython/Marshal.lean`, `LeanPython/Generate.lean`: public
-  types and functions. `LeanPython/Check.lean`: `obligations check`. `Main.lean`: the CLI.
+  types and functions. `LeanPython/Check.lean`: `obligations check`. `LeanPython/Cli.lean`: the CLI.
 - `src/leanfran/runtime.py`, `io_externs.py`: the runtime (`lean_*` are the C names of Lean's
   externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `sync.py`, `models.py`, `cli.py`:
   `lean(...)` and `leanfran sync`. `verify.py`, `translate.py`, `check.py`: `@model` and

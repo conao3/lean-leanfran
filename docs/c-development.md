@@ -4,7 +4,7 @@ The C backend builds on Lean's native C emitter and runtime. It selects Lean def
 
 ## Layout
 
-- `langs/C/Main.lean` parses the C backend CLI.
+- `langs/C/LeanC/Cli.lean` parses the C backend CLI.
 - `langs/C/LeanC/Export.lean` selects declarations and emits the Lean export module. Its `@[export]` declarations supply stable symbols independent of the Lake package name.
 - `langs/C/LeanC/Desc.lean` describes public types and synthesizes evidence that proof fields are decidable.
 - `langs/C/LeanC/Json.lean` emits deciders and JSON codecs as Lean source. `langs/C/lean/LeanfranC/Json.lean` provides the runtime parser and serializer and imports only `Init`. The generated export module links the runtime with the user library.

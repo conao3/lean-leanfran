@@ -10,8 +10,8 @@ current=$(
     sed -n 's/^version = "\(.*\)"/\1/p' langs/Python/pyproject.toml
     sed -n 's/^  "version": "\(.*\)",$/\1/p' langs/TypeScript/package.json
     sed -n 's/.*:version "\([0-9.]*\)".*/\1/p' langs/Clojure/deps.edn
-    sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/PHP/Main.lean
-    sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/Go/Main.lean
+    sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/PHP/LeanPhp/Cli.lean
+    sed -n 's/^def version : String := "\([0-9.]*\)"$/\1/p' langs/Go/LeanGo/Cli.lean
     sed -n 's/^version = "\([0-9.]*\)"$/\1/p' langs/C/lakefile.toml
   } | sort -V | tail -n 1
 )

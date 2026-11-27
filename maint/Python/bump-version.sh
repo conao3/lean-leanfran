@@ -5,7 +5,7 @@ set -euo pipefail
 v=$1
 cd "$(dirname "$0")/../../langs/Python"
 sed -i "s/^version = \".*\"/version = \"$v\"/" pyproject.toml
-sed -i "s/^def version : String := \".*\"/def version : String := \"$v\"/" Main.lean
+sed -i "s/^def version : String := \".*\"/def version : String := \"$v\"/" LeanPython/Cli.lean
 uv lock -q
 grep -q "version = \"$v\"" pyproject.toml
-grep -q "def version : String := \"$v\"" Main.lean
+grep -q "def version : String := \"$v\"" LeanPython/Cli.lean

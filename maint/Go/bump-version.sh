@@ -9,11 +9,11 @@ fi
 cd "$(dirname "$0")/../../langs/Go"
 lean_pattern='^def version : String := "[0-9]+\.[0-9]+\.[0-9]+"$'
 go_pattern='^const Version = "[0-9]+\.[0-9]+\.[0-9]+"$'
-if ! grep -Eq "$lean_pattern" Main.lean || ! grep -Eq "$go_pattern" leanfran.go; then
-    echo 'bump-version.sh: release version declaration missing from Main.lean or leanfran.go' >&2
+if ! grep -Eq "$lean_pattern" LeanGo/Cli.lean || ! grep -Eq "$go_pattern" leanfran.go; then
+    echo 'bump-version.sh: release version declaration missing from LeanGo/Cli.lean or leanfran.go' >&2
     exit 1
 fi
-sed -Ei "s/$lean_pattern/def version : String := \"$1\"/" Main.lean
+sed -Ei "s/$lean_pattern/def version : String := \"$1\"/" LeanGo/Cli.lean
 sed -Ei "s/$go_pattern/const Version = \"$1\"/" leanfran.go
 
 git ls-files -z -- 'samples/*/go.mod' 'testdata/*/go.mod' |
