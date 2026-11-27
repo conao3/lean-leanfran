@@ -4,7 +4,7 @@ cd "$(dirname "$0")/../../langs/Go"
 export LEAN_BACKTRACE=0
 unset LEANFRAN_GO_TEST_INIT_FAILURE
 
-lake build leanfran-go
+lake --dir ../.. build leanfran
 mkdir -p test-out/_generated
 tmp=$(mktemp -d "$PWD/test-out/_generated/panic.XXXXXXXX")
 trap 'rm -r "$tmp"' EXIT
@@ -18,7 +18,7 @@ cp LeanGoTest/Panic.lean "$tmp/LeanGoTest/"
     leanc -O2 -o oracle LeanGoTest/Panic.c
 )
 generate() {
-    .lake/build/bin/leanfran-go module generate --module-name LeanGoTest.Panic \
+    ../../.lake/build/bin/leanfran --lang go module generate --module-name LeanGoTest.Panic \
         --search-path "$tmp" --internal-only "$@"
 }
 generate --roots main --main main --output text --output-file "$tmp/command/main.go"

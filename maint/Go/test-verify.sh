@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
 root=$PWD
-export LEANFRAN_GO_CLI="$root/.lake/build/bin/leanfran-go"
+export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
 mkdir -p test-out
 out=$(mktemp -d "$root/test-out/verify.XXXXXX")
 trap 'rm -rf "$out"' EXIT
@@ -62,7 +62,7 @@ LAKE
     (
         cd "$workspace"
         lake env lean -o .lake/build/lib/lean/ModelOps.olean ModelOps.lean
-        lake env "$LEANFRAN_GO_CLI" module generate --module-name ModelOps --package models             --output-dir "$out/translation/models" --output text
+        lake env "$LEANFRAN_CLI" --lang go module generate --module-name ModelOps --package models             --output-dir "$out/translation/models" --output text
     )
     cp "$root/testdata/verify/model/model_test.go" .
     go test -count=1 -run '^TestGoOperations$' .

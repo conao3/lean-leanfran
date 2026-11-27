@@ -419,13 +419,13 @@ func queryProofs(work, compiler string, modules []string, refs []obligation, dia
 	if err := writeIfChanged(path, data); err != nil {
 		return nil, err
 	}
-	args := append([]string{"env", compiler, "obligations", "check", "--modules"}, modules...)
+	args := append([]string{"env", compiler, "--lang", "go", "obligations", "check", "--modules"}, modules...)
 	args = append(args, "--obligations", path)
 	cmd := command(work, "lake", args...)
 	cmd.Stderr = diag
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("leanfran-go obligations check: %w", err)
+		return nil, fmt.Errorf("leanfran --lang go obligations check: %w", err)
 	}
 	var checked []obligation
 	if err := json.Unmarshal(output, &checked); err != nil || len(checked) != len(refs) {

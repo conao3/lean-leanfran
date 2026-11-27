@@ -8,7 +8,7 @@ CHECK_TARGETS :=
 include make/*.mk
 
 build:
-	lake build leanfran-go
+	lake --dir ../.. build leanfran
 
 check: format-check externs-check $(CHECK_TARGETS)
 

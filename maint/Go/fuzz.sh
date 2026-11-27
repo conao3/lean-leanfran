@@ -14,8 +14,9 @@ run=$(mktemp -d "$out/run.XXXXXXXX")
 trap 'rm -r "$run"' EXIT
 go run ../../maint/Go/fuzz-gen/main.go "$seed" "$count" > "$run/rows.tsv"
 
-lake build leanfran-go oracle-fuzz
-.lake/build/bin/leanfran-go module generate --module-name LeanGoTest.FuzzMain \
+lake --dir ../.. build leanfran
+lake build oracle-fuzz
+../../.lake/build/bin/leanfran --lang go module generate --module-name LeanGoTest.FuzzMain \
     --roots main --main main --search-path .lake/build/lib/lean --internal-only \
     --output text --output-file "$run/main.go"
 test -z "$(gofmt -l "$run/main.go")"

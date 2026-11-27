@@ -3,12 +3,13 @@ set -euo pipefail
 export LEAN_BACKTRACE=0
 cd "$(dirname "$0")/../../langs/Go"
 
-lake build leanfran-go oracle LeanGoTest.Unsupported
+lake --dir ../.. build leanfran
+lake build oracle LeanGoTest.Unsupported
 mkdir -p test-out/_generated
 
-compiler=.lake/build/bin/leanfran-go
+compiler=../../.lake/build/bin/leanfran
 generate() {
-    "$compiler" module generate --search-path .lake/build/lib/lean --internal-only "$@"
+    "$compiler" --lang go module generate --search-path .lake/build/lib/lean --internal-only "$@"
 }
 
 generate --module-name LeanGoTest.OracleMain --roots main LeanGoTest.ControlIr.impossible \
@@ -70,7 +71,7 @@ GO
 gofmt -w test-out/_generated/host/main.go
 CGO_ENABLED=0 go build -o test-out/sum-host test-out/_generated/host/main.go
 test "$(test-out/sum-host)" = 500000500000
-test "$("$compiler" --generator-version)" = "$(awk '/^const GeneratorVersion = / { print $NF }' leanfran.go)"
+test "$("$compiler" --lang go --generator-version)" = "$(awk '/^const GeneratorVersion = / { print $NF }' leanfran.go)"
 
 status=0
 generate --module-name LeanGoTest.Unsupported --output text \

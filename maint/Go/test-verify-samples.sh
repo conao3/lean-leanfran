@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
 root=$PWD
-export LEANFRAN_GO_CLI="$root/.lake/build/bin/leanfran-go"
+export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
 mkdir -p test-out
 out=$(mktemp -d "$root/test-out/verified.XXXXXX")
 trap 'rm -rf "$out"' EXIT

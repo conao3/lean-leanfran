@@ -52,7 +52,7 @@ func checkVersions(dir, toolchain, compiler string) error {
 	if want == nil {
 		return fmt.Errorf("unsupported lean-toolchain %q", toolchain)
 	}
-	const selectCompiler = "set LEANFRAN_GO_CLI to the matching compiler"
+	const selectCompiler = "set LEANFRAN_CLI to the matching compiler"
 	for _, check := range []struct {
 		flag, name, version, fix string
 	}{
@@ -60,9 +60,9 @@ func checkVersions(dir, toolchain, compiler string) error {
 		{"--generator-version", "generator version", strconv.Itoa(generatorVersion), "rebuild the compiler from the Go module's source revision"},
 		{"--lean-version", "Lean version", want[1], "use a compiler built with the Lean version in lean-toolchain"},
 	} {
-		output, err := command(dir, compiler, check.flag).Output()
+		output, err := command(dir, compiler, "--lang", "go", check.flag).Output()
 		if err != nil {
-			return fmt.Errorf("%s %s: %w; %s and %s", compiler, check.flag, processError(err), check.fix, selectCompiler)
+			return fmt.Errorf("%s --lang go %s: %w; %s and %s", compiler, check.flag, processError(err), check.fix, selectCompiler)
 		}
 		if got := strings.TrimSpace(string(output)); got != check.version {
 			return fmt.Errorf("compiler %s %q, expected %s; %s and %s", check.name, got, check.version, check.fix, selectCompiler)
@@ -85,18 +85,37 @@ func checkVersions(dir, toolchain, compiler string) error {
 	return nil
 }
 
-func resolveCompiler(value string) (string, error) {
-	if value == "" {
-		value = os.Getenv("LEANFRAN_GO_CLI")
+func resolveCompiler() (string, error) {
+	const install = "install it with nix profile install 'github:conao3/lean-leanfran#leanfran' or set LEANFRAN_CLI to its path"
+	if value := os.Getenv("LEANFRAN_CLI"); value != "" {
+		path, err := exec.LookPath(value)
+		if err != nil {
+			return "", fmt.Errorf("find leanfran using LEANFRAN_CLI: %w; %s", err, install)
+		}
+		return filepath.Abs(path)
 	}
-	if value == "" {
-		value = "leanfran-go"
-	}
-	path, err := exec.LookPath(value)
+	executable, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("find leanfran-go: %w; install it with nix profile install 'github:conao3/lean-leanfran#go' or set LEANFRAN_GO_CLI to its path", err)
+		return "", fmt.Errorf("identify the running Go CLI: %w", err)
 	}
-	return filepath.Abs(path)
+	self, err := os.Stat(executable)
+	if err != nil {
+		return "", fmt.Errorf("stat the running Go CLI: %w", err)
+	}
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if !filepath.IsAbs(dir) {
+			continue
+		}
+		path, err := exec.LookPath(filepath.Join(dir, "leanfran"))
+		if err != nil {
+			continue
+		}
+		candidate, err := os.Stat(path)
+		if err == nil && !os.SameFile(self, candidate) {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("find leanfran on PATH: %w; %s", exec.ErrNotFound, install)
 }
 
 func lakeOutput(dir string, verbose bool, args ...string) (string, error) {
@@ -173,9 +192,9 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, verbos
 	if err := os.WriteFile(batch, data, 0o600); err != nil {
 		return nil, err
 	}
-	data, err = command(work, "lake", "env", compiler, "module", "generate", "--batch", batch, "--output", "json").Output()
+	data, err = command(work, "lake", "env", compiler, "--lang", "go", "module", "generate", "--batch", batch, "--output", "json").Output()
 	if err != nil {
-		return nil, fmt.Errorf("leanfran-go: %w\n%s", processError(err), data)
+		return nil, fmt.Errorf("leanfran --lang go: %w\n%s", processError(err), data)
 	}
 
 	var summaries []struct {
@@ -184,12 +203,12 @@ func (p *project) generate(blocks []*block, work, stage, compiler string, verbos
 		Types     []verify.NamedType
 	}
 	if err := json.Unmarshal(data, &summaries); err != nil || len(summaries) != len(blocks) {
-		return nil, fmt.Errorf("invalid leanfran-go batch result: %s", data)
+		return nil, fmt.Errorf("invalid leanfran --lang go batch result: %s", data)
 	}
 	var changes []change
 	for i, b := range blocks {
 		if summaries[i].Module != b.module {
-			return nil, fmt.Errorf("invalid leanfran-go batch module %q", summaries[i].Module)
+			return nil, fmt.Errorf("invalid leanfran --lang go batch module %q", summaries[i].Module)
 		}
 		b.wrappers = summaries[i].Functions
 		b.verifyTypes = summaries[i].Types

@@ -133,7 +133,7 @@ def collectPublic (types roots : Array Name) : MarshalM PublicModule := do
 
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
     IO (PublicModule × Environment) := do
-  let ctx : Core.Context := { fileName := "<leanfran-go>", fileMap := default, maxHeartbeats := 0 }
+  let ctx : Core.Context := { fileName := "<leanfran --lang go>", fileMap := default, maxHeartbeats := 0 }
   let ((r, _), st) ← ((((collectPublic types roots).run {}).run cfg).run').toIO ctx { env }
   return (r, st.env)
 

@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
 root=$PWD
-export LEANFRAN_GO_CLI="$root/.lake/build/bin/leanfran-go"
+export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
 mkdir -p test-out
 out=$(mktemp -d "$root/test-out/embed.XXXXXX")
 trap 'rm -rf "$out"' EXIT
@@ -12,7 +12,9 @@ go build -o "$out/leanfran" ./cmd/leanfran
 cd "$out"
 
 go get -tool github.com/conao3/leanfran-go/cmd/leanfran
-go tool leanfran sync
+mkdir cli-path
+ln -s "$out/leanfran" cli-path/leanfran
+env PATH="$out/cli-path:${LEANFRAN_CLI%/*}:$PATH" LEANFRAN_CLI= leanfran sync
 go tool leanfran check --dir consumer
 go vet ./...
 go test ./...
@@ -56,9 +58,10 @@ expect_failure() {
     test "$status" = 1
 }
 
-expect_failure env PATH="$out/tools" LEANFRAN_GO_CLI= go tool leanfran sync
-grep -Fq "nix profile install 'github:conao3/lean-leanfran#go'" result.err
-grep -Fq 'LEANFRAN_GO_CLI' result.err
+expect_failure env PATH="$out/cli-path:$out/tools" LEANFRAN_CLI= leanfran sync
+grep -Fq "find leanfran on PATH" result.err
+grep -Fq "nix profile install 'github:conao3/lean-leanfran#leanfran'" result.err
+grep -Fq 'LEANFRAN_CLI' result.err
 unchanged
 
 list_stale() {
@@ -82,7 +85,7 @@ check_edit types/types.go 'Std.Data.HashMap' 'Std' types consumer
 check_edit types/types.go ':= ⟨value⟩' ':= { value := value }' types consumer
 check_edit types/types.go 'min_len=2' 'min_len=3' types consumer
 check_edit leanfran.config.json '"\."' '"types", "consumer"' types consumer
-version=$("$LEANFRAN_GO_CLI" --generator-version)
+version=$("$LEANFRAN_CLI" --lang go --generator-version)
 check_edit types/leanfran.json "\"generator_version\": $version" '"generator_version": 0' types
 
 mv consumer/leanfran_funcs_gen.go missing
@@ -116,24 +119,25 @@ unchanged
 
 cat > wrong-compiler <<'COMPILER'
 #!/usr/bin/env bash
-if [[ "$1" == "$WRONG_FLAG" ]]; then
+if [[ "$3" == "$WRONG_FLAG" ]]; then
     printf '%s\n' "$WRONG_VERSION"
 else
-    exec "$LEANFRAN_GO_CLI" "$@"
+    exec "$REAL_COMPILER" "$@"
 fi
 COMPILER
 chmod +x wrong-compiler
-release=$("$LEANFRAN_GO_CLI" --version)
-lean=$("$LEANFRAN_GO_CLI" --lean-version)
+export REAL_COMPILER="$LEANFRAN_CLI"
+release=$("$LEANFRAN_CLI" --lang go --version)
+lean=$("$LEANFRAN_CLI" --lang go --lean-version)
 for mode in sync check; do
-    expect_failure env WRONG_FLAG=--version WRONG_VERSION=9.9.9 go tool leanfran "$mode" --leanfran-go ./wrong-compiler
+    expect_failure env LEANFRAN_CLI=./wrong-compiler WRONG_FLAG=--version WRONG_VERSION=9.9.9 go tool leanfran "$mode"
     grep -Fq "compiler release version \"9.9.9\", expected $release" result.err
     grep -Fq "update the Go module to the compiler's release" result.err
-    expect_failure env WRONG_FLAG=--lean-version WRONG_VERSION=9.9.9 go tool leanfran "$mode" --leanfran-go ./wrong-compiler
+    expect_failure env LEANFRAN_CLI=./wrong-compiler WRONG_FLAG=--lean-version WRONG_VERSION=9.9.9 go tool leanfran "$mode"
     grep -Fq "compiler Lean version \"9.9.9\", expected $lean" result.err
-    grep -Fq 'set LEANFRAN_GO_CLI to the matching compiler' result.err
+    grep -Fq 'set LEANFRAN_CLI to the matching compiler' result.err
 done
-expect_failure env WRONG_FLAG=--generator-version WRONG_VERSION=0 go tool leanfran sync --leanfran-go ./wrong-compiler
+expect_failure env LEANFRAN_CLI=./wrong-compiler WRONG_FLAG=--generator-version WRONG_VERSION=0 go tool leanfran sync
 grep -Fq "compiler generator version \"0\", expected $version" result.err
 unchanged
 

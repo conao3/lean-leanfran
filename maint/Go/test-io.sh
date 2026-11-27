@@ -6,15 +6,16 @@ export LEAN_BACKTRACE=0
 export LEANFRAN_GO_IO_VALUE='parent environment'
 unset LEANFRAN_GO_IO_UNSET
 
-lake build leanfran-go oracle-io
+lake --dir ../.. build leanfran
+lake build oracle-io
 mkdir -p test-out
-compiler="$PWD/.lake/build/bin/leanfran-go"
+compiler="$PWD/../../.lake/build/bin/leanfran"
 oracle="$PWD/.lake/build/bin/oracle-io"
 root=LeanGoTest.Io.run
 fixture_root=$(mktemp -d "$PWD/test-out/_io.XXXXXX")
 trap 'rm -rf -- "$fixture_root"' EXIT
 
-"$compiler" module generate --module-name LeanGoTest.Io --roots "$root" --main "$root" \
+"$compiler" --lang go module generate --module-name LeanGoTest.Io --roots "$root" --main "$root" \
     --search-path .lake/build/lib/lean --internal-only --output text \
     --output-file "$fixture_root/main.go"
 test -z "$(gofmt -l "$fixture_root/main.go")"
