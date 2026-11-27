@@ -1,0 +1,13 @@
+[[generate]]
+lang = "clojure"
+lake-dir = "."
+out-dir = "clojure/src"
+path = "external"
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "clojure"
+lake-dir = "."
+out-dir = "clojure/src"
+path = "generated"
+modules = ["Report", "Shapes.+", "Shapes", { name = "Choice", as = "flags" }]

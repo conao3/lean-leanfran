@@ -2,6 +2,7 @@ import Lake.Toml.Load
 import LeanRust.Cli
 import LeanTs.Marshal
 import LeanPhp.Marshal
+import LeanClj.Cli
 
 open Lean Lake System
 
@@ -15,12 +16,12 @@ Runs every [[generate]] table of leanfran.toml:
   --output json|text     Format of the summary (default: text)
 
 [[generate]]
-  lang = \"rust\" | \"python\" | \"go\" | \"typescript\" | \"php\"
+  lang = \"rust\" | \"python\" | \"go\" | \"typescript\" | \"php\" | \"clojure\"
   lake-dir = \"<Lake package>\"
   out-dir = \"<directory of the generated code>\"
-  path = \"<Rust module path, Python package, Go import path, or PHP namespace (required for these languages)>\"
+  path = \"<Rust module path, Python package, Go import path, PHP namespace, or Clojure namespace prefix (required for these languages)>\"
   modules = [\"<Module>\", \"<Module>.*\", { name = \"<Module>\", as = \"<name>\", bind = { \"<Namespace>\" = \"<path>\" } }]
-  bind = { \"<Namespace>\" = \"<path>\" }
+  bind = { \"<Namespace>\" = \"<path>\" }   (not for clojure)
 
 exit codes: 0 success, 252 invalid parameters or leanfran.toml, 254 input that cannot be converted, 255 other errors"
 
@@ -44,7 +45,7 @@ structure Module where
   output : String
   bind : Array (Name × String)
 
-def languages : Array String := #["rust", "python", "go", "typescript", "php"]
+def languages : Array String := #["rust", "python", "go", "typescript", "php", "clojure"]
 
 private def keyString : Name → String
   | .str .anonymous s => s
@@ -92,7 +93,10 @@ private def entry (root : FilePath) (index : Nat) : Toml.Value → Except String
       | some (.array _ values) => values.mapM moduleSpec
       | _ => throw "'modules' must be an array"
     if modules.isEmpty then throw "'modules' is empty"
-    return { index, lang, lakeDir := root / lakeDir, outDir := root / outDir, path, modules, bind := ← bindings t `bind }
+    let bind ← bindings t `bind
+    if lang == "clojure" && (!bind.isEmpty || modules.any (!·.bind.isEmpty)) then
+      throw "'bind' is not supported for clojure; generated namespaces pass values as maps"
+    return { index, lang, lakeDir := root / lakeDir, outDir := root / outDir, path, modules, bind }
   | _ => throw "must be a table"
 
 def readConfig (root : FilePath) : IO (Except String (Array Entry)) := do
@@ -122,6 +126,7 @@ def defaultOutput (lang : String) (module : Name) : String :=
     | _ => module.toString
   else if lang == "typescript" then "/".intercalate (module.components.map LeanTs.componentString)
   else if lang == "php" then LeanPhp.componentString module
+  else if lang == "clojure" then ".".intercalate (module.components.map fun c => LeanClj.kebab (c.toString (escape := false)))
   else LeanRust.Cli.rustModName module
 
 /-- How the language names the generated code of a module of a table. -/
@@ -130,6 +135,7 @@ def target (lang path output : String) : String :=
   | "rust" => s!"{path}::{output}"
   | "python" => s!"{path}.{output}"
   | "php" => s!"{path}\\{output}"
+  | "clojure" => s!"{path}.{output}"
   | _ => s!"{path}/{output}"
 
 /-- Module bindings override table bindings. Longer namespaces come first. -/
@@ -191,6 +197,16 @@ private def package (lake : String) (lakeDir : FilePath) (entries : Array Entry)
   let built ← if ← lib.isDir then LeanRust.Cli.oleanModules lib lib .anonymous else pure #[]
   return .ok { searchPath := ((leanPath.splitOn ":").filter (!·.isEmpty)).toArray, sysroot, built }
 
+/-- Dot-separated segments that start with a letter and continue with letters, digits, `-` and `_`. -/
+def cljNamespace (s : String) : Bool :=
+  (s.splitOn ".").all fun seg => match seg.toList with
+    | c :: cs => c.isAlpha && cs.all fun c => c.isAlphanum || c == '-' || c == '_'
+    | [] => false
+
+/-- The source file of the namespace of a module of a Clojure table, as `project generate` writes it. -/
+def cljFile (e : Entry) (m : Module) : FilePath :=
+  e.outDir / LeanClj.Cli.namespacePath (target e.lang e.path m.output)
+
 private def expand (e : Entry) (built : Array Name) : Except String (Array Module) := do
   let mut out : Array Module := #[]
   for spec in e.modules do
@@ -206,10 +222,14 @@ private def expand (e : Entry) (built : Array Name) : Except String (Array Modul
       let output := spec.as?.getD (defaultOutput e.lang name)
       if e.lang == "php" && !LeanPhp.phpIdentifier output then
         throw s!"'{output}' is not a PHP identifier; supply a PHP identifier with 'as' for module '{name}'"
+      if e.lang == "clojure" && !cljNamespace output then
+        throw s!"'{output}' is not a Clojure namespace; supply one with 'as' for module '{name}'"
       out := out.push { name, output, bind := spec.bind }
   for m in out do
     let sameName (other : Module) :=
-      if e.lang == "php" then other.output.toLower == m.output.toLower else other.output == m.output
+      if e.lang == "php" then other.output.toLower == m.output.toLower
+      else if e.lang == "clojure" then cljFile e other == cljFile e m
+      else other.output == m.output
     if (out.filter sameName).size > 1 then
       throw s!"two modules are generated as '{m.output}'; name one of them with 'as'"
   return out
@@ -252,7 +272,32 @@ def main (args : List String) : IO UInt32 := do
     let pkg ← match ← package lake lakeDir mine with
       | .ok pkg => pure pkg
       | .error e => return ← fail 255 e
-    for lang in languages do
+    for e in mine.filter (·.lang == "clojure") do
+      let modules ← match expand e pkg.built with
+        | .ok modules => pure modules
+        | .error message => return ← fail 252 s!"[[generate]] {e.index}: {message}"
+      for m in modules do
+        let ns := target e.lang e.path m.output
+        let file := cljFile e m
+        let child ← IO.Process.output {
+          cmd := self.toString
+          args := #["--lang", "clojure", "module", "generate-namespace", "--module-name", m.name.toString,
+            "--namespace", ns, "--output-file", file.toString, "--output", o.output, "--search-path"] ++ pkg.searchPath
+          cwd := root
+          env := #[("LEAN_SYSROOT", some pkg.sysroot)] }
+        IO.eprint child.stderr
+        code := max code child.exitCode
+        if o.output == "json" then
+          match Json.parse child.stdout with
+          | .ok (.obj fields) =>
+            summaries := summaries.push <| Json.mkObj ([("module", toJson m.name.toString), ("namespace", toJson ns)] ++
+              fields.toArray.toList.map fun ⟨k, v⟩ => (k, v))
+          | _ => IO.print child.stdout
+        else if child.exitCode == 0 then
+          IO.println s!"{m.name}: namespace {ns}\n  wrote {file}"
+          for line in child.stdout.splitOn "\n" do
+            unless line.isEmpty do IO.println s!"  {line}"
+    for lang in languages.erase "clojure" do
       let mut jobs : Array Json := #[]
       let mut rustDirs : Array (FilePath × Array Module) := #[]
       for e in mine.filter (·.lang == lang) do

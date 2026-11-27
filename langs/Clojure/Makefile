@@ -27,8 +27,12 @@ test: build
 	clojure -M:test
 	$(MAKE) -C samples test
 
+.PHONY: test-generate
+test-generate: build
+	../../maint/test-generate.sh ../../.lake/build/bin/leanfran clojure
+
 .PHONY: check
-check: format-check lint test
+check: format-check lint test test-generate
 
 .PHONY: jar
 jar:
