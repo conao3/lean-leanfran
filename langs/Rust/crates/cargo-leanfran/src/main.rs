@@ -387,7 +387,7 @@ impl Specs {
             });
         }
         Err(format!(
-            "{at}: `{shown}` ({unit}) is not a public function generated from Lean (by a lean! block or `leanfran project generate`)"
+            "{at}: `{shown}` ({unit}) is not a public function generated from Lean (by a lean! block or `leanfran --lang rust project generate`)"
         ))
     }
 }

@@ -10,14 +10,14 @@ def version : String := "0.13.3"
     leanfran-build checks it and puts it into its cache keys. -/
 def generatorVersion : String := "6"
 
-def usage : String := "usage: leanfran [--version] [--generator-version] <command> <subcommand> [parameters]
+def usage : String := "usage: leanfran --lang rust [--version] [--generator-version] <command> <subcommand> [parameters]
 
 commands:
   module generate   Emit a Rust module for functions of a Lean module
   project generate  Build a lake project and emit a Rust module per Lean module
   crate check       Check the proofs of the obligations of a crate's Lean package
 
-leanfran module generate
+leanfran --lang rust module generate
   --module-name <Name>        Lean module to import (required unless --batch)
   --roots <Name> ...          Functions to export (default: the module's public definitions)
   --namespace <Name>          Namespace removed from public Rust names (default: the module name)
@@ -37,13 +37,13 @@ leanfran module generate
   --internal-only             Do not emit public functions
   --output json|text          Format of the summary (skipped definitions with reasons)
 
-leanfran crate check
+leanfran --lang rust crate check
   --lake-dir <dir>            The crate's Lean package, built (required)
   --obligations <file>        JSON array of {\"model\": <Lean name>, \"label\": <label>} (required)
   --modules <Name> ...        Modules to import (default: every module the package built)
   Prints a JSON array of {\"model\", \"label\", \"status\", \"axioms\"?, \"file\"?, \"line\"?}
 
-leanfran project generate
+leanfran --lang rust project generate
   --lake-dir <dir>            Lake project to build (required)
   --output-dir <dir>          Directory of the Rust modules and mod.rs (required)
   --modules <Name> ...        Modules to emit (default: every module the package builds)
@@ -116,7 +116,7 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   | a :: _ => .error s!"unknown parameter: {a}"
 
 def fail (code : UInt32) (msg : String) : IO UInt32 := do
-  IO.eprintln s!"leanfran: {msg}"
+  IO.eprintln s!"leanfran --lang rust: {msg}"
   return code
 
 structure Job where
@@ -175,11 +175,11 @@ def printSummary (o : Opts) (toStderr : Bool) (j : Json) : IO Unit := do
     let get (k : String) := (j.getObjValD k)
     let mod := (get "module").getStr?.toOption.getD ""
     match (get "error").getStr? with
-    | .ok e => IO.eprintln s!"leanfran: {mod}: {e}"
+    | .ok e => IO.eprintln s!"leanfran --lang rust: {mod}: {e}"
     | .error _ =>
       out s!"{mod}: {get "functions"} functions, {get "externs"} externs, {(get "public").getArr?.toOption.getD #[] |>.size} public"
       for s in (get "skipped").getArr?.toOption.getD #[] do
-        IO.eprintln s!"leanfran: skipped {(s.getObjValD "name").getStr?.toOption.getD ""}: {(s.getObjValD "reason").getStr?.toOption.getD ""}"
+        IO.eprintln s!"leanfran --lang rust: skipped {(s.getObjValD "name").getStr?.toOption.getD ""}: {(s.getObjValD "reason").getStr?.toOption.getD ""}"
 
 def importAll (o : Opts) (mods : Array Name) : IO (Except Name Environment) := do
   initSearchPath (← o.sysroot.getDM findSysroot) o.searchPath.toList

@@ -4,13 +4,13 @@
 
 ## Install
 
-Install the Lean compiler and verification tools:
+Install the leanfran compiler:
 
 ```sh
-nix profile install 'github:conao3/lean-leanfran#rust'
+nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
-Generation requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Add these dependencies to your crate:
+Use `leanfran --lang rust` to run the compiler directly. Generation requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Add these dependencies to your crate:
 
 ```toml
 [dependencies]

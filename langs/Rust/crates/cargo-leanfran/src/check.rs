@@ -175,19 +175,19 @@ pub fn check(c: &Crate) -> Result<(), String> {
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let qfile = tmp.join("obligations.json");
     fs::write(&qfile, serde_json::Value::Array(query).to_string()).map_err(|e| e.to_string())?;
-    println!("leanfran crate check");
+    println!("leanfran --lang rust crate check");
     let result = run(
         Command::new(tool("LEANFRAN_CLI", "leanfran"))
-            .args(["crate", "check", "--lake-dir"])
+            .args(["--lang", "rust", "crate", "check", "--lake-dir"])
             .arg(&lean)
             .arg("--obligations")
             .arg(&qfile)
             .arg("--modules")
             .args(&modules),
-        "leanfran crate check",
+        "leanfran --lang rust crate check",
     )?;
-    let result: serde_json::Value =
-        serde_json::from_str(&result).map_err(|e| format!("leanfran crate check: {e}"))?;
+    let result: serde_json::Value = serde_json::from_str(&result)
+        .map_err(|e| format!("leanfran --lang rust crate check: {e}"))?;
     let result = result.as_array().cloned().unwrap_or_default();
     let get = |j: &serde_json::Value, k: &str| {
         j.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string()
