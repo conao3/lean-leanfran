@@ -292,7 +292,8 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) : Mars
   if ind.isRec && ind.ctors.length == 1 then throwError "recursive structure `{t}`"
   let cfg ← read
   let strip := cfg.strip
-  let mut py := "_".intercalate (pyPath strip c).toList
+  let typeStrip := if cfg.pythonPath.isSome && c == strip then .anonymous else strip
+  let mut py := "_".intercalate (pyPath typeStrip c).toList
   let ext := cfg.typeModules.find? fun (ns, _, _) => ns.isPrefixOf c && c != ns
   if let some (ns, pymod, _) := ext then
     py := (← importAlias pymod) ++ "." ++ ".".intercalate (pyPath ns c).toList

@@ -17,6 +17,7 @@ func main() {
 	rect, _ := area.Place(template.Seed)
 	_, _ = report.Total([]report.Line{{Origin: point, Size: rect}})
 	_ = area.Count(shapes.Counter{Value: 4})
+	_ = area.ShapeCount(shapes.Shapes{Count: 6})
 
 	var status shapes.Status = report.Status(area.Packet(shapes.StatusReady()))
 	_ = status

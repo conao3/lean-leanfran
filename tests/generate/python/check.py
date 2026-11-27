@@ -9,6 +9,7 @@ assert type(rect) is area.Rect
 assert type(rect.origin) is shapes.Point
 assert report.total([report.Line(label="", origin=point, size=rect)]) == 12
 assert area.count(shapes.Counter(value=4)) == shapes.Counter(value=5)
+assert area.shapeCount(shapes.Shapes(count=6)) == 6
 
 packet = area.packet(shapes.Status.ready)
 assert type(packet) is area.Shapes_Packet_Shapes_Status

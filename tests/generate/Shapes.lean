@@ -28,3 +28,6 @@ end Shapes.Area
 
 structure Shapes.Template where
   seed : Shapes.Area.Seed
+
+structure Shapes where
+  count : UInt64

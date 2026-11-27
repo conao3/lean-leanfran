@@ -28,4 +28,5 @@ pub fn check(point: shapes::Point) -> bool {
         && external_flag.enabled
         && setting.value == 3
         && report::grams(shapes_area::weigh(7)) == 7
+        && shapes_area::shape_count(shapes::Shapes { count: 6 }) == 6
 }

@@ -21,4 +21,6 @@ def mainFlag (flag : Choice.Flag) : Choice.Flag := flag
 
 def weigh (grams : UInt64) : Loose.Weight := ⟨grams⟩
 
+def shapeCount (s : Shapes) : UInt64 := s.count
+
 end Shapes.Area
