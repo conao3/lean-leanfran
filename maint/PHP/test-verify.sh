@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-compiler="$(realpath .lake/build/bin/leanfran-php)"
+compiler="$(realpath ../../.lake/build/bin/leanfran)"
 app="$(realpath -m test-out/verify)"
 cd "$app"
 
@@ -19,7 +19,7 @@ root = "Oracle"
 srcDir = "verification"
 TOML
 generate_semantics() {
-    lake env "$compiler" module generate --internal-only --module-name Semantics --class 'Verification\Semantics' \
+    lake env "$compiler" --lang php module generate --internal-only --module-name Semantics --class 'Verification\Semantics' \
         --roots Php.add Php.sub Php.mul Php.neg Php.abs Php.intdiv Php.mod Php.fdiv Php.strlen Php.concat Php.minFloat Php.maxFloat \
         Semantics.intCompare Semantics.intMin Semantics.intMax Semantics.floatCompare Semantics.boolCompare Semantics.stringEqual \
         Semantics.index Semantics.count Semantics.matchOne Semantics.floatAdd Semantics.floatSub Semantics.floatMul \
@@ -57,7 +57,7 @@ printf 'Arithmetic model mutation detected and restored.\n'
 
 check_result() {
     local expected="$1" file="$2" code=0
-    vendor/bin/leanfran check --leanfran-php "$compiler" --require proved > "$file" 2>&1 || code=$?
+    LEANFRAN_CLI="$compiler" vendor/bin/leanfran check --require proved > "$file" 2>&1 || code=$?
     if [[ "$code" != "$expected" ]]; then
         cat "$file"
         printf 'Expected check exit %s, got %s\n' "$expected" "$code" >&2

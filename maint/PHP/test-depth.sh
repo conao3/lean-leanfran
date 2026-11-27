@@ -6,8 +6,9 @@ export LEAN_BACKTRACE=0
 module=LeanPhpTest.ControlDepth
 out=test-out/depth
 mkdir -p "$out"
-lake build leanfran-php oracle-control-depth
-.lake/build/bin/leanfran-php module generate --module-name "$module" --roots "$module.run" \
+lake --dir ../.. build leanfran
+lake build oracle-control-depth
+../../.lake/build/bin/leanfran --lang php module generate --module-name "$module" --roots "$module.run" \
     --main "$module.run" --search-path .lake/build/lib/lean --internal-only --output text \
     --output-file "$out/Depth.php"
 php -l "$out/Depth.php"

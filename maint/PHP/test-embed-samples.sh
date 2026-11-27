@@ -2,7 +2,7 @@
 set -euo pipefail
 
 out=$(realpath -m test-out/samples)
-compiler=$(realpath .lake/build/bin/leanfran-php)
+compiler=$(realpath ../../.lake/build/bin/leanfran)
 export COMPOSER_DISABLE_NETWORK=1
 
 for sample in embed-range embed-orders; do
@@ -14,7 +14,7 @@ for sample in embed-range embed-orders; do
     bash samples/run.sh "$project" main.php
     (
         cd "$project"
-        vendor/bin/leanfran sync --leanfran-php "$compiler"
+        LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
         vendor/bin/leanfran status
         diff -ru "$OLDPWD/samples/$sample/src" src
     )

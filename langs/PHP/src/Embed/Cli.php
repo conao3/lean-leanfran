@@ -14,9 +14,11 @@ final class Cli
 {
     private const USAGE = <<<'USAGE'
         Usage:
-          leanfran sync [--package dir] [--leanfran-php path]
+          leanfran sync [--package dir] [--leanfran path]
           leanfran status [--package dir]
-          leanfran check [--package dir] [--leanfran-php path] [--require proved]
+          leanfran check [--package dir] [--leanfran path] [--require proved]
+
+        Compiler lookup: --leanfran, LEANFRAN_CLI, then leanfran on PATH.
         USAGE;
 
     /** @param list<string> $args */
@@ -38,8 +40,8 @@ final class Cli
                     !in_array(
                         $option,
                         match ($command) {
-                            'sync' => ['--package', '--leanfran-php'],
-                            'check' => ['--package', '--leanfran-php', '--require'],
+                            'sync' => ['--package', '--leanfran'],
+                            'check' => ['--package', '--leanfran', '--require'],
                             default => ['--package'],
                         },
                         true,
@@ -55,7 +57,7 @@ final class Cli
                 $options[$option] = $value;
             }
             $dir = $options['--package'] ?? '.';
-            $compiler = $options['--leanfran-php'] ?? null;
+            $compiler = $options['--leanfran'] ?? null;
             $require = $options['--require'] ?? null;
             if ($require !== null && $require !== 'proved') {
                 throw new RuntimeException('--require expects proved');

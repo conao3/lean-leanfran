@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if (( $# < 2 )); then
-    echo 'usage: samples/run.sh SAMPLE_DIR [--verify COMPILER] PHP_ARGS...' >&2
+    echo 'usage: samples/run.sh SAMPLE_DIR [--verify] PHP_ARGS...' >&2
     exit 2
 fi
 
@@ -11,8 +11,8 @@ shift
 php -r 'printf("%s: PHP %s\n", basename(getcwd()), PHP_VERSION);'
 composer update --no-interaction --no-progress --no-audit
 if [[ "$1" == --verify ]]; then
-    vendor/bin/leanfran check --leanfran-php "$2" --require proved
-    shift 2
+    vendor/bin/leanfran check --require proved
+    shift
 fi
 output=$(mktemp)
 trap 'rm -f "$output"' EXIT

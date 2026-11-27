@@ -7,16 +7,17 @@ export LEANFRAN_PHP_IO_VALUE='parent environment'
 unset LEANFRAN_PHP_IO_UNSET
 
 php -d error_reporting=E_ALL -d display_errors=1 ../../maint/PHP/extern-gap.php
-lake build leanfran-php oracle-io
+lake --dir ../.. build leanfran
+lake build oracle-io
 mkdir -p test-out
-compiler="$PWD/.lake/build/bin/leanfran-php"
+compiler="../../.lake/build/bin/leanfran"
 oracle="$PWD/.lake/build/bin/oracle-io"
 autoload="$PWD/vendor/autoload.php"
 root=LeanPhpTest.Io.run
 fixture_root=$(mktemp -d "$PWD/test-out/io.XXXXXX")
 trap 'rm -rf -- "$fixture_root"' EXIT
 
-"$compiler" module generate --module-name LeanPhpTest.Io --roots "$root" --main "$root" \
+"$compiler" --lang php module generate --module-name LeanPhpTest.Io --roots "$root" --main "$root" \
     --search-path .lake/build/lib/lean --internal-only --output text \
     --output-file "$fixture_root/Io.php"
 php -l "$fixture_root/Io.php"

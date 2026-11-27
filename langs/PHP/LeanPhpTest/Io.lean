@@ -157,7 +157,7 @@ private def processes : IO Unit := do
   let bytes ← child.stdout.read 3
   let eof ← child.stdout.read 1
   IO.println s!"spawn: {repr line} {bytes.toList} {eof.isEmpty} {← child.wait}"
-  let missing ← IO.Process.output { cmd := "leanfran-php-io-no-such-command" }
+  let missing ← IO.Process.output { cmd := "leanfran-io-no-such-command" }
   IO.println s!"missing: {missing.exitCode} {repr missing.stderr}"
   let dir ← IO.Process.output { cmd := "sh", cwd := some "missing-dir" }
   IO.println s!"bad cwd: {dir.exitCode} {repr dir.stderr}"

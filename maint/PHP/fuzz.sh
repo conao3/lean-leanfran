@@ -14,8 +14,9 @@ input=$(mktemp -d "$out/run.XXXXXXXX")
 trap 'rm -r "$input"' EXIT
 php ../../maint/PHP/fuzz-gen.php "$seed" "$count" > "$input/rows.tsv"
 
-lake build leanfran-php oracle-fuzz
-.lake/build/bin/leanfran-php module generate --module-name LeanPhpTest.Fuzz \
+lake --dir ../.. build leanfran
+lake build oracle-fuzz
+../../.lake/build/bin/leanfran --lang php module generate --module-name LeanPhpTest.Fuzz \
     --roots LeanPhpTest.Fuzz.evalRow --class 'Leanfran\Generated\Fuzz' --search-path .lake/build/lib/lean \
     --internal-only --output text --output-file "$input/Fuzz.php"
 

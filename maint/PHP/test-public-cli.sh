@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cli=.lake/build/bin/leanfran-php
+cli=../../.lake/build/bin/leanfran
 dir=test-out/public/stale
 mkdir -p "$dir"
 printf '<?php\n' > "$dir/UserFile.php"
 gen() {
-    "$cli" module generate --search-path .lake/build/lib/lean --module-name LeanPhpTest.Public \
+    "$cli" --lang php module generate --search-path .lake/build/lib/lean --module-name LeanPhpTest.Public \
         --php-namespace 'App\Lean\Stale' --output-dir "$dir" "$@"
 }
 gen --roots LeanPhpTest.Public.total > "$dir/first.json"
@@ -27,7 +27,7 @@ test -f "$dir/Range.php"
 cmp "$dir/UserFile.php" <(printf '<?php\n')
 
 set +e
-"$cli" module generate --search-path .lake/build/lib/lean --module-name LeanPhpTest.PublicNames \
+"$cli" --lang php module generate --search-path .lake/build/lib/lean --module-name LeanPhpTest.PublicNames \
     --php-namespace 'App\Lean\Clashing' --facade Name_2 --output-dir "$dir" \
     > "$dir/name-collision.json" 2> "$dir/name-collision.log"
 status=$?

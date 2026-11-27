@@ -4,7 +4,7 @@
 
 ## Installation
 
-Generation uses Lean 4.35.0 and the `leanfran-php` compiler. Follow the [quick start](../langs/PHP/README.md) to build the compiler with Nix and install the runtime with `composer require conao3/leanfran`. Running the generated code requires 64-bit PHP 8.4 or later, `ext-gmp`, and `ext-tokenizer`.
+Generation uses Lean 4.35.0 and the `leanfran` compiler. Install the compiler with `nix profile install 'github:conao3/lean-leanfran#leanfran'` and follow the [quick start](../langs/PHP/README.md) to install the Composer runtime. Running the generated code requires 64-bit PHP 8.4 or later, `ext-gmp`, and `ext-tokenizer`.
 
 ## Embedded Lean
 
@@ -35,7 +35,7 @@ Commit the generated PHP and manifests. In CI, install Composer dependencies and
 
 In `composer.json`, set `extra.leanfran.paths` to a list of package directories to scan. By default, the CLI scans the directories listed in `autoload.psr-4`. Set `extra.leanfran.require` to a list of Lake requirements using the keys from `[[require]]` in a Lake TOML file. Relative dependency paths resolve from the Composer package directory. Composer scripts can run the binary, for example `"lean:sync": "leanfran sync"`.
 
-For `sync` and `check`, the compiler is selected by `--leanfran-php`, then `LEANFRAN_PHP_CLI`, then `leanfran-php` on PATH. Its `--generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
+For `sync` and `check`, the CLI selects the compiler from `--leanfran <path>`, then `LEANFRAN_CLI`, then `leanfran` on PATH. It skips the Composer CLI during the PATH search. The output of `leanfran --lang php --generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
 
 A Lean error in a block starts with the PHP file, line, and column. The message also gives the block's fully qualified PHP class name and the Lean line and column within its source string. When a block fails to build, the previous generated PHP remains available. Proofs of PHP models run after sync has installed the generated files.
 
@@ -155,7 +155,7 @@ Inputs that fail a generated value check or whose `requires` predicate returns f
 
 A counterexample throws `Conao3\Leanfran\Verify\PropertyFailure` with the function, label, seed, input, implementation result and expected value. A failed postcondition records its false predicate result. If the PHP function throws on an accepted input, the test fails and preserves the throwable, including a `TypeError` from returning an overflowed float through an `int` signature. With only postconditions, this uses the first label and expects a successful return. A float returned to an integer specification also fails the result comparison. Reuse the seed and run count to reproduce the sequence.
 
-For a Lean-enabled CI job, install Composer development dependencies, put `leanfran-php` and the selected Lean toolchain on PATH, and run the proof and property checks. For the clamp sample, run the following from its Composer directory.
+For a Lean-enabled CI job, install Composer development dependencies, put the `leanfran` compiler and the selected Lean toolchain on PATH, and run the proof and property checks. For the clamp sample, run the following from its Composer directory.
 
 ```sh
 vendor/bin/leanfran check --require proved
@@ -166,7 +166,7 @@ You can run `vendor/bin/leanfran status` in a PHP-only job to check freshness of
 
 ## The CLI
 
-`leanfran-php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran-php --help` to see the full usage, including the `obligations check` command used by the Composer CLI. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
+`leanfran --lang php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran --lang php --help` to see the full usage, including the `obligations check` command used by the Composer CLI. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
 
 | Option | Effect |
 | --- | --- |
@@ -194,7 +194,7 @@ You can run `vendor/bin/leanfran status` in a PHP-only job to check freshness of
 | 254 | Input that cannot be converted, such as a call to an extern outside the runtime's inventory |
 | 255 | Other errors, such as failure to write the output file |
 
-Use `--output-dir` together with `--php-namespace`. Options for single-file output (`--output-file`, `--internal-only`, `--class`, and `--main`) are incompatible with `--output-dir`. The facade and shared-type options apply to directory output. `leanfran-php obligations check --modules … --obligations file` returns JSON states for the supplied obligations. Its exit status indicates whether the command ran successfully. Use the Composer binary's `--require proved` to enforce their states.
+Use `--output-dir` together with `--php-namespace`. Options for single-file output (`--output-file`, `--internal-only`, `--class`, and `--main`) are incompatible with `--output-dir`. The facade and shared-type options apply to directory output. `leanfran --lang php obligations check --modules … --obligations file` returns JSON states for the supplied obligations. Its exit status indicates whether the command ran successfully. Use the Composer binary's `--require proved` to enforce their states.
 
 ## Public types
 

@@ -28,9 +28,9 @@ def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Ar
 def version : String := "0.13.3"
 def generatorVersion : String := "7"
 
-def usage : String := "usage: leanfran-php [--version] [--generator-version] <command> <subcommand> [parameters]
+def usage : String := "usage: leanfran --lang php [--version] [--generator-version] <command> <subcommand> [parameters]
 
-leanfran-php module generate
+leanfran --lang php module generate
   --module-name <Name>        Lean module to import (required unless --batch)
   --roots <Name> ...          Roots (default: the module's public definitions)
   --namespace <Name>          Lean namespace removed from public names (default: module)
@@ -49,7 +49,7 @@ leanfran-php module generate
   --internal-only             Emit only the runtime-facing class
   --output json|text          Format of the summary (default: json)
 
-leanfran-php obligations check --modules <Name> ... --obligations <file>
+leanfran --lang php obligations check --modules <Name> ... --obligations <file>
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 "
@@ -116,7 +116,7 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts := do
     else throw s!"--output must be json or text: {v}"
 
 def fail (code : UInt32) (msg : String) : IO UInt32 := do
-  IO.eprintln s!"leanfran-php: {msg}"
+  IO.eprintln s!"leanfran --lang php: {msg}"
   return code
 
 structure Job extends JobOpts where
@@ -283,7 +283,7 @@ def printSummary (o : Opts) (toStderr : Bool) (j : Json) : IO Unit := do
   else
     let mod := (j.getObjValD "module").getStr?.toOption.getD ""
     match (j.getObjValD "error").getStr? with
-    | .ok e => out s!"leanfran-php: {mod}: {e}"
+    | .ok e => out s!"leanfran --lang php: {mod}: {e}"
     | .error _ =>
       out s!"{mod}: class {(j.getObjValD "class").getStr?.toOption.getD ""}, {j.getObjValD "functions"} functions, {j.getObjValD "externs"} externs"
       if let .ok files := (j.getObjValD "files").getArr? then
@@ -292,7 +292,7 @@ def printSummary (o : Opts) (toStderr : Bool) (j : Json) : IO Unit := do
         for item in skipped do
           let name := (item.getObjValD "name").getStr?.toOption.getD ""
           let reason := (item.getObjValD "reason").getStr?.toOption.getD ""
-          IO.eprintln s!"leanfran-php: skipped {name}: {reason}"
+          IO.eprintln s!"leanfran --lang php: skipped {name}: {reason}"
 
 def optionalField [FromJson α] (j : Json) (key : String) : Except String (Option α) :=
   match j.getObjVal? key with
@@ -392,6 +392,6 @@ unsafe def main (args : List String) : IO UInt32 := do
   | "obligations" :: "check" :: "--modules" :: rest =>
     try checkObligations rest
     catch e => fail 255 (toString e)
-  | _ => fail 252 "unknown command (see leanfran-php help)"
+  | _ => fail 252 "unknown command (see leanfran --lang php help)"
 
 end LeanPhp.Cli

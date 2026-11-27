@@ -234,9 +234,21 @@ final class Check
         }
         $file = "$this->sources/obligations.json";
         Files::write($file, json_encode($refs, JSON_THROW_ON_ERROR));
-        $command = ['lake', 'env', $compiler, 'obligations', 'check', '--modules', ...$built, '--obligations', $file];
+        $command = [
+            'lake',
+            'env',
+            $compiler,
+            '--lang',
+            'php',
+            'obligations',
+            'check',
+            '--modules',
+            ...$built,
+            '--obligations',
+            $file,
+        ];
         $result = Process::run($command, $this->workspace);
-        $result->check('leanfran-php obligations check');
+        $result->check('leanfran --lang php obligations check');
         $decoded = json_decode($result->stdout, flags: JSON_THROW_ON_ERROR);
         if (!is_array($decoded) || count($decoded) !== count($refs)) {
             throw new RuntimeException('unexpected obligations check response');
