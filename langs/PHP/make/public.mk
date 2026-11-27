@@ -4,7 +4,7 @@ CHECK_TARGETS += $(PUBLIC_CHECK_TARGETS)
 
 .PHONY: public-fixtures $(PUBLIC_CHECK_TARGETS)
 
-PUBLIC_GEN := .lake/build/bin/leanfran-php module generate --search-path .lake/build/lib/lean
+PUBLIC_GEN := $(PHP_COMPILER) module generate --search-path .lake/build/lib/lean
 PUBLIC_OUT := test-out/public
 
 public-fixtures: vendor/autoload.php build

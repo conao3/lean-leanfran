@@ -76,17 +76,39 @@ final class Sync
     /** Resolves the compiler used by sync and verification. */
     public static function compiler(?string $given): string
     {
-        $env = getenv('LEANFRAN_PHP_CLI');
-        $tool = $given ?? ($env === false ? 'leanfran-php' : $env);
+        $env = getenv('LEANFRAN_CLI');
+        $tool = $given ?? ($env === false || $env === '' ? null : $env);
+        if ($tool === null) {
+            $script = $_SERVER['SCRIPT_FILENAME'] ?? null;
+            $composerBin = $GLOBALS['_composer_bin_dir'] ?? null;
+            $wrappers = [
+                is_string($script) ? realpath($script) : false,
+                realpath(dirname(__DIR__, 2) . '/bin/leanfran'),
+                is_string($composerBin) ? realpath("$composerBin/leanfran") : false,
+            ];
+            $path = getenv('PATH');
+            foreach ($path === false ? [] : explode(PATH_SEPARATOR, $path) as $dir) {
+                $candidate = realpath(($dir === '' ? '.' : $dir) . '/leanfran');
+                if (
+                    $candidate !== false
+                    && !in_array($candidate, $wrappers, true)
+                    && is_file($candidate)
+                    && is_executable($candidate)
+                ) {
+                    return $candidate;
+                }
+            }
+            throw new RuntimeException('the executable `leanfran` is not on PATH (set LEANFRAN_CLI)');
+        }
         if ($tool === '') {
-            throw new RuntimeException('leanfran-php compiler path is empty');
+            throw new RuntimeException('leanfran --lang php compiler path is empty');
         }
         if (!str_contains($tool, '/')) {
             return $tool;
         }
         $path = realpath($tool);
         if ($path === false || !is_file($path) || !is_executable($path)) {
-            throw new RuntimeException("leanfran-php compiler is not executable: $tool");
+            throw new RuntimeException("leanfran --lang php compiler is not executable: $tool");
         }
         return $path;
     }

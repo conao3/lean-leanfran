@@ -10,7 +10,7 @@ PRICING_OUT := test-out/samples/pricing
 pricing-fixture: build
 	cd $(PRICING_SAMPLE)/lean && lake build
 	mkdir -p $(PRICING_OUT)
-	.lake/build/bin/leanfran-php module generate --module-name Pricing \
+	$(PHP_COMPILER) module generate --module-name Pricing \
 		--search-path $(PRICING_SAMPLE)/lean/.lake/build/lib/lean --php-namespace 'App\Lean\Pricing' \
 		--output-dir $(PRICING_OUT) > $(PRICING_OUT)/summary.json
 

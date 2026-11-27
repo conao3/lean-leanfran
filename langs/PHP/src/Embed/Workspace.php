@@ -67,7 +67,7 @@ final readonly class Workspace
                 throw new RuntimeException("$tool must match lean-toolchain ($version): " . trim($result->stdout));
             }
         }
-        $result = Process::run([$compiler, '--generator-version'], $this->dir);
+        $result = Process::run([$compiler, '--lang', 'php', '--generator-version'], $this->dir);
         $result->check($compiler);
         $actual = trim($result->stdout);
         if ($actual !== Lean::GENERATOR_VERSION) {
@@ -140,8 +140,18 @@ final readonly class Workspace
         $build->check('lake build');
         $batch = "$stage/batch.json";
         Files::write($batch, json_encode($jobs, JSON_THROW_ON_ERROR));
-        $generate = Process::run(['lake', 'env', $compiler, 'module', 'generate', '--batch', $batch], $this->dir);
-        $generate->check('leanfran-php module generate');
+        $generate = Process::run([
+            'lake',
+            'env',
+            $compiler,
+            '--lang',
+            'php',
+            'module',
+            'generate',
+            '--batch',
+            $batch,
+        ], $this->dir);
+        $generate->check('leanfran --lang php module generate');
     }
 
     private function prepare(): void

@@ -72,7 +72,7 @@ def collectPublic (types roots : Array Name) (facade : String) : MarshalM Collec
 
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) (facade : String) :
     IO (Collected × Environment) := do
-  let ctx : Core.Context := { fileName := "<leanfran-php>", fileMap := default, maxHeartbeats := 0 }
+  let ctx : Core.Context := { fileName := "<leanfran --lang php>", fileMap := default, maxHeartbeats := 0 }
   let ((r, _), st) ← ((((collectPublic types roots facade).run {}).run cfg).run').toIO ctx { env }
   return (r, st.env)
 

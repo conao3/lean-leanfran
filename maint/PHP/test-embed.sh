@@ -4,7 +4,7 @@ set -euo pipefail
 project_template=tests/fixtures/embed
 out=$(realpath -m test-out/embed)
 project="$out/project"
-compiler=$(realpath .lake/build/bin/leanfran-php)
+compiler=$(realpath ../../.lake/build/bin/leanfran)
 php=$(command -v php)
 temp_path="$out/php-only"
 
@@ -37,11 +37,16 @@ compare_generated() {
     done
 }
 
-assert_status 0 sync-first env LEANFRAN_PHP_CLI=not-the-compiler \
-    vendor/bin/leanfran sync --package "$project" --leanfran-php "$compiler"
+assert_status 0 sync-first env LEANFRAN_CLI=not-the-compiler \
+    vendor/bin/leanfran sync --package "$project" --leanfran "$compiler"
 cp -R src/{Basket,Pricing,Catalog,Receipt} "$out/saved/"
-assert_status 0 sync-second env LEANFRAN_PHP_CLI="$compiler" composer lean:sync
+assert_status 0 sync-second env LEANFRAN_CLI="$compiler" composer lean:sync
 compare_generated
+composer_path="$project/vendor/bin:$project/vendor/conao3/leanfran/bin"
+assert_status 0 sync-path env LEANFRAN_CLI= PATH="$composer_path:$(dirname "$compiler"):$PATH" leanfran sync
+compare_generated
+assert_status 1 missing-compiler env LEANFRAN_CLI= PATH="$composer_path:$temp_path" leanfran sync
+grep -Fxq 'the executable `leanfran` is not on PATH (set LEANFRAN_CLI)' "$out/missing-compiler.log"
 printf 'Repeated sync: PHP and manifests are byte-identical\n'
 
 assert_status 0 pricing php -r 'require "vendor/autoload.php"; echo App\Pricing::width(new App\Pricing\Range(lo: 2, hi: 5)), "\n";'
@@ -124,7 +129,7 @@ test "$(grep -c ': removed' "$out/explicit-scan-paths.log")" -eq 4
 cp "$out/fixture-composer.json" composer.json
 
 sed -i 's/width r ≤ r.hi/width r ≤ r.lo/' src/Pricing.php
-assert_status 1 bad-proof env LEANFRAN_PHP_CLI="$compiler" vendor/bin/leanfran sync
+assert_status 1 bad-proof env LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
 grep -E '^src/Pricing\.php:18:21: error: \(lean block App\\Pricing, Lean 9:16\).*omega could not prove' "$out/bad-proof.log"
 compare_generated
 assert_status 0 pricing-after-failed-proof php -r 'require "vendor/autoload.php"; echo App\Pricing::width(new App\Pricing\Range(lo: 2, hi: 5)), "\n";'
@@ -132,7 +137,7 @@ diff -u "$out/pricing.log" "$out/pricing-after-failed-proof.log"
 cp "$OLDPWD/$project_template/src/Pricing.php" src/Pricing.php
 
 sed -i 's/offset (width r + width r)/)/' src/Basket.php
-assert_status 1 bad-syntax env LEANFRAN_PHP_CLI="$compiler" vendor/bin/leanfran sync
+assert_status 1 bad-syntax env LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
 grep -E '^src/Basket\.php:10:40: error: \(lean block App\\Basket, Lean 1:35\).*unexpected token' "$out/bad-syntax.log"
 compare_generated
 php run.php > "$out/after-syntax"
@@ -168,7 +173,7 @@ test "$(wc -l < "$out/model-change.log")" -eq 2
 cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
 
 sed -i 's/list<Shade>/array<string, Shade>/' src/OrderInput.php
-assert_status 1 unsupported-model-type vendor/bin/leanfran sync --leanfran-php "$compiler"
+assert_status 1 unsupported-model-type env LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
 grep -Fq 'App\OrderInput.colors: unsupported PHPDoc type array<string, Shade>' "$out/unsupported-model-type.log"
 compare_generated
 cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
@@ -188,14 +193,14 @@ sed -E "s/GENERATOR_VERSION = '[^']+'/GENERATOR_VERSION = 'incompatible'/" \
 assert_status 1 generator-change env PATH="$temp_path" \
     "$php" -d auto_prepend_file="$out/incompatible.php" vendor/bin/leanfran status
 test "$(grep -c ': stale$' "$out/generator-change.log")" -eq 4
-assert_status 1 generator-mismatch "$php" -d auto_prepend_file="$out/incompatible.php" \
-    vendor/bin/leanfran sync --leanfran-php "$compiler"
+assert_status 1 generator-mismatch env LEANFRAN_CLI="$compiler" \
+    "$php" -d auto_prepend_file="$out/incompatible.php" vendor/bin/leanfran sync
 grep -Fq 'this package expects incompatible' "$out/generator-mismatch.log"
 
 printf 'leanprover/lean4:v0.0.0\n' > lean-toolchain
 assert_status 1 toolchain-change php_status
 test "$(grep -c ': stale$' "$out/toolchain-change.log")" -eq 4
-assert_status 1 toolchain-mismatch vendor/bin/leanfran sync --leanfran-php "$compiler"
+assert_status 1 toolchain-mismatch env LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
 grep -Fq 'lean must match lean-toolchain (0.0.0)' "$out/toolchain-mismatch.log"
 rm lean-toolchain
 
@@ -212,12 +217,12 @@ assert_status 1 removed-without-manifest php_status
 grep -Fxq 'App\Receipt: removed (src/Receipt)' "$out/removed-without-manifest.log"
 cp "$out/saved/Receipt/leanfran.json" src/Receipt/leanfran.json
 printf 'owned by the project\n' > src/Receipt/keep.txt
-assert_status 1 unmanaged-output vendor/bin/leanfran sync --leanfran-php "$compiler"
+assert_status 1 unmanaged-output env LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
 grep -Fq 'non-generated entry in output directory' "$out/unmanaged-output.log"
 test -f src/Receipt/keep.txt
 rm src/Receipt/keep.txt
 compare_generated
-assert_status 0 check env PATH="$(dirname "$compiler"):$PATH" vendor/bin/leanfran check
+assert_status 0 check env LEANFRAN_CLI="$compiler" vendor/bin/leanfran check
 test ! -e src/Receipt
 assert_status 0 after-cleanup php_status
 

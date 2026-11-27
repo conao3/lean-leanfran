@@ -4,7 +4,7 @@ leanfran compiles Lean 4 IR into PHP classes with a Composer runtime. See the [b
 
 ## Layout
 
-- `LeanPhp/Cli.lean` implements the `leanfran-php` CLI. `LeanPhp/EmitPhp.lean` collects the IR reachable from the roots, emits PHP, and assembles initializers and entry points.
+- `LeanPhp/Cli.lean` implements the `leanfran --lang php` CLI. `LeanPhp/EmitPhp.lean` collects the IR reachable from the roots, emits PHP, and assembles initializers and entry points.
 - `LeanPhp/Marshal.lean` collects type descriptors and compiles invariant decisions. `LeanPhp/Generate.lean` emits public types, facade methods, and their descriptor-backed conversions. The implementation class sits in the generated `Internal/` directory.
 - `bin/leanfran` runs the Composer CLI. `src/Embed/` scans attributes, reflects PHP models, hashes block dependencies, builds a Lake workspace, and publishes the generated traits and manifests. `tests/Embed/` and `tests/fixtures/embed/` exercise the embedding workflow.
 - `src/Model.php` declares `#[Model]`. `src/Verify/` discovers modeled functions with nikic/php-parser, resolves signature types, translates bodies and obligations, invokes Lean's proof checker, and maintains `leanfran.lock`. `LeanPhp/Check.lean` compares proof types and checks axiom dependencies. `src/lean/LeanPhpLib/Php.lean` defines the modeled PHP operations.
@@ -36,10 +36,12 @@ From the repository root, run both PHP versions with the root Makefile.
 ```sh
 nix shell nixpkgs#gnumake -c make check BACKENDS=PHP
 nix shell nixpkgs#gnumake -c make format-check BACKENDS=PHP
-nix build .#php
+nix build .#leanfran
 ```
 
 The check runs differential, numeric, depth, complexity, IR coverage, and fuzz tests, plus PHPUnit, PHPStan, the extern inventory comparison, proof state and freshness checks, property tests, and the samples. The verified samples require all their obligations to be proved and compare their runtime output and checked-in generated PHP. The named shells `.#php` and `.#php85` provide PHP 8.4 and 8.5 with matching Composer, PHPStan, and PHPUnit. Select the shell when running a backend target directly.
+
+To use the compiler from PATH, install it with `nix profile install 'github:conao3/lean-leanfran#leanfran'`.
 
 ```sh
 nix develop .#php -c make -C langs/PHP gen-externs

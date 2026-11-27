@@ -3,12 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/../../langs/PHP"
 
 export LEAN_BACKTRACE=0
-lake build leanfran-php oracle LeanPhpTest.Unsupported
+lake --dir ../.. build leanfran
+lake build oracle LeanPhpTest.Unsupported
 mkdir -p test-out
 printf 'control input\n' > test-out/diff.in
 
-compiler=.lake/build/bin/leanfran-php
-"$compiler" module generate --module-name LeanPhpTest.Vectors \
+compiler=../../.lake/build/bin/leanfran
+"$compiler" --lang php module generate --module-name LeanPhpTest.Vectors \
     --roots LeanPhpTest.Vectors.run LeanPhpTest.ControlIr.impossible --main LeanPhpTest.Vectors.run \
     --search-path .lake/build/lib/lean --internal-only --output text \
     --output-file test-out/Vectors.php
@@ -53,7 +54,7 @@ for mode in invalid-tag unreachable; do
 done
 
 status=0
-"$compiler" module generate --module-name LeanPhpTest.Unsupported \
+"$compiler" --lang php module generate --module-name LeanPhpTest.Unsupported \
     --roots LeanPhpTest.Unsupported.run --search-path .lake/build/lib/lean \
     --internal-only --output text > test-out/unsupported.out 2> test-out/unsupported.err || status=$?
 if [[ "$status" != 254 || -s test-out/unsupported.out ]]; then
