@@ -1,9 +1,11 @@
+export LEANFRAN_CLI := $(abspath ../../.lake/build/bin/leanfran)
+
 .PHONY: all
 all: build
 
 .PHONY: build
 build:
-	lake build
+	lake --dir ../.. build leanfran
 
 .PHONY: format
 format:
@@ -22,7 +24,7 @@ lint:
 .PHONY: test
 test: build
 	../../maint/Clojure/test-diff.sh
-	PATH="$(CURDIR)/.lake/build/bin:$$PATH" clojure -M:test
+	clojure -M:test
 	$(MAKE) -C samples test
 
 .PHONY: check

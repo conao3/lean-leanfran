@@ -6,13 +6,13 @@ namespace LeanClj.Cli
 
 def version : String := "0.13.3"
 
-def usage : String := "usage: leanfran [--version] <command> <subcommand> [parameters]
+def usage : String := "usage: leanfran --lang clojure [--version] <command> <subcommand> [parameters]
 
 commands:
   module generate-namespace  Emit a Clojure namespace for functions of a Lean module
   project generate           Build a lake project and emit a namespace for each of its modules
 
-leanfran module generate-namespace
+leanfran --lang clojure module generate-namespace
   --module-name <Name>        Lean module to import (required)
   --namespace <ns>            Clojure namespace of the output (required)
   --roots <Name> ...          Functions to export (default: the module's public definitions)
@@ -23,7 +23,7 @@ leanfran module generate-namespace
                               Omit the `ns` form (used by deflean)
   --output json|text          Format of the summary printed when --output-file is given
 
-leanfran project generate
+leanfran --lang clojure project generate
   --lake-dir <dir>            Directory of the lake project (required)
   --namespace-prefix <ns>     Prefix of the Clojure namespaces (required)
   --output-dir <dir>          Source directory to write the namespaces in (required)

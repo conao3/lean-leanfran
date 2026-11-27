@@ -13,10 +13,10 @@ Add the dependency to `deps.edn`:
 Install the compiler:
 
 ```sh
-nix profile install 'github:conao3/lean-leanfran#clojure'
+nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
-The first expansion of a `deflean` block requires Lean 4.35.0 (`lean` and `lake`) and the compiler on `PATH`. Clojure 1.12 and JDK 21 or later are required. Generated namespaces and cached blocks run without Lean.
+The first expansion of a `deflean` block requires Lean 4.35.0 (`lean` and `lake`) and the compiler at `LEANFRAN_CLI` or on `PATH`. The library calls `leanfran --lang clojure`. Clojure 1.12 and JDK 21 or later are required. Generated namespaces and cached blocks run without Lean.
 
 ## First Lean block
 

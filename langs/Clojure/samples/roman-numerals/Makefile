@@ -1,4 +1,4 @@
-LEANFRAN_CLJ := ../../.lake/build/bin/leanfran
+LEANFRAN_CLI := ../../../../.lake/build/bin/leanfran
 
 .PHONY: all
 all: test
@@ -11,7 +11,7 @@ leanfran:
 .PHONY: generate
 generate: leanfran
 	cd lean && lake build
-	$(LEANFRAN_CLJ) module generate-namespace --module-name Roman --namespace roman.core \
+	$(LEANFRAN_CLI) --lang clojure module generate-namespace --module-name Roman --namespace roman.core \
 	  --search-path lean/.lake/build/lib/lean --output-file src/roman/core.clj --output text
 	cljstyle fix src/roman/core.clj
 

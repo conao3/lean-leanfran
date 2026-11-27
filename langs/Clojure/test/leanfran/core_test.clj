@@ -162,7 +162,8 @@
 
 (t/deftest the-cli-generates-a-lake-project
   (let [out "test-out/project"
-        {:keys [exit err]} (clojure.java.shell/sh "leanfran" "project" "generate"
+        {:keys [exit err]} (clojure.java.shell/sh (or (System/getenv "LEANFRAN_CLI") "leanfran")
+                                                  "--lang" "clojure" "project" "generate"
                                                   "--lake-dir" "samples/roman-numerals/lean"
                                                   "--namespace-prefix" "gen"
                                                   "--output-dir" out)]

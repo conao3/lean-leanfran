@@ -1,5 +1,4 @@
-LEANFRAN_CLJ_BIN := $(abspath ../../.lake/build/bin)
-export PATH := $(LEANFRAN_CLJ_BIN):$(PATH)
+export LEANFRAN_CLI := $(abspath ../../../../.lake/build/bin/leanfran)
 
 .PHONY: all
 all: test

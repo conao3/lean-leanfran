@@ -48,7 +48,7 @@ vectors:
 ## Usage
 
 Inside `nix develop` of the repository root (the first run needs Lean to
-expand `deflean`; `make` builds the `leanfran` CLI and puts it on `PATH`):
+expand `deflean`; `make` builds the shared `leanfran` compiler and sets `LEANFRAN_CLI`):
 
 ```
 $ make run ARGS='--limit 4'
