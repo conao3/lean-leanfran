@@ -375,24 +375,14 @@ export function run(
   return { status: r.status ?? 255, stdout: r.stdout, stderr: r.stderr }
 }
 
-export function findCompiler(given: string | undefined): string {
-  const override = given ?? process.env["LEANFRAN_CLI"]
+export function findCompiler(): string {
+  const override = process.env["LEANFRAN_CLI"]
   if (override) return override
-  const self = process.argv[1] && statSync(process.argv[1], { throwIfNoEntry: false })
   for (const dir of process.env["PATH"]?.split(delimiter) ?? []) {
     const candidate = resolve(dir, "leanfran")
     try {
       accessSync(candidate, constants.X_OK)
-      const executable = statSync(candidate)
-      if (!executable.isFile()) continue
-      if (self && self.dev === executable.dev && self.ino === executable.ino) continue
-      if (self && basename(dir) === ".bin") {
-        const npmEntry = statSync(resolve(dir, "../leanfran/dist/cli.js"), {
-          throwIfNoEntry: false,
-        })
-        if (npmEntry?.dev === self.dev && npmEntry.ino === self.ino) continue
-      }
-      return candidate
+      if (statSync(candidate).isFile()) return candidate
     } catch {
       continue
     }
@@ -471,11 +461,10 @@ function named(v: unknown): Named[] {
 
 export async function syncPackage(
   dir: string,
-  cliPath: string | undefined,
+  cli: string,
   log: Log,
   csimp: (pkg: Package) => ReadonlyMap<string, string> = () => new Map(),
 ): Promise<Synced> {
-  const cli = findCompiler(cliPath)
   const gv = run(cli, [...TYPESCRIPT_LANG, "--generator-version"])
   if (gv.status !== 0)
     throw new SyncError(`${cli} --lang typescript --generator-version failed: ${gv.stderr}`, 255)

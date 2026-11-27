@@ -4,7 +4,7 @@ Paths in this guide are relative to `langs/TypeScript/`.
 
 - `LeanTs/`, `LeanTs/Cli.lean`: emitter, public-type generation and compiler CLI (`leanfran --lang typescript`).
 - `src/runtime/`: runtime and externs; `make gen-externs` updates `LeanTs/RuntimeExterns.lean`.
-- `src/embed.ts`, `sync.ts`, `cli.ts`: embedding and CLI.
+- `src/embed.ts`, `sync.ts`, `cli.ts`: embedding and the npm package implementation of `leanfran --lang typescript sync`, `check`, `status`, and `generate`.
 - `src/schema/`, `models.ts`: schemas and host-model integration.
 - `src/verify/`, `src/lean/`: verification and Lean-side host models.
 - `LeanTsTest/`, `test/`, `samples/`: native oracles, host tests and examples.
