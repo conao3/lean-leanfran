@@ -12,3 +12,6 @@ name = "Choice"
 
 [[lean_lib]]
 name = "Settings"
+
+[[lean_lib]]
+name = "Inheritance"

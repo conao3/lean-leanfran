@@ -166,6 +166,8 @@ You can run `vendor/bin/leanfran status` in a PHP-only job to check freshness of
 
 ## The CLI
 
+Use [`leanfran generate`](generate-guide.md) to generate PHP from the modules listed in your project's `leanfran.toml`. A PHP table maps its output directory to a Composer PSR-4 namespace and shares types between its modules.
+
 `leanfran --lang php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran --lang php --help` to see the full usage, including the `obligations check` command used by the Composer CLI. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
 
 | Option | Effect |

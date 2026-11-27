@@ -1,0 +1,22 @@
+[[generate]]
+lang = "php"
+lake-dir = "."
+out-dir = "php/external"
+path = 'GenerateTest\External'
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "php"
+lake-dir = "."
+out-dir = "php/generated"
+path = 'GenerateTest\Generated'
+modules = [
+  { name = "Report", bind = { "Choice" = 'GenerateTest\External\Choice' } },
+  "Shapes.+",
+  { name = "Shapes", as = "Models" },
+  "Choice",
+  "Inheritance",
+]
+
+[generate.bind]
+"Settings" = 'GenerateTest\External\Settings'

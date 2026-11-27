@@ -36,10 +36,10 @@ modules = [
 
 | Key | Required | Meaning |
 |---|---|---|
-| `lang` | yes | `rust`, `python`, `go`, or `typescript` |
+| `lang` | yes | `rust`, `python`, `go`, `typescript`, or `php` |
 | `lake-dir` | yes | The Lake package that holds the modules |
 | `out-dir` | yes | The directory of the generated code |
-| `path` | Rust, Python, and Go | The Rust module path, Python package, or Go import path of `out-dir` |
+| `path` | Rust, Python, Go, and PHP | The Rust module path, Python package, Go import path, or PHP namespace of `out-dir` |
 | `modules` | yes | The modules to compile: a module name, a glob, or a table |
 | `bind` | no | Types defined outside the table: a Lean namespace and the path of its types in the language |
 
@@ -57,6 +57,9 @@ An entry of `modules` is one of:
 | Python | The same as Rust | `<out-dir>/<name>.py` | `<path>.<name>` |
 | Go | The last component in lower case, `Shop.Cart` → `cart` | The package `<name>` in `<out-dir>/<name>/` | `<path>/<name>` |
 | TypeScript | Module components separated by slashes, `Shop.Cart` → `Shop/Cart` | `<out-dir>/<name>.ts` | A relative import between the generated files, including the `.ts` extension |
+| PHP | The last component, `Shop.Cart` → `Cart` | PSR-4 classes in `<out-dir>/<name>/` | `<path>\<name>` |
+
+For PHP, map the `path` namespace to `out-dir` in Composer's PSR-4 configuration. Use a TOML literal string such as `path = 'App\Lean'` for the namespace. The module name in the table, after applying `as`, determines the subdirectory, namespace suffix, and facade name. Supply an `as` value with a valid PHP identifier when the default name cannot be used.
 
 ## Shared types
 
