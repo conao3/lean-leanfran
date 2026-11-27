@@ -2,15 +2,15 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/model.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
 cd "$backend"
 source_file="$backend/tests/verify/model.c"
-"$compiler" generate --module-name ModelOps --out-dir "$scratch"
-"$compiler" build --out-dir "$scratch"
+"$compiler" --lang c generate --module-name ModelOps --out-dir "$scratch"
+"$compiler" --lang c build --out-dir "$scratch"
 leanc -I"$scratch" -DLEAN_MODEL "$source_file" "$scratch/libmodel_ops.a" -o "$scratch/model"
 "$scratch/model" >"$scratch/model.out"
 

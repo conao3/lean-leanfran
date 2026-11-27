@@ -515,7 +515,7 @@ def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (S
     let output ← IO.Process.output {cmd := "lake", cwd := some dir, args}
     unless output.exitCode == 0 do
       IO.eprint output.stderr
-      throw <| IO.userError "leanfran-c obligations check failed"
+      throw <| IO.userError "leanfran --lang c obligations check failed"
     let checked ← IO.ofExcept <| (Json.parse output.stdout >>= (·.getArr?) >>= (·.mapM Obligation.fromJson))
     unless checked.size == refs.size do throw <| IO.userError s!"invalid obligations check response: {output.stdout}"
     for o in checked do

@@ -1,12 +1,12 @@
 # C guide
 
-`leanfran-c` generates a C11 API for definitions in a Lean 4.35.0 Lake library. The generated header also works with C++.
+`leanfran --lang c` generates a C11 API for definitions in a Lean 4.35.0 Lake library. The generated header also works with C++.
 
 ## Set up the compiler
 
-From the leanfran repository root, run `nix build .#c` and add `result/bin` to your PATH. To build with elan, run `lake build leanfran-c` in `langs/C` and add its `.lake/build/bin` to your PATH. Use Lean 4.35.0 and a C compiler in the consuming workspace. The clang bundled with an elan toolchain does not find the system C headers on NixOS, so build there inside `nix develop .#c`. The linking examples use pkg-config, GNU Make, or CMake.
+Install the compiler with `nix profile install 'github:conao3/lean-leanfran#leanfran'`. To build from a clone with elan, run `lake build leanfran` at the repository root and add `.lake/build/bin` to your PATH. Use Lean 4.35.0 and a C compiler in the consuming workspace. The clang bundled with an elan toolchain does not find the system C headers on NixOS, so build there inside `nix develop .#c`. The linking examples use pkg-config, GNU Make, or CMake.
 
-`leanfran-c --version` prints the release and the Lean version, as in `leanfran-c <version> (Lean 4.35.0)`. `leanfran-c --generator-version` prints the version of the generated code and the C translation; `sync`, `status`, and `check` record it with the Lean version, so outputs and proof results stay current across releases that keep it. `leanfran-c --help` lists the commands and the exit codes: 0 for success, 1 when `status` finds out-of-date output or `check` finds obligations that did not pass, 252 for invalid parameters, 254 for input that cannot be converted, and 255 for other errors.
+`leanfran --lang c --version` prints the release and the Lean version, as in `leanfran --lang c <version> (Lean 4.35.0)`. `leanfran --lang c --generator-version` prints the version of the generated code and the C translation; `sync`, `status`, and `check` record it with the Lean version, so outputs and proof results stay current across releases that keep it. `leanfran --lang c --help` lists the commands and the exit codes: 0 for success, 1 when `status` finds out-of-date output or `check` finds obligations that did not pass, 252 for invalid parameters, 254 for input that cannot be converted, and 255 for other errors.
 
 ## Generate and build
 
@@ -24,9 +24,9 @@ end Pricing
 From that workspace, generate and build the bindings.
 
 ```sh
-lake env leanfran-c generate --module-name Pricing.Core --roots Pricing.total \
+lake env leanfran --lang c generate --module-name Pricing.Core --roots Pricing.total \
   --prefix pricing --out-dir out
-lake env leanfran-c build --out-dir out
+lake env leanfran --lang c build --out-dir out
 ```
 
 Pass a comma-separated list of fully qualified declarations to `--roots`. Omit it to select supported public definitions declared in the module. The default prefix is the last component of the module name in snake case, such as `core` for `Pricing.Core`. Use the same output directory for generation and build. `generate` writes `<prefix>.h`, `<prefix>.c`, `leanfran.h`, `leanfran.c`, `leanfran.json`, the Lean export module under `LeanfranExport/`, and the JSON runtime under `LeanfranC/`, which `build` compiles, together with `<prefix>.externs.txt`, `<prefix>.implemented-by.txt`, and `<prefix>.schema.json`, described in [Generation checks](#generation-checks) and [Validation and JSON](#validation-and-json).
@@ -129,7 +129,7 @@ On an Intel Core i5-8400 with the standard Nix C development shell and Lean 4.35
 
 ## Link the library
 
-The default build produces `lib<prefix>.a`. Use `leanfran-c build --shared --out-dir out` for `lib<prefix>.so` on Linux or `lib<prefix>.dylib` on macOS, linked with `libleanshared`. The build also writes link settings for all three build tools.
+The default build produces `lib<prefix>.a`. Use `leanfran --lang c build --shared --out-dir out` for `lib<prefix>.so` on Linux or `lib<prefix>.dylib` on macOS, linked with `libleanshared`. The build also writes link settings for all three build tools.
 
 - **pkg-config** accepts `out/pricing.pc` in the command above. For a path containing spaces, get the flags through your build system so it can preserve argument boundaries.
 - **GNU Make** can include `out/pricing.mk`. Compile with `$(PRICING_CFLAGS)` and put `$(PRICING_LDLIBS)` after the source or object arguments.
@@ -147,7 +147,7 @@ GMP is available under LGPLv3 or GPLv2. If you distribute a statically linked ex
 
 ## Embed Lean in C sources
 
-`leanfran-c sync` reads Lean from block comments in C files, builds them in a Lake workspace under `.leanfran/workspace`, and writes the headers, one static library, and link settings to an output directory. The C project does not need to be a Lake project. Add `.leanfran/` to `.gitignore`.
+`leanfran --lang c sync` reads Lean from block comments in C files, builds them in a Lake workspace under `.leanfran/workspace`, and writes the headers, one static library, and link settings to an output directory. The C project does not need to be a Lake project. Add `.leanfran/` to `.gitignore`.
 
 ```c
 /* leanfran:lean pricing
@@ -191,9 +191,9 @@ path = "../pricing-rules"
 
 The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, `leanfran-config.cmake`, and `leanfran.manifest.json`. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
 
-- `leanfran-c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: …`. A failure leaves the previous output directory unchanged.
-- `leanfran-c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, a change of the compiler's generator version or Lean version (`leanfran-c`), or a missing output file. It exits with status 0 when the output is current.
-- `leanfran-c check` runs `sync`, checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean), and then runs `status`.
+- `leanfran --lang c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: …`. A failure leaves the previous output directory unchanged.
+- `leanfran --lang c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, a change of the compiler's generator version or Lean version (`leanfran --lang c`), or a missing output file. It exits with status 0 when the output is current.
+- `leanfran --lang c check` runs `sync`, checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean), and then runs `status`.
 
 ### Use C structs in Lean
 
@@ -237,7 +237,7 @@ Declare `LF_STRUCT` structs in a header that includes `leanfran.h`. The block's 
 
 ## Verify a C function in Lean
 
-Put `LF_MODEL(...)` from `leanfran.h` before a C function and write the specification in a Lean block. `leanfran-c check` translates the function from clang's JSON AST into a Lean definition and checks the proofs you write about it.
+Put `LF_MODEL(...)` from `leanfran.h` before a C function and write the specification in a Lean block. `leanfran --lang c check` translates the function from clang's JSON AST into a Lean definition and checks the proofs you write about it.
 
 ```c
 /* leanfran:lean clamp
@@ -263,7 +263,7 @@ int32_t clamp(int32_t lo, int32_t hi, int32_t x) {
 | `ensures=<label>:<name>` | A Lean function returning `Bool` that takes the arguments followed by the result. Use a distinct label for each postcondition. |
 | `spec=<block>` | The Lean block that contains the names. The default is the only block in the file that contains `LF_MODEL`. |
 
-Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads `LF_MODEL` functions to generate the [model test](#model-test), so `sync`, `status`, and `check` need clang on `PATH`. `leanfran-c --help` also lists `translate`, which writes the translation of one C file to a Lean file, and `obligations check`, which checks proof modules against an obligations file. `check` runs both steps for a project, and the two commands help to inspect a translation.
+Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a header applies to the definition. Mark a read-only array argument with `LF_ARRAY(<length argument>)` after a `const T *` parameter. The Lean definition takes an `Array` and derives the length argument from its size. `LF_MODEL` and `LF_ARRAY` expand to clang `annotate` attributes and to nothing for other compilers. `sync` reads `LF_MODEL` functions to generate the [model test](#model-test), so `sync`, `status`, and `check` need clang on `PATH`. `leanfran --lang c --help` also lists `translate`, which writes the translation of one C file to a Lean file, and `obligations check`, which checks proof modules against an obligations file. `check` runs both steps for a project, and the two commands help to inspect a translation.
 
 ### Obligations and proof status
 
@@ -287,8 +287,8 @@ end LeanCModel.clamp
 A function whose body can hit undefined behavior returns `C.M α`, which is `Except C.Exc α`. Signed overflow, division by zero, a shift count that is negative or not less than the width, a `double` to integer conversion out of range, an out-of-range array index, a read of an inactive tagged-union member, a non-terminating loop, and reaching the end of a function that returns a value are modeled failures. Refinement then means the translated function returns `Except.ok` with the specified value, so a proof also shows that the translated definition reaches none of these modeled failures on inputs that satisfy `requires`. A postcondition for such a function states that a successful result exists and satisfies the predicate.
 
 ```sh
-leanfran-c check --require proved
-leanfran-c status
+leanfran --lang c check --require proved
+leanfran --lang c status
 ```
 
 `check` prints one line per obligation, such as `clamp.clamp [refines]: proved`, and writes `leanfran.lock` in the project root with the states and SHA-256 hashes of the inputs.

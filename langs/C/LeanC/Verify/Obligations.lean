@@ -110,11 +110,11 @@ def parseObligations (j : Json) : Except String (Array ObligationRef) := do
     return { model, label }
 
 def obligationsUsage : String :=
-  "Usage: leanfran-c obligations check --modules Module... --obligations file.json"
+  "Usage: leanfran --lang c obligations check --modules Module... --obligations file.json"
 
 unsafe def obligationsMain (args : List String) : IO UInt32 := do
   let fail := fun (message : String) => do
-    IO.eprintln s!"leanfran-c: {message}\n{obligationsUsage}"
+    IO.eprintln s!"leanfran --lang c: {message}\n{obligationsUsage}"
     return (252 : UInt32)
   let "check" :: "--modules" :: rest := args | fail "expected 'obligations check'"
   let modules := rest.takeWhile (! ·.startsWith "--")

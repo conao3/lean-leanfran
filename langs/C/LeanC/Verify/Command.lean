@@ -6,7 +6,7 @@ open LeanC.ClangAst
 namespace LeanC.Verify
 
 def translateUsage : String :=
-  "Usage: leanfran-c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]"
+  "Usage: leanfran --lang c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]"
 
 private def supportHeader := include_str "../../support/leanfran.h"
 
@@ -47,11 +47,11 @@ private def lineOf (source : ByteArray) (offset : Nat) : Nat :=
 def translateMain (args : List String) : IO UInt32 := do
   let opts ← match parseOptions args with
     | .ok opts => pure opts
-    | .error message => IO.eprintln s!"leanfran-c: {message}\n{translateUsage}"; return 252
+    | .error message => IO.eprintln s!"leanfran --lang c: {message}\n{translateUsage}"; return 252
   let cwd ← IO.currentDir
   let file := absolute cwd ⟨opts.source⟩
   unless ← file.pathExists do
-    IO.eprintln s!"leanfran-c: {opts.source}: no such file"
+    IO.eprintln s!"leanfran --lang c: {opts.source}: no such file"
     return 254
   let file ← IO.FS.realPath file
   try
@@ -71,7 +71,7 @@ def translateMain (args : List String) : IO UInt32 := do
       IO.FS.writeFile ⟨opts.out⟩ (emitModule opts.block opts.imports output.functions)
     return 0
   catch error =>
-    IO.eprintln s!"leanfran-c: {error}"
+    IO.eprintln s!"leanfran --lang c: {error}"
     return 254
 
 end LeanC.Verify

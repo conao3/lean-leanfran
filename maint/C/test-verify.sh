@@ -2,7 +2,7 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/verify.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
@@ -13,7 +13,7 @@ source="$app/src/states.c"
 run() {
     local expected=$1 status=0
     shift
-    "$compiler" "$@" --dir "$app" >"$scratch/out" 2>"$scratch/err" || status=$?
+    "$compiler" --lang c "$@" --dir "$app" >"$scratch/out" 2>"$scratch/err" || status=$?
     cat "$scratch/out"
     if [[ $status -ne $expected ]]; then
         cat "$scratch/err" >&2

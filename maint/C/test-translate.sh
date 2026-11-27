@@ -2,7 +2,7 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 fixtures="$backend/tests/verify/translation"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/translate.XXXXXXXX")
@@ -34,13 +34,13 @@ LAKE
 
 cd "$project"
 lake build FixtureTypes LeanCLib
-"$compiler" generate --module-name FixtureTypes --roots Geo.norm1,Geo.paint,Geo.shade --prefix shapes \
+"$compiler" --lang c generate --module-name FixtureTypes --roots Geo.norm1,Geo.paint,Geo.shade --prefix shapes \
     --out-dir "$scratch/shapes"
 grep -Fq 'struct LF_LEAN("Geo.Point") shapes_geo_point' "$scratch/shapes/shapes.h"
 grep -Fq 'struct LF_LEAN("Geo.Shape") shapes_geo_shape' "$scratch/shapes/shapes.h"
 
 clang_args=(-I "$scratch/shapes" -I "$fixtures" -ffp-contract=off)
-"$compiler" translate --block fixture --import FixtureTypes \
+"$compiler" --lang c translate --block fixture --import FixtureTypes \
     --out "$project/LeanCModel/Fixture.lean" "$fixtures/fixture.c" -- "${clang_args[@]}" \
     >"$scratch/translated.txt" 2>"$scratch/translate.err"
 if grep -q unextracted "$scratch/translate.err"; then
@@ -135,7 +135,7 @@ for cc in "${compilers[@]}"; do
 done
 
 cd "$fixtures"
-"$compiler" translate --block unsupported --out "$scratch/Unsupported.lean" unsupported.c \
+"$compiler" --lang c translate --block unsupported --out "$scratch/Unsupported.lean" unsupported.c \
     -- "${clang_args[@]}" >"$scratch/unsupported.out" 2>"$scratch/unsupported.err"
 test "$(grep -c ': unextracted ' "$scratch/unsupported.err")" -eq "$(wc -l <unsupported.txt)"
 while read -r fn line reason; do

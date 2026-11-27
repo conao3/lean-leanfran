@@ -13,13 +13,13 @@ inductive CliCommand where
   | embed (command : Embed.Command) (dir : FilePath)
 
 def usage : String :=
-  "Usage: leanfran-c generate --module-name M [--roots name,...] [--prefix prefix] [--rename Lean.Name=c_name] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
-  "       leanfran-c build [--shared] --out-dir dir\n" ++
-  "       leanfran-c {sync|status} [--dir dir]\n" ++
-  "       leanfran-c check [--dir dir] [--require proved]\n" ++
-  "       leanfran-c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]\n" ++
-  "       leanfran-c obligations check --modules Module... --obligations file.json\n" ++
-  "       leanfran-c --version | --generator-version | --help\n" ++
+  "Usage: leanfran --lang c generate --module-name M [--roots name,...] [--prefix prefix] [--rename Lean.Name=c_name] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
+  "       leanfran --lang c build [--shared] --out-dir dir\n" ++
+  "       leanfran --lang c {sync|status} [--dir dir]\n" ++
+  "       leanfran --lang c check [--dir dir] [--require proved]\n" ++
+  "       leanfran --lang c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]\n" ++
+  "       leanfran --lang c obligations check --modules Module... --obligations file.json\n" ++
+  "       leanfran --lang c --version | --generator-version | --help\n" ++
   "exit codes: 0 success, 1 out-of-date output or unmet obligations (status, check), " ++
     "252 invalid parameters, 254 input that cannot be converted, 255 other errors"
 
@@ -89,7 +89,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     IO.println usage
     return 0
   if args == ["--version"] then
-    IO.println s!"leanfran-c {Embed.releaseVersion} (Lean {Lean.versionString})"
+    IO.println s!"leanfran --lang c {Embed.releaseVersion} (Lean {Lean.versionString})"
     return 0
   if args == ["--generator-version"] then
     IO.println Embed.generatorVersion
@@ -99,7 +99,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   if command == "obligations" then return ← Verify.obligationsMain rest
   let cmd ← match parse command rest with
     | .ok cmd => pure cmd
-    | .error message => IO.eprintln s!"leanfran-c: {message}\n{usage}"; return 252
+    | .error message => IO.eprintln s!"leanfran --lang c: {message}\n{usage}"; return 252
   try
     match cmd with
     | .embed command dir =>
@@ -108,11 +108,11 @@ unsafe def main (args : List String) : IO UInt32 := do
     | .build out shared => build (← loadWorkspace (← IO.Process.getCurrentDir)) out shared
     | .generate target out roots checks renames =>
       if let .error message ← generate (← loadWorkspace (← IO.Process.getCurrentDir)) target out roots checks renames then
-        IO.eprintln s!"leanfran-c: {message}"
+        IO.eprintln s!"leanfran --lang c: {message}"
         return 254
     return 0
   catch error =>
-    IO.eprintln s!"leanfran-c: {error}"
+    IO.eprintln s!"leanfran --lang c: {error}"
     return 255
 
 end LeanC.Cli

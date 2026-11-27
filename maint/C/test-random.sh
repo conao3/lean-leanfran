@@ -2,7 +2,7 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/random.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
@@ -31,7 +31,7 @@ model_test() {
 
 check() {
     local expected=$1 status=0
-    "$compiler" check --dir "$app" >"$scratch/check" 2>"$scratch/check.err" || status=$?
+    "$compiler" --lang c check --dir "$app" >"$scratch/check" 2>"$scratch/check.err" || status=$?
     if [[ $status -ne $expected ]]; then
         cat "$scratch/check" "$scratch/check.err" >&2
         echo "expected check to exit $expected, got $status" >&2
@@ -74,7 +74,7 @@ lf_status checked(int32_t a, int32_t b, int32_t *out) {
     return LF_OK;
 }
 C
-"$compiler" sync --dir "$app" >/dev/null
+"$compiler" --lang c sync --dir "$app" >/dev/null
 model_test 0 clang
 grep -Fxq 'random.checked: skipped: lf_status results are not generated' "$scratch/out"
 
@@ -101,7 +101,7 @@ kinds_mismatch() {
         echo "the edit '$edit' did not change kinds.c" >&2
         exit 1
     fi
-    "$compiler" sync --dir "$app" >/dev/null
+    "$compiler" --lang c sync --dir "$app" >/dev/null
     for cc in "${compilers[@]}"; do
         model_test 2 "$cc"
         grep -Fxq "kinds.$fn [refines]: mismatch (seed 1, run $run)" "$scratch/err"
@@ -147,7 +147,7 @@ int32_t vacuous(int32_t x) {
     return x + 1;
 }
 C
-"$compiler" sync --dir "$app" >/dev/null
+"$compiler" --lang c sync --dir "$app" >/dev/null
 for cc in "${compilers[@]}"; do
     model_test 2 "$cc"
     grep -Fxq 'random.vacuous: no input satisfied requires' "$scratch/err"
@@ -166,7 +166,7 @@ double muladd(double a, double b, double c) {
     return a * b + c;
 }
 C
-    "$compiler" sync --dir "$app" >/dev/null
+    "$compiler" --lang c sync --dir "$app" >/dev/null
     model_test 2 clang CFLAGS="-O2 -mfma"
     grep -Eq '^random\.muladd \[refines\]: mismatch \(seed 1, run [0-9]+\)$' "$scratch/err"
     model_test 0 clang CFLAGS="-O2 -mfma -ffp-contract=off"

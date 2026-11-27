@@ -11,7 +11,8 @@ clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
 VERIFY_TARGET ?= check-verify
 
 build:
-	lake build
+	lake --dir ../.. build leanfran
+	lake build LeanCLib
 
 check: check-models $(VERIFY_TARGET) check-integration
 
