@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php>}")
-lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php>}
+leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php|clojure>}")
+lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php|clojure>}
 root=$(cd "$(dirname "$0")/.." && pwd)
 fixtures="$root/tests/generate"
 
@@ -21,7 +21,7 @@ expect_status() {
 }
 
 case "$lang" in
-    rust|python|go|typescript|php) ;;
+    rust|python|go|typescript|php|clojure) ;;
     *) fail "unknown language: $lang" ;;
 esac
 
@@ -41,6 +41,14 @@ printf '[[generate]]\nlang = "rust"\nlake-dir = "."\nout-dir = "out"\nmodules = 
 expect_status 252 "$leanfran" generate
 printf '[[generate]]\nlang = "rust"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = ["A"]\nmodule = "A"\n' > leanfran.toml
 expect_status 252 "$leanfran" generate
+if [[ $lang == clojure ]]; then
+    printf '[[generate]]\nlang = "clojure"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = ["Choice"]\nbind = { "Choice" = "q" }\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+    printf '[[generate]]\nlang = "clojure"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = [{ name = "Choice", bind = { "Choice" = "q" } }]\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+    printf '[[generate]]\nlang = "clojure"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = [{ name = "Choice", as = "1st" }]\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+fi
 
 cp "$lang/leanfran.toml" leanfran.toml
 "$leanfran" generate --output json > summary.json
@@ -52,7 +60,9 @@ elif [[ $lang == php ]]; then
     expected="$expected Inheritance"
 fi
 [[ $modules == "$expected" ]] || fail "expected summary order '$expected', found '$modules'"
-grep -Fq '"name":"Shapes.Unsupported"' summary.json || fail 'unsupported declared type missing from skipped'
+if [[ $lang != clojure ]]; then
+    grep -Fq '"name":"Shapes.Unsupported"' summary.json || fail 'unsupported declared type missing from skipped'
+fi
 
 case "$lang" in
     rust)
@@ -93,6 +103,20 @@ MANIFEST
         cd php
         find generated external -type f -name '*.php' -exec php -l {} +
         php check.php "$root/langs/PHP/vendor/autoload.php"
+        ;;
+    clojure)
+        "$leanfran" --lang clojure project generate --lake-dir . --namespace-prefix generated --output-dir compare \
+            --modules Report Shapes.Area Shapes > /dev/null
+        for file in generated/report.clj generated/shapes.clj generated/shapes/area.clj; do
+            diff "compare/$file" "clojure/src/$file" || fail "$file differs from project generate"
+        done
+        cd clojure
+        cat > deps.edn <<DEPS
+{:paths ["src" "."]
+ :deps {org.clojure/clojure {:mvn/version "1.12.7"}
+        io.github.conao3/leanfran {:local/root "$root/langs/Clojure"}}}
+DEPS
+        clojure -M -e "(require 'check)"
         ;;
 esac
 

@@ -279,6 +279,11 @@ builds a lake project, takes the search path of its dependencies from
 the project (or each of `--modules`). Exit codes: 0 success, 252 invalid
 parameters, 254 input the backend cannot handle, 255 other failures.
 
+To generate namespaces from several Lake packages and modules with one command,
+list them in `leanfran.toml` with `lang = "clojure"` and run
+`leanfran generate`. See the [generation guide](generate-guide.md) for the
+table keys and the names and files of the namespaces.
+
 Public functions take the Lean name relative to the module (or
 `--strip-namespace`) in kebab-case: `Point.add` → `point-add`, `isEven?` →
 `is-even?`. An `IO` action runs when called and returns its value, or throws
