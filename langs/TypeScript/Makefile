@@ -1,6 +1,6 @@
 # Run the targets inside the dev shell: `nix develop ../..#typescript -c make check`.
 
-.PHONY: install build pack gen-externs externs-check test test-public fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples bench check
+.PHONY: install build pack gen-externs externs-check test test-public test-generate fuzz typecheck-generated embed-links embed-fixture status test-embed format format-check verify-links verify-fixture test-verify samples bench check
 
 install:
 	pnpm install --frozen-lockfile
@@ -29,6 +29,9 @@ fuzz: build
 
 test-public: build
 	../../maint/TypeScript/test-public.sh
+
+test-generate: build pack
+	../../maint/test-generate.sh ../../.lake/build/bin/leanfran typescript
 
 # Type-check and lint every module the diff-test generated (test-out/ is gitignored, so it is passed explicitly).
 typecheck-generated: test test-public fuzz
@@ -80,5 +83,5 @@ format-check: install
 	treefmt --ci
 	vp fmt --check
 
-check: format-check externs-check test test-public fuzz typecheck-generated status build pack verify-links test-verify samples
+check: format-check externs-check test test-public test-generate fuzz typecheck-generated status build pack verify-links test-verify samples
 	vp run check

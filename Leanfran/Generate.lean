@@ -1,5 +1,6 @@
 import Lake.Toml.Load
 import LeanRust.Cli
+import LeanTs.Marshal
 
 open Lean Lake System
 
@@ -13,10 +14,10 @@ Runs every [[generate]] table of leanfran.toml:
   --output json|text     Format of the summary (default: text)
 
 [[generate]]
-  lang = \"rust\" | \"python\" | \"go\"
+  lang = \"rust\" | \"python\" | \"go\" | \"typescript\"
   lake-dir = \"<Lake package>\"
   out-dir = \"<directory of the generated code>\"
-  path = \"<out-dir in the language: Rust module path, Python package, Go import path>\"
+  path = \"<Rust module path, Python package, or Go import path (required for these languages)>\"
   modules = [\"<Module>\", \"<Module>.*\", { name = \"<Module>\", as = \"<name>\", bind = { \"<Namespace>\" = \"<path>\" } }]
   bind = { \"<Namespace>\" = \"<path>\" }
 
@@ -42,7 +43,7 @@ structure Module where
   output : String
   bind : Array (Name × String)
 
-def languages : Array String := #["rust", "python", "go"]
+def languages : Array String := #["rust", "python", "go", "typescript"]
 
 private def keyString : Name → String
   | .str .anonymous s => s
@@ -85,7 +86,7 @@ private def entry (root : FilePath) (index : Nat) : Toml.Value → Except String
       throw s!"'lang' must be one of {", ".intercalate languages.toList}, got '{lang}'"
     let some lakeDir ← string t `«lake-dir» | throw "'lake-dir' is required"
     let some outDir ← string t `«out-dir» | throw "'out-dir' is required"
-    let some path ← string t `path | throw "'path' is required"
+    let path := (← string t `path (lang != "typescript")).getD ""
     let modules ← match t.find? `modules with
       | some (.array _ values) => values.mapM moduleSpec
       | _ => throw "'modules' must be an array"
@@ -118,6 +119,7 @@ def defaultOutput (lang : String) (module : Name) : String :=
     match module with
     | .str _ s => s.toLower
     | _ => module.toString
+  else if lang == "typescript" then "/".intercalate (module.components.map LeanTs.componentString)
   else LeanRust.Cli.rustModName module
 
 /-- How the language names the generated code of a module of a table. -/
@@ -143,8 +145,10 @@ def job (e : Entry) (m : Module) : Json :=
   | "rust" => [
       ("rust_path", path), ("output_file", (e.outDir / s!"{m.output}.rs").toString),
       ("type_paths", Json.mkObj (bind.toList.map fun (ns, path) => (ns.toString, Json.str path)))]
-  | "python" => [
-      ("python_path", path), ("output_file", (e.outDir / s!"{m.output}.py").toString),
+  | "python" | "typescript" =>
+    let outputFile := e.outDir / s!"{m.output}{if e.lang == "python" then ".py" else ".ts"}"
+    (if e.lang == "python" then [("python_path", Json.str path)] else []) ++ [
+      ("output_file", Json.str outputFile.toString),
       ("type_modules", Json.arr (bind.map fun (ns, path) =>
         Json.mkObj [("namespace", ns.toString), ("module", path)]))]
   | _ => [

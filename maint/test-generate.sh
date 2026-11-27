@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go>}")
-lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go>}
+leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript>}")
+lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript>}
 root=$(cd "$(dirname "$0")/.." && pwd)
 fixtures="$root/tests/generate"
 
@@ -21,7 +21,7 @@ expect_status() {
 }
 
 case "$lang" in
-    rust|python|go) ;;
+    rust|python|go|typescript) ;;
     *) fail "unknown language: $lang" ;;
 esac
 
@@ -72,6 +72,17 @@ MANIFEST
         go mod init example.com/shapes
         go mod edit -require=github.com/conao3/leanfran-go@v0.0.0 -replace="github.com/conao3/leanfran-go=$root/langs/Go"
         go build ./...
+        ;;
+    typescript)
+        cd typescript
+        grep -Fq 'from "../models/Shapes.ts"' generated/Shapes/Area.ts
+        grep -Fq 'from "./models/Shapes.ts"' generated/Report.ts
+        grep -Fq 'from "../external/Choice.ts"' generated/Report.ts
+        grep -Fq 'from "../external/Settings.ts"' generated/Report.ts
+        mkdir -p node_modules
+        ln -s "$root/langs/TypeScript" node_modules/leanfran
+        node "$root/langs/TypeScript/node_modules/vite-plus/bin/vp" pack --no-config --no-dts check.ts
+        node dist/check.mjs
         ;;
 esac
 
