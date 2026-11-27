@@ -93,7 +93,7 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | Python     | [Python quick start](langs/Python/README.md)         | [leanfran on PyPI](https://pypi.org/project/leanfran/)                                | `lean(...)`, pydantic models, Python modules   |
 | TypeScript | [TypeScript quick start](langs/TypeScript/README.md) | [leanfran on npm](https://www.npmjs.com/package/leanfran)                             | `lean(...)`, TypeScript types, Standard Schema |
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
-| PHP        | [PHP quick start](langs/PHP/README.md)               | [conao3/leanfran on Packagist](https://packagist.org/packages/conao3/leanfran) | `#[Lean]`, `#[Model]`, Composer CLI |
+| PHP        | [PHP quick start](langs/PHP/README.md)               | [conao3/leanfran on Packagist](https://packagist.org/packages/conao3/leanfran) | `#[Lean]`, `#[Model]`, `leanfran --lang php sync` |
 | Go         | [Go quick start](langs/Go/README.md)                 | [leanfran-go on pkg.go.dev](https://pkg.go.dev/github.com/conao3/leanfran-go) | `go get github.com/conao3/leanfran-go`, embedded Lean, Go module tool |
 | C          | [C quick start](langs/C/README.md)                   | [Git tags](https://github.com/conao3/lean-leanfran/tags), Nix flake output `#leanfran` | `leanfran:lean` comments, C headers, pkg-config, Make and CMake |
 

@@ -8,7 +8,6 @@
         "ext-gmp": "*",
         "ext-tokenizer": "*"
     },
-    "bin": ["bin/leanfran"],
     "autoload": {
         "psr-4": {
             "Conao3\\Leanfran\\": "src/"

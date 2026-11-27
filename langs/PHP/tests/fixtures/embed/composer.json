@@ -16,6 +16,6 @@
         }
     },
     "scripts": {
-        "lean:sync": "leanfran sync"
+        "lean:sync": "leanfran --lang php sync"
     }
 }

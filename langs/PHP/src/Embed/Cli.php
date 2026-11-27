@@ -9,16 +9,16 @@ use Conao3\Leanfran\Verify\Lock;
 use RuntimeException;
 use Throwable;
 
-/** Entry point for the Composer binary. */
+/** Entry point that `leanfran --lang php sync|status|check` runs in the project. */
 final class Cli
 {
     private const USAGE = <<<'USAGE'
         Usage:
-          leanfran sync [--package dir] [--leanfran path]
-          leanfran status [--package dir]
-          leanfran check [--package dir] [--leanfran path] [--require proved]
+          leanfran --lang php sync [--package dir]
+          leanfran --lang php status [--package dir]
+          leanfran --lang php check [--package dir] [--require proved]
 
-        Compiler lookup: --leanfran, LEANFRAN_CLI, then leanfran on PATH.
+        Compiler lookup: LEANFRAN_CLI, then leanfran on PATH.
         USAGE;
 
     /** @param list<string> $args */
@@ -40,8 +40,8 @@ final class Cli
                     !in_array(
                         $option,
                         match ($command) {
-                            'sync' => ['--package', '--leanfran'],
-                            'check' => ['--package', '--leanfran', '--require'],
+                            'sync' => ['--package'],
+                            'check' => ['--package', '--require'],
                             default => ['--package'],
                         },
                         true,
@@ -57,21 +57,18 @@ final class Cli
                 $options[$option] = $value;
             }
             $dir = $options['--package'] ?? '.';
-            $compiler = $options['--leanfran'] ?? null;
             $require = $options['--require'] ?? null;
             if ($require !== null && $require !== 'proved') {
                 throw new RuntimeException('--require expects proved');
             }
             if ($command === 'sync') {
-                self::count(Sync::run($dir, $compiler));
+                self::count(Sync::run($dir));
                 return 0;
             }
             if ($command === 'check') {
-                return Sync::run($dir, $compiler, static function (Project $project, ?string $tool, int $count) use (
-                    $require,
-                ): int {
+                return Sync::run($dir, static function (Project $project, int $count) use ($require): int {
                     self::count($count);
-                    $result = Check::run($project, Sync::compiler($tool), $require !== null);
+                    $result = Check::run($project, Sync::compiler(), $require !== null);
                     return self::blockStatus($project) ? $result : 1;
                 });
             }

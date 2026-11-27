@@ -10,8 +10,8 @@ use RuntimeException;
 /** Checks the package and installs generated files when the entire batch succeeds. */
 final class Sync
 {
-    /** @param (Closure(Project, ?string, int): int)|null $after */
-    public static function run(string $dir, ?string $compiler, ?Closure $after = null): int
+    /** @param (Closure(Project, int): int)|null $after */
+    public static function run(string $dir, ?Closure $after = null): int
     {
         $root = realpath($dir);
         if ($root === false || !is_file("$root/composer.json")) {
@@ -35,14 +35,14 @@ final class Sync
                 throw new RuntimeException("cannot lock $lockPath");
             }
             $project = Project::load($root);
-            $count = self::sync($project, $compiler);
-            return $after === null ? $count : $after($project, $compiler, $count);
+            $count = self::sync($project);
+            return $after === null ? $count : $after($project, $count);
         } finally {
             fclose($lock);
         }
     }
 
-    private static function sync(Project $project, ?string $compiler): int
+    private static function sync(Project $project): int
     {
         $outputs = array_fill_keys(array_keys(Status::outputs($project)), null);
         foreach ($project->blocks as $block) {
@@ -57,7 +57,7 @@ final class Sync
         $cleanup = true;
         try {
             if ($project->blocks !== []) {
-                new Workspace($project)->generate(self::compiler($compiler), $stage);
+                new Workspace($project)->generate(self::compiler(), $stage);
                 foreach ($project->blocks as $block) {
                     Manifest::write("$stage/$block->module", $project, $block);
                 }
@@ -73,35 +73,22 @@ final class Sync
         return count($project->blocks);
     }
 
-    /** Resolves the compiler used by sync and verification. */
-    public static function compiler(?string $given): string
+    /**
+     * Resolves the compiler used by sync and verification: LEANFRAN_CLI, which
+     * `leanfran --lang php` sets to itself, then `leanfran` on PATH.
+     */
+    public static function compiler(): string
     {
-        $env = getenv('LEANFRAN_CLI');
-        $tool = $given ?? ($env === false || $env === '' ? null : $env);
-        if ($tool === null) {
-            $script = $_SERVER['SCRIPT_FILENAME'] ?? null;
-            $composerBin = $GLOBALS['_composer_bin_dir'] ?? null;
-            $wrappers = [
-                is_string($script) ? realpath($script) : false,
-                realpath(dirname(__DIR__, 2) . '/bin/leanfran'),
-                is_string($composerBin) ? realpath("$composerBin/leanfran") : false,
-            ];
+        $tool = getenv('LEANFRAN_CLI');
+        if ($tool === false || $tool === '') {
             $path = getenv('PATH');
             foreach ($path === false ? [] : explode(PATH_SEPARATOR, $path) as $dir) {
                 $candidate = realpath(($dir === '' ? '.' : $dir) . '/leanfran');
-                if (
-                    $candidate !== false
-                    && !in_array($candidate, $wrappers, true)
-                    && is_file($candidate)
-                    && is_executable($candidate)
-                ) {
+                if ($candidate !== false && is_file($candidate) && is_executable($candidate)) {
                     return $candidate;
                 }
             }
             throw new RuntimeException('the executable `leanfran` is not on PATH (set LEANFRAN_CLI)');
-        }
-        if ($tool === '') {
-            throw new RuntimeException('leanfran --lang php compiler path is empty');
         }
         if (!str_contains($tool, '/')) {
             return $tool;

@@ -57,7 +57,7 @@ printf 'Arithmetic model mutation detected and restored.\n'
 
 check_result() {
     local expected="$1" file="$2" code=0
-    LEANFRAN_CLI="$compiler" vendor/bin/leanfran check --require proved > "$file" 2>&1 || code=$?
+    "$compiler" --lang php check --require proved > "$file" 2>&1 || code=$?
     if [[ "$code" != "$expected" ]]; then
         cat "$file"
         printf 'Expected check exit %s, got %s\n' "$expected" "$code" >&2
@@ -65,13 +65,15 @@ check_result() {
     fi
 }
 
-php_bin="$(command -v php)"
-PATH=/nonexistent "$php_bin" vendor/bin/leanfran status > status-fresh.out
+php_only="$app-php-only"
+mkdir -p "$php_only"
+ln -sf "$(command -v php)" "$php_only/php"
+PATH="$php_only" "$compiler" --lang php status > status-fresh.out
 grep -Fx 'App\Calc\clamp refines: proved' status-fresh.out
 
 sed -i '0,/if (\$x < \$lo)/s//if ($x > $lo)/' src/Calc.php
 code=0
-PATH=/nonexistent "$php_bin" vendor/bin/leanfran status > status-stale.out || code=$?
+PATH="$php_only" "$compiler" --lang php status > status-stale.out || code=$?
 test "$code" = 1
 grep -Fx 'App\Calc\clamp refines: stale' status-stale.out
 grep -Fx 'App\Calc\clamp in_range: stale' status-stale.out
@@ -109,6 +111,6 @@ printf 'All seven proof states, source positions and stale status checked.\n'
 
 composer install --no-dev --no-interaction --no-progress
 code=0
-PATH=/nonexistent "$php_bin" vendor/bin/leanfran status > status-parser.out 2>&1 || code=$?
+PATH="$php_only" "$compiler" --lang php status > status-parser.out 2>&1 || code=$?
 test "$code" = 1
 grep -F 'composer require --dev nikic/php-parser:^5.9' status-parser.out
