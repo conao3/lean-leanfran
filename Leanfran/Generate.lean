@@ -127,30 +127,28 @@ def target (lang path output : String) : String :=
   | "python" => s!"{path}.{output}"
   | _ => s!"{path}/{output}"
 
-/-- The bindings of one module: the other modules of its table, the table's `bind` and the module's
-`bind`, a later source replacing an earlier one. Namespaces that are a prefix of the module are
-left out, and longer namespaces come first because the backends use the first match. -/
-def bindingsOf (e : Entry) (modules : Array Module) (m : Module) : Array (Name × String) := Id.run do
+/-- Module bindings override table bindings. Longer namespaces come first. -/
+def bindingsOf (e : Entry) (m : Module) : Array (Name × String) := Id.run do
   let mut out : Array (Name × String) := #[]
-  for (ns, path) in modules.map (fun o => (o.name, target e.lang e.path o.output)) ++ e.bind ++ m.bind do
+  for (ns, path) in e.bind ++ m.bind do
     out := (out.filter (·.1 != ns)).push (ns, path)
-  out := out.filter fun (ns, _) => !ns.isPrefixOf m.name
   return out.qsort fun a b =>
     if a.1.components.length == b.1.components.length then a.1.toString < b.1.toString
     else a.1.components.length > b.1.components.length
 
-def job (e : Entry) (modules : Array Module) (m : Module) : Json :=
-  let bind := bindingsOf e modules m
-  match e.lang with
-  | "rust" => Json.mkObj [
-      ("module", m.name.toString), ("output_file", (e.outDir / s!"{m.output}.rs").toString),
+def job (e : Entry) (m : Module) : Json :=
+  let bind := bindingsOf e m
+  let path := target e.lang e.path m.output
+  Json.mkObj <| [("module", toJson m.name.toString), ("type_group", toJson e.index)] ++ match e.lang with
+  | "rust" => [
+      ("rust_path", path), ("output_file", (e.outDir / s!"{m.output}.rs").toString),
       ("type_paths", Json.mkObj (bind.toList.map fun (ns, path) => (ns.toString, Json.str path)))]
-  | "python" => Json.mkObj [
-      ("module", m.name.toString), ("output_file", (e.outDir / s!"{m.output}.py").toString),
+  | "python" => [
+      ("python_path", path), ("output_file", (e.outDir / s!"{m.output}.py").toString),
       ("type_modules", Json.arr (bind.map fun (ns, path) =>
         Json.mkObj [("namespace", ns.toString), ("module", path)]))]
-  | _ => Json.mkObj [
-      ("module", m.name.toString), ("package", m.output), ("output_dir", (e.outDir / m.output).toString),
+  | _ => [
+      ("go_path", path), ("package", m.output), ("output_dir", (e.outDir / m.output).toString),
       ("type_modules", Json.arr (bind.map fun (ns, path) => Json.str s!"{ns}={path}"))]
 
 private def lakeOutput (lake : String) (args : Array String) (cwd : FilePath) : IO (Except String String) := do
@@ -246,7 +244,7 @@ def main (args : List String) : IO UInt32 := do
           | .ok modules => pure modules
           | .error message => return ← fail 252 s!"[[generate]] {e.index}: {message}"
         IO.FS.createDirAll e.outDir
-        jobs := jobs ++ modules.map (job e modules)
+        jobs := jobs ++ modules.map (job e)
         if lang == "rust" then rustDirs := rustDirs.push (e.outDir, modules)
       if jobs.isEmpty then continue
       let status ← IO.FS.withTempDir fun tmp => do

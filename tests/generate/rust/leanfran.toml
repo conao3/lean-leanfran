@@ -1,0 +1,16 @@
+[[generate]]
+lang = "rust"
+lake-dir = "."
+out-dir = "rust/src/external"
+path = "crate::external"
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "rust"
+lake-dir = "."
+out-dir = "rust/src/generated"
+path = "crate::generated"
+modules = [{ name = "Report", bind = { "Choice" = "crate::external::choice" } }, "Shapes.*", "Choice"]
+
+[generate.bind]
+"Settings" = "crate::external::settings"

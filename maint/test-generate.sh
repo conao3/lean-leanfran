@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran>}")
-cd "$(dirname "$0")/../tests/generate"
+leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go>}")
+lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go>}
+root=$(cd "$(dirname "$0")/.." && pwd)
+fixtures="$root/tests/generate"
 
 fail() {
     printf 'test-generate.sh: %s\n' "$*" >&2
@@ -18,55 +20,59 @@ expect_status() {
     fi
 }
 
-rm -rf out expected
-"$leanfran" generate > /dev/null
+case "$lang" in
+    rust|python|go) ;;
+    *) fail "unknown language: $lang" ;;
+esac
 
-lib=.lake/build/lib/lean
-rust() {
-    local module=$1 name=$2
-    shift 2
-    "$leanfran" --lang rust module generate --module-name "$module" --search-path "$lib" \
-        --output-file "expected/rust/$name.rs" --output text "$@" > /dev/null
-}
-python() {
-    local module=$1 name=$2
-    shift 2
-    "$leanfran" --lang python module generate --module-name "$module" --search-path "$lib" \
-        --output-file "expected/python/$name.py" --output text "$@" > /dev/null
-}
-go() {
-    local module=$1 name=$2
-    shift 2
-    "$leanfran" --lang go module generate --module-name "$module" --search-path "$lib" \
-        --package "$name" --output-dir "expected/go/$name" --output text "$@" > /dev/null
-}
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+cp "$fixtures/"*.lean "$fixtures/"{lakefile.toml,lake-manifest.json,lean-toolchain} "$work/"
+cp -R "$fixtures/Shapes" "$fixtures/$lang" "$work/"
+cd "$work"
 
-rust Shapes shapes --type-path Report=crate::generated::report
-rust Shapes.Area shapes_area --type-path Report=crate::generated::report
-rust Report report --type-path Shapes.Area=crate::generated::shapes_area Shapes=crate::generated::shapes
-cp out/rust/mod.rs expected/rust/mod.rs
-grep -qx 'pub mod report;' out/rust/mod.rs || fail 'out/rust/mod.rs does not declare report'
-grep -qx 'pub mod shapes_area;' out/rust/mod.rs || fail 'out/rust/mod.rs does not declare shapes_area'
+expect_status 252 "$leanfran" generate
+printf '[[generate]]\nlang = "ruby"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = ["A"]\n' > leanfran.toml
+expect_status 252 "$leanfran" generate
+printf '[[generate]]\nlang = "rust"\nlake-dir = "."\nout-dir = "out"\nmodules = ["A"]\n' > leanfran.toml
+expect_status 252 "$leanfran" generate
+printf '[[generate]]\nlang = "rust"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = ["A"]\nmodule = "A"\n' > leanfran.toml
+expect_status 252 "$leanfran" generate
 
-python Shapes shapes --type-module Report=shapes.gen.report
-python Shapes.Area area --type-module Report=shapes.gen.report
-python Report report --type-module Shapes.Area=shapes.gen.area Shapes=shapes.points
+cp "$lang/leanfran.toml" leanfran.toml
+"$leanfran" generate --output json > summary.json
+modules=$(grep -oE '"module":"[^"]+"' summary.json | cut -d '"' -f 4 | paste -sd ' ' -)
+expected='Choice Settings Report Shapes.Area Shapes Choice'
+if [[ $lang == rust ]]; then
+    expected='Choice Settings Report Shapes Shapes.Area Choice'
+fi
+[[ $modules == "$expected" ]] || fail "expected summary order '$expected', found '$modules'"
+grep -Fq '"name":"Shapes.Unsupported"' summary.json || fail 'unsupported declared type missing from skipped'
 
-go Shapes shapes --type-module Report=example.com/shapes/gen/report
-go Shapes.Area area --type-module Report=example.com/shapes/gen/report
-go Report report --type-module Shapes.Area=example.com/shapes/area --type-module Shapes=example.com/shapes/gen/shapes
+case "$lang" in
+    rust)
+        mv rust/lib.rs rust/src/
+        cp "$root/langs/Rust/Cargo.lock" rust/
+        cat > rust/Cargo.toml <<MANIFEST
+[package]
+name = "generate-test"
+version = "0.0.0"
+edition = "2024"
 
-diff -r expected out || fail 'leanfran generate differs from the same module generate commands'
+[dependencies]
+leanfran = { path = "$root/langs/Rust/crates/leanfran" }
+MANIFEST
+        cargo check --manifest-path rust/Cargo.toml --target-dir "$root/langs/Rust/target"
+        ;;
+    python)
+        uv run --project "$root/langs/Python" python python/check.py
+        ;;
+    go)
+        cd go
+        go mod init example.com/shapes
+        go mod edit -require=github.com/conao3/leanfran-go@v0.0.0 -replace="github.com/conao3/leanfran-go=$root/langs/Go"
+        go build ./...
+        ;;
+esac
 
-config=$(mktemp -d)
-trap 'rm -rf "$config"' EXIT
-expect_status 252 "$leanfran" generate --dir "$config"
-printf '[[generate]]\nlang = "ruby"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = ["A"]\n' > "$config/leanfran.toml"
-expect_status 252 "$leanfran" generate --dir "$config"
-printf '[[generate]]\nlang = "rust"\nlake-dir = "."\nout-dir = "out"\nmodules = ["A"]\n' > "$config/leanfran.toml"
-expect_status 252 "$leanfran" generate --dir "$config"
-printf '[[generate]]\nlang = "rust"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = ["A"]\nmodule = "A"\n' > "$config/leanfran.toml"
-expect_status 252 "$leanfran" generate --dir "$config"
-
-rm -rf out expected
-echo 'test-generate.sh: leanfran generate writes the files of the same module generate commands'
+echo "test-generate.sh: $lang project generation and shared types passed"

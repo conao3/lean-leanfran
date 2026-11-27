@@ -51,6 +51,3 @@
 /Rust/**/test-out/
 /langs/C/**/.lake/
 /langs/C/test-out/
-/tests/generate/.lake/
-/tests/generate/out/
-/tests/generate/expected/
