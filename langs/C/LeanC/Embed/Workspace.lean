@@ -48,7 +48,7 @@ private def status (config : Config) (blocks : Array Block) (current : Manifest)
   let previous : Manifest := previous
   let mut stale := #[]
   if previous.schema != current.schema || previous.compiler != current.compiler then
-    stale := stale.push "leanfran-c"
+    stale := stale.push "leanfran --lang c"
   if previous.config != current.config then stale := stale.push "leanfran.toml"
   if previous.models != current.models then stale := stale.push "LF_STRUCT"
   let old := Std.HashMap.ofList (previous.blocks.toList.map fun b => (b.name, b))

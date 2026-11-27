@@ -2,7 +2,7 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/embed.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
@@ -13,7 +13,7 @@ out="$app/generated bindings"
 expect_status() {
     local expected=$1 status=0
     shift
-    "$compiler" "$@" --dir "$app" >"$scratch/diagnostics" 2>&1 || status=$?
+    "$compiler" --lang c "$@" --dir "$app" >"$scratch/diagnostics" 2>&1 || status=$?
     cat "$scratch/diagnostics"
     test "$status" -eq "$expected"
 }
@@ -23,7 +23,7 @@ expect_status 254 status
 grep -F 'leanfran.toml not found; create leanfran.toml' "$scratch/diagnostics"
 mv "$scratch/leanfran.toml.saved" "$app/leanfran.toml"
 expect_status 1 status
-"$compiler" check --dir "$app"
+"$compiler" --lang c check --dir "$app"
 expect_status 0 status
 mkdir "$scratch/status-path"
 if [[ $(uname -s) == Darwin ]]; then
@@ -32,7 +32,7 @@ else
     ln -s "$(command -v sha256sum)" "$scratch/status-path/sha256sum"
 fi
 ln -s "$(command -v clang)" "$scratch/status-path/clang"
-PATH="$scratch/status-path" "$compiler" status --dir "$app"
+PATH="$scratch/status-path" "$compiler" --lang c status --dir "$app"
 test -f "$app/.leanfran/workspace/LeanfranBlocks/invoice.lean"
 test -f "$out/leanfran.manifest.json"
 test "$(ar t "$out/libleanfran.a" | grep -c '^EmbedDependency\.c\.o\.export$')" -eq 1
@@ -85,7 +85,7 @@ rm "$app/src/duplicate.h"
 
 manifest="$out/leanfran.manifest.json"
 lean_version=$(lean --version | sed -E 's/^Lean \(version ([0-9.]+).*/\1/')
-compiler_key="$("$compiler" --generator-version)/$lean_version"
+compiler_key="$("$compiler" --lang c --generator-version)/$lean_version"
 if [[ $(uname -s) == Darwin ]]; then
     compiler_hash=$(printf '%s' "$compiler_key" | shasum -a 256 | cut -d ' ' -f 1)
 else
@@ -94,7 +94,7 @@ fi
 grep -F "\"compiler\": \"$compiler_hash\"" "$scratch/previous/leanfran.manifest.json"
 sed -E 's/("compiler": ")[a-f0-9]+/\1different/' "$scratch/previous/leanfran.manifest.json" >"$manifest"
 expect_status 1 status
-grep -F 'stale: leanfran-c' "$scratch/diagnostics"
+grep -F 'stale: leanfran --lang c' "$scratch/diagnostics"
 
 printf '/* leanfran:lean twin\ndef basePrice : UInt32 := 1\n*/\n' >"$app/src/twin.h"
 expect_status 254 sync
@@ -103,12 +103,12 @@ grep -F "src/twin.h:1:1: error: Lean blocks 'catalog' (src/nested/catalog.h:1) a
 rm "$app/src/twin.h"
 
 printf '/* leanfran:lean extra\ndef extraPrice : UInt32 := 0\n*/\n' >"$app/src/extra.h"
-"$compiler" check --dir "$app"
+"$compiler" --lang c check --dir "$app"
 test -f "$out/extra.h"
 rm "$app/src/extra.h"
 expect_status 1 status
 grep -F 'stale: extra' "$scratch/diagnostics"
-"$compiler" sync --dir "$app"
+"$compiler" --lang c sync --dir "$app"
 test ! -e "$out/extra.h"
 expect_status 0 status
 
@@ -147,16 +147,16 @@ grep -F "'app_config.h' file not found" "$scratch/diagnostics"
 cat >"$app/compile_commands.json" <<JSON
 [{"directory": "$app", "file": "src/main.c", "command": "cc -std=c11 -Isrc/config '-Igenerated bindings' -c src/main.c -o main.o"}]
 JSON
-"$compiler" check --dir "$app"
+"$compiler" --lang c check --dir "$app"
 rm "$app/compile_commands.json"
 expect_status 254 sync
 cp "$app/leanfran.toml" "$scratch/leanfran.toml"
 { printf 'cflags = ["-Isrc/config"]\n'; cat "$scratch/leanfran.toml"; } >"$app/leanfran.toml"
-"$compiler" check --dir "$app"
+"$compiler" --lang c check --dir "$app"
 cp "$scratch/leanfran.toml" "$app/leanfran.toml"
 cp "$scratch/models.h" "$models"
 rm -r "$app/src/config"
-"$compiler" check --dir "$app"
+"$compiler" --lang c check --dir "$app"
 test "$(make --no-print-directory -s -C "$app" check)" = "$expected"
 
 noclang="$scratch/noclang-path"
@@ -174,6 +174,6 @@ done
 LEAN_CC="$lean_cc" PATH="$noclang" expect_status 254 sync
 grep -E '^src/models\.h:[0-9]+:1: error: LF_STRUCT requires clang on PATH' "$scratch/diagnostics"
 mv "$models" "$scratch/models-saved.h"
-LEAN_CC="$lean_cc" PATH="$noclang" "$compiler" check --dir "$app"
+LEAN_CC="$lean_cc" PATH="$noclang" "$compiler" --lang c check --dir "$app"
 test ! -e "$out/pricing.h"
 mv "$scratch/models-saved.h" "$models"

@@ -2,50 +2,50 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/check.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
 release=$(sed -nE 's/^#define LEANFRAN_VERSION "([^"]*)"$/\1/p' "$backend/support/leanfran.h")
 lean_version=$(lean --version | sed -E 's/^Lean \(version ([0-9.]+).*/\1/')
-test "$("$compiler" --version)" = "leanfran-c $release (Lean $lean_version)"
-"$compiler" --generator-version | grep -Eqx '[0-9]+'
-"$compiler" --help | grep -Fx 'exit codes: 0 success, 1 out-of-date output or unmet obligations (status, check), 252 invalid parameters, 254 input that cannot be converted, 255 other errors'
+test "$("$compiler" --lang c --version)" = "leanfran --lang c $release (Lean $lean_version)"
+"$compiler" --lang c --generator-version | grep -Eqx '[0-9]+'
+"$compiler" --lang c --help | grep -Fx 'exit codes: 0 success, 1 out-of-date output or unmet obligations (status, check), 252 invalid parameters, 254 input that cannot be converted, 255 other errors'
 
 cd "$backend/tests/cases"
 out="$scratch/public"
-"$compiler" generate --module-name Examples.PublicApi --out-dir "$out"
-"$compiler" generate --module-name Examples.PublicApi --out-dir "$scratch/repeat"
+"$compiler" --lang c generate --module-name Examples.PublicApi --out-dir "$out"
+"$compiler" --lang c generate --module-name Examples.PublicApi --out-dir "$scratch/repeat"
 diff -r "$out" "$scratch/repeat"
-"$compiler" build --out-dir "$out"
+"$compiler" --lang c build --out-dir "$out"
 
 status=0
-"$compiler" generate --module-name Examples.PublicApi --roots Example.unsupported \
+"$compiler" --lang c generate --module-name Examples.PublicApi --roots Example.unsupported \
     --out-dir "$scratch/invalid" >"$scratch/rejected" 2>&1 || status=$?
 test "$status" -eq 254
 grep -F 'unsupported parameter type' "$scratch/rejected"
 test ! -e "$scratch/invalid"
 for root in safeHalf lastIndex; do
     status=0
-    "$compiler" generate --module-name Examples.Dependent --roots "Dependent.$root" \
+    "$compiler" --lang c generate --module-name Examples.Dependent --roots "Dependent.$root" \
         --out-dir "$scratch/dependent" >"$scratch/rejected" 2>&1 || status=$?
     test "$status" -eq 254
-    grep -Fx "leanfran-c: 'Dependent.$root' has a parameter or result type that depends on parameter 'n'" \
+    grep -Fx "leanfran --lang c: 'Dependent.$root' has a parameter or result type that depends on parameter 'n'" \
         "$scratch/rejected"
     if grep -E 'PANIC|backtrace' "$scratch/rejected"; then
         exit 1
     fi
     test ! -e "$scratch/dependent"
 done
-"$compiler" generate --module-name Examples.Dependent --out-dir "$scratch/dependent" 2>"$scratch/skipped"
+"$compiler" --lang c generate --module-name Examples.Dependent --out-dir "$scratch/dependent" 2>"$scratch/skipped"
 grep -F 'dependent_half(' "$scratch/dependent/dependent.h"
-test "$(grep -c "^leanfran-c: skipping 'Dependent\.[a-zA-Z]*' has a parameter or result type that depends on parameter 'n'$" \
+test "$(grep -c "^leanfran --lang c: skipping 'Dependent\.[a-zA-Z]*' has a parameter or result type that depends on parameter 'n'$" \
     "$scratch/skipped")" -eq 2
 if grep -E 'PANIC|backtrace' "$scratch/skipped"; then
     exit 1
 fi
-"$compiler" generate --module-name Examples.PublicApi --roots Example.lookup \
+"$compiler" --lang c generate --module-name Examples.PublicApi --roots Example.lookup \
     --prefix selected --out-dir "$scratch/selected"
 grep -F 'lf_status selected_lookup(' "$scratch/selected/selected.h"
 if grep -F 'selected_counter(' "$scratch/selected/selected.h" ||
@@ -94,15 +94,15 @@ for source in missing_dec extra_dec; do
     grep -F 'mimalloc live blocks changed' "$scratch/refcount.log"
 done
 
-"$compiler" generate --module-name Examples.Broken --roots sample --out-dir "$scratch/broken"
-"$compiler" build --out-dir "$scratch/broken"
+"$compiler" --lang c generate --module-name Examples.Broken --roots sample --out-dir "$scratch/broken"
+"$compiler" --lang c build --out-dir "$scratch/broken"
 leanc -UNDEBUG -I"$scratch/broken" "$backend/tests/initialization_failure.c" \
     "$scratch/broken/libbroken.a" -o "$scratch/initialization_failure"
 LEANFRAN_TEST_INIT_ERROR=1 "$scratch/initialization_failure" </dev/null
 
 for module in SharedFirst SharedSecond; do
-    "$compiler" generate --module-name "Examples.$module" --out-dir "$scratch/$module"
-    "$compiler" build --out-dir "$scratch/$module"
+    "$compiler" --lang c generate --module-name "Examples.$module" --out-dir "$scratch/$module"
+    "$compiler" --lang c build --out-dir "$scratch/$module"
 done
 leanc -UNDEBUG -I"$scratch/SharedFirst" -I"$scratch/SharedSecond" \
     "$backend/tests/shared_initialization.c" "$scratch/SharedFirst/libshared_first.a" \
@@ -131,14 +131,14 @@ roots+=,Typed.multiple,Typed.checked,Typed.checkUnit,Typed.sampleArray,Typed.emp
 roots+=,Typed.floats,Typed.floatSum,Typed.floatMake,Typed.samples
 roots+=,Typed.wrapText,Typed.wrapByte,Typed.wrapNat,Typed.wrapFloat,Typed.wrapPoint,Typed.bounded
 roots+=,Typed.boundedByte,Typed.wrapped
-"$compiler" generate --module-name PublicTypes --roots "$roots" --out-dir "$types"
-"$compiler" build --out-dir "$types"
+"$compiler" --lang c generate --module-name PublicTypes --roots "$roots" --out-dir "$types"
+"$compiler" --lang c build --out-dir "$types"
 
 rejected() {
     local diagnostic=$1
     shift
     local status=0
-    "$compiler" generate --module-name PublicTypes --out-dir "$scratch/collision" "$@" \
+    "$compiler" --lang c generate --module-name PublicTypes --out-dir "$scratch/collision" "$@" \
         >"$scratch/rejected" 2>&1 || status=$?
     test "$status" -eq 254
     grep -F "$diagnostic" "$scratch/rejected"
@@ -159,14 +159,14 @@ rejected "unsupported type Task UInt8: $not_constructor (field Typed.Pending.tas
 rejected 'Checked.Undecidable.proof has no Decidable instance' --roots Checked.bad
 
 renamed="$scratch/renamed"
-"$compiler" generate --module-name PublicTypes --out-dir "$renamed" \
+"$compiler" --lang c generate --module-name PublicTypes --out-dir "$renamed" \
     --roots Collision.echo,Collision.fooBar,Collision.foo_bar \
     --rename Collision.fooBar=camel_case --rename Collision.Fields.fooBar=camel_case \
     --rename Collision.Fields=renamed_fields
 grep -F 'lf_status public_types_camel_case(' "$renamed/public_types.h"
 grep -F 'bool camel_case LF_LEAN("fooBar");' "$renamed/public_types.h"
 grep -F 'typedef struct public_types_renamed_fields' "$renamed/public_types.h"
-"$compiler" build --out-dir "$renamed"
+"$compiler" --lang c build --out-dir "$renamed"
 
 types_args=(-I"$types" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/roundtrip.c")
 leanc "${types_args[@]}" "$types/libpublic_types.a" -o "$scratch/roundtrip"
@@ -198,8 +198,8 @@ if [[ $(uname -s) == Linux ]]; then
 fi
 
 handles="$scratch/handles"
-"$compiler" generate --module-name ValueHandles --out-dir "$handles"
-"$compiler" build --out-dir "$handles"
+"$compiler" --lang c generate --module-name ValueHandles --out-dir "$handles"
+"$compiler" --lang c build --out-dir "$handles"
 handles_args=(-I"$handles" -UNDEBUG -Wall -Wextra -Werror "$backend/tests/types/value_handles.c")
 leanc "${handles_args[@]}" "$handles/libvalue_handles.a" -o "$scratch/value_handles"
 "$scratch/value_handles" </dev/null

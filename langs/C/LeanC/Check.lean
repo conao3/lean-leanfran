@@ -27,7 +27,7 @@ def importsStd (env : Environment) (root : Name) : Bool :=
 
 def usesSorry (env : Environment) (name : Name) : IO Bool := do
   let axioms ← (collectAxioms (m := CoreM) name).toIO'
-    {fileName := "leanfran-c", fileMap := default} {env}
+    {fileName := "leanfran --lang c", fileMap := default} {env}
   return axioms.contains ``sorryAx
 
 private partial def callees (body : IR.FnBody) (pending : Array Name) : Array Name :=

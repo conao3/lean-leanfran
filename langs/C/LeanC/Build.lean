@@ -32,7 +32,7 @@ def loadWorkspace (dir : FilePath) : IO Workspace := do
   let some actual := (version.splitOn "version ")[1]?.map (fun s => (s.splitOn ",").head!)
     | throw <| IO.userError s!"could not read Lean version: {version.trimAscii}"
   unless actual == Lean.versionString do
-    throw <| IO.userError s!"leanfran-c was built with Lean {Lean.versionString}, found Lean {actual}"
+    throw <| IO.userError s!"leanfran --lang c was built with Lean {Lean.versionString}, found Lean {actual}"
   let sysroot ← run {cmd := "lean", cwd := some dir, args := #["--print-prefix"]}
   let lean ← Lake.LeanInstall.get ⟨sysroot.trimAscii.toString⟩
   let lakeEnv ← (Lake.Env.compute (Lake.LakeInstall.ofLean lean) lean (← Lake.findElanInstall?))
@@ -92,7 +92,7 @@ private def selectExports (env : Environment) (moduleName : Name) (cPrefix : Str
     match described with
     | .error message =>
       if !roots.isEmpty || message.startsWith "C name collision:" || message.startsWith "C invariant:" then throw message
-      IO.eprintln s!"leanfran-c: skipping {message}"
+      IO.eprintln s!"leanfran --lang c: skipping {message}"
     | .ok (entry, types) =>
       exports := exports.push entry
       descs := types
@@ -126,7 +126,7 @@ private def checkSorry (env : Environment) (checks : Checks) (roots : Array Name
   if !sorryRoots.isEmpty then
     let names := ", ".intercalate (sorryRoots.toList.map fun name => s!"'{name}'")
     let message := s!"{names} depends on sorryAx"
-    if checks.allowSorry then IO.eprintln s!"leanfran-c: warning: {message}"
+    if checks.allowSorry then IO.eprintln s!"leanfran --lang c: warning: {message}"
     else throw s!"{message} (use --allow-sorry to allow)"
 
 def jsonSupportSource : String := include_str "../lean/LeanfranC/Json.lean"

@@ -51,8 +51,8 @@ cp -R "$checkout/langs/C/tests" "$temp/consumer/"
 check_consumer() (
     local compiler=$1 out="$temp/$2" flags
     cd "$temp/consumer/tests/cases"
-    "$compiler" generate --module-name Examples.PublicApi --out-dir "$out"
-    "$compiler" build --out-dir "$out"
+    "$compiler" --lang c generate --module-name Examples.PublicApi --out-dir "$out"
+    "$compiler" --lang c build --out-dir "$out"
     check_version "$out/leanfran.h" 's/^#define LEANFRAN_VERSION "([^"]*)"$/\1/p'
     flags=$(pkg-config --cflags --libs "$out/public_api.pc")
     eval 'cc -std=c11 ../link/main.c -o "$out/consumer" '"$flags"
@@ -60,8 +60,8 @@ check_consumer() (
     printf 'C consumer passed for %s via %s\n' "$tag" "$2"
 )
 
-nix profile install --profile "$temp/profile" "$flake#c"
-check_consumer "$temp/profile/bin/leanfran-c" nix
+nix profile install --profile "$temp/profile" "$flake#leanfran"
+check_consumer "$temp/profile/bin/leanfran" nix
 
-(cd "$checkout/langs/C" && lake build leanfran-c)
-check_consumer "$checkout/langs/C/.lake/build/bin/leanfran-c" lake
+(cd "$checkout" && lake build leanfran)
+check_consumer "$checkout/.lake/build/bin/leanfran" lake

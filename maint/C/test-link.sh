@@ -2,7 +2,7 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/link.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
@@ -11,7 +11,7 @@ cd "$backend/tests/cases"
 reject() {
     local expected=$1 status=0
     shift
-    "$compiler" generate --out-dir "$scratch/invalid" "$@" >"$scratch/diagnostics" 2>&1 || status=$?
+    "$compiler" --lang c generate --out-dir "$scratch/invalid" "$@" >"$scratch/diagnostics" 2>&1 || status=$?
     test "$status" -eq 254
     grep -F -- "$expected" "$scratch/diagnostics"
     test ! -e "$scratch/invalid"
@@ -23,28 +23,28 @@ reject "go:foreign.Increment" --module-name Examples.ForeignExtern --roots calls
 reject "Examples.LeanImport -> Examples.JsonDependency -> Lean.Data.Json" \
     --module-name Examples.LeanImport
 
-"$compiler" generate --module-name Examples.Checks \
+"$compiler" --lang c generate --module-name Examples.Checks \
     --roots Checks.dependsOnSorry --allow-sorry --out-dir "$scratch/sorry" 2>"$scratch/warning"
 grep -F "warning: 'Checks.dependsOnSorry' depends on sorryAx" "$scratch/warning"
 
 extern="$scratch/extern"
-"$compiler" generate --module-name Examples.Checks --roots Checks.withExtern --out-dir "$extern"
+"$compiler" --lang c generate --module-name Examples.Checks --roots Checks.withExtern --out-dir "$extern"
 printf '%s\n' leanfran_test_increment | diff -u - "$extern/checks.externs.txt"
 grep -F 'Checks.alternative -> ' "$extern/checks.implemented-by.txt"
 grep -F 'Checks.implementation' "$extern/checks.implemented-by.txt"
-"$compiler" build --out-dir "$extern"
+"$compiler" --lang c build --out-dir "$extern"
 
 lean_import="$scratch/import"
-"$compiler" generate --module-name Examples.LeanImport --allow-lean-import --out-dir "$lean_import"
-"$compiler" build --out-dir "$lean_import"
+"$compiler" --lang c generate --module-name Examples.LeanImport --allow-lean-import --out-dir "$lean_import"
+"$compiler" --lang c build --out-dir "$lean_import"
 
 out="$scratch/static"
 shared="$scratch/shared output"
-"$compiler" generate --module-name Examples.PublicApi --out-dir "$out"
-"$compiler" generate --module-name Examples.PublicApi --out-dir "$shared"
+"$compiler" --lang c generate --module-name Examples.PublicApi --out-dir "$out"
+"$compiler" --lang c generate --module-name Examples.PublicApi --out-dir "$shared"
 test ! -s "$out/public_api.externs.txt"
-"$compiler" build --out-dir "$out"
-"$compiler" build --shared --out-dir "$shared"
+"$compiler" --lang c build --out-dir "$out"
+"$compiler" --lang c build --shared --out-dir "$shared"
 if [[ $(uname -s) == Darwin ]]; then
     test -f "$shared/libpublic_api.dylib"
 else

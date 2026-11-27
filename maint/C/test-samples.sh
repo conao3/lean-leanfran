@@ -2,7 +2,7 @@
 set -euo pipefail
 
 backend="$(cd "$(dirname "$0")/../../langs/C" && pwd)"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/samples.XXXXXXXX")
 trap 'rm -rf "$scratch"' EXIT
@@ -30,18 +30,18 @@ same_text 'import LeanCModel.clamp' "$backend/samples/verified-clamp/lean/Proofs
 
 cd "$scratch/pricing"
 lake build
-lake env "$compiler" generate --module-name Pricing.Core --roots Pricing.total \
+lake env "$compiler" --lang c generate --module-name Pricing.Core --roots Pricing.total \
     --prefix pricing --out-dir out
-lake env "$compiler" build --out-dir out
+lake env "$compiler" --lang c build --out-dir out
 flags=$(PKG_CONFIG_PATH=out pkg-config --cflags --libs pricing)
 eval 'cc -std=c11 -Wall -Wextra -Werror main.c -o pricing-demo '"$flags"
 test "$(./pricing-demo)" = 3600
 
 cd "$scratch/verified-clamp"
-"$compiler" check --require proved >"$scratch/check.out"
+"$compiler" --lang c check --require proved >"$scratch/check.out"
 cat "$scratch/check.out"
 grep -Fx 'clamp.clamp [refines]: proved' "$scratch/check.out"
-"$compiler" status
+"$compiler" --lang c status
 make --no-print-directory -s leanfran-model-test >"$scratch/model.out"
 cat "$scratch/model.out"
 grep -Fx 'clamp.clamp: 109 inputs passed (seed 1)' "$scratch/model.out"

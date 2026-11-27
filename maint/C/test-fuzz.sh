@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 backend="$root/langs/C"
-compiler="$backend/.lake/build/bin/leanfran-c"
+compiler="$backend/../../.lake/build/bin/leanfran"
 generator="$root/maint/C/fuzz-translate.py"
 mkdir -p "$backend/test-out"
 scratch=$(mktemp -d "$backend/test-out/fuzz.XXXXXXXX")
@@ -42,7 +42,7 @@ root = "Oracle"
 LAKE
     cd "$dir"
     python "$generator" generate "$seed" "$functions" ${mode:+"$mode"}
-    "$compiler" translate --block fixture --out LeanCModel/Fixture.lean fixture.c -- -ffp-contract=off \
+    "$compiler" --lang c translate --block fixture --out LeanCModel/Fixture.lean fixture.c -- -ffp-contract=off \
         >translated.txt 2>translate.err
     if [[ -s translate.err ]] || [[ $(wc -l <translated.txt) -ne $functions ]]; then
         cat translate.err >&2
