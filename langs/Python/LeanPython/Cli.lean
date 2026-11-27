@@ -6,15 +6,21 @@ namespace LeanPython.Cli
 
 def version : String := "0.13.3"
 
-/-- Version of the generated code. Raise it when the emitted code changes; `leanfran sync`
+/-- Version of the generated code. Raise it when the emitted code changes; `leanfran --lang python sync`
     checks it and puts it into its cache keys. -/
 def generatorVersion : String := "6"
 
 def usage : String := "usage: leanfran --lang python [--version] [--generator-version] <command> <subcommand> [parameters]
 
 commands:
-  module generate      Emit a Python module for functions of a Lean module
-  obligations check    Judge the proofs of obligations (used by `leanfran check`)
+  sync --package <dir>      Check the Lean blocks of a Python package and generate their modules
+  check --package <dir>     Translate the @model functions to Lean and judge their obligations
+  status --package <dir>    Show the states recorded by check
+  module generate           Emit a Python module for functions of a Lean module
+  obligations check         Judge the proofs of obligations (used by check)
+
+sync, check and status run `python3 -m leanfran.cli` of the project's Python environment;
+`leanfran --lang python sync --help` prints their parameters.
 
 leanfran --lang python module generate
   --module-name <Name>        Lean module to import (required unless --batch)
@@ -247,9 +253,26 @@ def obligationsCheck (o : Opts) : IO UInt32 := do
     IO.println (Json.arr out).compress
     return 0
 
+/-- `sync`, `check` and `status` run in the Python package of the project: it reads the Python
+    sources with Python and calls this executable back to generate. -/
+def packageCommand (args : List String) : IO UInt32 := do
+  let python := "python3"
+  let probe ← IO.Process.output { cmd := python, args := #["-c", "import leanfran.cli"] } |>.toBaseIO
+  match probe with
+  | .ok out =>
+    if out.exitCode != 0 then
+      return ← fail 255 s!"{python} cannot import the Python package `leanfran`; run this in the environment of the project, for example `uv run leanfran --lang python {" ".intercalate args}`"
+  | .error _ => return ← fail 255 s!"`{python}` is not on PATH"
+  let child ← IO.Process.spawn {
+    cmd := python
+    args := #["-m", "leanfran.cli"] ++ args.toArray
+    env := #[("LEANFRAN_CLI", some (← IO.appPath).toString)] }
+  child.wait
+
 unsafe def main (args : List String) : IO UInt32 := do
   enableInitializersExecution
   match args with
+  | "sync" :: _ | "check" :: _ | "status" :: _ => packageCommand args
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
   | [] | ["help"] | ["--help"] => IO.print usage; return 0

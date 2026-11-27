@@ -16,10 +16,10 @@ which must belong to a package. The block's definitions live in the namespace
 (`Discount.percent`, `total`).
 
 ```sh
-leanfran sync --package src/myapp
+leanfran --lang python sync --package src/myapp
 ```
 
-`leanfran sync` imports every module of the package, writes each block to a Lake workspace in
+`leanfran --lang python sync` imports every module of the package, writes each block to a Lake workspace in
 `.leanfran/workspace/`, builds it, and generates `src/myapp/_lean/<module>__<name>.py` and
 `src/myapp/_lean/blocks.json`. Lean errors point at the Python file:
 
@@ -31,7 +31,7 @@ Add `.leanfran/` to `.gitignore` and commit `<package>/_lean/`.
 
 At run time `lean(...)` compares a hash of the block (its source, imports, uses, the Lean structures
 of its models and the generator version) with `blocks.json`. If the block changed since the last
-sync, it raises `LeanBlockStale`. With `LEANFRAN_PYTHON_AUTO_SYNC=1` it runs `leanfran sync` instead.
+sync, it raises `LeanBlockStale`. With `LEANFRAN_PYTHON_AUTO_SYNC=1` it runs `leanfran --lang python sync` instead.
 
 - `imports=["Std.Data.HashMap"]`: Lean modules to import.
 - `uses=["geometry"]`: other blocks of the module (or `"pkg.mod:name"`) to import and open. The
@@ -168,7 +168,7 @@ them. Generated functions take and return your classes. Values that skipped vali
 ## Verifying Python functions
 
 `@model` binds a typed, pure Python function to specifications written in a Lean block. The function
-stays ordinary Python. `leanfran check` translates it to Lean and checks your proofs, and
+stays ordinary Python. `leanfran --lang python check` translates it to Lean and checks your proofs, and
 `check_model` runs the same specifications as a Hypothesis property test.
 
 ```python
@@ -190,7 +190,7 @@ def clamp(x: int, lo: int, hi: int) -> int:
     return x
 ```
 
-`leanfran check --package calc` writes the translation and one obligation per specification:
+`leanfran --lang python check --package calc` writes the translation and one obligation per specification:
 
 ```lean
 def LeanPythonModel.calc.calc.clamp (x : Int) (lo : Int) (hi : Int) : Int := Id.run do
@@ -241,8 +241,8 @@ The states:
 | `mismatch`    | the theorem states something else         |
 | `unextracted` | the obligation's statement is not defined |
 
-With `--require proved`, `leanfran check` exits with 254 unless every obligation is proved. It
-writes the result to `leanfran.lock` with a hash of each function's source. `leanfran status`
+With `--require proved`, `leanfran --lang python check` exits with 254 unless every obligation is proved. It
+writes the result to `leanfran.lock` with a hash of each function's source. `leanfran --lang python status`
 reads the lock file without Lean and marks changed functions `stale`.
 
 - `refines=s`: `f x = s x` (`Except.ok (s x)` for a function that may fail); `requires=p`: `p x = true →`
@@ -275,17 +275,20 @@ feature at a time, from functions on `Nat` (01) to types shared between blocks w
 
 ## The CLI
 
-The Python package installs `leanfran`:
+Every command is a command of the executable `leanfran`:
 
 ```
-leanfran sync --package <dir> [--leanfran <path>]
-leanfran check --package <dir> [--leanfran <path>] [--require proved]
-leanfran status --package <dir>
+leanfran --lang python sync --package <dir>
+leanfran --lang python check --package <dir> [--require proved]
+leanfran --lang python status --package <dir>
 ```
 
-`--leanfran` is the path of the Lean executable `leanfran`. It defaults to `$LEANFRAN_CLI`, then
-`leanfran` on `PATH`; the command of the Python package has the same name and is passed over.
-`leanfran --lang python` does the compilation:
+`sync`, `check` and `status` read the Python sources, so `leanfran` runs them as
+`python3 -m leanfran.cli` in the Python environment of the project and passes its own path on.
+Run `leanfran` where `python3` is the interpreter of the project, for example
+`uv run leanfran --lang python sync --package src/myapp`. The Python package itself installs no
+command. When it generates on its own (`LEANFRAN_PYTHON_AUTO_SYNC=1`), it takes the executable
+from `$LEANFRAN_CLI`, then `leanfran` on `PATH`. The same executable does the compilation:
 
 ```
 leanfran --lang python module generate --module-name <Name> [--roots <Name> ...] [--namespace <Name>]
@@ -330,8 +333,8 @@ nix develop ../..#python -c make bench
   types and functions. `LeanPython/Check.lean`: `obligations check`. `LeanPython/Cli.lean`: the CLI.
 - `src/leanfran/runtime.py`, `io_externs.py`: the runtime (`lean_*` are the C names of Lean's
   externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `sync.py`, `models.py`, `cli.py`:
-  `lean(...)` and `leanfran sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
-  `leanfran check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
+  `lean(...)` and `leanfran --lang python sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
+  `leanfran --lang python check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
 - `LeanPythonTest/`: Lean programs of the tests; `../../maint/Python/test-diff.sh` runs `Vectors` and `Io` natively and
   as Python.
 

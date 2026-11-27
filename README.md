@@ -63,7 +63,7 @@ theorem double_eq (n : Nat) : double n = 2 * n := by
 Generate the module and call it as Python:
 
 ```console
-$ uv run leanfran sync --package src/myapp
+$ uv run leanfran --lang python sync --package src/myapp
 leanfran: 1 blocks of myapp checked and generated
 $ uv run python -c 'from myapp.arith import arith; print(arith.double(21))'
 42
@@ -72,7 +72,7 @@ $ uv run python -c 'from myapp.arith import arith; print(arith.double(21))'
 Change the theorem to `double n = 3 * n` and generation stops at the proof:
 
 ```console
-$ uv run leanfran sync --package src/myapp
+$ uv run leanfran --lang python sync --package src/myapp
 leanfran: /tmp/myapp/src/myapp/arith.py:7: error: (lean block arith, Lean 5:17) omega could not prove the goal:
 a possible counterexample may satisfy the constraints
   a ≥ 1

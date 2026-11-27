@@ -16,7 +16,7 @@ Paths in this guide are relative to `langs/Python/`.
   CLI refuses to emit code calling a symbol not in the list.
 - `src/leanfran/marshal.py`: conversion between Python and runtime values, `LeanModel`,
   `LeanInductive` (Lean's JSON encoding), `adopt` for the user's models.
-- `src/leanfran/embed.py`, `sync.py`, `models.py`, `cli.py`: `lean(...)` and `leanfran sync`.
+- `src/leanfran/embed.py`, `sync.py`, `models.py`, `cli.py`: `lean(...)` and `leanfran --lang python sync`.
 - `LeanPythonTest/`: Lean test programs. `Vectors.lean` and `Io.lean` hold the diff-test cases;
   `*Main.lean` are the native oracles. `Public.lean`, `Json.lean`: the public API and JSON tests.
 - `tests/`: pytest. `test-out/` holds generated code (ignored by git).

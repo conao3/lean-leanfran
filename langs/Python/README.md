@@ -29,7 +29,7 @@ theorem double_eq (n : Nat) : double n = 2 * n := by
 Generate the Python modules:
 
 ```sh
-leanfran sync --package src/myapp
+leanfran --lang python sync --package src/myapp
 ```
 
 Then call the function from your application:

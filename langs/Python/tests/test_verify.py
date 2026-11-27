@@ -10,9 +10,13 @@ import pytest
 from conftest import CLI, ROOT
 
 
-def run(args, cwd):
+def execute(cmd, cwd):
     env = {**os.environ, "LEANFRAN_CLI": str(CLI), "PYTHONPATH": str(cwd)}
-    return subprocess.run([sys.executable, *args], cwd=cwd, env=env, capture_output=True, text=True, check=False)
+    return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, check=False)
+
+
+def run(args, cwd):
+    return execute([str(CLI), "--lang", "python", *args], cwd)
 
 
 @pytest.fixture(scope="module")
@@ -24,7 +28,7 @@ def project(tmp_path_factory):
             shutil.copytree(src, d / name, ignore=shutil.ignore_patterns("_lean", "__pycache__"))
         else:
             shutil.copy(src, d / name)
-    r = run(["-m", "leanfran.cli", "check", "--package", "calc"], d)
+    r = run(["check", "--package", "calc"], d)
     assert r.returncode == 0, r.stderr
     return d
 
@@ -47,18 +51,18 @@ def test_check(project):
     lock = json.loads((project / "leanfran.lock").read_text())
     got = {(q, label): st for q, e in lock.items() for label, st in e["obligations"].items()}
     assert got == EXPECTED
-    r = run(["-m", "leanfran.cli", "check", "--package", "calc", "--require", "proved"], project)
+    r = run(["check", "--package", "calc", "--require", "proved"], project)
     assert r.returncode == 254
 
 
 def test_status_marks_changed_functions(project, tmp_path):
     d = tmp_path / "p"
     shutil.copytree(project, d, ignore=shutil.ignore_patterns(".leanfran"))
-    r = run(["-m", "leanfran.cli", "status", "--package", "calc"], d)
+    r = run(["status", "--package", "calc"], d)
     assert statuses(r.stdout) == EXPECTED
     calc = d / "calc/calc.py"
     calc.write_text(calc.read_text().replace("    if x > hi:\n        return hi\n", ""))
-    r = run(["-m", "leanfran.cli", "status", "--package", "calc"], d)
+    r = run(["status", "--package", "calc"], d)
     got = statuses(r.stdout)
     assert got[("calc.calc:clamp", "refines")] == "stale"
     assert got[("calc.calc:first_or", "refines")] == "proved"
@@ -78,7 +82,7 @@ def test_wrong_proof_and_wrong_statement(project, tmp_path):
         "import LeanPythonModel.calc.calc\n\ntheorem LeanPythonModel.«calc».«calc».sum_to.proof.returns_nat :\n"
         "    LeanPythonModel.«calc».«calc».sum_to.obligation.returns_nat := by\n  intro n\n  rfl\n"
     )
-    r = run(["-m", "leanfran.cli", "check", "--package", "calc"], d)
+    r = run(["check", "--package", "calc"], d)
     got = statuses(r.stdout)
     assert got[("calc.calc:first_or", "refines")] == "mismatch"
     assert got[("calc.calc:sum_to", "returns_nat")] == "failed"
@@ -103,6 +107,6 @@ try:
 except PropertyFailure as e:
     print("counterexample", "the spec gives" in str(e))
 """
-    r = run(["-c", code], project)
+    r = execute([sys.executable, "-c", code], project)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == "counterexample True"

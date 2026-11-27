@@ -7,7 +7,7 @@ from leanfran.cli import main
 def test_command_help(command, capsys):
     assert main([command, "--help"]) == 0
     output = capsys.readouterr()
-    assert f"usage: leanfran {command}" in output.out
+    assert f"usage: leanfran --lang python {command}" in output.out
     assert "--package" in output.out
     assert not output.err
 
