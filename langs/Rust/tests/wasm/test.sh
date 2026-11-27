@@ -4,7 +4,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
-export LEANFRAN_CLI="$root/.lake/build/bin/leanfran"
+export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
 cargo build -q -p leanfran-wasm-test --target wasm32-unknown-unknown --release
 node -e '
 const bytes = require("fs").readFileSync(process.argv[1]);

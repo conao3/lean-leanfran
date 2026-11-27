@@ -24,7 +24,7 @@ without Lean works as long as the Lean source is unchanged.
 
 ## 2. Compile a lake project to Rust modules
 
-`leanfran project generate` builds a lake project and writes a Rust module per Lean module,
+`leanfran --lang rust project generate` builds a lake project and writes a Rust module per Lean module,
 which you commit and build without Lean.
 
 | Sample | What it shows |

@@ -6,7 +6,13 @@ Commands and source paths below are relative to `langs/Rust/`.
 
 ## Installation
 
-See the [Rust quick start](../langs/Rust/README.md) for installation.
+Install the compiler and see the [Rust quick start](../langs/Rust/README.md) for the Cargo dependencies.
+
+```sh
+nix profile install 'github:conao3/lean-leanfran#leanfran'
+```
+
+For Rust verification, install the Cargo command with `nix profile install 'github:conao3/lean-leanfran#cargo-leanfran'` and use the Charon and Aeneas tools from the repository's `nix develop .#rust` environment.
 
 ## Quick start: `lean!`
 
@@ -34,7 +40,7 @@ leanfran::lean! {
 The build script finds every `lean!` in `src/**/*.rs`. For a block that is not in
 `.leanfran/cache/`, it writes the source (wrapped in `namespace <name>`) into the crate's Lean
 package `lean/LeanRustGen/Embed/`, creating `lean/` with a `lakefile.toml` when it is missing,
-runs `lake build`, and runs `leanfran module generate`. Lean errors are reported at the Rust
+runs `lake build`, and runs `leanfran --lang rust module generate`. Lean errors are reported at the Rust
 file and line of the source. `imports` are Lean modules to import; `uses` are other `lean!`
 blocks of the crate, whose module is imported and opened and whose generated types are shared.
 
@@ -77,7 +83,7 @@ the refreshed cache and Lean files.
 ## Quick start: a lake project
 
 ```
-leanfran project generate --lake-dir lean --output-dir src/generated
+leanfran --lang rust project generate --lake-dir lean --output-dir src/generated
 ```
 
 builds the project, uses `lake env`'s `LEAN_PATH` as the search path, and writes
@@ -419,21 +425,22 @@ Commit all of them (and `.leanfran/cache/`). CI runs `cargo leanfran extract && 
 check` and `git diff --exit-code -- lean/LeanRustGen leanfran.lock`.
 
 `cargo leanfran` runs `charon` and `aeneas` (the flake's packages; Aeneas reads only the LLBC
-of its own Charon), `lake` and `leanfran` (`LEANFRAN_CLI`) from `PATH`. Lean comes from elan:
+of its own Charon), `lake` from `PATH`, and `leanfran --lang rust` using the executable from
+`LEANFRAN_CLI` or `PATH`. Lean comes from elan:
 nixpkgs' `leantar` cannot unpack Mathlib's cache. `init --packages-dir <dir>` shares Lake's
 packages (Mathlib's 7.3 GB) between crates.
 
 ## The CLI
 
 ```
-leanfran help | --help | --version | --generator-version
-leanfran module generate (--module-name <Module> | --batch <jobs.json>) [--roots <Name> ...]
+leanfran --lang rust help | --help | --version | --generator-version
+leanfran --lang rust module generate (--module-name <Module> | --batch <jobs.json>) [--roots <Name> ...]
           [--namespace <Name>] [--type-path <Namespace>=<path> ...] [--import <Module> ...]
           [--model-namespace <Name>] [--search-path <dir> ...] [--output-file <path>]
           [--runtime-path <path>] [--facade-path <path>] [--internal-only] [--output json|text]
-leanfran project generate --lake-dir <dir> --output-dir <dir> [--modules <Module> ...]
+leanfran --lang rust project generate --lake-dir <dir> --output-dir <dir> [--modules <Module> ...]
           [--runtime-path <path>] [--facade-path <path>] [--output json|text]
-leanfran crate check --lake-dir <dir> --obligations <file> [--modules <Module> ...]
+leanfran --lang rust crate check --lake-dir <dir> --obligations <file> [--modules <Module> ...]
 ```
 
 `--roots` defaults to the module's public definitions written in its source (not instances).
@@ -441,7 +448,7 @@ leanfran crate check --lake-dir <dir> --obligations <file> [--modules <Module> .
 `@[csimp]` lemmas apply, and `--model-namespace` maps the types of a crate's Aeneas model to its
 Rust types. `crate check` judges the proofs of obligations (used by `cargo leanfran check`).
 Exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted (externs the
-runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `leanfran help` prints all options.
+runtime lacks, unsupported IR, clashing Rust names), 255 other errors. `leanfran --lang rust help` prints all options.
 
 ## Samples
 

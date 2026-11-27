@@ -2,7 +2,7 @@
 # `make verify` extracts the models and checks the proofs again (inside the repository's
 # `nix develop`, with Mathlib in ../../.lake-aeneas/packages) and fails when the committed
 # model, obligations, csimp or lockfile are not up to date.
-export LEANFRAN_CLI := $(abspath ../../.lake/build/bin/leanfran)
+export LEANFRAN_CLI := $(abspath ../../../../.lake/build/bin/leanfran)
 CARGO_LEANFRAN := $(abspath ../../target/debug/cargo-leanfran)
 
 .PHONY: all
@@ -14,7 +14,7 @@ test:
 
 .PHONY: tools
 tools:
-	cd ../.. && lake build leanfran && cargo build -q -p cargo-leanfran
+	cd ../.. && lake --dir ../.. build leanfran && cargo build -q -p cargo-leanfran
 
 .PHONY: verify
 verify: tools

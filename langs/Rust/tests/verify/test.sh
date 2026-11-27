@@ -7,7 +7,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 src="$root/tests/verify"
-export LEANFRAN_CLI="${LEANFRAN_CLI:-$root/.lake/build/bin/leanfran}"
+export LEANFRAN_CLI="${LEANFRAN_CLI:-$root/../../.lake/build/bin/leanfran}"
 cargo build -q -p cargo-leanfran --manifest-path "$root/Cargo.toml"
 clr="$root/target/debug/cargo-leanfran"
 work="$root/test-out/verify"

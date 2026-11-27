@@ -9,7 +9,7 @@
 //! [`Builder::compile`] finds the `lean!` blocks in `src/**/*.rs`, and for each block copies the
 //! cached Rust module from `.leanfran/cache/` to `OUT_DIR`. Blocks without a cache entry are
 //! written into the crate's Lean package (`lean/LeanRustGen/Embed/`), checked with `lake build`
-//! and generated with `leanfran module generate`.
+//! and generated with `leanfran --lang rust module generate`.
 //!
 //! It also compares the `#[leanfran::model]` functions with the lockfile `leanfran.lock`
 //! (without Lean or Charon), reports the stale and unextracted obligations with
@@ -39,7 +39,7 @@ use std::process::Command;
 use syn::visit::Visit;
 use syntax::{file_hash, normalize_path, LeanBlock};
 
-/// Version of the generated code: the `leanfran --generator-version` this crate works with, and part of every
+/// Version of the generated code: the `leanfran --lang rust --generator-version` this crate works with, and part of every
 /// cache key.
 pub const GENERATOR_VERSION: &str = "6";
 
@@ -301,7 +301,7 @@ impl Builder {
     }
 
     /// Generates the cache entries of the `blocks` that `select` accepts and that are not
-    /// cached (with `lake build` and `leanfran module generate`).
+    /// cached (with `lake build` and `leanfran --lang rust module generate`).
     pub fn generate_cache(
         &self,
         blocks: &[Block],
@@ -562,12 +562,10 @@ impl Builder {
                 )));
             }
         }
-        let cli = std::env::var_os("LEANFRAN_CLI")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("leanfran"));
+        let cli = compiler_path();
         let version = run_output(
-            Command::new(&cli).arg("--generator-version"),
-            &cli.display().to_string(),
+            Command::new(&cli).args(["--lang", "rust", "--generator-version"]),
+            &format!("{} --lang rust --generator-version", cli.display()),
         )?;
         if version.trim() != GENERATOR_VERSION {
             return Err(Error::new(format!(
@@ -672,7 +670,7 @@ impl Builder {
         fs::write(&batch, serde_json::Value::Array(jobs).to_string())?;
         let mut cmd = Command::new(&cli);
         cmd.current_dir(&lean)
-            .args(["module", "generate", "--batch"])
+            .args(["--lang", "rust", "module", "generate", "--batch"])
             .arg(&batch);
         if csimp {
             cmd.args(["--import", "LeanRustGen.Csimp"]);
@@ -710,7 +708,7 @@ impl Builder {
                 errors.push(String::from_utf8_lossy(&out.stderr).into_owned());
             }
             return Err(Error::new(format!(
-                "leanfran-build: leanfran module generate failed:\n{}",
+                "leanfran-build: leanfran --lang rust module generate failed:\n{}",
                 errors.join("\n")
             )));
         }
@@ -1057,6 +1055,12 @@ fn map_diagnostics(
     out.into_iter().map(|d| d.trim_end().to_string()).collect()
 }
 
+fn compiler_path() -> PathBuf {
+    std::env::var_os("LEANFRAN_CLI")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("leanfran"))
+}
+
 fn run_output(cmd: &mut Command, what: &str) -> Result<String, Error> {
     let out = cmd
         .output()
@@ -1262,7 +1266,7 @@ impl Builder {
     }
 
     /// Writes the Rust of the models of the opaque functions to `OUT_DIR` from the cache,
-    /// generating the missing ones with `leanfran module generate` unless `cached_only`.
+    /// generating the missing ones with `leanfran --lang rust module generate` unless `cached_only`.
     fn compile_opaque(&self, items: &model::CrateItems, cached_only: bool) -> Result<(), Error> {
         let models = self.opaque_models(items)?;
         let cache = self.cache_dir();
@@ -1282,9 +1286,7 @@ impl Builder {
     }
 
     fn generate_opaque(&self, models: &[&OpaqueModel]) -> Result<(), Error> {
-        let cli = std::env::var_os("LEANFRAN_CLI")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("leanfran"));
+        let cli = compiler_path();
         let lean = self.lean_dir();
         run_output(
             Command::new("lake")
@@ -1317,13 +1319,16 @@ impl Builder {
         fs::write(&batch, serde_json::Value::Array(jobs).to_string())?;
         let mut cmd = Command::new(&cli);
         cmd.current_dir(&lean)
-            .args(["module", "generate", "--batch"])
+            .args(["--lang", "rust", "module", "generate", "--batch"])
             .arg(&batch)
             .args(["--output", "json", "--search-path"]);
         for p in lean_path.trim().split(':').filter(|p| !p.is_empty()) {
             cmd.arg(p);
         }
-        let summary = run_output(&mut cmd, &format!("{} module generate", cli.display()))?;
+        let summary = run_output(
+            &mut cmd,
+            &format!("{} --lang rust module generate", cli.display()),
+        )?;
         let summary: Vec<serde_json::Value> = serde_json::from_str(&summary).unwrap_or_default();
         let cache = self.cache_dir();
         fs::create_dir_all(&cache)?;

@@ -6,10 +6,11 @@ cd "$(dirname "$0")/../../langs/Rust"
 ulimit -s 65536
 export LEAN_BACKTRACE=0
 export LEANFRAN_TEST_VAR=from-the-environment
-lake build leanfran oracle oracle-io LeanRustTest
+lake --dir ../.. build leanfran
+lake build oracle oracle-io LeanRustTest
 mkdir -p test-out
 generate() {
-  .lake/build/bin/leanfran module generate \
+  ../../.lake/build/bin/leanfran --lang rust module generate \
     --module-name "$1" --roots "$2" \
     --search-path .lake/build/lib/lean --runtime-path ::leanfran_runtime \
     --output-file "$3" --output text --internal-only
