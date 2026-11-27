@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process"
 import { readFileSync } from "node:fs"
-import { leanTypescriptCli, readPackage, statusPackage, SyncError, syncPackage } from "./sync.ts"
+import {
+  findCompiler,
+  readPackage,
+  statusPackage,
+  SyncError,
+  syncPackage,
+  TYPESCRIPT_LANG,
+} from "./sync.ts"
 import { checkPackage, csimpFiles, statusModels } from "./verify/check.ts"
 
 const USAGE = `usage: leanfran [--version] <command> [parameters]
@@ -14,11 +21,11 @@ commands:
 
 leanfran sync
   --package <dir>            The package (the directory with package.json and src/) (required)
-  --leanfran-typescript <path>   The Lean CLI (default: $LEANFRAN_TYPESCRIPT, then leanfran-typescript on PATH)
+  --leanfran <path>          The Lean compiler (default: $LEANFRAN_CLI, then leanfran on PATH)
 
 leanfran check
   --package <dir>            The package (required)
-  --leanfran-typescript <path>   as for sync
+  --leanfran <path>          as for sync
   --require proved           Exit with 254 unless every obligation is proved
   Writes <dir>/leanfran.lock and prints one line per obligation: <status> <module>:<function> <label>
 
@@ -29,7 +36,7 @@ leanfran generate
   --lake-dir <dir>           Lake project to build (required)
   --output-dir <dir>         Directory of the TypeScript modules (required)
   --modules <Name> ...       Modules to emit (default: every module the project builds)
-  --leanfran-typescript <path>   as for sync
+  --leanfran <path>          as for sync
 
 exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
 `
@@ -87,23 +94,18 @@ async function main(argv: readonly string[]): Promise<number> {
     return 0
   }
   if (command === "sync") {
-    const args = parseArgs(rest, ["--package", "--leanfran-typescript"])
-    await syncPackage(
-      required(args, "--package"),
-      args.single.get("--leanfran-typescript"),
-      log,
-      csimpFiles,
-    )
+    const args = parseArgs(rest, ["--package", "--leanfran"])
+    await syncPackage(required(args, "--package"), args.single.get("--leanfran"), log, csimpFiles)
     return 0
   }
   if (command === "check") {
-    const args = parseArgs(rest, ["--package", "--leanfran-typescript", "--require"])
+    const args = parseArgs(rest, ["--package", "--leanfran", "--require"])
     const req = args.single.get("--require")
     if (req !== undefined && req !== "proved")
       throw new SyncError(`--require takes proved (got ${req})`, 252)
     const { rows } = await checkPackage(
       required(args, "--package"),
-      args.single.get("--leanfran-typescript"),
+      args.single.get("--leanfran"),
       log,
     )
     for (const r of rows) process.stdout.write(`${r.status.padEnd(12)}${r.fn} ${r.label}\n`)
@@ -122,17 +124,13 @@ async function main(argv: readonly string[]): Promise<number> {
       : 254
   }
   if (command === "generate") {
-    const args = parseArgs(rest, [
-      "--lake-dir",
-      "--output-dir",
-      "--modules",
-      "--leanfran-typescript",
-    ])
-    const cli = leanTypescriptCli(args.single.get("--leanfran-typescript"))
+    const args = parseArgs(rest, ["--lake-dir", "--output-dir", "--modules", "--leanfran"])
+    const cli = findCompiler(args.single.get("--leanfran"))
     const modules = args.modules.length === 0 ? [] : ["--modules", ...args.modules]
     const r = spawnSync(
       cli,
       [
+        ...TYPESCRIPT_LANG,
         "project",
         "generate",
         "--lake-dir",

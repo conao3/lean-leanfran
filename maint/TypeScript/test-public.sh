@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/../../langs/TypeScript"
-lake build leanfran-typescript LeanTsTest oracle-json
+lake --dir ../.. build leanfran
+lake build LeanTsTest oracle-json
 mkdir -p test-out
-gen=(.lake/build/bin/leanfran-typescript module generate --module-name LeanTsTest.Public
+gen=(../../.lake/build/bin/leanfran --lang typescript module generate --module-name LeanTsTest.Public
   --search-path .lake/build/lib/lean --runtime-path ../src/runtime/index.ts --output json)
 "${gen[@]}" --output-file test-out/public.ts > test-out/public.summary.json
 "${gen[@]}" --output-file test-out/public-alt.ts --tag-key _tag --option undefined > test-out/public-alt.summary.json
-.lake/build/bin/leanfran-typescript module generate --module-name LeanTsTest.Json --search-path .lake/build/lib/lean \
+../../.lake/build/bin/leanfran --lang typescript module generate --module-name LeanTsTest.Json --search-path .lake/build/lib/lean \
   --runtime-path ../src/runtime/index.ts --output-file test-out/json.ts --output json > test-out/json.summary.json
 .lake/build/bin/oracle-json > test-out/json.oracle.txt
-.lake/build/bin/leanfran-typescript module generate --module-name LeanTsTest.TsModel --search-path .lake/build/lib/lean \
+../../.lake/build/bin/leanfran --lang typescript module generate --module-name LeanTsTest.TsModel --search-path .lake/build/lib/lean \
   --runtime-path ../src/runtime/index.ts --output-file test-out/ts-model.ts --output json > test-out/ts-model.summary.json
 set +e
 "${gen[@]}" --output-file test-out/public-clash.ts --tag-key amount 2> test-out/public-clash.stderr

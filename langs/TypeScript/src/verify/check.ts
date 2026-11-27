@@ -26,15 +26,16 @@ import { posixRelative, SyncError, tsFiles } from "../scan.ts"
 import {
   aliasFile,
   type Block,
+  findCompiler,
   isRecord,
   leanName,
-  leanTypescriptCli,
   type Log,
   moduleParts,
   type Package,
   run,
   type Summary,
   syncPackage,
+  TYPESCRIPT_LANG,
 } from "../sync.ts"
 import {
   astHash,
@@ -723,8 +724,8 @@ export async function checkPackage(
   cliPath: string | undefined,
   log: Log,
 ): Promise<Checked> {
-  const cli = leanTypescriptCli(cliPath)
-  const first = await syncPackage(dir, cliPath, log, csimpFiles)
+  const cli = findCompiler(cliPath)
+  const first = await syncPackage(dir, cli, log, csimpFiles)
   const { pkg, summaries } = first
   const before = canonicalJson(Object.fromEntries(csimpFiles(pkg)))
   const ws = join(pkg.root, ".leanfran", "workspace")
@@ -833,6 +834,7 @@ export async function checkPackage(
   let results: unknown[] = []
   if (refs.length !== 0) {
     const r = run(cli, [
+      ...TYPESCRIPT_LANG,
       "obligations",
       "check",
       "--search-path",
@@ -845,12 +847,12 @@ export async function checkPackage(
     ])
     if (r.status !== 0) {
       log(r.stderr)
-      throw new SyncError("leanfran-typescript obligations check failed", r.status)
+      throw new SyncError("leanfran --lang typescript obligations check failed", r.status)
     }
     const parsed: unknown = JSON.parse(r.stdout)
     if (!Array.isArray(parsed) || parsed.length !== refs.length)
       throw new SyncError(
-        "leanfran-typescript obligations check returned an unexpected result",
+        "leanfran --lang typescript obligations check returned an unexpected result",
         255,
       )
     results = parsed
@@ -865,7 +867,7 @@ export async function checkPackage(
     const raw = isRecord(res) ? res["status"] : undefined
     if (!isStatus(raw))
       throw new SyncError(
-        `leanfran-typescript obligations check returned no status for ${ref.lean} ${ref.label}`,
+        `leanfran --lang typescript obligations check returned no status for ${ref.lean} ${ref.label}`,
         255,
       )
     let status: Status = raw
@@ -887,7 +889,7 @@ export async function checkPackage(
   const sorted = Object.fromEntries(Object.entries(lock).toSorted(([a], [b]) => a.localeCompare(b)))
   writeFileSync(lockFile(pkg.root), JSON.stringify(sorted, null, 2) + "\n")
   if (canonicalJson(Object.fromEntries(csimpFiles(pkg))) !== before)
-    await syncPackage(dir, cliPath, log, csimpFiles)
+    await syncPackage(dir, cli, log, csimpFiles)
   return { rows, lock: sorted }
 }
 

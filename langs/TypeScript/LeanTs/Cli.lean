@@ -10,14 +10,14 @@ def version : String := "0.13.3"
     `GENERATOR_VERSION` of `src/embed.ts`; `leanfran sync` checks it and puts it into its keys. -/
 def generatorVersion : String := "10"
 
-def usage : String := "usage: leanfran-typescript [--version] [--generator-version] <command> <subcommand> [parameters]
+def usage : String := "usage: leanfran --lang typescript [--version] [--generator-version] <command> <subcommand> [parameters]
 
 commands:
   module generate      Emit a TypeScript module for functions of a Lean module
   project generate     Build a lake project and emit a TypeScript module per Lean module
   obligations check    Judge the proofs of obligations (used by `leanfran check`)
 
-leanfran-typescript module generate
+leanfran --lang typescript module generate
   --module-name <Name>        Lean module to import (required unless --batch)
   --roots <Name> ...          Functions to export (default: the module's public definitions)
   --main <Name>               Also emit the program entry running <Name> as `main`
@@ -44,13 +44,13 @@ leanfran-typescript module generate
   --internal-only             Export the internal functions instead of the public wrappers
   --output json|text          Format of the summary
 
-leanfran-typescript project generate
+leanfran --lang typescript project generate
   --lake-dir <dir>            Lake project to build (required)
   --output-dir <dir>          Directory of the TypeScript modules, one <A>/<B>.ts per module A.B (required)
   --modules <Name> ...        Modules to emit (default: every module the package builds)
   --runtime-path, --output    as above
 
-leanfran-typescript obligations check
+leanfran --lang typescript obligations check
   --modules <Name> ...        Modules to import (required)
   --obligations <file>        JSON array of {\"model\": <Lean name>, \"label\": <label>} (required)
   --search-path <dir> ...     Extra .olean search directories
@@ -132,7 +132,7 @@ partial def parseOpts (args : List String) (o : Opts) : Except String Opts :=
   | a :: _ => .error s!"unknown parameter: {a}"
 
 def fail (code : UInt32) (msg : String) : IO UInt32 := do
-  IO.eprintln s!"leanfran-typescript: {msg}"
+  IO.eprintln s!"leanfran --lang typescript: {msg}"
   return code
 
 structure BlockInfo where
@@ -196,24 +196,24 @@ def printSummary (o : Opts) (toStderr : Bool) (j : Json) : IO Unit := do
   let get (k : String) := j.getObjValD k
   let mod := (get "module").getStr?.toOption.getD ""
   match (get "error").getStr? with
-  | .ok e => IO.eprintln s!"leanfran-typescript: {mod}: {e}"
+  | .ok e => IO.eprintln s!"leanfran --lang typescript: {mod}: {e}"
   | .error _ =>
     if o.output == "json" then out j.compress
     else
       let size (k : String) := (get k).getArr?.toOption.getD #[] |>.size
       out s!"{mod}: {get "functions"} functions, {size "externs"} externs, {size "public"} public, {size "types"} types"
       for s in (get "skipped").getArr?.toOption.getD #[] do
-        IO.eprintln s!"leanfran-typescript: skipped {(s.getObjValD "name").getStr?.toOption.getD ""}: {(s.getObjValD "reason").getStr?.toOption.getD ""}"
+        IO.eprintln s!"leanfran --lang typescript: skipped {(s.getObjValD "name").getStr?.toOption.getD ""}: {(s.getObjValD "reason").getStr?.toOption.getD ""}"
 
 def collect (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) :
     IO (Collected × Environment) := do
-  let ctx : Core.Context := { fileName := "<leanfran-typescript>", fileMap := default, maxHeartbeats := 0 }
+  let ctx : Core.Context := { fileName := "<leanfran --lang typescript>", fileMap := default, maxHeartbeats := 0 }
   let ((r, _), st) ← ((((collectPublics types roots).run {}).run cfg).run').toIO ctx { env }
   return (r, st.env)
 
 def bridges (env : Environment) (cfg : MarshalCfg) (st : MarshalState) (decls : Array IR.Decl) :
     IO (Except String (Array Bridge × MarshalState)) := do
-  let ctx : Core.Context := { fileName := "<leanfran-typescript>", fileMap := default, maxHeartbeats := 0 }
+  let ctx : Core.Context := { fileName := "<leanfran --lang typescript>", fileMap := default, maxHeartbeats := 0 }
   let act : MarshalM (Array Bridge) := decls.mapM fun d => do
     let sym := (tsExternTarget (← getEnv) d.name).getD ""
     let some target := parseTsTarget sym | throwError "{d.name}: malformed TypeScript extern {sym}"
@@ -384,7 +384,7 @@ def obligationsCheck (o : Opts) : IO UInt32 := do
   match ← importAll o o.modules with
   | .error m => fail 252 s!"no .olean for {m} in the search path"
   | .ok env =>
-    let ctx : Core.Context := { fileName := "<leanfran-typescript>", fileMap := default, maxHeartbeats := 0 }
+    let ctx : Core.Context := { fileName := "<leanfran --lang typescript>", fileMap := default, maxHeartbeats := 0 }
     let (out, _) ← ((obls.mapM checkObligation).run').toIO ctx { env }
     IO.println (Json.arr out).compress
     return 0
@@ -406,6 +406,6 @@ unsafe def main (args : List String) : IO UInt32 := do
   | "module" :: "generate" :: rest => withOpts rest moduleGenerate
   | "project" :: "generate" :: rest => withOpts rest projectGenerate
   | "obligations" :: "check" :: rest => withOpts rest obligationsCheck
-  | _ => fail 252 s!"unknown command (see `leanfran-typescript help`)"
+  | _ => fail 252 s!"unknown command (see `leanfran --lang typescript help`)"
 
 end LeanTs.Cli

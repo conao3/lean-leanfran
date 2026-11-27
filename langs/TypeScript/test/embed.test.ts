@@ -9,13 +9,13 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs"
-import { dirname, join, relative, resolve } from "node:path"
+import { delimiter, dirname, join, relative, resolve } from "node:path"
 import { beforeAll, describe, expect, test } from "vite-plus/test"
 import { GENERATOR_VERSION } from "../src/embed.ts"
 
 const ROOT = resolve(import.meta.dirname, "..")
 const CLI = join(ROOT, "src/cli.ts")
-const LEANFRAN_TYPESCRIPT = join(ROOT, ".lake/build/bin/leanfran-typescript")
+const LEANFRAN_CLI = join(ROOT, "../../.lake/build/bin/leanfran")
 const FIXTURE = join(ROOT, "test/embed/app")
 const OUT = join(ROOT, "test-out/embed")
 const NODE_ONLY = join(OUT, "node-only-bin")
@@ -31,7 +31,7 @@ function run(cmd: string, args: readonly string[], cwd: string, env: NodeJS.Proc
   const r = spawnSync(cmd, args, {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, LEANFRAN_TYPESCRIPT, LEANFRAN_TS_AUTO_SYNC: "0", ...env },
+    env: { ...process.env, LEANFRAN_CLI, LEANFRAN_TS_AUTO_SYNC: "0", ...env },
   })
   if (r.error !== undefined) throw r.error
   return { status: r.status ?? -1, stdout: r.stdout, stderr: r.stderr }
@@ -124,8 +124,8 @@ let app = ""
 let appSync: Run = { status: -1, stdout: "", stderr: "" }
 
 beforeAll(() => {
-  if (!existsSync(LEANFRAN_TYPESCRIPT))
-    throw new Error(`${LEANFRAN_TYPESCRIPT} is missing; run lake build leanfran-typescript`)
+  if (!existsSync(LEANFRAN_CLI))
+    throw new Error(`${LEANFRAN_CLI} is missing; run lake --dir ../.. build leanfran`)
   if (!existsSync(join(ROOT, "dist/index.js")))
     throw new Error("dist/index.js is missing; run vp pack")
   mkdirSync(OUT, { recursive: true })
@@ -148,6 +148,30 @@ describe("leanfran sync", () => {
   test("the committed fixture is what sync generates", () => {
     expect(generatedFiles(app)).toEqual(generatedFiles(FIXTURE))
   })
+
+  test(
+    "finds the compiler after the npm CLI on PATH",
+    () => {
+      const dir = copyProject(FIXTURE, "compiler-on-path")
+      const scripts = join(dir, "node_modules/.bin")
+      mkdirSync(scripts)
+      const npmCli = join(scripts, "leanfran")
+      symlinkSync(join(ROOT, "dist/cli.js"), npmCli)
+      const args = [npmCli, "sync", "--package", dir]
+      const missing = run(process.execPath, args, dir, { PATH: scripts, LEANFRAN_CLI: "" })
+      expect(missing.status).toBe(255)
+      expect(missing.stderr).toContain("the compiler `leanfran` is not on PATH (set LEANFRAN_CLI)")
+
+      const synced = run(process.execPath, args, dir, {
+        PATH: [scripts, dirname(LEANFRAN_CLI), process.env["PATH"]].join(delimiter),
+        LEANFRAN_CLI: "",
+      })
+      expect(synced.stderr).toContain("6 blocks of")
+      expect(synced.status).toBe(0)
+      expect(generatedFiles(dir)).toEqual(generatedFiles(FIXTURE))
+    },
+    TIMEOUT,
+  )
 
   test("a block shares the types of the block it uses", () => {
     expect(
@@ -349,9 +373,9 @@ describe("stale blocks", () => {
 })
 
 describe("without Lean", () => {
-  test("the committed fixture runs with node --test when lake and leanfran-typescript are not on PATH", () => {
+  test("the committed fixture runs with node --test when lake and leanfran are not on PATH", () => {
     const env = { PATH: NODE_ONLY }
-    for (const cmd of ["lake", "leanfran-typescript", "lean"]) {
+    for (const cmd of ["lake", "leanfran", "lean"]) {
       const r = spawnSync(cmd, ["--version"], { env })
       expect(r.error?.message).toContain("ENOENT")
     }
@@ -382,12 +406,12 @@ describe("leanfran generate", () => {
 })
 
 describe("versions", () => {
-  test("GENERATOR_VERSION is the generatorVersion of LeanTs/Cli.lean and of leanfran-typescript", () => {
+  test("GENERATOR_VERSION is the generatorVersion of LeanTs/Cli.lean and of leanfran --lang typescript", () => {
     const m = /^def generatorVersion : String := "([^"]*)"$/mu.exec(
       readFileSync(join(ROOT, "LeanTs/Cli.lean"), "utf8"),
     )
     expect(m?.[1]).toBe(GENERATOR_VERSION)
-    expect(run(LEANFRAN_TYPESCRIPT, ["--generator-version"], ROOT).stdout).toBe(
+    expect(run(LEANFRAN_CLI, ["--lang", "typescript", "--generator-version"], ROOT).stdout).toBe(
       `${GENERATOR_VERSION}\n`,
     )
   })
@@ -405,11 +429,11 @@ describe("cli parameters", () => {
     expect(r.stderr).toContain("--package is required")
   })
 
-  test("leanfran-typescript --batch with an invalid file exits with 252", () => {
+  test("leanfran --lang typescript --batch with an invalid file exits with 252", () => {
     const f = join(OUT, "bad-batch.json")
     mkdirSync(dirname(f), { recursive: true })
     writeFileSync(f, '[{"module": "X"}]')
-    const r = run(LEANFRAN_TYPESCRIPT, ["module", "generate", "--batch", f], ROOT)
+    const r = run(LEANFRAN_CLI, ["--lang", "typescript", "module", "generate", "--batch", f], ROOT)
     expect(r.status).toBe(252)
     expect(r.stderr).toContain("invalid --batch file")
   })
