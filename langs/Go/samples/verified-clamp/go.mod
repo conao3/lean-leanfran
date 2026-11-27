@@ -6,4 +6,4 @@ require github.com/conao3/leanfran-go v0.13.3
 
 replace github.com/conao3/leanfran-go => ../..
 
-tool github.com/conao3/leanfran-go/cmd/leanfran
+tool github.com/conao3/leanfran-go/cmd/leanfran-go

@@ -14,7 +14,7 @@ func main() {
 
 func run(args []string) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		_, err := fmt.Fprintln(os.Stdout, "usage: leanfran sync|check [--dir dir] [--verbose]\n       leanfran status [--dir dir]")
+		_, err := fmt.Fprintln(os.Stdout, "usage: leanfran --lang go sync|check [--dir dir] [--verbose]\n       leanfran --lang go status [--dir dir]")
 		if len(args) == 0 || err != nil {
 			return 1
 		}
@@ -25,7 +25,7 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "leanfran: unknown command %q\n", command)
 		return 1
 	}
-	flags := flag.NewFlagSet("leanfran "+command, flag.ContinueOnError)
+	flags := flag.NewFlagSet("leanfran --lang go "+command, flag.ContinueOnError)
 	dir := flags.String("dir", ".", "directory within the Go module")
 	var require string
 	var verbose bool

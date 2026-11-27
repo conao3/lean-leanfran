@@ -22,7 +22,7 @@ git ls-files -z -- 'samples/*/go.mod' 'testdata/*/go.mod' |
     done
 
 lake --dir ../.. build leanfran
-export LEANFRAN_CLI="$PWD/../../.lake/build/bin/leanfran"
+cli="$PWD/../../.lake/build/bin/leanfran"
 for sample in samples/verified-clamp samples/verified-nibble; do
-    (cd "$sample" && go tool leanfran check --require proved)
+    (cd "$sample" && "$cli" --lang go check --require proved)
 done

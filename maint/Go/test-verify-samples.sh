@@ -3,12 +3,12 @@ set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
 root=$PWD
-export LEANFRAN_CLI="$root/../../.lake/build/bin/leanfran"
+cli="$root/../../.lake/build/bin/leanfran"
 mkdir -p test-out
 out=$(mktemp -d "$root/test-out/verified.XXXXXX")
 trap 'rm -rf "$out"' EXIT
 for sample in verified-clamp verified-nibble; do
-    (cd "samples/$sample" && go tool leanfran status)
+    (cd "samples/$sample" && "$cli" --lang go status)
     dest="$out/$sample"
     mkdir "$dest"
     git ls-files --cached --others --exclude-standard "samples/$sample" |
@@ -18,11 +18,11 @@ for sample in verified-clamp verified-nibble; do
     go mod edit -modfile "$dest/go.mod" -replace "github.com/conao3/leanfran-go=$root"
     (
         cd "$dest"
-        go tool leanfran check --require proved
+        "$cli" --lang go check --require proved
         go test -count=1 ./...
         go vet ./...
         test -z "$(gofmt -l .)"
-        go tool leanfran status
+        "$cli" --lang go status
         for file in leanfran.json leanfran_*_gen.go leanfran_model_test.go; do
             cmp "$root/samples/$sample/$file" "$file"
         done

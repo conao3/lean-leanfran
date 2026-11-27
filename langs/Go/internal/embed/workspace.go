@@ -94,28 +94,11 @@ func resolveCompiler() (string, error) {
 		}
 		return filepath.Abs(path)
 	}
-	executable, err := os.Executable()
+	path, err := exec.LookPath("leanfran")
 	if err != nil {
-		return "", fmt.Errorf("identify the running Go CLI: %w", err)
+		return "", fmt.Errorf("find leanfran on PATH: %w; %s", err, install)
 	}
-	self, err := os.Stat(executable)
-	if err != nil {
-		return "", fmt.Errorf("stat the running Go CLI: %w", err)
-	}
-	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
-		if !filepath.IsAbs(dir) {
-			continue
-		}
-		path, err := exec.LookPath(filepath.Join(dir, "leanfran"))
-		if err != nil {
-			continue
-		}
-		candidate, err := os.Stat(path)
-		if err == nil && !os.SameFile(self, candidate) {
-			return path, nil
-		}
-	}
-	return "", fmt.Errorf("find leanfran on PATH: %w; %s", exec.ErrNotFound, install)
+	return filepath.Abs(path)
 }
 
 func lakeOutput(dir string, verbose bool, args ...string) (string, error) {
