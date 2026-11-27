@@ -51,9 +51,9 @@ false}`, so the CLI stores the value returned by Lean directly as EDN.
 
 ## Usage
 
-The first run expands `deflean`, so it needs `lean`, `lake`, and the `leanfran`
-CLI on `PATH`; `make` builds the CLI in the repository root and puts it on
-`PATH`. Run everything inside `nix develop` of the repository root.
+The first run expands `deflean`, so it needs `lean`, `lake`, and the shared
+`leanfran` compiler. `make` builds the compiler in the repository root and sets
+`LEANFRAN_CLI`. Run everything inside `nix develop` of the repository root.
 
 ```
 $ make run ARGS='task create-task --title "Buy milk"'

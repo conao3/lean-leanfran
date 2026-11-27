@@ -21,7 +21,7 @@ functions of the namespace.
 
 ## 2. Compile a Lean project to a Clojure namespace
 
-The `leanfran` CLI compiles the modules of a lake project to a Clojure
+`leanfran --lang clojure` compiles the modules of a lake project to a Clojure
 namespace, which you commit and load without Lean.
 
 | Sample | What it shows |

@@ -90,6 +90,13 @@
       (throw (ex-info (str "leanfran: `" name "` was not found on PATH") {:executable name}))))
 
 
+(defn- compiler-exe
+  []
+  (if-let [path (System/getenv "LEANFRAN_CLI")]
+    (.getAbsolutePath (io/file path))
+    (find-exe "leanfran")))
+
+
 (defn- sh!
   [dir & args]
   (apply sh/sh (concat args [:dir (str dir)])))
@@ -189,16 +196,16 @@
 
 
 (defn- check-cli!
-  "Stop when the `leanfran` CLI on PATH is another version than this library."
+  "Check that the Clojure compiler and the library have the same version."
   []
   (when-not @cli-checked
-    (let [{:keys [out]} (sh/sh (find-exe "leanfran") "--version")
+    (let [{:keys [out]} (sh/sh (compiler-exe) "--lang" "clojure" "--version")
           v (second (re-find #"^leanfran (\S+)" (str out)))]
       (when-not (= v generator-version)
-        (throw (ex-info (str "leanfran: the leanfran CLI on PATH is version " v
+        (throw (ex-info (str "leanfran --lang clojure: compiler version " v
                              ", but the library is " generator-version
-                             "; install the CLI of the same version (nix profile install github:conao3/leanfran/v"
-                             generator-version ")")
+                             ". Install the matching compiler with nix profile install 'github:conao3/lean-leanfran/v"
+                             generator-version "#leanfran'.")
                         {:cli v :library generator-version})))
       (reset! cli-checked true))))
 
@@ -214,7 +221,8 @@
                              (relocate-messages (str (:out r) (:err r)) rel offset block where)
                              "\nLean source of the block:\n" (numbered src))
                         {:block block :module module :exit exit}))))
-    (let [{:keys [exit err]} (sh! ws (find-exe "leanfran")
+    (let [{:keys [exit err]} (sh! ws (compiler-exe)
+                                  "--lang" "clojure"
                                   "module" "generate-namespace"
                                   "--module-name" module
                                   "--namespace" (str ns-name)
@@ -222,7 +230,7 @@
                                   "--forms-only"
                                   "--output-file" (.getAbsolutePath out))]
       (when-not (zero? exit)
-        (throw (ex-info (str "leanfran: code generation failed for deflean " block "\n" err)
+        (throw (ex-info (str "leanfran --lang clojure: code generation failed for deflean " block "\n" err)
                         {:block block :module module :exit exit})))
       (str (str/join (for [l (str/split-lines (str err)) :when (str/starts-with? l "leanfran: skipped")]
                        (str ";; " l "\n")))

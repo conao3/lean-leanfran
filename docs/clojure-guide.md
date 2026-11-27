@@ -137,7 +137,7 @@ project root, the nearest directory up from the working directory with a
   block needs no Lean.
 - An error from Lean points at the Clojure file and line of the form it came
   from, followed by the Lean source of the block.
-- The `leanfran` CLI on `PATH` must be the version of the library.
+- `deflean` calls `leanfran --lang clojure` using the executable at `LEANFRAN_CLI` or, if unset, `leanfran` on `PATH`. The compiler and the library must have the same version.
 
 clj-kondo picks up the names a block defines through the hook exported in
 `resources/clj-kondo.exports/io.github.conao3/leanfran`.
@@ -258,13 +258,15 @@ function schemas of the `lt/defn` functions of namespaces and instruments them
 
 ## The CLI
 
+Install the compiler with `nix profile install 'github:conao3/lean-leanfran#leanfran'`.
+
 ```
-leanfran module generate-namespace --module-name <Lean module> --namespace <Clojure ns>
+leanfran --lang clojure module generate-namespace --module-name <Lean module> --namespace <Clojure ns>
          [--roots <Lean name> ...] [--strip-namespace <Lean namespace>]
          [--search-path <dir> ...] [--output-file <path>] [--forms-only]
          [--output json|text]
 
-leanfran project generate --lake-dir <dir> --namespace-prefix <ns>
+leanfran --lang clojure project generate --lake-dir <dir> --namespace-prefix <ns>
          --output-dir <dir> [--modules <Lean module> ...]
 ```
 
@@ -305,7 +307,7 @@ where to start.
 ## Development
 
 ```
-make build     # lake build
+make build     # build the shared compiler
 make test      # diff-test against the C backend, then the Clojure tests
 make check     # format check, lint, and all tests
 make format

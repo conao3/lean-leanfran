@@ -10,7 +10,7 @@ Paths in this guide are relative to `langs/Clojure/`.
 - `LeanClj/EmitClj.lean`: the emitter. Collects IR decls from roots, emits
   Clojure forms, and derives the marshalling descriptors of public functions.
 - `LeanClj/Sx.lean`: S-expression tree and layout.
-- `LeanClj/Cli.lean`: the `leanfran` CLI.
+- `LeanClj/Cli.lean`: the commands of `leanfran --lang clojure`.
 - `src/leanfran/runtime.clj`: runtime. `lean_*` functions are named after the C
   symbols of Lean externs; generated code checks at load time that every
   symbol it uses exists (`check-symbols!`).
@@ -31,6 +31,8 @@ Paths in this guide are relative to `langs/Clojure/`.
   match the C backend byte for byte.
 
 ## Verification
+
+`make build` runs `lake --dir ../.. build leanfran`. The tests use that compiler with `--lang clojure`.
 
 ```
 nix develop ../..#clojure --command make check
