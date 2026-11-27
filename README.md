@@ -37,10 +37,10 @@ leanfran brings Lean 4 to Rust, Python, TypeScript, Clojure, PHP, Go, and C. Wri
 
 ## Quick look
 
-Install the Python compiler and Lean 4.35.0, and start a project:
+Install the compiler `leanfran` and Lean 4.35.0, and start a project:
 
 ```console
-$ nix profile install 'github:conao3/lean-leanfran#python'
+$ nix profile install 'github:conao3/lean-leanfran#leanfran'
 $ elan default leanprover/lean4:v4.35.0
 $ uv init --lib myapp && cd myapp
 $ uv add leanfran
@@ -95,7 +95,7 @@ leanfran compiles Lean's compiler IR into source code for the selected language.
 | Clojure    | [Clojure quick start](langs/Clojure/README.md)       | [io.github.conao3/leanfran on Clojars](https://clojars.org/io.github.conao3/leanfran) | `deflean`, Clojure values, JVM namespaces      |
 | PHP        | [PHP quick start](langs/PHP/README.md)               | [conao3/leanfran on Packagist](https://packagist.org/packages/conao3/leanfran) | `#[Lean]`, `#[Model]`, Composer CLI |
 | Go         | [Go quick start](langs/Go/README.md)                 | [leanfran-go on pkg.go.dev](https://pkg.go.dev/github.com/conao3/leanfran-go) | `go get github.com/conao3/leanfran-go`, embedded Lean, Go module tool |
-| C          | [C quick start](langs/C/README.md)                   | [Git tags](https://github.com/conao3/lean-leanfran/tags), Nix flake output `#c` | `leanfran:lean` comments, C headers, pkg-config, Make and CMake |
+| C          | [C quick start](langs/C/README.md)                   | [Git tags](https://github.com/conao3/lean-leanfran/tags), Nix flake output `#leanfran` | `leanfran:lean` comments, C headers, pkg-config, Make and CMake |
 
 ## What you can build
 
@@ -109,25 +109,14 @@ Proofs are theorems about Lean definitions. The code that runs is generated from
 
 ## Get started
 
-Choose a language above and install its host package and compiler. Lean 4.35.0 is required for generation and proof checking. With Nix, install a compiler from this repository:
+Choose a language above and install its host package and the compiler. Lean 4.35.0 is required for generation and proof checking. One executable, `leanfran`, compiles to every language; `--lang` selects the language. With Nix, install it from this repository:
 
 ```sh
-nix profile install 'github:conao3/lean-leanfran#python'
+nix profile install 'github:conao3/lean-leanfran#leanfran'
+leanfran --lang python module generate --module-name MyModule --search-path .lake/build/lib/lean --output-file my_module.py
 ```
 
-The compiler targets also include `#rust`, `#typescript`, `#clojure`, and `#php`. The Rust package also includes the Cargo CLI and Aeneas verification tools. For PHP, build the compiler from a checkout with `nix build .#php` and install the runtime from Packagist with `composer require conao3/leanfran`.
-
-Nix can install the Go compiler from any directory.
-
-```sh
-nix profile install 'github:conao3/lean-leanfran#go'
-```
-
-Install the C compiler `leanfran-c` the same way. Its headers and link settings come from the generation commands.
-
-```sh
-nix profile install 'github:conao3/lean-leanfran#c'
-```
+`--lang` takes `rust`, `python`, `typescript`, `clojure`, `php`, `go` or `c`. The package also holds the Lean library of the Go backend and the C support files. The `#rust` package adds the Cargo CLI and the Aeneas verification tools to the compiler. Without Nix, build the compiler from a checkout of a release tag with `lake build leanfran`.
 
 Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to your application, and the [C quick start](langs/C/README.md) to generate and link a C library. Follow the other language quick starts for their dependencies, project setup, and generation commands.
 

@@ -1,13 +1,8 @@
 name = "leanfran-go"
-defaultTargets = ["leanfran-go"]
+defaultTargets = ["LeanGo"]
 
 [[lean_lib]]
 name = "LeanGo"
-
-[[lean_exe]]
-name = "leanfran-go"
-root = "Main"
-supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanGoTest"

@@ -9,9 +9,9 @@ make format
 make check BACKENDS="Python TypeScript"
 ```
 
-The root `flake.nix` and `flake.lock` define the development environments and compiler packages. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure PHP Go C`. To use backend-specific commands, run `nix develop .#python` or select the `.#rust`, `.#typescript`, `.#clojure`, `.#php`, `.#php85`, `.#go`, `.#go126`, or `.#c` shell at the root, then enter the backend directory. `nix develop` provides all toolsets.
+The root `flake.nix` and `flake.lock` define the development environments and the compiler package. The root Makefile selects a named environment for each backend. `BACKENDS` defaults to `Rust Python TypeScript Clojure PHP Go C`. To use backend-specific commands, run `nix develop .#python` or select the `.#rust`, `.#typescript`, `.#clojure`, `.#php`, `.#php85`, `.#go`, `.#go126`, or `.#c` shell at the root, then enter the backend directory. `nix develop` provides all toolsets.
 
-Build compiler packages with `nix build .#python` or select the `.#typescript`, `.#clojure`, `.#rust`, `.#php`, `.#go`, or `.#c` target. The Rust package includes the compiler, Cargo CLI, and Aeneas. `nix fmt` formats Nix, Rust, and Python across the repository. `make format` also formats TypeScript, Clojure, PHP, Go, and C. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
+The root `lakefile.toml` builds the compiler: `lake build leanfran` writes `.lake/build/bin/leanfran`, one executable that holds every backend, and `--lang` selects the backend. The command line of a backend is the module `Lean<X>.Cli` in `langs/<language>/Lean<X>/Cli.lean`. Each backend's Makefile builds the compiler with `lake --dir ../.. build leanfran`. `nix build .#leanfran` builds the compiler package; `.#rust` adds the Cargo CLI and Aeneas to it. `nix fmt` formats Nix, Rust, and Python across the repository. `make format` also formats TypeScript, Clojure, PHP, Go, and C. Maintenance scripts live in `maint/`, with backend-specific scripts in its language subdirectories.
 
 ## Backend development
 
@@ -37,11 +37,11 @@ Pull requests run the checks for affected backends, including cross-backend test
 
 Run `make pack` in TypeScript before `npm pack` or `npm publish`, and `clojure -T:build jar` in Clojure to build its JAR. Build Python distributions with `uv build` and Rust crates with `cargo package` inside their backend environments.
 
-PHP applications install the runtime from Packagist with `composer require conao3/leanfran`. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag. Build the compiler with `nix build .#php`.
+PHP applications install the runtime from Packagist with `composer require conao3/leanfran`. The release snapshot places the Composer manifest, runtime, README, license, and any CLI scripts at the root of the read-only mirror `conao3/leanfran-php`. Packagist derives the package version from the mirror's Git tag.
 
-Go applications install the module with `go get github.com/conao3/leanfran-go`. The release snapshot places the module and its license at the root of the read-only mirror `conao3/leanfran-go`. Go resolves versions from the mirror's Git tags. Build the compiler with `nix build .#go`.
+Go applications install the module with `go get github.com/conao3/leanfran-go`. The release snapshot places the module and its license at the root of the read-only mirror `conao3/leanfran-go`. Go resolves versions from the mirror's Git tags.
 
-C applications build the compiler and support files with `nix build .#c`. See the [C guide](docs/c-guide.md) for generating an API and linking it with the Lean toolchain.
+C applications build the compiler and support files with `nix build .#leanfran`. See the [C guide](docs/c-guide.md) for generating an API and linking it with the Lean toolchain.
 
 ## Releases
 

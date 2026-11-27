@@ -1,13 +1,8 @@
 name = "leanfran-python"
-defaultTargets = ["leanfran-python"]
+defaultTargets = ["LeanPython"]
 
 [[lean_lib]]
 name = "LeanPython"
-
-[[lean_exe]]
-name = "leanfran-python"
-root = "Main"
-supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanPythonTest"

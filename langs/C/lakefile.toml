@@ -1,6 +1,6 @@
 name = "leanfran-c"
 version = "0.13.3"
-defaultTargets = ["leanfran-c", "LeanCLib"]
+defaultTargets = ["LeanCLib"]
 
 [[lean_lib]]
 name = "LeanC"
@@ -19,11 +19,6 @@ text = true
 name = "cLib"
 path = "lean/LeanCLib"
 text = true
-
-[[lean_exe]]
-name = "leanfran-c"
-root = "Main"
-supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanCLib"

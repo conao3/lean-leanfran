@@ -1,13 +1,8 @@
 name = "leanfran"
-defaultTargets = ["leanfran"]
+defaultTargets = ["LeanRust"]
 
 [[lean_lib]]
 name = "LeanRust"
-
-[[lean_exe]]
-name = "leanfran"
-root = "Main"
-supportInterpreter = true
 
 [[lean_lib]]
 name = "LeanRustTest"

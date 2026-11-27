@@ -57,56 +57,6 @@
               exec ${nodejs}/bin/node "$vp_cli" "$@"
             '';
           };
-          mkCompiler =
-            backend: library: binary:
-            pkgs.stdenv.mkDerivation {
-              pname = "leanfran-${pkgs.lib.toLower backend}";
-              inherit version;
-              src = pkgs.lib.fileset.toSource {
-                root = ./.;
-                fileset = pkgs.lib.fileset.unions (
-                  [
-                    ./lean-toolchain
-                    (./. + "/langs/${backend}/lakefile.toml")
-                    (./. + "/langs/${backend}/lake-manifest.json")
-                    (./. + "/langs/${backend}/Main.lean")
-                    (./. + "/langs/${backend}/${library}.lean")
-                    (./. + "/langs/${backend}/${library}")
-                  ]
-                  ++ pkgs.lib.optional (backend == "Go") ./langs/Go/lean/LeanGoLib
-                  ++ pkgs.lib.optionals (backend == "C") [
-                    ./langs/C/support
-                    ./langs/C/lean/LeanfranC
-                    ./langs/C/lean/LeanCLib
-                  ]
-                );
-              };
-              postUnpack = ''sourceRoot="$sourceRoot/langs/${backend}"'';
-              nativeBuildInputs = [
-                pkgs.lean4
-                pkgs.makeWrapper
-              ];
-              buildPhase = ''
-                runHook preBuild
-                lake build ${binary}
-                runHook postBuild
-              '';
-              installPhase = ''
-                runHook preInstall
-                install -Dm755 .lake/build/bin/${binary} $out/bin/${binary}
-                wrapProgram $out/bin/${binary} --set-default LEAN_SYSROOT ${pkgs.lean4}
-              ''
-              + pkgs.lib.optionalString (backend == "Go") ''
-                install -Dm644 lean/LeanGoLib/Go.lean $out/share/leanfran-go/LeanGoLib/Go.lean
-              ''
-              + pkgs.lib.optionalString (backend == "C") ''
-                install -Dm644 -t $out/share/leanfran-c support/leanfran.h support/leanfran.c
-              ''
-              + ''
-                runHook postInstall
-              '';
-              meta.mainProgram = binary;
-            };
           common = [
             pkgs.lean4
             config.treefmt.build.wrapper
@@ -178,13 +128,6 @@
         in
         {
           packages = {
-            rust-compiler = mkCompiler "Rust" "LeanRust" "leanfran";
-            python = mkCompiler "Python" "LeanPython" "leanfran-python";
-            typescript = mkCompiler "TypeScript" "LeanTs" "leanfran-typescript";
-            clojure = mkCompiler "Clojure" "LeanClj" "leanfran";
-            php = mkCompiler "PHP" "LeanPhp" "leanfran-php";
-            go = mkCompiler "Go" "LeanGo" "leanfran-go";
-            c = mkCompiler "C" "LeanC" "leanfran-c";
             leanfran = pkgs.stdenv.mkDerivation {
               pname = "leanfran";
               inherit version;
@@ -260,12 +203,12 @@
             rust = pkgs.symlinkJoin {
               name = "leanfran-${version}";
               paths = [
-                config.packages.rust-compiler
+                config.packages.leanfran
                 config.packages.cargo-leanfran
                 inputs.aeneas.packages.${system}.default
               ];
             };
-            default = config.packages.rust;
+            default = config.packages.leanfran;
           };
           devShells = {
             default = pkgs.mkShell {
