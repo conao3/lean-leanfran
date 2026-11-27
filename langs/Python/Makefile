@@ -3,7 +3,8 @@
 .PHONY: build gen-externs test samples format format-check bench check
 
 build:
-	lake build leanfran-python oracle oracle-io oracle-json oracle-bench LeanPythonTest
+	lake --dir ../.. build leanfran
+	lake build oracle oracle-io oracle-json oracle-bench LeanPythonTest
 	uv sync -q
 
 gen-externs:
@@ -16,7 +17,7 @@ test: build
 
 # Sync, run and compare every sample; the committed generated modules must be up to date.
 samples: build
-	for s in samples/*/ samples/steps/*/; do [ -f $$s/expected.txt ] || continue; LEANFRAN_PYTHON_CLI=$(CURDIR)/.lake/build/bin/leanfran-python samples/run.sh $$s || exit 1; done
+	for s in samples/*/ samples/steps/*/; do [ -f $$s/expected.txt ] || continue; LEANFRAN_CLI=$(abspath ../../.lake/build/bin/leanfran) samples/run.sh $$s || exit 1; done
 	git diff --exit-code -- samples
 
 format:

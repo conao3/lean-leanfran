@@ -104,7 +104,7 @@ def reimport(pkg):
 
 def check_package(pkg_dir, cli=None, out=sys.stderr):
     pkg_dir = pathlib.Path(pkg_dir).resolve()
-    cli = cli or shutil.which("leanfran-python")
+    cli = sync.find_cli(cli)
     sync.sync_package(pkg_dir, cli=cli, out=out)
     root = sync.project_root(pkg_dir)
     ws = root / ".leanfran" / "workspace"
@@ -222,6 +222,7 @@ def check_package(pkg_dir, cli=None, out=sys.stderr):
     r = subprocess.run(
         [
             cli,
+            *sync.LANG,
             "obligations",
             "check",
             "--search-path",
@@ -238,7 +239,7 @@ def check_package(pkg_dir, cli=None, out=sys.stderr):
     )
     if r.returncode != 0:
         print(r.stderr, file=out)
-        raise sync.SyncError("leanfran-python obligations check failed", r.returncode)
+        raise sync.SyncError("leanfran --lang python obligations check failed", r.returncode)
     results = json.loads(r.stdout)
     for (s, label), res in zip(obligation_refs, results, strict=True):
         theorem = f"{s.fn.__qualname__}.proof.{label}"

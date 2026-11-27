@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sync the Lean blocks of a sample, run it, and compare its output with expected.txt.
-# usage: samples/run.sh <sample dir>   (LEANFRAN_PYTHON_CLI points at the built leanfran-python)
+# usage: samples/run.sh <sample dir>   (LEANFRAN_CLI points at the built leanfran)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 dir=$(cd "$1" && pwd)

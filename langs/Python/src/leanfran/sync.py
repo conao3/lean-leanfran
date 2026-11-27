@@ -9,8 +9,11 @@ import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 
 from leanfran import embed, models
+
+LANG = ["--lang", "python"]
 
 LAKEFILE = """name = "leanfran-python-workspace"
 defaultTargets = ["LeanPythonEmbed"]
@@ -149,12 +152,26 @@ def lake_messages(output, offsets):
     return out
 
 
+def find_cli(cli=None):
+    """The executable ``leanfran``: the given path, ``$LEANFRAN_CLI``, then ``leanfran`` on PATH.
+
+    The command of this package is also named ``leanfran``, so a candidate in the scripts
+    directory of this Python environment is passed over."""
+    cli = cli or os.environ.get("LEANFRAN_CLI")
+    if cli:
+        return cli
+    scripts = pathlib.Path(sysconfig.get_path("scripts")).resolve()
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        found = shutil.which("leanfran", path=d) if d else None
+        if found and pathlib.Path(found).resolve().parent != scripts:
+            return found
+    raise SyncError("the executable `leanfran` is not on PATH (set LEANFRAN_CLI)", 255)
+
+
 def sync_package(pkg_dir, cli=None, out=sys.stderr):
     pkg_dir = pathlib.Path(pkg_dir).resolve()
-    cli = cli or os.environ.get("LEANFRAN_PYTHON_CLI") or shutil.which("leanfran-python")
-    if cli is None:
-        raise SyncError("the Lean CLI `leanfran-python` is not on PATH (set LEANFRAN_PYTHON_CLI)", 255)
-    gv = subprocess.run([cli, "--generator-version"], check=True, capture_output=True, text=True).stdout.strip()
+    cli = find_cli(cli)
+    gv = subprocess.run([cli, *LANG, "--generator-version"], check=True, capture_output=True, text=True).stdout.strip()
     if gv != embed.GENERATOR_VERSION:
         raise SyncError(f"{cli} generates version {gv}, this package expects {embed.GENERATOR_VERSION}", 255)
 
@@ -237,6 +254,7 @@ def sync_package(pkg_dir, cli=None, out=sys.stderr):
     r = subprocess.run(
         [
             cli,
+            *LANG,
             "module",
             "generate",
             "--batch",
@@ -252,7 +270,7 @@ def sync_package(pkg_dir, cli=None, out=sys.stderr):
     )
     if r.returncode != 0:
         print(r.stderr + r.stdout, file=out)
-        raise SyncError("leanfran-python module generate failed", r.returncode)
+        raise SyncError("leanfran --lang python module generate failed", r.returncode)
     summaries = json.loads(r.stdout)
     for s in summaries:
         for sk in s.get("skipped", []):

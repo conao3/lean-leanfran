@@ -11,7 +11,7 @@ from conftest import CLI, ROOT
 
 
 def run(args, cwd):
-    env = {**os.environ, "LEANFRAN_PYTHON_CLI": str(CLI), "PYTHONPATH": str(cwd)}
+    env = {**os.environ, "LEANFRAN_CLI": str(CLI), "PYTHONPATH": str(cwd)}
     return subprocess.run([sys.executable, *args], cwd=cwd, env=env, capture_output=True, text=True, check=False)
 
 

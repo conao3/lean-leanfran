@@ -6,7 +6,7 @@
 
 ```sh
 uv add leanfran
-nix profile install 'github:conao3/lean-leanfran#python'
+nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
 Generation also requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Generated modules run with the Python package and pydantic.

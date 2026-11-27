@@ -278,21 +278,22 @@ feature at a time, from functions on `Nat` (01) to types shared between blocks w
 The Python package installs `leanfran`:
 
 ```
-leanfran sync --package <dir> [--leanfran-python <path>]
-leanfran check --package <dir> [--leanfran-python <path>] [--require proved]
+leanfran sync --package <dir> [--leanfran <path>]
+leanfran check --package <dir> [--leanfran <path>] [--require proved]
 leanfran status --package <dir>
 ```
 
-`--leanfran-python` defaults to `$LEANFRAN_PYTHON_CLI`, then `leanfran-python` on `PATH`. The Lean CLI
-`leanfran-python` does the compilation:
+`--leanfran` is the path of the Lean executable `leanfran`. It defaults to `$LEANFRAN_CLI`, then
+`leanfran` on `PATH`; the command of the Python package has the same name and is passed over.
+`leanfran --lang python` does the compilation:
 
 ```
-leanfran-python module generate --module-name <Name> [--roots <Name> ...] [--namespace <Name>]
+leanfran --lang python module generate --module-name <Name> [--roots <Name> ...] [--namespace <Name>]
   [--import <Name> ...] [--search-path <dir> ...] [--output-file <path>] [--internal-only]
   [--output json|text] [--type-module <Name>=<module> ...] [--model-module <Name>=<module> ...]
   [--batch <file>]
-leanfran-python obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
-leanfran-python --version | --generator-version | help
+leanfran --lang python obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
+leanfran --lang python --version | --generator-version | help
 ```
 
 `module generate` writes one Python module with the IR of the roots and of everything they call
