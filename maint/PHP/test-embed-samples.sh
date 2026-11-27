@@ -14,8 +14,8 @@ for sample in embed-range embed-orders; do
     bash samples/run.sh "$project" main.php
     (
         cd "$project"
-        LEANFRAN_CLI="$compiler" vendor/bin/leanfran sync
-        vendor/bin/leanfran status
+        "$compiler" --lang php sync
+        "$compiler" --lang php status
         diff -ru "$OLDPWD/samples/$sample/src" src
     )
 done

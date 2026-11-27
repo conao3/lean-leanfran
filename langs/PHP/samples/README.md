@@ -14,7 +14,7 @@ The repository samples install `conao3/leanfran` from the PHP backend directory 
 nix develop .#php -c make -C langs/PHP samples
 ```
 
-The verified samples run `leanfran check --require proved` before executing their property checks and comparing their output. They install the PHP parser as a development dependency.
+The verified samples run `leanfran --lang php check --require proved` before executing their property checks and comparing their output. They install the PHP parser as a development dependency.
 
 After generating the CLI with `make samples`, run it with another name from its project directory.
 

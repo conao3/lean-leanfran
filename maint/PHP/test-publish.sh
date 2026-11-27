@@ -70,7 +70,8 @@ cat > composer.json <<EOF
 }
 EOF
 composer install --no-interaction
-vendor/bin/leanfran --help | grep -F 'leanfran sync'
+test ! -e vendor/bin/leanfran
+php vendor/conao3/leanfran/bin/leanfran --help | grep -F 'leanfran --lang php sync'
 result=$(php -r 'require "vendor/autoload.php"; echo Conao3\Leanfran\Runtime\lean_nat_add(19, 23);')
 test "$result" = 42
 printf '(e) Composer path install: lean_nat_add(19, 23) = %s\n' "$result"

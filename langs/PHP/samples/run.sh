@@ -11,7 +11,7 @@ shift
 php -r 'printf("%s: PHP %s\n", basename(getcwd()), PHP_VERSION);'
 composer update --no-interaction --no-progress --no-audit
 if [[ "$1" == --verify ]]; then
-    vendor/bin/leanfran check --require proved
+    "${LEANFRAN_CLI:-leanfran}" --lang php check --require proved
     shift
 fi
 output=$(mktemp)

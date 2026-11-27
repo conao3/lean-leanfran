@@ -3,6 +3,6 @@
 
 declare(strict_types=1);
 
-require $GLOBALS['_composer_autoload_path'] ?? __DIR__ . '/../vendor/autoload.php';
+require dirname($_SERVER['SCRIPT_FILENAME'], 4) . '/autoload.php';
 
 exit(Conao3\Leanfran\Embed\Cli::run(array_slice($argv, 1)));

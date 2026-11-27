@@ -23,19 +23,19 @@ For `App\Pricing` in `src/Pricing.php`, leanfran writes the `App\Pricing\Functio
 
 ### Commands and configuration
 
-Run the Composer binary from the application directory. Pass `--package dir` to select a package in another directory.
+Run the `leanfran` executable with `--lang php` from the application directory. Pass `--package dir` to select a package in another directory.
 
 | Command | Effect |
 | --- | --- |
-| `vendor/bin/leanfran sync` | Scans the package, builds the blocks in `.leanfran/workspace`, and replaces their generated PHP and manifests after every block succeeds. |
-| `vendor/bin/leanfran status` | Reports stale or removed blocks, missing generated files, and saved proof states. It runs without Lean and exits 1 if outputs or proof results are stale. |
-| `vendor/bin/leanfran check` | Runs `sync`, translates PHP models, and checks their Lean proofs. Accepts `--require proved` to enforce a proof policy. |
+| `leanfran --lang php sync` | Scans the package, builds the blocks in `.leanfran/workspace`, and replaces their generated PHP and manifests after every block succeeds. |
+| `leanfran --lang php status` | Reports stale or removed blocks, missing generated files, and saved proof states. It runs without Lean and exits 1 if outputs or proof results are stale. |
+| `leanfran --lang php check` | Runs `sync`, translates PHP models, and checks their Lean proofs. Accepts `--require proved` to enforce a proof policy. |
 
-Commit the generated PHP and manifests. In CI, install Composer dependencies and run `vendor/bin/leanfran status` to verify that the checkout is up to date. Run `check` in jobs that also verify Lean proofs and regenerate the PHP. The CLI keeps its Lake workspace under the ignored `.leanfran/` directory.
+Commit the generated PHP and manifests. In CI, install Composer dependencies and run `leanfran --lang php status` to verify that the checkout is up to date. Run `check` in jobs that also verify Lean proofs and regenerate the PHP. The CLI keeps its Lake workspace under the ignored `.leanfran/` directory.
 
-In `composer.json`, set `extra.leanfran.paths` to a list of package directories to scan. By default, the CLI scans the directories listed in `autoload.psr-4`. Set `extra.leanfran.require` to a list of Lake requirements using the keys from `[[require]]` in a Lake TOML file. Relative dependency paths resolve from the Composer package directory. Composer scripts can run the binary, for example `"lean:sync": "leanfran sync"`.
+In `composer.json`, set `extra.leanfran.paths` to a list of package directories to scan. By default, the CLI scans the directories listed in `autoload.psr-4`. Set `extra.leanfran.require` to a list of Lake requirements using the keys from `[[require]]` in a Lake TOML file. Relative dependency paths resolve from the Composer package directory. Composer scripts can run the executable, for example `"lean:sync": "leanfran --lang php sync"`.
 
-For `sync` and `check`, the CLI selects the compiler from `--leanfran <path>`, then `LEANFRAN_CLI`, then `leanfran` on PATH. It skips the Composer CLI during the PATH search. The output of `leanfran --lang php --generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
+The executable runs the package's `vendor/conao3/leanfran/bin/leanfran` with `php` from PATH and passes its own path in `LEANFRAN_CLI`. It returns that command's exit code and output. If the package has no `vendor/conao3/leanfran`, it prints how to install the package and exits 255. The Composer package installs no `leanfran` command. It uses the executable at `LEANFRAN_CLI` or, if unset, `leanfran` on PATH to compile. The output of `leanfran --lang php --generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
 
 A Lean error in a block starts with the PHP file, line, and column. The message also gives the block's fully qualified PHP class name and the Lean line and column within its source string. When a block fails to build, the previous generated PHP remains available. Proofs of PHP models run after sync has installed the generated files.
 
@@ -131,7 +131,7 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
 end LeanPhpModel.App.Calc
 ```
 
-`vendor/bin/leanfran check` syncs the blocks, translates the modeled functions, builds their Lean definitions and proofs, and writes proof results and input hashes to `leanfran.lock`. It prints a state per obligation.
+`leanfran --lang php check` syncs the blocks, translates the modeled functions, builds their Lean definitions and proofs, and writes proof results and input hashes to `leanfran.lock`. It prints a state per obligation.
 
 | State | Meaning |
 | --- | --- |
@@ -158,17 +158,17 @@ A counterexample throws `Conao3\Leanfran\Verify\PropertyFailure` with the functi
 For a Lean-enabled CI job, install Composer development dependencies, put the `leanfran` compiler and the selected Lean toolchain on PATH, and run the proof and property checks. For the clamp sample, run the following from its Composer directory.
 
 ```sh
-vendor/bin/leanfran check --require proved
+leanfran --lang php check --require proved
 php main.php
 ```
 
-You can run `vendor/bin/leanfran status` in a PHP-only job to check freshness of committed outputs and proof results. Run `check` after editing proof files to refresh their results and enforce the `proved` policy.
+You can run `leanfran --lang php status` in a job with PHP and the `leanfran` executable but no Lean toolchain to check freshness of committed outputs and proof results. Run `check` after editing proof files to refresh their results and enforce the `proved` policy.
 
 ## The CLI
 
 Use [`leanfran generate`](generate-guide.md) to generate PHP from the modules listed in your project's `leanfran.toml`. A PHP table maps its output directory to a Composer PSR-4 namespace and shares types between its modules.
 
-`leanfran --lang php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran --lang php --help` to see the full usage, including the `obligations check` command used by the Composer CLI. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
+`leanfran --lang php module generate` reads a compiled Lean module and emits PHP source. Run `leanfran --lang php --help` to see the full usage, including the `obligations check` command used by `check`. `--version` prints the compiler's release version. `--generator-version` prints the emitted-code version.
 
 | Option | Effect |
 | --- | --- |
@@ -196,7 +196,7 @@ Use [`leanfran generate`](generate-guide.md) to generate PHP from the modules li
 | 254 | Input that cannot be converted, such as a call to an extern outside the runtime's inventory |
 | 255 | Other errors, such as failure to write the output file |
 
-Use `--output-dir` together with `--php-namespace`. Options for single-file output (`--output-file`, `--internal-only`, `--class`, and `--main`) are incompatible with `--output-dir`. The facade and shared-type options apply to directory output. `leanfran --lang php obligations check --modules … --obligations file` returns JSON states for the supplied obligations. Its exit status indicates whether the command ran successfully. Use the Composer binary's `--require proved` to enforce their states.
+Use `--output-dir` together with `--php-namespace`. Options for single-file output (`--output-file`, `--internal-only`, `--class`, and `--main`) are incompatible with `--output-dir`. The facade and shared-type options apply to directory output. `leanfran --lang php obligations check --modules … --obligations file` returns JSON states for the supplied obligations. Its exit status indicates whether the command ran successfully. Use `leanfran --lang php check --require proved` to enforce their states.
 
 ## Public types
 

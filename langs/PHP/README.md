@@ -87,7 +87,7 @@ echo Pricing::width(new Range(lo: 2, hi: 5)), PHP_EOL;
 Check the Lean block, generate the PHP trait and types, and run the application.
 
 ```sh
-vendor/bin/leanfran sync
+leanfran --lang php sync
 php main.php
 ```
 
@@ -140,7 +140,7 @@ Copy the proofs into `lean/Proofs/` next to `composer.json`. Install the PHP par
 mkdir -p lean/Proofs
 cp ../lean-leanfran/langs/PHP/samples/verified-clamp/lean/Proofs/Calc.lean lean/Proofs/
 composer require --dev --no-interaction 'nikic/php-parser:^5.9'
-vendor/bin/leanfran check --require proved
+leanfran --lang php check --require proved
 ```
 
 The proof check reports both obligations as proved.

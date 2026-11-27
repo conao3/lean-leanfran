@@ -8,4 +8,4 @@ rm -f "$app/src/Negative.php" "$app/src/Properties.php" "$app/lean/Proofs/States
 cp -R tests/fixtures/verify/. "$app/"
 cd "$app"
 composer install --no-interaction --no-progress
-LEANFRAN_CLI="$compiler" vendor/bin/leanfran check --require proved
+"$compiler" --lang php check --require proved
