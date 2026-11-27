@@ -2,7 +2,7 @@
 
 Paths in this guide are relative to `langs/TypeScript/`.
 
-- `LeanTs/`, `LeanTs/Cli.lean`: emitter, public-type generation and compiler CLI.
+- `LeanTs/`, `LeanTs/Cli.lean`: emitter, public-type generation and compiler CLI (`leanfran --lang typescript`).
 - `src/runtime/`: runtime and externs; `make gen-externs` updates `LeanTs/RuntimeExterns.lean`.
 - `src/embed.ts`, `sync.ts`, `cli.ts`: embedding and CLI.
 - `src/schema/`, `models.ts`: schemas and host-model integration.
@@ -10,5 +10,7 @@ Paths in this guide are relative to `langs/TypeScript/`.
 - `LeanTsTest/`, `test/`, `samples/`: native oracles, host tests and examples.
 
 Update `LeanTs/Cli.lean`'s `generatorVersion` and `src/embed.ts`'s `GENERATOR_VERSION` together when changing generated code.
+
+Build the compiler with `lake --dir ../.. build leanfran` and invoke it with `../../.lake/build/bin/leanfran --lang typescript`.
 
 Run `nix develop ../..#typescript -c make check` for formatting, extern validation, differential tests, fuzzing, generated-code type checking, embedding freshness, verification and samples. Run `make pack` to build the npm distribution. Format Markdown with `vp fmt` inside the development environment. See the [backend README](../langs/TypeScript/README.md) for usage.

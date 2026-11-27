@@ -1,15 +1,18 @@
 import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import {
+  accessSync,
+  constants,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
   rmdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs"
-import { basename, dirname, join, relative, resolve, sep } from "node:path"
+import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
 import {
   type BlockInputs,
@@ -25,6 +28,8 @@ import { blockRegistry, type RecordedBlock } from "./runtime/block.ts"
 import { posixRelative, type ScannedBlock, scanFile, SyncError, tsFiles } from "./scan.ts"
 
 export { SyncError }
+
+export const TYPESCRIPT_LANG = ["--lang", "typescript"] as const
 
 const LAKEFILE = `name = "leanfran-workspace"
 defaultTargets = ["LeanTsModels", "LeanTsEmbed", "LeanTsCsimp"]
@@ -370,8 +375,29 @@ export function run(
   return { status: r.status ?? 255, stdout: r.stdout, stderr: r.stderr }
 }
 
-export function leanTypescriptCli(given: string | undefined): string {
-  return given ?? process.env["LEANFRAN_TYPESCRIPT"] ?? "leanfran-typescript"
+export function findCompiler(given: string | undefined): string {
+  const override = given ?? process.env["LEANFRAN_CLI"]
+  if (override) return override
+  const self = process.argv[1] && statSync(process.argv[1], { throwIfNoEntry: false })
+  for (const dir of process.env["PATH"]?.split(delimiter) ?? []) {
+    const candidate = resolve(dir, "leanfran")
+    try {
+      accessSync(candidate, constants.X_OK)
+      const executable = statSync(candidate)
+      if (!executable.isFile()) continue
+      if (self && self.dev === executable.dev && self.ino === executable.ino) continue
+      if (self && basename(dir) === ".bin") {
+        const npmEntry = statSync(resolve(dir, "../leanfran/dist/cli.js"), {
+          throwIfNoEntry: false,
+        })
+        if (npmEntry?.dev === self.dev && npmEntry.ino === self.ino) continue
+      }
+      return candidate
+    } catch {
+      continue
+    }
+  }
+  throw new SyncError("the compiler `leanfran` is not on PATH (set LEANFRAN_CLI)", 255)
 }
 
 export function specifier(from: string, to: string): string {
@@ -449,9 +475,10 @@ export async function syncPackage(
   log: Log,
   csimp: (pkg: Package) => ReadonlyMap<string, string> = () => new Map(),
 ): Promise<Synced> {
-  const cli = leanTypescriptCli(cliPath)
-  const gv = run(cli, ["--generator-version"])
-  if (gv.status !== 0) throw new SyncError(`${cli} --generator-version failed: ${gv.stderr}`, 255)
+  const cli = findCompiler(cliPath)
+  const gv = run(cli, [...TYPESCRIPT_LANG, "--generator-version"])
+  if (gv.status !== 0)
+    throw new SyncError(`${cli} --lang typescript --generator-version failed: ${gv.stderr}`, 255)
   if (gv.stdout.trim() !== GENERATOR_VERSION)
     throw new SyncError(
       `${cli} generates version ${gv.stdout.trim()}, this leanfran expects ${GENERATOR_VERSION}`,
@@ -532,6 +559,7 @@ export async function syncPackage(
   const summaries = new Map<string, Summary>()
   if (pkg.blocks.length !== 0) {
     const gen = run(cli, [
+      ...TYPESCRIPT_LANG,
       "module",
       "generate",
       "--batch",
@@ -545,7 +573,7 @@ export async function syncPackage(
     ])
     if (gen.status !== 0) {
       log(gen.stderr + gen.stdout)
-      throw new SyncError("leanfran-typescript module generate failed", gen.status)
+      throw new SyncError("leanfran --lang typescript module generate failed", gen.status)
     }
     const parsed: unknown = JSON.parse(gen.stdout)
     if (Array.isArray(parsed))

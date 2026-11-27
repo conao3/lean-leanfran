@@ -6,7 +6,12 @@ Commands and source paths below are relative to `langs/TypeScript/`.
 
 ## Installation
 
-See the [TypeScript quick start](../langs/TypeScript/README.md) for installation.
+```sh
+pnpm add leanfran
+nix profile install 'github:conao3/lean-leanfran#leanfran'
+```
+
+Run the npm CLI with `pnpm exec leanfran`. Its `sync`, `check`, and `generate` commands use the compiler from `--leanfran <path>`, `LEANFRAN_CLI`, or `leanfran` on PATH, in that order.
 
 ## Lean blocks
 
@@ -29,9 +34,9 @@ arith.double(21n) // 42n
 ```
 
 ```
-leanfran sync --package <dir> [--leanfran-typescript <path>]
-leanfran status --package <dir>
-leanfran generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
+pnpm exec leanfran sync --package <dir> [--leanfran <path>]
+pnpm exec leanfran status --package <dir>
+pnpm exec leanfran generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...] [--leanfran <path>]
 ```
 
 - `leanfran sync` reads the `lean(...)` calls of `<dir>/src/**/*.ts` with oxc-parser
@@ -204,8 +209,8 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
 ```
 
 ```
-leanfran check --package <dir> [--leanfran-typescript <path>] [--require proved]
-leanfran status --package <dir>
+pnpm exec leanfran check --package <dir> [--leanfran <path>] [--require proved]
+pnpm exec leanfran status --package <dir>
 ```
 
 - `model(fn, { refines?, requires?, ensures? })` (`leanfran/verify`) returns the function
@@ -294,14 +299,14 @@ and the verification of TypeScript functions (10 to 14).
 ## The CLI
 
 ```
-leanfran-typescript module generate --module-name Foo.Bar [--roots <Name> ...] [--main <Name>]
+leanfran --lang typescript module generate --module-name Foo.Bar [--roots <Name> ...] [--main <Name>]
   [--namespace <Name>] [--import <Name> ...] [--search-path <dir> ...] [--output-file <path>]
   [--runtime-path <specifier>] [--type-module <Name>=<specifier> ...] [--model-module <Name>=<key> ...]
   [--tag-key <key>] [--option null|undefined] [--ts-root <specifier>] [--batch <file>]
   [--internal-only] [--output json|text]
-leanfran-typescript project generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
-leanfran-typescript obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
-leanfran-typescript help | --version | --generator-version
+leanfran --lang typescript project generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
+leanfran --lang typescript obligations check --modules <Name> ... --obligations <file> [--search-path <dir> ...]
+leanfran --lang typescript help | --version | --generator-version
 ```
 
 The roots default to the module's public definitions with IR. Each root becomes a
@@ -350,7 +355,7 @@ export function double(n: bigint | number): bigint {
 - `LeanTs/RuntimeExterns.lean` — the runtime functions the generated code may call
   (generated from `src/runtime` by `make gen-externs`).
 - `LeanTs/Check.lean` — `obligations check`: the state of each obligation from the type and the axioms of its proof.
-- `LeanTs/Cli.lean` — the CLI `leanfran-typescript`.
+- `LeanTs/Cli.lean` — the CLI `leanfran --lang typescript`.
 - `src/verify/` — `leanfran/verify` (`model`, `checkModel`, `checkModule`), the translation of TypeScript functions to Lean (`translate.ts`) and `leanfran check` and `status` with `leanfran.lock` (`check.ts`); `src/lean/LeanTsLib/Ts.lean` — the meaning of the TypeScript operations; `src/schema/arbitrary.ts` — fast-check arbitraries of the descriptors.
 - `src/index.ts`, `src/embed.ts` — `lean(...)`, `LeanBlockStale` and the block keys;
   `src/scan.ts`, `src/sync.ts`, `src/cli.ts` — the CLI `leanfran` (`sync`, `status`,

@@ -1,5 +1,5 @@
-LEANFRAN_TYPESCRIPT ?= $(abspath ../.lake/build/bin/leanfran-typescript)
-export LEANFRAN_TYPESCRIPT
+LEANFRAN_CLI ?= $(abspath ../../../.lake/build/bin/leanfran)
+export LEANFRAN_CLI
 
 SAMPLES := word-count roman-numerals todo-cli sorted-search inventory generic-search pricing-api verified-typescript
 STEPS := $(sort $(wildcard steps/*/))

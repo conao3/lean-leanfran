@@ -6,7 +6,8 @@ install:
 	pnpm install --frozen-lockfile
 
 build: install
-	lake build leanfran-typescript LeanTsTest
+	lake --dir ../.. build leanfran
+	lake build LeanTsTest
 
 pack: install
 	vp pack
@@ -41,7 +42,7 @@ embed-links: install
 
 # Regenerate the committed modules of the embedding fixture.
 embed-fixture: build pack embed-links
-	node src/cli.ts sync --package test/embed/app --leanfran-typescript .lake/build/bin/leanfran-typescript
+	LEANFRAN_CLI=$(abspath ../../.lake/build/bin/leanfran) node src/cli.ts sync --package test/embed/app
 
 # The committed modules of the embedding fixture are fresh (no Lean).
 status: pack embed-links verify-links
@@ -57,7 +58,7 @@ verify-links: install
 	ln -sfn ../../../../node_modules/zod test/verify/app/node_modules/zod
 
 verify-fixture: build pack verify-links
-	node src/cli.ts check --package test/verify/app --leanfran-typescript .lake/build/bin/leanfran-typescript
+	LEANFRAN_CLI=$(abspath ../../.lake/build/bin/leanfran) node src/cli.ts check --package test/verify/app
 
 test-verify: build pack
 	test/verify/test.sh

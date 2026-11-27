@@ -6,7 +6,7 @@
 
 ```sh
 pnpm add leanfran
-nix profile install 'github:conao3/lean-leanfran#typescript'
+nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
 Generation requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Generated modules run in Node 22.18 or later, Bun and browsers with the npm package.
@@ -35,10 +35,10 @@ arith.double(21n) // 42n
 Generate modules from the package root:
 
 ```sh
-leanfran sync --package .
+pnpm exec leanfran sync --package .
 ```
 
-Commit `src/_lean/` and `.leanfran/blocks.json`. Run sync again when you change a block; `leanfran status --package .` checks whether generated code is current.
+Commit `src/_lean/` and `.leanfran/blocks.json`. Run sync again when you change a block; `pnpm exec leanfran status --package .` checks whether generated code is current.
 
 ## Next steps
 
