@@ -73,8 +73,34 @@ def collectPublic (types roots : Array Name) (facade : String) : MarshalM Collec
 def inspectPublic (env : Environment) (cfg : MarshalCfg) (types roots : Array Name) (facade : String) :
     IO (Collected × Environment) := do
   let ctx : Core.Context := { fileName := "<leanfran --lang php>", fileMap := default, maxHeartbeats := 0 }
-  let ((r, _), st) ← ((((collectPublic types roots facade).run {}).run cfg).run').toIO ctx { env }
+  let state : MarshalState := { foreignTypes := (cfg.shared.getD {}).defs }
+  let ((r, _), st) ← ((((collectPublic types roots facade).run state).run cfg).run').toIO ctx { env }
   return (r, st.env)
+
+private def qualifyDesc (ns : String) : Desc → Desc
+  | .named ident => .foreign ns ident
+  | .list d => .list (qualifyDesc ns d)
+  | .array d => .array (qualifyDesc ns d)
+  | .option d => .option (qualifyDesc ns d)
+  | .prod a b => .prod (qualifyDesc ns a) (qualifyDesc ns b)
+  | .except e a => .except (qualifyDesc ns e) (qualifyDesc ns a)
+  | d => d
+
+def shareTypes (ns : String) (state : MarshalState) (shared : SharedTypes) : SharedTypes := Id.run do
+  let defs := state.types.foldl (fun defs t =>
+    let kind := match t.kind with
+      | .struct v trivial =>
+        .struct { v with fields := v.fields.map fun f => { f with desc := qualifyDesc ns f.desc } } trivial
+      | .subtype base inv bounds => .subtype (qualifyDesc ns base) inv bounds
+      | kind => kind
+    defs.insert (ns, t.ident) { t with kind }) state.foreignTypes
+  let mut names := shared.names
+  for (ty, desc) in state.byType.toArray do
+    if let .named ident := desc then
+      if let some t := defs[(ns, ident)]? then
+        if !t.anonymous && t.model.isNone then
+          names := names.insert ty (ns, ident)
+  return { names, defs }
 
 def runtime (name : String) : String := "\\Conao3\\Leanfran\\" ++ name
 def descClass : String := runtime "Schema\\Desc"
@@ -147,7 +173,11 @@ partial def Desc.phpType (c : RenderCfg) (ctor : Bool := false) : Desc → Strin
     | some cls, _ => "\\" ++ cls
     | none, some d => d.phpType c ctor
     | none, none => c.qualified ident
-  | .foreign ns ident => s!"\\{ns}\\{ident}"
+  | .foreign ns ident =>
+    match c.state.foreignTypes[(ns, ident)]? with
+    | some { anonymous := true, kind := .subtype base .., .. } => base.phpType c ctor
+    | some { model := some cls, .. } => "\\" ++ cls
+    | _ => s!"\\{ns}\\{ident}"
 
 def boundValue (bounds : Array (String × Int)) (keys : List (String × Int)) (combine : Int → Int → Int)
     (base : Option Int) : Option Int := Id.run do
@@ -192,6 +222,10 @@ partial def Desc.phpDoc (c : RenderCfg) (ctor : Bool := false) (bs : Array (Stri
     match c.findType ident with
     | { anonymous := true, kind := .subtype base _ bounds, .. } => base.phpDoc c ctor (bs ++ bounds)
     | _ => (Desc.named ident).phpType c ctor
+  | .foreign ns ident =>
+    match c.state.foreignTypes[(ns, ident)]? with
+    | some { anonymous := true, kind := .subtype base _ bounds, .. } => base.phpDoc c ctor (bs ++ bounds)
+    | _ => (Desc.foreign ns ident).phpType c ctor
   | d => d.phpType c ctor
 
 def docLines (lines : Array String) : String :=

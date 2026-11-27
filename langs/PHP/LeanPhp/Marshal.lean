@@ -126,10 +126,15 @@ structure TypeDef where
   model : Option String := none
   deriving Inhabited
 
+structure SharedTypes where
+  names : Std.HashMap Lean.Expr (String × String) := {}
+  defs : Std.HashMap (String × String) TypeDef := {}
+
 structure MarshalCfg where
   strip : Name
   typeModules : Array (Name × String) := #[]
   models : Std.HashMap Name String := {}
+  shared : Option SharedTypes := none
 
 structure MarshalState where
   types : Array TypeDef := #[]
@@ -318,13 +323,16 @@ partial def namedDesc (c : Name) (t : Lean.Expr) (args : Array Lean.Expr) (alias
   let names ← if c == ``Subtype then pure #[] else paramArgs.mapM fun a => return toString (← ppExpr a)
   if !cfg.models.contains c && (c != ``Subtype || alias?.isSome) then
     let source := alias?.getD c
-    if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) => ns.isPrefixOf source && source != ns then
+    if let some (ns, spec) := cfg.typeModules.find? fun (ns, _) =>
+        ns.isPrefixOf source && (source != ns || cfg.shared.isSome) then
       let ident := typeIdentOf ns source names
       let d := Desc.foreign spec ident
       modify fun s => { s with byType := s.byType.insert key d }
       let td ← typeDef c t args ident alias? true
       modify fun s => { s with foreignTypes := s.foreignTypes.insert (spec, ident) td }
       return d
+    if let some (ns, ident) := cfg.shared.bind (·.names[key]?) then
+      return .foreign ns ident
   let base ← if c == ``Subtype then
       match alias? with
       | some n => pure (typeIdentOf cfg.strip n #[])

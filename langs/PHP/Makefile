@@ -16,11 +16,11 @@ build:
 check: format-check externs-check test test-numeric test-runtime $(CHECK_TARGETS) samples
 
 format:
-	mago format src tests samples/sum-to/main.php samples/pricing/main.php $(sample-sources) ../../maint/PHP
+	mago format src tests samples/sum-to/main.php samples/pricing/main.php $(sample-sources) ../../maint/PHP ../../tests/generate/php/check.php
 
 format-check:
 	$(show-php-version)
-	mago format --check src tests samples/sum-to/main.php samples/pricing/main.php $(sample-sources) ../../maint/PHP
+	mago format --check src tests samples/sum-to/main.php samples/pricing/main.php $(sample-sources) ../../maint/PHP ../../tests/generate/php/check.php
 
 vendor/autoload.php: composer.json composer.lock
 	composer install --no-interaction

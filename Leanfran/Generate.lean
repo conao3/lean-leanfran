@@ -1,6 +1,7 @@
 import Lake.Toml.Load
 import LeanRust.Cli
 import LeanTs.Marshal
+import LeanPhp.Marshal
 
 open Lean Lake System
 
@@ -14,10 +15,10 @@ Runs every [[generate]] table of leanfran.toml:
   --output json|text     Format of the summary (default: text)
 
 [[generate]]
-  lang = \"rust\" | \"python\" | \"go\" | \"typescript\"
+  lang = \"rust\" | \"python\" | \"go\" | \"typescript\" | \"php\"
   lake-dir = \"<Lake package>\"
   out-dir = \"<directory of the generated code>\"
-  path = \"<Rust module path, Python package, or Go import path (required for these languages)>\"
+  path = \"<Rust module path, Python package, Go import path, or PHP namespace (required for these languages)>\"
   modules = [\"<Module>\", \"<Module>.*\", { name = \"<Module>\", as = \"<name>\", bind = { \"<Namespace>\" = \"<path>\" } }]
   bind = { \"<Namespace>\" = \"<path>\" }
 
@@ -43,7 +44,7 @@ structure Module where
   output : String
   bind : Array (Name × String)
 
-def languages : Array String := #["rust", "python", "go", "typescript"]
+def languages : Array String := #["rust", "python", "go", "typescript", "php"]
 
 private def keyString : Name → String
   | .str .anonymous s => s
@@ -120,6 +121,7 @@ def defaultOutput (lang : String) (module : Name) : String :=
     | .str _ s => s.toLower
     | _ => module.toString
   else if lang == "typescript" then "/".intercalate (module.components.map LeanTs.componentString)
+  else if lang == "php" then LeanPhp.componentString module
   else LeanRust.Cli.rustModName module
 
 /-- How the language names the generated code of a module of a table. -/
@@ -127,6 +129,7 @@ def target (lang path output : String) : String :=
   match lang with
   | "rust" => s!"{path}::{output}"
   | "python" => s!"{path}.{output}"
+  | "php" => s!"{path}\\{output}"
   | _ => s!"{path}/{output}"
 
 /-- Module bindings override table bindings. Longer namespaces come first. -/
@@ -151,6 +154,10 @@ def job (e : Entry) (m : Module) : Json :=
       ("output_file", Json.str outputFile.toString),
       ("type_modules", Json.arr (bind.map fun (ns, path) =>
         Json.mkObj [("namespace", ns.toString), ("module", path)]))]
+  | "php" => [
+      ("php_namespace", path), ("facade", m.output), ("output_dir", (e.outDir / m.output).toString),
+      ("type_modules", Json.arr (bind.map fun (ns, path) =>
+        Json.mkObj [("namespace", ns.toString), ("php_namespace", path)]))]
   | _ => [
       ("go_path", path), ("package", m.output), ("output_dir", (e.outDir / m.output).toString),
       ("type_modules", Json.arr (bind.map fun (ns, path) => Json.str s!"{ns}={path}"))]
@@ -196,9 +203,14 @@ private def expand (e : Entry) (built : Array Name) : Except String (Array Modul
         pure found
     for name in names do
       if out.any (·.name == name) then throw s!"module '{name}' is listed twice"
-      out := out.push { name, output := spec.as?.getD (defaultOutput e.lang name), bind := spec.bind }
+      let output := spec.as?.getD (defaultOutput e.lang name)
+      if e.lang == "php" && !LeanPhp.phpIdentifier output then
+        throw s!"'{output}' is not a PHP identifier; supply a PHP identifier with 'as' for module '{name}'"
+      out := out.push { name, output, bind := spec.bind }
   for m in out do
-    if (out.filter (·.output == m.output)).size > 1 then
+    let sameName (other : Module) :=
+      if e.lang == "php" then other.output.toLower == m.output.toLower else other.output == m.output
+    if (out.filter sameName).size > 1 then
       throw s!"two modules are generated as '{m.output}'; name one of them with 'as'"
   return out
 

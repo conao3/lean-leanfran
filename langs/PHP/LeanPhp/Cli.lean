@@ -43,6 +43,7 @@ leanfran --lang php module generate
   --main <Name>               Generate a CLI entry point
   --batch <file>              JSON array of jobs with module and output_file or output_dir
                               Public jobs accept php_namespace, facade, facade_kind, type_modules and models
+                              Public jobs with the same type_group share generated types
   --import <Name> ...         More modules to import
   --search-path <dir> ...     Extra .olean search directories
   --output-file <path>        Output path (default: stdout)
@@ -121,6 +122,7 @@ def fail (code : UInt32) (msg : String) : IO UInt32 := do
 
 structure Job extends JobOpts where
   module : Name
+  typeGroup : Option Nat := none
 
 structure PhpClass where
   ns : String
@@ -198,7 +200,8 @@ def writePublic (dir : System.FilePath) (files : Array (String × String)) : IO 
   for path in old do
     unless paths.contains path do IO.FS.removeFile path
 
-def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : Array Name) :
+def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : Array Name)
+    (groups : IO.Ref (Std.HashMap Nat SharedTypes)) :
     IO (Except (UInt32 × String) Json) := do
   if job.outputFile.isSome || job.internalOnly || job.class?.isSome || job.main?.isSome then
     return .error (252, "--output-dir cannot be combined with --output-file, --internal-only, --class or --main")
@@ -220,7 +223,8 @@ def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : A
   let models := job.models.foldl (fun out cls =>
     let name := (cls.splitOn "\\").foldl Name.str `LeanPhpModels
     out.insert name cls) ({} : Std.HashMap Name String)
-  let cfg : MarshalCfg := { strip := job.namespace?.getD job.module, typeModules, models }
+  let shared ← job.typeGroup.mapM fun group => do pure ((← groups.get).getD group {})
+  let cfg : MarshalCfg := { strip := job.namespace?.getD job.module, typeModules, models, shared }
   let types := if job.roots.isEmpty then moduleTypes env job.module else #[]
   let (pub, env) ← inspectPublic env cfg types roots facade
   if let some clash := pub.skipped.find? (·.reason.startsWith collisionLabel) then
@@ -243,17 +247,20 @@ def runPublic (env : Environment) (job : Job) (dir : System.FilePath) (roots : A
   let internalFile := ("Internal/" ++ cls.name ++ ".php", header job.module cls true ++ out.items ++ descs ++ constructors ++ results ++ "}\n")
   let files := typeFiles ++ #[facadeFile, internalFile]
   writePublic dir files
+  if let some group := job.typeGroup then
+    groups.modify fun all => all.insert group (shareTypes ns pub.state (all.getD group {}))
   let paths := files.map fun (path, _) => (dir / path).toString
   let skipped := pub.skipped.map fun s => Json.mkObj [("name", (privateToUserName s.name).toString), ("reason", s.reason)]
   return .ok (Json.mkObj [("module", toString job.module), ("class", ns ++ "\\" ++ facade),
     ("functions", out.functions), ("externs", out.externs), ("files", toJson paths), ("skipped", toJson skipped)])
 
-def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
+def runJob (env : Environment) (job : Job) (groups : IO.Ref (Std.HashMap Nat SharedTypes)) :
+    IO (Json × UInt32) := do
   let failed (code : UInt32) (msg : String) : IO (Json × UInt32) :=
     return (Json.mkObj [("module", toString job.module), ("error", msg), ("code", code.toNat)], code)
   let roots := if job.roots.isEmpty then defaultRoots env job.module job.outputDir.isSome else job.roots
   if let some dir := job.outputDir then
-    match ← runPublic env job dir roots with
+    match ← runPublic env job dir roots groups with
     | .ok summary => return (summary, 0)
     | .error (code, e) => return ← failed code e
   if job.phpNamespace.isSome || job.facade.isSome || job.facadeKind.isSome || !job.typeModules.isEmpty then
@@ -321,7 +328,9 @@ def parseJobs (j : Json) : Except String (Array Job) := do
       pure (ns, phpNs)
     let models := (← optionalField (α := Array String) e "models").getD #[]
     unless models.isEmpty || outputDir.isSome do throw s!"{module}: models require output_dir"
-    return { module, roots, namespace?, class?, main?, outputFile, outputDir, phpNamespace, facade, facadeKind, typeModules, models }
+    let typeGroup ← optionalField (α := Nat) e "type_group"
+    unless typeGroup.isNone || outputDir.isSome do throw s!"{module}: type_group requires output_dir"
+    return { module, roots, namespace?, class?, main?, outputFile, outputDir, phpNamespace, facade, facadeKind, typeModules, models, typeGroup }
 
 def importAll (o : Opts) (mods : Array Name) (publicOutput : Bool) : IO (Except Name Environment) := do
   initSearchPath (← findSysroot) o.searchPath.toList
@@ -350,12 +359,15 @@ unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
   let env ← match ← importAll o mods publicOutput with
     | .ok env => pure env
     | .error m => return ← fail 252 s!"module not found: {m}"
-  let mut code : UInt32 := 0
-  let mut summaries := #[]
-  for job in jobs do
-    let (j, c) ← runJob env job
-    summaries := summaries.push j
-    if c != 0 && code == 0 then code := c
+  let groups ← IO.mkRef ({} : Std.HashMap Nat SharedTypes)
+  let rank (job : Job) := if job.typeGroup.isSome then (env.getModuleIdx? job.module).map (·.toNat + 1) |>.getD 0 else 0
+  let order := jobs.zipIdx.qsort fun (a, i) (b, j) =>
+    if rank a == rank b then i < j else rank a < rank b
+  let mut results := Array.replicate jobs.size (Json.null, (0 : UInt32))
+  for (job, i) in order do
+    results := results.set! i (← runJob env job groups)
+  let summaries := results.map Prod.fst
+  let code := ((results.find? (·.2 != 0)).map Prod.snd).getD 0
   if o.batch.isSome && o.output == "json" then IO.println (Json.arr summaries).compress
   else for j in summaries do printSummary o (o.batch.isNone && o.outputFile.isNone && o.outputDir.isNone) j
   return code

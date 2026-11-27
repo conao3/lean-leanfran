@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript>}")
-lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript>}
+leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php>}")
+lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php>}
 root=$(cd "$(dirname "$0")/.." && pwd)
 fixtures="$root/tests/generate"
 
@@ -21,7 +21,7 @@ expect_status() {
 }
 
 case "$lang" in
-    rust|python|go|typescript) ;;
+    rust|python|go|typescript|php) ;;
     *) fail "unknown language: $lang" ;;
 esac
 
@@ -29,6 +29,9 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cp "$fixtures/"*.lean "$fixtures/"{lakefile.toml,lake-manifest.json,lean-toolchain} "$work/"
 cp -R "$fixtures/Shapes" "$fixtures/$lang" "$work/"
+if [[ $lang == php ]]; then
+    cp "$fixtures/php/Inheritance.lean" "$work/"
+fi
 cd "$work"
 
 expect_status 252 "$leanfran" generate
@@ -45,6 +48,8 @@ modules=$(grep -oE '"module":"[^"]+"' summary.json | cut -d '"' -f 4 | paste -sd
 expected='Choice Settings Report Shapes.Area Shapes Choice'
 if [[ $lang == rust ]]; then
     expected='Choice Settings Report Shapes Shapes.Area Choice'
+elif [[ $lang == php ]]; then
+    expected="$expected Inheritance"
 fi
 [[ $modules == "$expected" ]] || fail "expected summary order '$expected', found '$modules'"
 grep -Fq '"name":"Shapes.Unsupported"' summary.json || fail 'unsupported declared type missing from skipped'
@@ -83,6 +88,11 @@ MANIFEST
         ln -s "$root/langs/TypeScript" node_modules/leanfran
         node "$root/langs/TypeScript/node_modules/vite-plus/bin/vp" pack --no-config --no-dts check.ts
         node dist/check.mjs
+        ;;
+    php)
+        cd php
+        find generated external -type f -name '*.php' -exec php -l {} +
+        php check.php "$root/langs/PHP/vendor/autoload.php"
         ;;
 esac
 
