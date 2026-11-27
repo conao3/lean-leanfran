@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := check
-.PHONY: build check check-model check-translate check-fuzz check-verify check-random check-samples format format-check
+.PHONY: build check check-models check-model check-translate check-fuzz check-verify check-integration check-random check-samples format format-check
 
 c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/types/*.c \
 	tests/embed/app/src/*.c tests/embed/app/src/*.h tests/embed/app/src/nested/*.h \
@@ -13,7 +13,11 @@ VERIFY_TARGET ?= check-verify
 build:
 	lake build
 
-check: build format-check check-model check-translate check-fuzz $(VERIFY_TARGET) check-random check-samples
+check: check-models $(VERIFY_TARGET) check-integration
+
+check-models: build format-check check-model check-translate check-fuzz
+
+check-integration: build check-random check-samples
 	../../maint/C/test-diff.sh
 	../../maint/C/test-link.sh
 	../../maint/C/test-embed.sh

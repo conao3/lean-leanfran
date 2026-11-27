@@ -63,8 +63,6 @@ jobs:
             nix-shells: php php85
           - dir: Go
             build: true
-          - dir: C
-            build: true
     steps:
       - uses: actions/checkout@v7.0.1
         if: env.RUN_BACKEND == 'true'
@@ -100,12 +98,54 @@ jobs:
           restore-keys: maven-${{ runner.os }}-
       - if: env.RUN_BACKEND == 'true'
         run: make check BACKENDS=${{ matrix.dir }}
-      - if: env.RUN_BACKEND == 'true' && matrix.dir == 'C'
-        run: nix develop .#c -c maint/C/test-publish.sh
       - if: env.RUN_BACKEND == 'true' && matrix.build
         run: nix build ".#${BACKEND,,}"
         env:
           BACKEND: ${{ matrix.dir }}
+  check-c-linux-models:
+    name: C Linux (models and packaging)
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.backends), 'C')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: cachix/install-nix-action@v32.0.0
+      - run: nix develop .#c -c make -C langs/C check-models
+      - run: nix develop .#c -c maint/C/test-publish.sh
+      - run: nix build .#c
+  check-c-linux-verification:
+    name: C Linux (verification)
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.backends), 'C')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: cachix/install-nix-action@v32.0.0
+      - run: nix develop .#c -c make -C langs/C check-verify
+  check-c-linux-integration:
+    name: C Linux (integration)
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.backends), 'C')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: cachix/install-nix-action@v32.0.0
+      - run: nix develop .#c -c make -C langs/C check-integration
+  check-c-linux:
+    name: make check (C)
+    needs: [changes, check-c-linux-models, check-c-linux-verification, check-c-linux-integration]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.backends), 'C') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "$MODELS_RESULT" = success && test "$VERIFICATION_RESULT" = success && test "$INTEGRATION_RESULT" = success
+        env:
+          MODELS_RESULT: ${{ needs.check-c-linux-models.result }}
+          VERIFICATION_RESULT: ${{ needs.check-c-linux-verification.result }}
+          INTEGRATION_RESULT: ${{ needs.check-c-linux-integration.result }}
   check-go-macos:
     name: make check (Go, macOS arm64)
     needs: changes
