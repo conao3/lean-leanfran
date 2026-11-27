@@ -4,11 +4,12 @@ cd "$(dirname "$0")/../../langs/Go"
 
 module=LeanGoTest.Vectors
 out=test-out/_generated/determinism
-lake build leanfran-go "$module"
+lake --dir ../.. build leanfran
+lake build "$module"
 mkdir -p "$out"
 
 generate() {
-    .lake/build/bin/leanfran-go module generate --module-name "$module" --roots "$@" \
+    ../../.lake/build/bin/leanfran --lang go module generate --module-name "$module" --roots "$@" \
         --search-path .lake/build/lib/lean --internal-only --output text --output-file "$out/vectors.go"
 }
 

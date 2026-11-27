@@ -5,8 +5,9 @@ cd "$(dirname "$0")/../../langs/Go"
 module=LeanGoTest.ControlRace
 out=test-out/_generated/race
 mkdir -p "$out"
-lake build leanfran-go "$module"
-.lake/build/bin/leanfran-go module generate --module-name "$module" --roots "$module.render" \
+lake --dir ../.. build leanfran
+lake build "$module"
+../../.lake/build/bin/leanfran --lang go module generate --module-name "$module" --roots "$module.render" \
     --package race --search-path .lake/build/lib/lean --internal-only --output text \
     --output-file "$out/race.go"
 test -z "$(gofmt -l "$out/race.go")"

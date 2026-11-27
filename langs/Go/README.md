@@ -2,10 +2,10 @@
 
 Embed Lean definitions and proofs in a Go package. `go tool leanfran sync` checks the Lean and generates Go functions and types in the same package.
 
-Nix can install the compiler from any directory.
+Install the compiler that the Go tool invokes as `leanfran --lang go`.
 
 ```sh
-nix profile install 'github:conao3/lean-leanfran#go'
+nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
 ```go

@@ -21,8 +21,8 @@ git ls-files -z -- 'samples/*/go.mod' 'testdata/*/go.mod' |
         go mod edit -modfile="$manifest" -require="github.com/conao3/leanfran-go@v$1"
     done
 
-lake build leanfran-go
-export LEANFRAN_GO_CLI="$PWD/.lake/build/bin/leanfran-go"
+lake --dir ../.. build leanfran
+export LEANFRAN_CLI="$PWD/../../.lake/build/bin/leanfran"
 for sample in samples/verified-clamp samples/verified-nibble; do
     (cd "$sample" && go tool leanfran check --require proved)
 done

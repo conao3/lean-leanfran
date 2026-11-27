@@ -4,7 +4,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 
 ## Layout
 
-- `langs/Go/LeanGo/Cli.lean` implements the `leanfran-go` CLI. `langs/Go/LeanGo/EmitGo.lean` collects reachable IR, emits Go, and assembles package initialization and command entry points.
+- `langs/Go/LeanGo/Cli.lean` implements the compiler commands under `leanfran --lang go`. `langs/Go/LeanGo/EmitGo.lean` collects reachable IR, emits Go, and assembles package initialization and command entry points.
 - `langs/Go/LeanGo/Marshal.lean` inspects Lean signatures and constructor layouts and compiles proof deciders. `Generate.lean` emits public types, typed conversions, descriptors and function wrappers.
 - `langs/Go/cmd/leanfran/` implements the module tool. `internal/embed/` scans Go with `go/parser`, reads the selected model types with `go/types`, and builds a Lake workspace for the embedded blocks. The batch generator uses the model's Go import path and fields to emit a codec against the original type.
 - `langs/Go/internal/verify/` reads directives and lowers typed Go ASTs into Lean `do` notation. The embedding CLI invokes it after installing the generated Go package. `LeanGo/Check.lean` checks the compiled proof declarations.
@@ -20,7 +20,7 @@ leanfran compiles Lean 4 IR into Go source. The bundled runtime uses the Go stan
 
 - Use the repository's `lean-toolchain` for compiler builds and native oracles. Check the toolchain's Lean sources and `lean.h` for the symbol, argument order, erased parameters, and ownership of each extern. Increment a retained value read from a container and leave borrowed arguments owned by the caller.
 - Extend the differential fixtures when runtime behavior changes. Regenerate the extern inventory with `make gen-externs` and commit it with the runtime change.
-- When generated code changes, raise `generatorVersion` in `LeanGo/Cli.lean` and `GeneratorVersion` in `leanfran.go` together. Regenerate the Go packages in `samples/sum-to/arith/` and `samples/pricing/pricing/` with the compiler commands from `maint/Go/test-samples.sh`. Run `go tool leanfran sync` in each embedded sample module with `LEANFRAN_GO_CLI` pointing to the rebuilt compiler.
+- When generated code changes, raise `generatorVersion` in `LeanGo/Cli.lean` and `GeneratorVersion` in `leanfran.go` together. Regenerate the Go packages in `samples/sum-to/arith/` and `samples/pricing/pricing/` with the compiler commands from `maint/Go/test-samples.sh`. Run `go tool leanfran sync` in each embedded sample module with `LEANFRAN_CLI` pointing to the rebuilt compiler.
 - A mutable `rt.V` belongs to one goroutine. Generated package initializers mark their shared values persistent before publication. Each caller can construct its own inputs and call generated functions concurrently. Lean tasks run synchronously.
 - Internal runtime errors and unreachable IR raise `*rt.InternalPanic`. A Go caller can recover and call the library again. The generated command entry point handles this panic during initialization and execution, prints its diagnostic, and exits with status 1.
 - Use `gofumpt` for handwritten Go and `gofmt` for generated Go. Run static checks and the native comparison in the backend shell.
@@ -31,10 +31,10 @@ From the repository root, run the checks for Go 1.27 and 1.26 and build the Nix 
 
 ```sh
 nix shell nixpkgs#gnumake -c make check BACKENDS=Go
-nix build .#go
+nix build .#leanfran
 ```
 
-CI runs both Go versions on Linux amd64. On macOS arm64, it runs Go 1.27 and builds the Nix compiler package. To reproduce the macOS checks, run `nix develop .#go -c make -k -C langs/Go check` from the repository root.
+CI runs both Go versions on Linux amd64 and Go 1.27 on macOS arm64. To reproduce the macOS checks, run `nix develop .#go -c make -k -C langs/Go check` from the repository root.
 
 The I/O fixture compares relative executable lookup via the child's `PATH` with Lean C on both platforms. Linux also compares the `inheritEnv = false` case with Lean C. On macOS, the Go executable is checked against the expected output and exit status for that case because Lean 4.35's Darwin runtime clears `environ` to null and then calls `setenv`, which segfaults.
 
@@ -64,6 +64,6 @@ The sum-to sample imports a generated package and calls it from Go. The greet-cl
 
 The Go Publish job checks that the release tag matches `Version` in `leanfran.go` and `version` in `LeanGo/Cli.lean`. It snapshots the Go module and license at the root of the read-only mirror `conao3/leanfran-go`. The `go-mirror` environment supplies `GO_MIRROR_DEPLOY_KEY` to push `main` and the `vX.Y.Z` tag in one atomic operation. A retry with the same tag succeeds when the snapshot matches the tagged tree. A different tree for the same tag fails.
 
-The job checks that Go resolves the tag directly from the mirror. Consumers can install the [published module](https://pkg.go.dev/github.com/conao3/leanfran-go) with `go get github.com/conao3/leanfran-go@vX.Y.Z`, substituting the published tag. The Lean compiler is available through `nix build .#go` in the source repository. Go major versions from v2 onward require the corresponding `/vN` suffix in the module and import paths.
+The job checks that Go resolves the tag directly from the mirror. Consumers can install the [published module](https://pkg.go.dev/github.com/conao3/leanfran-go) with `go get github.com/conao3/leanfran-go@vX.Y.Z`, substituting the published tag. The Lean compiler is available through `nix build .#leanfran` in the source repository. Go major versions from v2 onward require the corresponding `/vN` suffix in the module and import paths.
 
 Run `nix develop .#go -c make -C langs/Go test-publish` to exercise the mirror push locally. The check resolves the tagged module and tool from a bare Git repository, builds and runs the generated range example, verifies its manifest with `go tool leanfran status`, and checks identical and conflicting tag retries.

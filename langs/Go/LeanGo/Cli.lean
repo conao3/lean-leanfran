@@ -8,9 +8,9 @@ namespace LeanGo.Cli
 def version : String := "0.13.3"
 def generatorVersion : String := "14"
 
-def usage : String := "leanfran-go --version | --generator-version | --lean-version
-leanfran-go module generate --module-name <Name> [options]
-leanfran-go obligations check --modules <Name> ... --obligations <file>
+def usage : String := "leanfran --lang go --version | --generator-version | --lean-version
+leanfran --lang go module generate --module-name <Name> [options]
+leanfran --lang go obligations check --modules <Name> ... --obligations <file>
 
   --roots <Name> ...          Lean definitions to compile
   --namespace <Name>          Strip this prefix from public names
@@ -203,7 +203,7 @@ def printSummary (o : Opts) (summary : Json) (toStderr : Bool) : IO Unit := do
   else
     let mod := (summary.getObjValD "module").getStr?.toOption.getD ""
     match (summary.getObjValD "error").getStr? with
-    | .ok e => print s!"leanfran-go: {mod}: {e}"
+    | .ok e => print s!"leanfran --lang go: {mod}: {e}"
     | .error _ =>
       print s!"{mod}: package {(summary.getObjValD "package").getStr?.toOption.getD ""}"
       for file in (summary.getObjValD "files").getArr?.toOption.getD #[] do
@@ -258,7 +258,7 @@ def runJob (env : Environment) (job : Job) : IO (Json × UInt32) := do
   return (Json.mkObj [("module", mod), ("package", pkg)], 0)
 
 def fail (code : UInt32) (msg : String) : IO UInt32 := do
-  IO.eprintln s!"leanfran-go: {msg}"
+  IO.eprintln s!"leanfran --lang go: {msg}"
   return code
 
 unsafe def moduleGenerate (o : Opts) : IO UInt32 := do
@@ -338,6 +338,6 @@ unsafe def main (args : List String) : IO UInt32 := do
   | "obligations" :: "check" :: "--modules" :: rest =>
     try checkObligations rest
     catch e => fail 255 (toString e)
-  | _ => fail 252 "unknown command (see leanfran-go help)"
+  | _ => fail 252 "unknown command (see leanfran --lang go help)"
 
 end LeanGo.Cli

@@ -2,14 +2,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
-lake build leanfran-go
+lake --dir ../.. build leanfran
 out=test-out/samples
 source=test-out/_generated/samples
 mkdir -p "$out" "$source"
-compiler=.lake/build/bin/leanfran-go
+compiler=../../.lake/build/bin/leanfran
 
 lean --root=samples/sum-to -o "$out/SumTo.olean" samples/sum-to/SumTo.lean
-"$compiler" module generate --module-name SumTo --roots sumTo --package arith \
+"$compiler" --lang go module generate --module-name SumTo --roots sumTo --package arith \
     --search-path "$out" --internal-only --output text --output-file "$source/arith.go"
 test -z "$(gofmt -l "$source/arith.go")"
 go vet "$source/arith.go"
@@ -19,7 +19,7 @@ CGO_ENABLED=0 go build -o "$out/sum-to" ./samples/sum-to
 printf '500000500000\n' | diff -u - "$out/sum-to.out"
 
 lean --root=samples/greet-cli -o "$out/Greeting.olean" samples/greet-cli/Greeting.lean
-"$compiler" module generate --module-name Greeting --roots main --main main \
+"$compiler" --lang go module generate --module-name Greeting --roots main --main main \
     --search-path "$out" --internal-only --output text --output-file "$source/greeting.go"
 test -z "$(gofmt -l "$source/greeting.go")"
 go vet "$source/greeting.go"
@@ -34,7 +34,7 @@ printf 'usage: greet-cli NAME\n' | diff -u - "$out/usage.err"
 printf 'samples sum-to and greet-cli pass\n'
 
 lean --root=samples/pricing -o "$out/Pricing.olean" samples/pricing/Pricing.lean
-"$compiler" module generate --module-name Pricing --search-path "$out"     --output text --output-dir "$source/pricing"
+"$compiler" --lang go module generate --module-name Pricing --search-path "$out"     --output text --output-dir "$source/pricing"
 test -z "$(gofmt -l "$source/pricing" samples/pricing)"
 for file in "$source/pricing/"*_gen.go; do
     cmp "$file" "samples/pricing/pricing/${file##*/}"
@@ -46,7 +46,7 @@ printf '1800\n{"hi":3,"lo":1}\n' | diff -u - "$out/pricing.out"
 printf 'sample pricing passes\n'
 
 lean --root=samples/value-server -o "$out/Inventory.olean" samples/value-server/Inventory.lean
-"$compiler" module generate --module-name Inventory --search-path "$out" \
+"$compiler" --lang go module generate --module-name Inventory --search-path "$out" \
     --output text --output-dir "$source/inventory"
 test -z "$(gofmt -l "$source/inventory" samples/value-server)"
 for file in "$source/inventory/"*_gen.go; do

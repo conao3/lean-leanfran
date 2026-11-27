@@ -2,17 +2,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
-lake build leanfran-go oracle-public +LeanGoTest.PublicClient +LeanGoTest.Allocations
+lake --dir ../.. build leanfran
+lake build oracle-public +LeanGoTest.PublicClient +LeanGoTest.Allocations
 out=test-out/_generated/public
 mkdir -p "$out"
-compiler=.lake/build/bin/leanfran-go
+compiler=../../.lake/build/bin/leanfran
 search=.lake/build/lib/lean
 
 generate() {
     local mod=$1
     local path=$2
     shift 2
-    "$compiler" module generate --module-name "LeanGoTest.$mod"         --search-path "$search" --output-dir "$path" "$@"
+    "$compiler" --lang go module generate --module-name "LeanGoTest.$mod"         --search-path "$search" --output-dir "$path" "$@"
 }
 
 generate Public "$out/public" > "$out/public.summary.json"
@@ -105,14 +106,13 @@ CGO_ENABLED=0 go build -o "$out/oracle" "./$out"
 diff -u "$out/native.jsonl" "$out/emitted.jsonl"
 "$out/oracle" schema > "$out/go-schema.json"
 
-typescript=$(nix build ../..#typescript --no-link --print-out-paths)
-nix develop ../..#typescript -c bash -s -- "$typescript/bin/leanfran-typescript" "$out" "$search" <<'TYPESCRIPT'
+nix develop ../..#typescript -c bash -s -- "$compiler" "$out" "$search" <<'TYPESCRIPT'
 set -euo pipefail
 compiler=$1
 out=$2
 search=$3
-"$compiler" module generate --module-name LeanGoTest.Public --namespace LeanGoTest.Public     --roots LeanGoTest.Public.total LeanGoTest.Public.packedEcho LeanGoTest.Public.rangeEcho     --search-path "$search" --runtime-path ../../../../TypeScript/src/runtime/index.ts     --output-file "$out/Public.ts" > "$out/typescript-public.summary.json"
-"$compiler" module generate --module-name LeanGoTest.Json --namespace LeanGoTest.Json     --roots LeanGoTest.Json.{big,bigEcho,data,shapes,colors,trees}     --search-path "$search" --runtime-path ../../../../TypeScript/src/runtime/index.ts     --output-file "$out/Json.ts" > "$out/typescript-json.summary.json"
+"$compiler" --lang typescript module generate --module-name LeanGoTest.Public --namespace LeanGoTest.Public     --roots LeanGoTest.Public.total LeanGoTest.Public.packedEcho LeanGoTest.Public.rangeEcho     --search-path "$search" --runtime-path ../../../../TypeScript/src/runtime/index.ts     --output-file "$out/Public.ts" > "$out/typescript-public.summary.json"
+"$compiler" --lang typescript module generate --module-name LeanGoTest.Json --namespace LeanGoTest.Json     --roots LeanGoTest.Json.{big,bigEcho,data,shapes,colors,trees}     --search-path "$search" --runtime-path ../../../../TypeScript/src/runtime/index.ts     --output-file "$out/Json.ts" > "$out/typescript-json.summary.json"
 cp ../../maint/Go/schema-oracle.mjs "$out"
 node "$out/schema-oracle.mjs" > "$out/typescript-schema.json"
 TYPESCRIPT

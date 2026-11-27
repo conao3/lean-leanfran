@@ -5,8 +5,9 @@ cd "$(dirname "$0")/../../langs/Go"
 module=LeanGoTest.ControlDepth
 out=test-out/_generated/depth
 mkdir -p "$out"
-lake build leanfran-go oracle-control-depth
-.lake/build/bin/leanfran-go module generate --module-name "$module" --roots "$module.run" \
+lake --dir ../.. build leanfran
+lake build oracle-control-depth
+../../.lake/build/bin/leanfran --lang go module generate --module-name "$module" --roots "$module.run" \
     --main "$module.run" --search-path .lake/build/lib/lean --internal-only --output text \
     --output-file "$out/main.go"
 test -z "$(gofmt -l "$out/main.go")"

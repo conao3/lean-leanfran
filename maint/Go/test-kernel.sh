@@ -2,14 +2,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../langs/Go"
 
-lake build leanfran-go
+lake --dir ../.. build leanfran
 out="$PWD/test-out/kernel"
 generated=test-out/_generated/kernel
 mkdir -p "$out" "$generated"
 lean --root=testdata/kernel -o "$out/Kernel.olean" -c "$out/Kernel.c" testdata/kernel/Kernel.lean
 LEAN_PATH="$out" lean --root=testdata/kernel -c "$out/Oracle.c" testdata/kernel/Oracle.lean
 leanc -O2 -o "$out/oracle" "$out/Kernel.c" "$out/Oracle.c"
-.lake/build/bin/leanfran-go module generate --module-name Kernel --search-path "$out" --output-dir "$generated"
+../../.lake/build/bin/leanfran --lang go module generate --module-name Kernel --search-path "$out" --output-dir "$generated"
 cp testdata/kernel/*_test.go "$generated/"
 go vet "./$generated"
 LEANFRAN_KERNEL_ORACLE="$out/oracle" go test -count=1 "./$generated" -skip 'TestRegionThroughput|TestTakeUnaffiliatedFromTwoRegions|TestUnscopedZeroInputCallInRegion|TestRegionLeakedValues'

@@ -253,7 +253,7 @@ func install(changes []change) error {
 	return nil
 }
 
-func Run(mode, dir, compiler string, require, verbose bool, stdout, stderr io.Writer) error {
+func Run(mode, dir string, require, verbose bool, stdout, stderr io.Writer) error {
 	p, err := loadProject(dir)
 	if err != nil {
 		return err
@@ -288,8 +288,9 @@ func Run(mode, dir, compiler string, require, verbose bool, stdout, stderr io.Wr
 		return errors.Join(status(blocks, removed, stdout), p.testStatus(models, stdout), p.proofStatus(models, stdout))
 	}
 	work := filepath.Join(cache, "workspace")
+	var compiler string
 	if len(blocks) > 0 {
-		compiler, err = resolveCompiler(compiler)
+		compiler, err = resolveCompiler()
 		if err != nil {
 			return err
 		}
