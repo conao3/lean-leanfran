@@ -37,7 +37,7 @@ src/calc.ts:sumTo [returnsNat]: missing
 src/calc.ts:twice [refines]: axioms"
 
 scene base "$root/test/verify/app"
-rm -rf "$out/base/node_modules/leanfran" "$out/base/src/_lean" "$out/base/.leanfran" "$out/base/leanfran.lock"
+rm -rf "$out/base/node_modules/leanfran" "$out/base/src/_lean" "$out/base/.leanfran" "$out/base/leanfran.lock" "$out/base/leanfran.manifest.json"
 ln -sfn ../../../.. "$out/base/node_modules/leanfran"
 rows="$(cd "$out/base" && "${lts[@]}" check --package . 2>"$out/base.stderr")"
 expect_rows "$rows" "$base_rows" "check"

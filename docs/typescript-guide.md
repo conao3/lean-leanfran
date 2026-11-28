@@ -34,18 +34,24 @@ arith.double(21n) // 42n
 ```
 
 ```
-leanfran --lang typescript sync --package <dir>
-leanfran --lang typescript status --package <dir>
+leanfran --lang typescript sync --package <dir> [--verbose]
+leanfran --lang typescript check --package <dir> [--verbose] [--require proved]
+leanfran --lang typescript status --package <dir> [--require proved]
 leanfran --lang typescript generate --lake-dir <dir> --output-dir <dir> [--modules <Name> ...]
 ```
 
-- `leanfran --lang typescript sync` reads the `lean(...)` calls of `<dir>/src/**/*.ts` with oxc-parser
-  (the name is a string literal, the source a template literal or `String.raw`, the
-  options `imports`, `uses`, `models` and `output` an object literal), writes each
-  block to `.leanfran/workspace/LeanTsEmbed/<module>/<name>.lean`, builds it with Lake
-  and generates `_lean/<module>__<name>.ts` next to the module (and `_lean/<module>.ts`
-  when the module has one block) and `.leanfran/blocks.json`. A Lean error is reported
-  at the line of the TypeScript file with exit code 254.
+- `leanfran --lang typescript sync` runs the `scan` command of the project's npm package
+  `leanfran` (`node node_modules/leanfran/dist/cli.js`), which reads the `lean(...)` calls of
+  `<dir>/src/**/*.ts` with oxc-parser (the name is a string literal, the source a template
+  literal or `String.raw`, the options `imports`, `uses`, `models` and `output` an object
+  literal). The compiler writes each block to
+  `.leanfran/typescript/workspace/LeanTsEmbed/<module>/<name>.lean`, builds it with Lake,
+  generates `_lean/<module>__<name>.ts` next to the module (and `_lean/<module>.ts` when the
+  module has one block) and records the blocks and their files in the `typescript` section
+  of `<dir>/leanfran.manifest.json`. A Lean error is reported at the line and UTF-16 column
+  of the TypeScript file (`src/arith.ts:10:18: error: (lean block src/arith.ts:arith, Lean
+  5:17) ...`) with exit code 254. `.leanfran/lock` keeps two runs from writing at once, and
+  a failed install restores the previous files.
 - `uses: ["./geometry.ts:geometry"]` imports and opens another block of the package;
   the generated module imports the types and schemas of that block's module.
 - `models: { LineItem }` takes the user's Standard JSON Schema values (zod, valibot,
@@ -74,10 +80,10 @@ leanfran --lang typescript generate --lake-dir <dir> --output-dir <dir> [--modul
   settings. With `LEANFRAN_TS_AUTO_SYNC=1` it runs
   `leanfran --lang typescript sync` instead, and the regenerated module is used from the next start.
 - `leanfran --lang typescript status` compares the keys (which also cover the module path and the
-  `"leanfran"` field of `package.json`) with `.leanfran/blocks.json` without Lean and
-  exits with 254 when a block is stale.
-- Commit `_lean/` and `.leanfran/blocks.json`; ignore `.leanfran/workspace/`. The
-  package then runs without Lean.
+  `"leanfran"` field of `package.json`) with `leanfran.manifest.json` without Lean, prints
+  `<module>:<name>: stale` for a changed block and exits with 1 when a line is printed.
+- Commit `_lean/` and `leanfran.manifest.json`; `sync` writes `.leanfran/.gitignore`, which
+  ignores `.leanfran/typescript/` and `.leanfran/lock`. The package then runs without Lean.
 
 ## Generate from Lake modules
 
@@ -231,13 +237,16 @@ leanfran --lang typescript status --package <dir>
   `proved`, `sorry`, `axioms` (an axiom outside `propext`, `Quot.sound`,
   `Classical.choice`), `failed` (its proof file does not build), `missing` or
   `mismatch` (the theorem's type is not the obligation). It writes
-  `<dir>/leanfran.lock` (with a `spec_hash` of each function's AST without positions
-  and of the keys of its specification blocks); `--require proved` exits with 254
-  unless every obligation is proved. A construct outside the subset stops `check` with
-  254 and the file, line and column. Commit `leanfran.lock` with `_lean/`; `status` and the
+  `<dir>/leanfran.lock` (the `typescript` section of a `leanfran-lock` version 2 file, with a
+  `hash` of each function's AST without positions and of the keys of its specification
+  blocks) and prints one line per obligation, `<module>:<function> [<label>]: <status>`.
+  A construct outside the subset makes that function `unextracted` with the file, line
+  and column on standard error, and the other functions are still checked. `check` exits
+  with 1 when a function is `unextracted` or `failed`, and `--require proved` exits with 1
+  unless every obligation is proved. Commit `leanfran.lock` with `_lean/`; `status` and the
   replaced specifications read it.
 - `leanfran --lang typescript status` also prints the obligations of the lock and marks a function whose
-  hash changed `stale` (exit code 254) without Lean.
+  hash changed `stale` (exit code 1) without Lean.
 - The subset: parameters and results annotated with `number`, `bigint`, `boolean`,
   `string`, `T[]`, `readonly T[]`, `[A, B]`, `T | null`, `T | undefined`, `Nat` and `Int`
   of `leanfran/schema`, the structures, inductive types and enums generated from a block
@@ -302,7 +311,7 @@ and the verification of TypeScript functions (10 to 14).
 
 ## The CLI
 
-The compiler runs the project's `node_modules/leanfran/dist/cli.js` with Node.js for `sync`, `check`, `status`, and `generate`. It looks up the npm package in the directory passed to `--package` or, for `generate`, in the current directory. It passes its own path to the package in `LEANFRAN_CLI`. Automatic sync (`LEANFRAN_TS_AUTO_SYNC=1`) runs from the npm package and uses `LEANFRAN_CLI` first, then `leanfran` on PATH.
+For `sync`, `check` and `status`, the compiler runs the commands `scan` and `translate` of the project's `node_modules/leanfran/dist/cli.js` with Node.js; they read the TypeScript sources and print JSON, and the compiler does the Lake builds, the generation, the installation of the files, the manifest and the lock. It looks up the npm package in the directory passed to `--package` and exits with 255 and an installation hint when it is missing. The npm package checks that the compiler's release, generator and Lean versions are its own and exits with 255 otherwise. `generate` runs `project generate` in the compiler. Automatic sync (`LEANFRAN_TS_AUTO_SYNC=1`) runs `leanfran --lang typescript sync` of `LEANFRAN_CLI` first, then of `leanfran` on PATH. Exit codes of `sync`, `check` and `status`: 0 success, 1 a stale block or function, an `unextracted` or `failed` obligation or an unmet `--require proved`, 252 an argument the command cannot read, 254 an error in the project (the sources, a Lean diagnostic), 255 an error of the environment (the npm package, `lake`, `lean`, a version that does not match).
 
 ```text
 leanfran --lang typescript sync --package <dir>
@@ -397,7 +406,7 @@ export function double(n: bigint | number): bigint {
   the JSON against Lean's `ToJson` (`test/json.test.ts`), Standard Schema with Hono and
   zod (`test/standard.test.ts`); `test/embed.test.ts` — `leanfran --lang typescript sync`,
   `status` and `generate` on the fixtures `test/embed/app/` (with its committed
-  `src/_lean/` and `.leanfran/blocks.json`) and `test/project/`.
+  `src/_lean/` and `leanfran.manifest.json`) and `test/project/`.
 - `samples/` — the samples (pnpm workspace packages that link `leanfran`), `samples/run.sh` and
   `samples/Makefile` (`test`, `verify`).
 - `../../maint/TypeScript/bump-version.sh` — sets the version of `package.json` and `LeanTs/Cli.lean`;
