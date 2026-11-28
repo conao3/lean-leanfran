@@ -4,128 +4,112 @@ declare(strict_types=1);
 
 namespace Conao3\Leanfran\Embed;
 
-use Conao3\Leanfran\Lean;
 use RuntimeException;
 use stdClass;
 
-/** A generated block's inputs and owned PHP files. */
+/** The `php` section of the project's leanfran.manifest.json, which `leanfran --lang php sync` writes. */
 final readonly class Manifest
 {
-    public const FILE = 'leanfran.json';
-    private const FORMAT = 'leanfran-php-embed';
+    public const FILE = 'leanfran.manifest.json';
 
-    /** @param non-empty-list<string> $files */
+    /**
+     * @param list<mixed> $require
+     * @param array<string, array{hash: string, files: list<string>}> $blocks
+     * @param list<string> $files
+     */
     private function __construct(
-        public string $block,
-        public string $hash,
-        public string $version,
+        public string $compiler,
+        public array $require,
+        public string $inputs,
+        public string $support,
+        public array $blocks,
         public array $files,
     ) {}
 
-    /** Reads a valid embedding manifest, if present. */
-    public static function read(string $dir, bool $discover = false): ?self
+    /** Reads the `php` section, if the manifest has one. */
+    public static function read(string $root): ?self
     {
-        $path = "$dir/" . self::FILE;
-        if (!file_exists($path) && !is_link($path)) {
+        $path = "$root/" . self::FILE;
+        if (!is_file($path)) {
             return null;
         }
-        if (!is_file($path) || is_link($path)) {
-            throw new RuntimeException("invalid embedding manifest: $path");
-        }
-        try {
-            $data = Files::json($path);
-        } catch (RuntimeException $error) {
-            if ($discover) {
-                return null;
-            }
-            throw $error;
-        }
-        if ($discover && (!$data instanceof stdClass || ($data->format ?? null) !== self::FORMAT)) {
+        $data = Files::json($path);
+        $languages = $data instanceof stdClass ? $data->languages ?? null : null;
+        $section = $languages instanceof stdClass ? $languages->php ?? null : null;
+        if ($section === null) {
             return null;
         }
         if (
-            !$data instanceof stdClass
-            || ($data->format ?? null) !== self::FORMAT
-            || !is_string($data->block ?? null)
-            || $data->block === ''
-            || !is_string($data->hash ?? null)
-            || !preg_match('/^[0-9a-f]{64}$/D', $data->hash)
-            || !is_string($data->generator_version ?? null)
-            || !is_array($data->files ?? null)
-            || !array_is_list($data->files)
-            || $data->files === []
+            !$section instanceof stdClass
+            || !is_string($section->compiler ?? null)
+            || !is_array($section->require ?? null)
+            || !is_string($section->inputs ?? null)
+            || !is_string($section->support ?? null)
+            || !is_array($section->blocks ?? null)
+            || !is_array($section->files ?? null)
         ) {
-            throw new RuntimeException("invalid embedding manifest: $path");
+            throw new RuntimeException("$path: invalid php section");
         }
-        $files = [];
-        foreach ($data->files as $file) {
-            if (!is_string($file) || !preg_match('~^(?:Internal/)?[^/\\\\]+\.php$~D', $file)) {
-                throw new RuntimeException("invalid generated file path in $path");
+        $blocks = [];
+        foreach ($section->blocks as $entry) {
+            if (!$entry instanceof stdClass || !is_string($entry->name ?? null) || !is_string($entry->hash ?? null)) {
+                throw new RuntimeException("$path: invalid block in the php section");
             }
-            $files[] = $file;
+            $blocks[$entry->name] = ['hash' => $entry->hash, 'files' => self::paths($path, $entry->files ?? null)];
         }
-        return new self($data->block, $data->hash, $data->generator_version, $files);
-    }
-
-    /** Records a newly generated block. */
-    public static function write(string $dir, Project $project, Block $block): void
-    {
-        $files = self::generatedFiles($dir);
-        if (
-            !in_array('Functions.php', $files, true)
-            || !in_array('Internal/Lean' . basename($block->output) . '.php', $files, true)
-        ) {
-            throw new RuntimeException($block->location() . ': incomplete generator output');
-        }
-        sort($files, SORT_STRING);
-        Files::write(
-            "$dir/" . self::FILE,
-            json_encode(
-                [
-                    'format' => self::FORMAT,
-                    'block' => $block->name,
-                    'hash' => $project->digest($block),
-                    'generator_version' => Lean::GENERATOR_VERSION,
-                    'files' => $files,
-                ],
-                JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
-            )
-                . "\n",
+        return new self(
+            $section->compiler,
+            array_values($section->require),
+            $section->inputs,
+            $section->support,
+            $blocks,
+            self::paths($path, $section->files),
         );
     }
 
     /**
-     * Reads an output directory and rejects unmanaged entries before replacing it.
+     * Lists every generated file of the section.
      *
      * @return list<string>
      */
-    public static function generatedFiles(string $dir): array
+    public function files(): array
     {
-        if (!file_exists($dir) && !is_link($dir)) {
-            return [];
-        }
-        if (!is_dir($dir) || is_link($dir)) {
-            throw new RuntimeException("output path is not a directory: $dir");
-        }
-        $files = [];
-        foreach (Files::entries($dir) as $path) {
-            $name = basename($path);
-            if ($name === self::FILE && self::read($dir) !== null) {
-                continue;
-            }
-            if ($name === 'Internal' && is_dir($path) && !is_link($path)) {
-                foreach (Files::entries($path) as $child) {
-                    if (!Files::generated($child)) {
-                        throw new RuntimeException("non-generated entry in output directory: $child");
-                    }
-                    $files[] = 'Internal/' . basename($child);
-                }
-            } elseif (Files::generated($path)) {
-                $files[] = $name;
-            } else {
-                throw new RuntimeException("non-generated entry in output directory: $path");
-            }
+        $files = $this->files;
+        foreach ($this->blocks as $entry) {
+            array_push($files, ...$entry['files']);
         }
         return $files;
+    }
+
+    /** Encodes a JSON value with object keys in order, as `sync` compares requirements. */
+    public static function canonical(mixed $value): string
+    {
+        return json_encode(self::sorted($value), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private static function sorted(mixed $value): mixed
+    {
+        if ($value instanceof stdClass) {
+            $fields = get_object_vars($value);
+            ksort($fields, SORT_STRING);
+            return (object) array_map(self::sorted(...), $fields);
+        }
+        return is_array($value) ? array_map(self::sorted(...), $value) : $value;
+    }
+
+    /** @return list<string> */
+    private static function paths(string $path, mixed $files): array
+    {
+        if (!is_array($files)) {
+            throw new RuntimeException("$path: invalid file list in the php section");
+        }
+        $paths = [];
+        foreach ($files as $file) {
+            if (!is_string($file)) {
+                throw new RuntimeException("$path: invalid file list in the php section");
+            }
+            $paths[] = $file;
+        }
+        return $paths;
     }
 }

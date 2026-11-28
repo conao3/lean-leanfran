@@ -1,5 +1,6 @@
 import LeanPhp
 import LeanPhp.Check
+import LeanPhp.Embed
 
 open Lean LeanPhp
 
@@ -31,14 +32,13 @@ def generatorVersion : String := "7"
 def usage : String := "usage: leanfran --lang php [--version] [--generator-version] <command> <subcommand> [parameters]
 
 commands:
-  sync [--package <dir>]                      Check the Lean blocks of a Composer package and generate their PHP
-  check [--package <dir>] [--require proved]  Translate the #[Model] functions to Lean and judge their obligations
-  status [--package <dir>]                    Show stale blocks and the states recorded by check
-  module generate                             Emit PHP for functions of a Lean module
-  obligations check                           Judge the proofs of obligations (used by check)
+  sync [--package <dir>] [--verbose]                      Check the Lean blocks of a Composer package and generate their PHP
+  check [--package <dir>] [--verbose] [--require proved]  Translate the #[Model] functions to Lean and judge their obligations
+  status [--package <dir>] [--require proved]             Show stale blocks and the states recorded by check
+  module generate                                         Emit PHP for functions of a Lean module
+  obligations check                                       Judge the proofs of obligations (used by check)
 
-sync, check and status run vendor/conao3/leanfran/bin/leanfran of the package (default: .) with php;
-`leanfran --lang php sync --help` prints their parameters.
+sync, check and status read the package (default: .) with vendor/conao3/leanfran/bin/leanfran scan and translate.
 
 leanfran --lang php module generate
   --module-name <Name>        Lean module to import (required unless --batch)
@@ -399,27 +399,11 @@ unsafe def checkObligations (args : List String) : IO UInt32 := do
     IO.println (Json.arr results).compress
     return 0
 
-def packageCommand (args : List String) : IO UInt32 := do
-  let packages := (args.zip (args.drop 1)).filterMap fun (flag, value) =>
-    if flag == "--package" && !value.startsWith "--" then some value else none
-  let cwd ← IO.currentDir
-  let root := match packages.head? with
-    | none | some "." => cwd
-    | some dir => if System.FilePath.isAbsolute dir then dir else cwd / dir
-  let cli := root / "vendor" / "conao3" / "leanfran" / "bin" / "leanfran"
-  unless ← cli.pathExists do
-    return ← fail 255 s!"cannot find the PHP package conao3/leanfran in {root / "vendor"}; run `composer require conao3/leanfran` in {root}"
-  try
-    let child ← IO.Process.spawn {
-      cmd := "php"
-      args := #[cli.toString] ++ args.toArray
-      env := #[("LEANFRAN_CLI", some (← IO.appPath).toString)] }
-    child.wait
-  catch e => fail 255 s!"cannot run php: {e}"
-
 unsafe def main (args : List String) : IO UInt32 := do
   match args with
-  | "sync" :: _ | "check" :: _ | "status" :: _ => packageCommand args
+  | "sync" :: rest => Leanfran.Embed.run (LeanPhp.Embed.backend version generatorVersion) "sync" rest
+  | "check" :: rest => Leanfran.Embed.run (LeanPhp.Embed.backend version generatorVersion) "check" rest
+  | "status" :: rest => Leanfran.Embed.run (LeanPhp.Embed.backend version generatorVersion) "status" rest
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
   | [] | ["help"] | ["--help"] | "module" :: "help" :: _

@@ -150,6 +150,7 @@
                   ./langs/Clojure/LeanClj
                   ./langs/PHP/LeanPhp.lean
                   ./langs/PHP/LeanPhp
+                  ./langs/PHP/src/lean/LeanPhpLib
                   ./langs/Go/LeanGo.lean
                   ./langs/Go/LeanGo
                   ./langs/Go/lean/LeanGoLib

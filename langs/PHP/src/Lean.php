@@ -10,7 +10,9 @@ use Attribute;
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class Lean
 {
+    public const VERSION = '0.14.0';
     public const GENERATOR_VERSION = '7';
+    public const LEAN_VERSION = '4.35.0';
 
     /**
      * @param list<string> $imports

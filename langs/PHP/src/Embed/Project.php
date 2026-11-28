@@ -11,8 +11,6 @@ use stdClass;
 /** The Composer configuration and dependency graph of Lean blocks. */
 final class Project
 {
-    public const TOOLCHAIN = 'leanprover/lean4:v4.35.0';
-
     /**
      * @param array<string, Block> $blocks
      * @param list<string> $sources
@@ -25,7 +23,6 @@ final class Project
         public readonly array $blocks,
         public readonly array $sources,
         public readonly array $requirements,
-        public readonly string $toolchain,
         public readonly array $models,
         private array $hashes = [],
     ) {}
@@ -60,11 +57,6 @@ final class Project
         $requirements = [];
         foreach ($require as $item) {
             $requirements[] = self::object($item, 'extra.leanfran.require entry');
-        }
-        $file = "$root/lean-toolchain";
-        $toolchain = file_exists($file) ? trim(Files::read($file)) : self::TOOLCHAIN;
-        if (!preg_match('~^leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$~D', $toolchain)) {
-            throw new RuntimeException("$file: expected a Lean release toolchain, got $toolchain");
         }
         $files = [];
         foreach ($paths as $path) {
@@ -112,7 +104,7 @@ final class Project
         foreach ($blocks as $key => $block) {
             $models[$key] = $block->models === [] ? [] : ($collector ??= new Models($root))->block($block);
         }
-        $project = new self($root, $blocks, $sources, $requirements, $toolchain, $models);
+        $project = new self($root, $blocks, $sources, $requirements, $models);
         foreach ($blocks as $block) {
             $project->hash($block, []);
         }
@@ -193,7 +185,7 @@ final class Project
             ],
             'require' => self::canonical($this->requirements),
             'generator_version' => Lean::GENERATOR_VERSION,
-            'lean-toolchain' => $this->toolchain,
+            'lean-toolchain' => 'leanprover/lean4:v' . Lean::LEAN_VERSION,
         ], JSON_THROW_ON_ERROR));
     }
 

@@ -58,6 +58,40 @@ final readonly class Source
         return [$this->line + $line - 1, $base + $column];
     }
 
+    /**
+     * Maps byte offsets of the Lean text to one-based PHP lines and code point columns.
+     *
+     * @return list<array{int, int, int}>
+     */
+    public function map(): array
+    {
+        $map = [];
+        $offset = 0;
+        foreach ($this->lines as $index => $raw) {
+            $line = $this->line + $index;
+            if (!$this->quoted) {
+                $map[] = [$offset, $line, $this->indentLength($raw) + 1];
+                $offset += strlen($raw) - $this->indentLength($raw) + 1;
+                continue;
+            }
+            $column = $index === 0 ? $this->column : 1;
+            $map[] = [$offset, $line, $column];
+            preg_match_all("~\\\\[\\\\']|.~us", $raw, $matches);
+            foreach ($matches[0] as $token) {
+                if (strlen($token) === 2 && $token[0] === '\\') {
+                    $offset += 1;
+                    $column += 2;
+                    $map[] = [$offset, $line, $column];
+                } else {
+                    $offset += strlen($token);
+                    $column += 1;
+                }
+            }
+            $offset += 1;
+        }
+        return $map;
+    }
+
     private function indentLength(string $line): int
     {
         return min(strlen($this->indent), strspn($line, " \t"));

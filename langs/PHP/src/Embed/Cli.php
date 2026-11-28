@@ -4,98 +4,100 @@ declare(strict_types=1);
 
 namespace Conao3\Leanfran\Embed;
 
+use Conao3\Leanfran\Lean;
 use Conao3\Leanfran\Verify\Check;
-use Conao3\Leanfran\Verify\Lock;
-use RuntimeException;
+use JsonException;
 use Throwable;
 
-/** Entry point that `leanfran --lang php sync|status|check` runs in the project. */
+/** Entry point that `leanfran --lang php sync|check|status` runs in the project to read its sources. */
 final class Cli
 {
     private const USAGE = <<<'USAGE'
-        Usage:
-          leanfran --lang php sync [--package dir]
-          leanfran --lang php status [--package dir]
-          leanfran --lang php check [--package dir] [--require proved]
+        usage: php vendor/conao3/leanfran/bin/leanfran scan --root <root> --dir <dir>
+               php vendor/conao3/leanfran/bin/leanfran translate --root <root>
 
-        Compiler lookup: LEANFRAN_CLI, then leanfran on PATH.
+        Run leanfran --lang php sync, leanfran --lang php check or leanfran --lang php status
+        in the Composer project; they start these commands.
         USAGE;
+
+    private const INSTALL = "install the compiler of this release with nix profile install 'github:conao3/lean-leanfran/v%s#leanfran'";
 
     /** @param list<string> $args */
     public static function run(array $args): int
     {
+        $command = array_shift($args);
+        if (in_array($command, [null, '-h', '--help'], true)) {
+            fwrite(STDOUT, self::USAGE . "\n");
+            return 0;
+        }
+        $root = self::root($command, $args);
+        if ($root === null) {
+            fwrite(STDERR, self::USAGE . "\n");
+            return 252;
+        }
+        $error = self::versions();
+        if ($error !== null) {
+            fwrite(STDERR, "leanfran-php: $error\n");
+            return 255;
+        }
         try {
-            $command = array_shift($args);
-            if (in_array($command, [null, '-h', '--help'], true) || $args === ['--help']) {
-                fwrite(STDOUT, self::USAGE . "\n");
-                return 0;
+            if ($command === 'scan') {
+                $result = Scan::run($root);
+            } else {
+                json_decode((string) stream_get_contents(STDIN), flags: JSON_THROW_ON_ERROR);
+                $result = Check::run($root);
             }
-            if (!in_array($command, ['sync', 'status', 'check'], true)) {
-                throw new RuntimeException("unknown leanfran command: $command");
-            }
-            $options = [];
-            while ($args !== []) {
-                $option = array_shift($args);
-                if (
-                    !in_array(
-                        $option,
-                        match ($command) {
-                            'sync' => ['--package'],
-                            'check' => ['--package', '--require'],
-                            default => ['--package'],
-                        },
-                        true,
-                    )
-                    || isset($options[$option])
-                ) {
-                    throw new RuntimeException("invalid option for $command: $option");
-                }
-                $value = array_shift($args);
-                if ($value === null || $value === '' || str_starts_with($value, '--')) {
-                    throw new RuntimeException("expected a value for $option");
-                }
-                $options[$option] = $value;
-            }
-            $dir = $options['--package'] ?? '.';
-            $require = $options['--require'] ?? null;
-            if ($require !== null && $require !== 'proved') {
-                throw new RuntimeException('--require expects proved');
-            }
-            if ($command === 'sync') {
-                self::count(Sync::run($dir));
-                return 0;
-            }
-            if ($command === 'check') {
-                return Sync::run($dir, static function (Project $project, int $count) use ($require): int {
-                    self::count($count);
-                    $result = Check::run($project, Sync::compiler(), $require !== null);
-                    return self::blockStatus($project) ? $result : 1;
-                });
-            }
-            $project = Project::load($dir);
-            $fresh = Lock::status($project);
-            return self::blockStatus($project) && $fresh ? 0 : 1;
+            fwrite(STDOUT, json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+            return 0;
+        } catch (EnvironmentError $error) {
+            fwrite(STDERR, $error->getMessage() . "\n");
+            return 255;
+        } catch (JsonException $error) {
+            fwrite(STDERR, "leanfran-php $command: {$error->getMessage()}\n");
+            return 255;
         } catch (Throwable $error) {
             fwrite(STDERR, $error->getMessage() . "\n");
-            return 1;
+            return 254;
         }
     }
 
-    private static function count(int $count): void
+    /** @param list<string> $args */
+    private static function root(string $command, array $args): ?string
     {
-        $noun = $count === 1 ? 'block' : 'blocks';
-        fwrite(STDOUT, "leanfran: $count $noun checked and generated\n");
+        $flags = match ($command) {
+            'scan' => ['--root', '--dir'],
+            'translate' => ['--root'],
+            default => null,
+        };
+        if ($flags === null || count($args) !== 2 * count($flags)) {
+            return null;
+        }
+        $options = [];
+        foreach (array_chunk($args, 2) as [$flag, $value]) {
+            if (!in_array($flag, $flags, true) || isset($options[$flag]) || $value === '') {
+                return null;
+            }
+            $options[$flag] = $value;
+        }
+        return $options['--root'];
     }
 
-    private static function blockStatus(Project $project): bool
+    private static function versions(): ?string
     {
-        $changes = Status::changes($project);
-        foreach ($changes as $line) {
-            fwrite(STDOUT, "$line\n");
+        $install = sprintf(self::INSTALL, Lean::VERSION);
+        foreach ([
+            ['LEANFRAN_VERSION', 'release version', Lean::VERSION, 'use a compiler from the release of conao3/leanfran or update conao3/leanfran to the release of the compiler'],
+            ['LEANFRAN_GENERATOR_VERSION', 'generator version', Lean::GENERATOR_VERSION, 'rebuild the compiler from the source revision of conao3/leanfran'],
+            ['LEANFRAN_LEAN_VERSION', 'Lean version', Lean::LEAN_VERSION, 'use a compiler built with the Lean version of the release of conao3/leanfran'],
+        ] as [$variable, $name, $expected, $fix]) {
+            $actual = getenv($variable);
+            if ($actual === false || $actual === '') {
+                return 'run leanfran --lang php sync, check or status in the Composer project';
+            }
+            if ($actual !== $expected) {
+                return "compiler $name \"$actual\", expected $expected; $fix, or $install";
+            }
         }
-        if ($changes === []) {
-            fwrite(STDOUT, "leanfran: all blocks up to date\n");
-        }
-        return $changes === [];
+        return null;
     }
 }
