@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "go": {
+      "compiler": "14/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "example.com/verified-nibble",
+          "source": "nibble.go",
+          "hash": "aed7db54e6e8e26b0806ac003d1f4884bb6bbd303ebebafb2b81557ff0ee4e1d",
+          "files": ["leanfran_funcs_gen.go", "leanfran_lean_gen.go", "leanfran_types_gen.go"]
+        }
+      ],
+      "files": ["leanfran_model_test.go"]
+    }
+  }
+}

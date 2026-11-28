@@ -36,7 +36,7 @@ def prepare (ctx : Context) : IO (Except Failure Unit) := do
 
 def withLock (root : FilePath) (exclusive : Bool) (action : IO α) : IO α := do
   let dir := stateDir root
-  if !exclusive && !(← dir.isDir) then return ← action
+  if !exclusive && !(← (dir / "lock").pathExists) then return ← action
   IO.FS.createDirAll dir
   let handle ← IO.FS.Handle.mk (dir / "lock") .append
   handle.lock (exclusive := exclusive)

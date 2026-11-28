@@ -8,7 +8,11 @@ mkdir -p test-out
 out=$(mktemp -d "$root/test-out/verify.XXXXXX")
 trap 'rm -rf "$out"' EXIT
 mkdir "$out/tools"
-ln -s "$(command -v go)" "$out/tools/go"
+for tool in go sha256sum shasum; do
+    if command -v "$tool" > /dev/null; then
+        ln -s "$(command -v "$tool")" "$out/tools/$tool"
+    fi
+done
 
 for fixture in states translation; do
     cp -R "testdata/verify/$fixture" "$out/$fixture"
@@ -24,7 +28,7 @@ done
         read -r fn state <<< "$row"
         grep -Fx "fixture.test/states.$fn [refines]: $state" "$out/states.txt"
     done
-    grep -E 'states.go:[0-9]+:[0-9]+: unsupported' "$out/states.err"
+    grep -E 'states.go:[0-9]+:[0-9]+: unextracted fixture.test/states.Unsupported: unsupported' "$out/states.err"
     PATH="$out/tools" "$cli" --lang go status > "$out/fresh.txt"
     grep -Fx "fixture.test/states.Proved [refines]: proved" "$out/fresh.txt"
     sed -i 's/func Proved(n int64) int64 { return n + 1 }/func Proved(n int64) int64 { return n + 2 }/' states.go
@@ -40,7 +44,7 @@ done
     go test -count=1 -run '^TestLeanfranModels/(ReadTagged|FlavorOk|FlavorRoundTrip)$' .
     go test -count=1 ./helper
     go run . > "$out/go.txt"
-    workspace=.leanfran/workspace
+    workspace=.leanfran/go/workspace
     cp VerifyOracle.lean "$workspace/"
     cat >> "$workspace/lakefile.toml" <<'LAKE'
 
@@ -56,7 +60,7 @@ LAKE
 
 (
     cd "$out/translation"
-    workspace=$PWD/.leanfran/workspace
+    workspace=$PWD/.leanfran/go/workspace
     cp "$root/testdata/verify/model/ModelOps.lean" "$workspace/"
     (
         cd "$workspace"

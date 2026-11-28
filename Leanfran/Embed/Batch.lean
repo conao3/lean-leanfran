@@ -37,6 +37,7 @@ partial def filesUnder (dir : FilePath) : IO (Array String) := do
 
 def run (job : Block → FilePath → Json) (generateArgs : Array String) (ctx : Context) (blocks : Array Block) :
     IO (Except Failure (Array Generated)) := do
+  if blocks.isEmpty then return .ok #[]
   let stage ← stageDir ctx
   let blocks := order blocks
   let mut jobs := #[]

@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "go": {
+      "compiler": "14/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "example.com/embed-range/pricing",
+          "source": "pricing/pricing.go",
+          "hash": "e50df696353f7c360c76daae977f997fa6668d4f4ebc37c57be8ee3b179f8fe5",
+          "files": ["pricing/leanfran_funcs_gen.go", "pricing/leanfran_lean_gen.go", "pricing/leanfran_types_gen.go"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

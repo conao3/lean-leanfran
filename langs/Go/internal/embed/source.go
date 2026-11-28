@@ -47,23 +47,31 @@ func literal(raw, filename, file string, start int) (source, error) {
 	return s, nil
 }
 
-func (s source) location(row, column int) (int, int) {
-	offset := 0
-	for i := 1; i < row; i++ {
-		n := strings.IndexByte(s.text[offset:], '\n')
-		if n < 0 {
-			offset = len(s.text)
-			break
-		}
-		offset += n + 1
-	}
-	for i := 0; i < column && offset < len(s.text) && s.text[offset] != '\n'; i++ {
-		_, width := utf8.DecodeRuneInString(s.text[offset:])
-		offset += width
-	}
-	if s.offsets != nil {
-		offset = s.offsets[offset]
-	}
+func (s source) position(offset int) [2]int {
 	prefix := s.original[:offset]
-	return strings.Count(prefix, "\n") + 1, offset - strings.LastIndexByte(prefix, '\n')
+	return [2]int{strings.Count(prefix, "\n") + 1, offset - strings.LastIndexByte(prefix, '\n')}
+}
+
+func (s source) entries() [][3]int {
+	var entries [][3]int
+	for i := 0; i < len(s.text); i++ {
+		original := i
+		if s.offsets != nil {
+			original = s.offsets[i]
+		}
+		lineStart := i == 0 || s.text[i-1] == '\n'
+		jumped := s.offsets != nil && i > 0 && s.offsets[i] != s.offsets[i-1]+1
+		if lineStart || jumped {
+			pos := s.position(original)
+			entries = append(entries, [3]int{i, pos[0], pos[1]})
+		}
+	}
+	if entries == nil {
+		pos := s.position(0)
+		if s.offsets != nil {
+			pos = s.position(s.offsets[0])
+		}
+		entries = [][3]int{{0, pos[0], pos[1]}}
+	}
+	return entries
 }

@@ -23,7 +23,7 @@ for sample in verified-clamp verified-nibble; do
         go vet ./...
         test -z "$(gofmt -l .)"
         "$cli" --lang go status
-        for file in leanfran.json leanfran_*_gen.go leanfran_model_test.go; do
+        for file in leanfran.manifest.json leanfran_*_gen.go leanfran_model_test.go; do
             cmp "$root/samples/$sample/$file" "$file"
         done
     )

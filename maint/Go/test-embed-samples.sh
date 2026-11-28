@@ -22,7 +22,7 @@ for name in embed-range embed-models; do
         go vet ./...
         test -z "$(gofmt -l .)"
         git -C "$root" ls-files "samples/$name" --cached --others --exclude-standard |
-            sed -n '/leanfran_.*_gen.go$/p; /leanfran.json$/p' |
+            sed -n '/leanfran_.*_gen.go$/p; /leanfran.manifest.json$/p' |
             while IFS= read -r file; do
                 cmp "$root/$file" "${file#samples/"$name"/}"
             done
@@ -30,7 +30,7 @@ for name in embed-range embed-models; do
         "$out/$name.exe" > "$out/$name.go.out"
     )
 done
-cat "$out/embed-range/.leanfran/workspace"/LeanGoEmbed/B*.lean > "$out/Oracle.lean"
+cat "$out/embed-range/.leanfran/go/workspace"/LeanGoEmbed/B*.lean > "$out/Oracle.lean"
 ns=$(sed -n 's/^namespace //p' "$out/Oracle.lean")
 printf '\ndef main : IO Unit := IO.println (%s.width ⟨2, 5, by decide⟩)\n' "$ns" >> "$out/Oracle.lean"
 lean --root="$out" -c "$out/Oracle.c" "$out/Oracle.lean"

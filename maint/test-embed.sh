@@ -73,6 +73,9 @@ test -f .leanfran/fake-byte/workspace/FakeBlocks/Beta.lean || fail 'the workspac
 grep -Fq '"files": ["gen/alias.txt", "gen/beta.txt"]' leanfran.manifest.json || fail 'manifest files of beta'
 expect 0 --lang fake-byte status
 test ! -s "$work/out" || fail 'status printed rows for fresh blocks'
+rm .leanfran/lock
+expect 0 --lang fake-byte status
+test ! -e .leanfran/lock || fail 'status created .leanfran/lock'
 
 write_scan a2 "$alias"
 expect 1 --lang fake-byte status
@@ -181,5 +184,13 @@ contains err 'leanfran.lock is not a lock of leanfran --lang fake-byte'
 printf '{"version": 1, "inputs": "x", "functions": {}, "obligations": []}\n' >leanfran.lock
 expect 1 --lang fake-byte status
 contains out 'fake.double [refines]: stale'
+
+cat >fake/scan.json <<'JSON'
+{"format": 1, "scope": ["."], "require": [], "inputs": "", "blocks": [], "workspace": [], "files": [],
+ "stray": [], "functions": [], "proof_inputs": ""}
+JSON
+expect 0 --lang fake-byte sync
+contains err 'leanfran: 0 blocks checked and generated'
+test ! -e gen/alpha.txt || fail 'gen/alpha.txt of the removed block is left'
 
 echo "test-embed.sh: placement, rollback, ownership, stray removal, locking, position maps, host commands, batch errors and the lock passed"

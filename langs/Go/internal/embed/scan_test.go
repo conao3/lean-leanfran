@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func scannerProject(t *testing.T, files map[string]string) *project {
@@ -16,7 +17,7 @@ func scannerProject(t *testing.T, files map[string]string) *project {
 		t.Fatal(err)
 	}
 	p := &project{
-		root: root, module: "example.com/test", toolchain: defaultToolchain,
+		root: root, module: "example.com/test",
 		blocks: make(map[string]*block), packages: make(map[string]*goPackage),
 	}
 	for name, data := range files {
@@ -29,6 +30,24 @@ func scannerProject(t *testing.T, files map[string]string) *project {
 		}
 	}
 	return p
+}
+
+func locate(s source, row, column int) (int, int) {
+	offset := 0
+	for i := 1; i < row; i++ {
+		offset += strings.IndexByte(s.text[offset:], '\n') + 1
+	}
+	for i := 0; i < column && offset < len(s.text) && s.text[offset] != '\n'; i++ {
+		_, width := utf8.DecodeRuneInString(s.text[offset:])
+		offset += width
+	}
+	var found [3]int
+	for _, entry := range s.entries() {
+		if entry[0] <= offset {
+			found = entry
+		}
+	}
+	return found[1], found[2] + offset - found[0]
 }
 
 func TestScan(t *testing.T) {
@@ -60,7 +79,7 @@ func TestScan(t *testing.T) {
 			if b == nil || b.source.text != tt.text || filepath.Base(b.source.file) != tt.file {
 				t.Fatalf("unexpected block: %+v", b)
 			}
-			line, col := b.source.location(tt.row, tt.column)
+			line, col := locate(b.source, tt.row, tt.column)
 			if line != tt.wantLine || col != tt.wantCol {
 				t.Fatalf("mapped position %d:%d, expected %d:%d", line, col, tt.wantLine, tt.wantCol)
 			}
