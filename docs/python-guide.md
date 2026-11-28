@@ -16,7 +16,7 @@ which must belong to a package. The block's definitions live in the namespace
 (`Discount.percent`, `total`).
 
 ```sh
-leanfran --lang python sync --package src/myapp
+uv run leanfran --lang python sync --package src/myapp
 ```
 
 `leanfran --lang python sync` imports every module of the package, writes each block to a Lake workspace in
