@@ -239,6 +239,23 @@ describe("leanfran --lang typescript sync", () => {
     TIMEOUT,
   )
 
+  test(
+    "a Lean error after an escape of a template literal is at its UTF-16 column",
+    () => {
+      const dir = copyProject(FIXTURE, "escape")
+      writeFileSync(
+        join(dir, "src/escape.ts"),
+        'import { lean } from "leanfran"\n\nexport const escapeBlock = lean(\n  "accent",\n  `\ndef accent : String := "\\u00e9𝔸" ++ missing\n`,\n)\n',
+      )
+      const r = sync(dir)
+      expect(r.status).toBe(254)
+      expect(r.stderr).toContain(
+        `${relative(ROOT, join(dir, "src/escape.ts"))}:6:38: error: (lean block src/escape.ts:accent, Lean 2:31)`,
+      )
+    },
+    TIMEOUT,
+  )
+
   test("a block with an unknown use stops with 254", () => {
     const dir = copyProject(FIXTURE, "unknown-use")
     edit(join(dir, "src/report.ts"), "./geometry.ts:geometry", "./geometry.ts:shapes")
