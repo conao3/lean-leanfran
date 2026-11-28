@@ -30,22 +30,6 @@ final class Files
         }
     }
 
-    /** Writes a complete file. */
-    public static function write(string $path, string $text): void
-    {
-        if (@file_put_contents($path, $text) !== strlen($text)) {
-            throw new RuntimeException("cannot write $path");
-        }
-    }
-
-    /** Creates a directory and its parents. */
-    public static function mkdir(string $path): void
-    {
-        if (!is_dir($path) && !@mkdir($path, 0777, true) && !is_dir($path)) {
-            throw new RuntimeException("cannot create directory $path");
-        }
-    }
-
     /**
      * Returns the paths of a directory's immediate children in sorted order.
      *
@@ -86,30 +70,6 @@ final class Files
             ) {
                 yield from self::walk($path, $stopAtPackages);
             }
-        }
-    }
-
-    /** Moves a path on the same filesystem. */
-    public static function move(string $from, string $to): void
-    {
-        if (!@rename($from, $to)) {
-            throw new RuntimeException("cannot rename $from to $to");
-        }
-    }
-
-    /** Removes a temporary tree. */
-    public static function remove(string $path): void
-    {
-        if (is_dir($path) && !is_link($path)) {
-            foreach (self::entries($path) as $child) {
-                self::remove($child);
-            }
-            $ok = @rmdir($path);
-        } else {
-            $ok = @unlink($path);
-        }
-        if (!$ok) {
-            throw new RuntimeException("cannot remove $path");
         }
     }
 

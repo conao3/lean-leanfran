@@ -1,0 +1,39 @@
+{
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "php": {
+      "inputs": {
+        "compiler": "7/4.35.0",
+        "library": "58fd39a147692115a785968d9a7585874f39221bac84ed919006fbac32b7359b",
+        "host": "21fd59243e0fb47cc7f1590bb6b9139f9ee1ab0b6fd30e567de7d55ea030d34b",
+        "proofs": "904eda141776293e6ceac5b06bcd4584151011037f2f1f8bfa953c82c36093b5"
+      },
+      "functions": [
+        {
+          "id": "App\\Calc\\clamp",
+          "hash": "d8660ce4def3663c00744e5f3327be47f60d8577a2e864975f6b09fdb59ded7c",
+          "model": "LeanPhpModel.App.Calc.clamp",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "in_range",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Calc.lean",
+              "line": 12
+            },
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Calc.lean",
+              "line": 6
+            }
+          ],
+          "data": {}
+        }
+      ]
+    }
+  }
+}

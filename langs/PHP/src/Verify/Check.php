@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace Conao3\Leanfran\Verify;
 
-use Conao3\Leanfran\Embed\Files;
-use Conao3\Leanfran\Embed\Process;
 use Conao3\Leanfran\Embed\Project;
-use RuntimeException;
-use stdClass;
 
-/** Builds translated models and classifies each requested proof. */
+/** Translates the #[Model] functions to the Lean modules that `leanfran --lang php check` builds. */
 final class Check
 {
     /** @var array<string, Translated> */
@@ -23,8 +19,6 @@ final class Check
     private array $active = [];
 
     private Objects $objects;
-    private string $workspace;
-    private string $sources;
 
     /**
      * @param array<string, Declaration> $models
@@ -36,58 +30,53 @@ final class Check
         private readonly array $functions,
     ) {
         $this->objects = new Objects($project);
-        $this->workspace = "$project->root/.leanfran/workspace";
-        $this->sources = "$this->workspace/verification";
     }
 
-    /** Checks all models and returns the exit status requested by the caller. */
-    public static function run(Project $project, string $compiler, bool $require): int
+    /**
+     * Returns the modules, aggregates and functions of `translate`.
+     *
+     * @return array<string, mixed>
+     */
+    public static function run(string $root): array
     {
+        $project = Project::load($root);
         $discovery = Discover::project($project);
-        $models = $discovery->models;
-        if ($models === []) {
-            Lock::write($project, [], []);
-            return 0;
-        }
-        $check = new self($project, $models, $discovery->functions);
-        $autoload = "$project->root/vendor/autoload.php";
-        if (is_file($autoload)) {
-            require_once $autoload;
-        }
-        foreach (array_keys($models) as $key) {
+        $check = new self($project, $discovery->models, $discovery->functions);
+        foreach (array_keys($discovery->models) as $key) {
             try {
                 $check->translate($key);
             } catch (TranslateError) {
                 continue;
             }
         }
-        $states = $check->definitions === [] ? [] : $check->judge($compiler);
-        $entries = [];
-        $exit = 0;
-        foreach ($models as $key => $model) {
+        [$modules, $aggregates] = $check->definitions === [] ? [[], []] : $check->modules();
+        $functions = [];
+        foreach ($discovery->models as $key => $model) {
             $error = $check->errors[$key] ?? null;
-            $obligations = [];
-            $labels = $model->labels();
-            if ($error !== null && $labels === []) {
-                $labels = ['model'];
+            $function = ['id' => $model->name, 'model' => $model->lean()];
+            if ($error === null) {
+                $function['dependencies'] = array_map(
+                    fn(string $child): string => $discovery->models[$child]->name,
+                    $check->definitions[$key]->dependencies ?? [],
+                );
+            } else {
+                $function['error'] = self::error($model, $error);
             }
-            foreach ($labels as $label) {
-                $state = $error === null ? $states[$key][$label] ?? 'missing' : 'unextracted';
-                $obligations[$label] = $state;
-                $detail = $error === null ? '' : " ($error)";
-                fwrite(STDOUT, "$model->name $label: $state$detail\n");
-                if ($state === 'unextracted' || $require && $state !== 'proved') {
-                    $exit = 1;
-                }
-            }
-            $entries[$key] = [
-                'hash' => Lock::digest($project, $discovery, $key),
-                'dependencies' => $check->definitions[$key]->dependencies ?? [],
-                'obligations' => $obligations,
-            ];
+            $functions[] = $function;
         }
-        Lock::write($project, $models, $entries);
-        return $exit;
+        return ['format' => 1, 'modules' => $modules, 'aggregates' => $aggregates, 'functions' => $functions];
+    }
+
+    /** @return array{file: string, line: int, column: int, message: string} */
+    private static function error(Declaration $model, string $message): array
+    {
+        $prefix = $model->file . ':';
+        if (
+            str_starts_with($message, $prefix) && preg_match('/^(\d+): (.*)$/sD', substr($message, strlen($prefix)), $m)
+        ) {
+            return ['file' => $model->file, 'line' => (int) $m[1], 'column' => 1, 'message' => $m[2]];
+        }
+        return ['file' => $model->file, 'line' => $model->node->getStartLine(), 'column' => 1, 'message' => $message];
     }
 
     private function translate(string $key): ?Translated
@@ -127,22 +116,19 @@ final class Check
         return 'LeanPhpModel.M' . hash('sha256', $key);
     }
 
-    /** @return array<string, array<string, string>> */
-    private function judge(string $compiler): array
+    /** @return array{list<array<string, mixed>>, list<array<string, string>>} */
+    private function modules(): array
     {
-        $this->prepare();
-        $this->writeModule(
-            'LeanPhpModel.ValueTypes',
-            "import LeanPhpModels\n\n" . implode("\n\n", $this->objects->standalone()) . "\n",
-        );
         $groups = [];
         $all = [];
         $specs = ['Lean'];
         $aliases = [];
+        $translated = [];
         foreach ($this->project->blocks as $block) {
             $specs[] = $block->module;
         }
-        foreach ($this->definitions as $key => $definition) {
+        foreach ($this->ordered() as $key) {
+            $definition = $this->definitions[$key];
             $model = $definition->model;
             $parts = explode('.', $model->lean());
             array_pop($parts);
@@ -154,7 +140,10 @@ final class Check
             foreach ($definition->dependencies as $child) {
                 $imports[] = $this->module($child);
             }
-            $this->writeModule($module, self::imports($imports) . "\n" . $definition->source);
+            $translated[] = self::file($module, self::imports($imports) . "\n" . $definition->source)
+            + [
+                'functions' => [$model->name],
+            ];
             $block = $model->block;
             if ($block !== null) {
                 foreach ([$model->refines, $model->requires, ...array_values($model->ensures)] as $spec) {
@@ -182,143 +171,57 @@ final class Check
             }
             $header .= "end $alias\n";
         }
-        $this->writeModule('LeanPhpModel.Specs', $header);
+        $modules = [
+            self::file(
+                'LeanPhpModel.ValueTypes',
+                "import LeanPhpModels\n\n" . implode("\n\n", $this->objects->standalone()) . "\n",
+            ) + ['functions' => []],
+            self::file('LeanPhpModel.Specs', $header) + ['functions' => []],
+            ...$translated,
+        ];
+        $aggregates = [];
         foreach ($groups as $group => $members) {
             if ($group !== 'LeanPhpModel') {
-                $this->writeModule($group, self::imports(['LeanPhpModel.Specs', ...$members]));
+                $aggregates[] = self::file($group, self::imports(['LeanPhpModel.Specs', ...$members]));
             }
         }
-        $this->writeModule('LeanPhpModel', self::imports(['LeanPhpModel.Specs', ...$all]));
-        $proofs = $this->proofs();
-        $built = [];
-        $full = Process::run(['lake', 'build', '+LeanPhpModel'], $this->workspace);
-        if ($full->status === 0) {
-            $built[] = 'LeanPhpModel';
-        } else {
-            foreach ($this->definitions as $key => $definition) {
-                $module = $this->module($key);
-                $build = Process::run(['lake', 'build', "+$module"], $this->workspace);
-                if ($build->status === 0) {
-                    $built[] = $module;
-                } else {
-                    $message = trim($build->stdout . "\n" . $build->stderr);
-                    fwrite(STDERR, $definition->model->where() . ": $message\n");
-                    $this->errors[$key] =
-                        $definition->model->where() . ': could not elaborate the translated definition or spec';
-                }
+        $aggregates[] = self::file('LeanPhpModel', self::imports(['LeanPhpModel.Specs', ...$all]));
+        return [$modules, $aggregates];
+    }
+
+    /**
+     * Orders the translated models so that each model follows the models it calls.
+     *
+     * @return list<string>
+     */
+    private function ordered(): array
+    {
+        $order = [];
+        $visit = function (string $key) use (&$visit, &$order): void {
+            if (isset($order[$key]) || !isset($this->definitions[$key])) {
+                return;
             }
-        }
-        $failed = [];
-        foreach ($proofs as $module => $text) {
-            $result = Process::run(['lake', 'build', "+$module"], $this->workspace);
-            if ($result->status === 0) {
-                $built[] = $module;
-            } else {
-                fwrite(STDERR, str_replace('verification/Proofs/', 'lean/Proofs/', $result->stdout . $result->stderr));
-                $failed[] = $text;
+            $order[$key] = false;
+            foreach ($this->definitions[$key]->dependencies as $child) {
+                $visit($child);
             }
+            unset($order[$key]);
+            $order[$key] = true;
+        };
+        foreach (array_keys($this->definitions) as $key) {
+            $visit($key);
         }
-        $refs = [];
-        $keys = [];
-        foreach ($this->definitions as $key => $definition) {
-            if (isset($this->errors[$key])) {
-                continue;
-            }
-            foreach ($definition->model->labels() as $label) {
-                $refs[] = ['model' => $definition->model->lean(), 'label' => $label];
-                $keys[] = $key;
-            }
-        }
-        if ($refs === []) {
-            return [];
-        }
-        $file = "$this->sources/obligations.json";
-        Files::write($file, json_encode($refs, JSON_THROW_ON_ERROR));
-        $command = [
-            'lake',
-            'env',
-            $compiler,
-            '--lang',
-            'php',
-            'obligations',
-            'check',
-            '--modules',
-            ...$built,
-            '--obligations',
-            $file,
+        return array_keys($order);
+    }
+
+    /** @return array{module: string, path: string, text: string} */
+    private static function file(string $name, string $text): array
+    {
+        return [
+            'module' => Translate::leanName($name),
+            'path' => 'verification/' . str_replace('.', '/', $name) . '.lean',
+            'text' => $text,
         ];
-        $result = Process::run($command, $this->workspace);
-        $result->check('leanfran --lang php obligations check');
-        $decoded = json_decode($result->stdout, flags: JSON_THROW_ON_ERROR);
-        if (!is_array($decoded) || count($decoded) !== count($refs)) {
-            throw new RuntimeException('unexpected obligations check response');
-        }
-        $states = [];
-        foreach ($refs as $index => $ref) {
-            $row = $decoded[$index] ?? null;
-            if (
-                !$row instanceof stdClass
-                || !is_string($row->status ?? null)
-                || ($row->model ?? null) !== $ref['model']
-                || ($row->label ?? null) !== $ref['label']
-            ) {
-                throw new RuntimeException('invalid obligation in compiler response');
-            }
-            $state = $row->status;
-            if ($state === 'missing' && self::failed($failed, $ref['model'], $ref['label'])) {
-                $state = 'failed';
-            }
-            if ($state === 'mismatch' && is_string($row->detail ?? null)) {
-                fwrite(STDERR, $row->detail . "\n");
-            }
-            if ($state === 'axioms' && is_array($row->axioms ?? null)) {
-                $axioms = array_filter($row->axioms, is_string(...));
-                fwrite(STDERR, $ref['model'] . '.proof.' . $ref['label'] . ' uses ' . implode(', ', $axioms) . "\n");
-            }
-            $states[$keys[$index]][$ref['label']] = $state;
-        }
-        return $states;
-    }
-
-    private function prepare(): void
-    {
-        if (is_link($this->sources)) {
-            throw new RuntimeException("unexpected symlink at $this->sources");
-        }
-        if (is_dir($this->sources)) {
-            Files::remove($this->sources);
-        }
-        Files::mkdir($this->sources);
-        $this->writeModule('LeanPhpLib.Php', Lock::library());
-    }
-
-    /** @return array<string, string> */
-    private function proofs(): array
-    {
-        $parent = "{$this->project->root}/lean/Proofs";
-        if (!is_dir($parent)) {
-            return [];
-        }
-        $out = [];
-        foreach (Files::walk($parent) as $path) {
-            if (!str_ends_with($path, '.lean')) {
-                continue;
-            }
-            $name = 'Proofs.' . str_replace('/', '.', substr($path, strlen($parent) + 1, -5));
-            if (!Declaration::dotted($name)) {
-                throw new RuntimeException("$path: invalid proof module name");
-            }
-            $out[$name] = Files::read($path);
-            $this->writeModule($name, $out[$name]);
-        }
-        return $out;
-    }
-
-    private function writeModule(string $name, string $text): void
-    {
-        $path = $this->sources . '/' . str_replace('.', '/', $name) . '.lean';
-        Files::mkdir(dirname($path));
-        Files::write($path, $text);
     }
 
     /** @param list<string> $modules */
@@ -328,19 +231,5 @@ final class Check
             static fn(string $name): string => 'import ' . Translate::leanName($name) . "\n",
             $modules,
         ));
-    }
-
-    /** @param list<string> $sources */
-    private static function failed(array $sources, string $model, string $label): bool
-    {
-        $parts = explode('.', $model);
-        $theorem = (string) end($parts) . '.proof.' . $label;
-        $pattern = '/\b(?:theorem|lemma|def|example)\s+[^\s:]*\b' . preg_quote($theorem, '/') . '(?![\w.])/u';
-        foreach ($sources as $source) {
-            if (preg_match($pattern, str_replace(['«', '»'], '', $source)) === 1) {
-                return true;
-            }
-        }
-        return false;
     }
 }

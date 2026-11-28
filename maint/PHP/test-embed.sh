@@ -12,6 +12,7 @@ rm -rf -- "$out"
 mkdir -p -- "$project" "$out/saved" "$temp_path"
 cp -R -- "$project_template/." "$project/"
 ln -s -- "$php" "$temp_path/php"
+ln -s -- "$(command -v sha256sum)" "$temp_path/sha256sum"
 
 cd "$project"
 export COMPOSER_DISABLE_NETWORK=1
@@ -31,10 +32,17 @@ php_status() {
 }
 
 compare_generated() {
-    local block
-    for block in Pricing Basket Catalog Receipt; do
+    local block blocks=("$@")
+    (($#)) || blocks=(Pricing Basket Catalog Receipt)
+    for block in "${blocks[@]}"; do
         diff -r "$out/saved/$block" "src/$block"
     done
+}
+
+php_wrapper() {
+    mkdir -p "$out/wrapper"
+    printf '#!%s\nexport %s\nexec %q "$@"\n' "$(command -v bash)" "$1" "$php" > "$out/wrapper/php"
+    chmod +x "$out/wrapper/php"
 }
 
 test ! -e vendor/bin/leanfran
@@ -43,10 +51,10 @@ cp -R src/{Basket,Pricing,Catalog,Receipt} "$out/saved/"
 assert_status 0 sync-second env PATH="$(dirname "$compiler"):$PATH" composer lean:sync
 compare_generated
 package_cli=vendor/conao3/leanfran/bin/leanfran
-assert_status 0 sync-path env LEANFRAN_CLI= PATH="$(dirname "$compiler"):$PATH" php "$package_cli" sync
-compare_generated
-assert_status 1 missing-compiler env LEANFRAN_CLI= PATH="$temp_path" php "$package_cli" sync
-grep -Fxq 'the executable `leanfran` is not on PATH (set LEANFRAN_CLI)' "$out/missing-compiler.log"
+assert_status 255 package-scan php "$package_cli" scan --root "$project" --dir "$project"
+grep -Fxq 'leanfran-php: run leanfran --lang php sync, check or status in the Composer project' "$out/package-scan.log"
+assert_status 252 bad-argument "$compiler" --lang php status --unknown
+grep -Fq "unknown option '--unknown' for status" "$out/bad-argument.log"
 assert_status 255 missing-package "$compiler" --lang php status --package "$temp_path"
 grep -Fq 'run `composer require conao3/leanfran` in' "$out/missing-package.log"
 printf 'Repeated sync: PHP and manifests are byte-identical\n'
@@ -56,7 +64,7 @@ grep -Fxq '3' "$out/pricing.log"
 
 php run.php > "$out/php"
 {
-    cat .leanfran/workspace/LeanPhpEmbed.lean
+    cat .leanfran/php/workspace/LeanPhpEmbed.lean
     printf '\n'
     for name in Pricing Basket Catalog Receipt; do
         php -r 'echo "open LeanPhpEmbed.B", bin2hex("App\\" . $argv[1]), "\n";' "$name"
@@ -101,15 +109,15 @@ def main : IO Unit := do
   IO.println order.units
   IO.println order.«class»
 LEAN
-} > .leanfran/workspace/Oracle.lean
-cat >> .leanfran/workspace/lakefile.toml <<'TOML'
+} > .leanfran/php/workspace/Oracle.lean
+cat >> .leanfran/php/workspace/lakefile.toml <<'TOML'
 
 [[lean_exe]]
 name = "oracle-embed"
 root = "Oracle"
 TOML
 (
-    cd .leanfran/workspace
+    cd .leanfran/php/workspace
     lake build oracle-embed > "$out/oracle-build" 2>&1 || { cat "$out/oracle-build"; exit 1; }
     .lake/build/bin/oracle-embed
 ) > "$out/oracle"
@@ -120,9 +128,7 @@ assert_status 0 model-constraints php validate.php
 grep -Fq 'o.percent: percent ≤ 100' "$out/model-constraints.log"
 
 assert_status 0 fresh php_status --package "$project"
-grep -Fxq 'leanfran: all blocks up to date' "$out/fresh.log"
-runtime_toolchain=$(php -r 'require "vendor/autoload.php"; echo Conao3\Leanfran\Embed\Project::TOOLCHAIN;')
-test "$runtime_toolchain" = "$(cat "$OLDPWD/../../lean-toolchain")"
+test ! -s "$out/fresh.log"
 
 cp composer.json "$out/fixture-composer.json"
 php -r '$file = "composer.json"; $config = json_decode(file_get_contents($file)); $config->extra->leanfran->paths = []; file_put_contents($file, json_encode($config));'
@@ -131,7 +137,7 @@ test "$(grep -c ': removed' "$out/explicit-scan-paths.log")" -eq 4
 cp "$out/fixture-composer.json" composer.json
 
 sed -i 's/width r ≤ r.hi/width r ≤ r.lo/' src/Pricing.php
-assert_status 1 bad-proof "$compiler" --lang php sync
+assert_status 254 bad-proof "$compiler" --lang php sync
 grep -E '^src/Pricing\.php:18:21: error: \(lean block App\\Pricing, Lean 9:16\).*omega could not prove' "$out/bad-proof.log"
 compare_generated
 assert_status 0 pricing-after-failed-proof php -r 'require "vendor/autoload.php"; echo App\Pricing::width(new App\Pricing\Range(lo: 2, hi: 5)), "\n";'
@@ -139,7 +145,7 @@ diff -u "$out/pricing.log" "$out/pricing-after-failed-proof.log"
 cp "$OLDPWD/$project_template/src/Pricing.php" src/Pricing.php
 
 sed -i 's/offset (width r + width r)/)/' src/Basket.php
-assert_status 1 bad-syntax "$compiler" --lang php sync
+assert_status 254 bad-syntax "$compiler" --lang php sync
 grep -E '^src/Basket\.php:10:40: error: \(lean block App\\Basket, Lean 1:35\).*unexpected token' "$out/bad-syntax.log"
 compare_generated
 php run.php > "$out/after-syntax"
@@ -175,61 +181,66 @@ test "$(wc -l < "$out/model-change.log")" -eq 2
 cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
 
 sed -i 's/list<Shade>/array<string, Shade>/' src/OrderInput.php
-assert_status 1 unsupported-model-type "$compiler" --lang php sync
+assert_status 254 unsupported-model-type "$compiler" --lang php sync
 grep -Fq 'App\OrderInput.colors: unsupported PHPDoc type array<string, Shade>' "$out/unsupported-model-type.log"
 compare_generated
 cp "$OLDPWD/$project_template/src/OrderInput.php" src/OrderInput.php
 
 sed -i '/^{$/a\    private int $secret;' src/Input/DetailFields.php
-assert_status 1 unsupported-model-shape php_status
+assert_status 254 unsupported-model-shape php_status
 grep -Fq 'App\Input\Detail.secret: expected a promoted public readonly property' "$out/unsupported-model-shape.log"
 cp "$OLDPWD/$project_template/src/Input/DetailFields.php" src/Input/DetailFields.php
 
 sed -i 's/OrderInput::class/UnknownModel::class/' src/Catalog.php
-assert_status 1 unknown-model php_status
+assert_status 254 unknown-model php_status
 grep -E '^src/Catalog\.php:[0-9]+:[0-9]+: unknown Lean model class App\\UnknownModel' "$out/unknown-model.log"
 cp "$OLDPWD/$project_template/src/Catalog.php" src/Catalog.php
 
-sed -E "s/GENERATOR_VERSION = '[^']+'/GENERATOR_VERSION = 'incompatible'/" \
-    vendor/conao3/leanfran/src/Lean.php > "$out/incompatible.php"
-assert_status 1 generator-change env PATH="$temp_path" \
-    "$php" -d auto_prepend_file="$out/incompatible.php" "$package_cli" status
-test "$(grep -c ': stale$' "$out/generator-change.log")" -eq 4
-assert_status 1 generator-mismatch env LEANFRAN_CLI="$compiler" \
-    "$php" -d auto_prepend_file="$out/incompatible.php" "$package_cli" sync
-grep -Fq 'this package expects incompatible' "$out/generator-mismatch.log"
+php_wrapper LEANFRAN_GENERATOR_VERSION=0
+assert_status 255 generator-change env PATH="$out/wrapper:$temp_path" "$compiler" --lang php status
+grep -Fq 'leanfran-php: compiler generator version "0", expected' "$out/generator-change.log"
+assert_status 255 generator-mismatch env PATH="$out/wrapper:$PATH" "$compiler" --lang php sync
+grep -Fq 'leanfran-php: compiler generator version "0", expected' "$out/generator-mismatch.log"
+php_wrapper LEANFRAN_VERSION=0.0.1
+assert_status 255 release-mismatch env PATH="$out/wrapper:$temp_path" "$compiler" --lang php status
+grep -Fq 'leanfran-php: compiler release version "0.0.1", expected' "$out/release-mismatch.log"
+php_wrapper LEANFRAN_LEAN_VERSION=0.0.0
+assert_status 255 lean-mismatch env PATH="$out/wrapper:$temp_path" "$compiler" --lang php status
+grep -Fq 'leanfran-php: compiler Lean version "0.0.0", expected' "$out/lean-mismatch.log"
+compare_generated
 
 printf 'leanprover/lean4:v0.0.0\n' > lean-toolchain
-assert_status 1 toolchain-change php_status
-test "$(grep -c ': stale$' "$out/toolchain-change.log")" -eq 4
-assert_status 1 toolchain-mismatch "$compiler" --lang php sync
-grep -Fq 'lean must match lean-toolchain (0.0.0)' "$out/toolchain-mismatch.log"
+assert_status 255 toolchain-change php_status
+grep -Fq 'lean-toolchain selects leanprover/lean4:v0.0.0, but leanfran was built with' "$out/toolchain-change.log"
+assert_status 255 toolchain-mismatch "$compiler" --lang php sync
+grep -Fq 'lean-toolchain selects leanprover/lean4:v0.0.0, but leanfran was built with' "$out/toolchain-mismatch.log"
 rm lean-toolchain
 
 rm src/Pricing/Range.php
 assert_status 1 missing-file php_status
-grep -Fxq 'App\Pricing: missing generated file (src/Pricing/Range.php)' "$out/missing-file.log"
+grep -Fxq 'App\Pricing: missing src/Pricing/Range.php' "$out/missing-file.log"
 cp "$out/saved/Pricing/Range.php" src/Pricing/Range.php
 
 mv src/Receipt.php "$out/Receipt.php"
 assert_status 1 removed-block php_status
-grep -Fxq 'App\Receipt: removed (src/Receipt)' "$out/removed-block.log"
-rm src/Receipt/leanfran.json
+grep -Fxq 'App\Receipt: removed' "$out/removed-block.log"
+mv leanfran.manifest.json "$out/manifest.json"
 assert_status 1 removed-without-manifest php_status
-grep -Fxq 'App\Receipt: removed (src/Receipt)' "$out/removed-without-manifest.log"
-cp "$out/saved/Receipt/leanfran.json" src/Receipt/leanfran.json
+grep -Fxq 'src/Receipt/Functions.php: removed' "$out/removed-without-manifest.log"
+mv "$out/manifest.json" leanfran.manifest.json
 printf 'owned by the project\n' > src/Receipt/keep.txt
-assert_status 1 unmanaged-output "$compiler" --lang php sync
-grep -Fq 'non-generated entry in output directory' "$out/unmanaged-output.log"
+assert_status 0 unmanaged-output "$compiler" --lang php sync
 test -f src/Receipt/keep.txt
+test ! -e src/Receipt/Functions.php
 rm src/Receipt/keep.txt
-compare_generated
+rmdir src/Receipt
+compare_generated Pricing Basket Catalog
 assert_status 0 check "$compiler" --lang php check
 test ! -e src/Receipt
 assert_status 0 after-cleanup php_status
 
 sed -i 's/Pricing::class/Unknown::class/' src/Basket.php
-assert_status 1 unknown-use php_status
+assert_status 254 unknown-use php_status
 grep -Fq 'Lean block App\Basket uses unknown block App\Unknown' "$out/unknown-use.log"
 
 cp "$OLDPWD/$project_template/src/Basket.php" src/Basket.php

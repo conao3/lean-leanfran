@@ -5,45 +5,102 @@ declare(strict_types=1);
 namespace Conao3\Leanfran\Embed;
 
 use Conao3\Leanfran\Lean;
+use stdClass;
 
 /** Checks generated output without invoking the Lean toolchain. */
 final class Status
 {
+    private const OLD_MANIFEST = 'leanfran.json';
+
     /**
-     * Finds outputs, including directories omitted by a new scan configuration.
+     * Lists earlier generated files that leanfran.manifest.json does not track: the old per-class
+     * manifests and the generated files of output directories that no current block owns.
      *
-     * @return array<string, string>
+     * @return list<string>
      */
-    public static function outputs(Project $project): array
+    public static function stray(Project $project): array
     {
+        $tracked = array_fill_keys(Manifest::read($project->root)?->files() ?? [], true);
+        $current = [];
+        foreach ($project->blocks as $block) {
+            $current[$block->output] = true;
+        }
         $outputs = [];
+        $stray = [];
         foreach (Files::walk($project->root, stopAtPackages: true) as $file) {
-            $name = basename($file);
             $dir = dirname($file);
             if ($dir === $project->root) {
                 continue;
             }
             $path = substr($dir, strlen($project->root) + 1);
-            if ($name === Manifest::FILE) {
-                $manifest = Manifest::read($dir, discover: true);
-                if ($manifest !== null && self::owns($dir, $manifest->block)) {
-                    $outputs[$path] = $manifest->block;
-                }
-            } elseif ($name === 'Functions.php' && !isset($outputs[$path])) {
-                $header = Files::generatedHeader($file);
-                if (
-                    $header !== null
-                    && preg_match('/from LeanPhpEmbed\.B((?:[0-9a-f]{2})+)\. Do not edit\./', $header, $match)
-                ) {
-                    $block = hex2bin($match[1]);
-                    if ($block !== false && self::owns($dir, $block)) {
-                        $outputs[$path] = $block;
-                    }
+            $block = match (basename($file)) {
+                self::OLD_MANIFEST => self::oldManifest($file),
+                'Functions.php' => self::facade($file),
+                default => null,
+            };
+            if ($block === null || !self::owns($dir, $block)) {
+                continue;
+            }
+            $outputs[$path] = true;
+            if (basename($file) === self::OLD_MANIFEST) {
+                $stray[] = "$path/" . self::OLD_MANIFEST;
+            }
+        }
+        foreach (array_keys($outputs) as $path) {
+            if (isset($current[$path])) {
+                continue;
+            }
+            foreach (self::generated("$project->root/$path") as $file) {
+                if (!isset($tracked["$path/$file"])) {
+                    $stray[] = "$path/$file";
                 }
             }
         }
-        ksort($outputs, SORT_STRING);
-        return $outputs;
+        $stray = array_values(array_unique($stray));
+        sort($stray, SORT_STRING);
+        return $stray;
+    }
+
+    /**
+     * Reports stale inputs, removed blocks and missing generated files recorded in leanfran.manifest.json.
+     *
+     * @return list<string>
+     */
+    public static function changes(Project $project): array
+    {
+        $manifest = Manifest::read($project->root);
+        $fresh =
+            $manifest !== null
+            && $manifest->compiler === Lean::GENERATOR_VERSION . '/' . Lean::LEAN_VERSION
+            && Manifest::canonical($manifest->require) === Manifest::canonical($project->requirements)
+            && $manifest->inputs === ''
+            && $manifest->support === '';
+        $changes = [];
+        $names = [];
+        foreach ($project->blocks as $block) {
+            $names[$block->name] = true;
+            $entry = $manifest?->blocks[$block->name] ?? null;
+            if ($entry === null || !$fresh || $entry['hash'] !== $project->digest($block)) {
+                $changes[] = "$block->name: stale";
+            }
+            foreach ($entry['files'] ?? [] as $file) {
+                if (!is_file("$project->root/$file")) {
+                    $changes[] = "$block->name: missing $file";
+                }
+            }
+        }
+        foreach ($manifest->files ?? [] as $file) {
+            if (!is_file("$project->root/$file")) {
+                $changes[] = "php: missing $file";
+            }
+        }
+        foreach (array_keys($manifest->blocks ?? []) as $name) {
+            if (!isset($names[$name])) {
+                $changes[] = "$name: removed";
+            }
+        }
+        sort($changes, SORT_STRING);
+        return $changes;
     }
 
     private static function owns(string $dir, string $block): bool
@@ -51,48 +108,49 @@ final class Status
         return basename($dir) === substr($block, (int) strrpos('\\' . $block, '\\'));
     }
 
-    /**
-     * Reports stale inputs, removed blocks and missing generated files.
-     *
-     * @return list<string>
-     */
-    public static function changes(Project $project): array
+    private static function oldManifest(string $file): ?string
     {
-        $old = self::outputs($project);
-        $changes = [];
-        foreach ($project->blocks as $block) {
-            $manifest = Manifest::read("$project->root/$block->output");
-            if ($manifest === null) {
-                $changes[] = "$block->name: missing manifest ($block->output/" . Manifest::FILE . ')';
-                if (($old[$block->output] ?? null) === $block->name) {
-                    unset($old[$block->output]);
+        if (is_link($file) || !is_file($file)) {
+            return null;
+        }
+        $data = json_decode((string) @file_get_contents($file));
+        return $data instanceof stdClass
+        && ($data->format ?? null) === 'leanfran-php-embed'
+        && is_string($data->block ?? null)
+        && $data->block !== ''
+            ? $data->block
+            : null;
+    }
+
+    private static function facade(string $file): ?string
+    {
+        $header = Files::generatedHeader($file);
+        if (
+            $header === null
+            || !preg_match('/from LeanPhpEmbed\.B((?:[0-9a-f]{2})+)\. Do not edit\./', $header, $match)
+        ) {
+            return null;
+        }
+        $block = hex2bin($match[1]);
+        return $block === false ? null : $block;
+    }
+
+    /** @return list<string> */
+    private static function generated(string $dir): array
+    {
+        $files = [];
+        foreach (Files::entries($dir) as $path) {
+            $name = basename($path);
+            if ($name === 'Internal' && is_dir($path) && !is_link($path)) {
+                foreach (Files::entries($path) as $child) {
+                    if (Files::generated($child)) {
+                        $files[] = 'Internal/' . basename($child);
+                    }
                 }
-                continue;
-            }
-            if (
-                $manifest->block !== $block->name
-                || $manifest->version !== Lean::GENERATOR_VERSION
-                || $manifest->hash !== $project->digest($block)
-            ) {
-                $changes[] = "$block->name: stale";
-            }
-            foreach ($manifest->files as $file) {
-                $path = "$block->output/$file";
-                if (
-                    is_link("$project->root/$block->output")
-                    || is_link("$project->root/" . dirname($path))
-                    || !Files::generated("$project->root/$path")
-                ) {
-                    $changes[] = "$block->name: missing generated file ($path)";
-                }
-            }
-            if ($manifest->block === $block->name) {
-                unset($old[$block->output]);
+            } elseif (Files::generated($path)) {
+                $files[] = $name;
             }
         }
-        foreach ($old as $dir => $block) {
-            $changes[] = "$block: removed ($dir)";
-        }
-        return $changes;
+        return $files;
     }
 }

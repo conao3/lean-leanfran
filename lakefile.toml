@@ -25,6 +25,7 @@ srcDir = "langs/Clojure"
 [[lean_lib]]
 name = "LeanPhp"
 srcDir = "langs/PHP"
+needs = ["phpLib"]
 
 [[lean_lib]]
 name = "LeanGo"
@@ -54,6 +55,11 @@ text = true
 [[input_dir]]
 name = "goLib"
 path = "langs/Go/lean/LeanGoLib"
+text = true
+
+[[input_dir]]
+name = "phpLib"
+path = "langs/PHP/src/lean/LeanPhpLib"
 text = true
 
 [[input_dir]]

@@ -1,0 +1,27 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "php": {
+      "compiler": "7/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "App\\Checkout",
+          "source": "src/Checkout.php",
+          "hash": "55520aeb06352965efa047ade9bf45138b52730341adb7589b1aa091e9d08950",
+          "files": ["src/Checkout/Functions.php", "src/Checkout/Internal/LeanCheckout.php"]
+        },
+        {
+          "name": "App\\Orders",
+          "source": "src/Orders.php",
+          "hash": "e04a138eea6ad2f64f4f918705eef91bb37dcf8c8af073c7d7e8b4cbfb4cff62",
+          "files": ["src/Orders/Functions.php", "src/Orders/Internal/LeanOrders.php", "src/Orders/Order.php"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

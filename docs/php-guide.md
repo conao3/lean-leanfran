@@ -19,7 +19,7 @@ Put `#[Conao3\Leanfran\Lean(...)]` on a PHP class. Its fully qualified name iden
 
 The last three arguments are optional literal arrays. Class names can be written as fully qualified strings or `ClassName::class` literals. See [embed-range](../langs/PHP/samples/embed-range) for a complete block and [embed-orders](../langs/PHP/samples/embed-orders) for two blocks that share an `Order` type.
 
-For `App\Pricing` in `src/Pricing.php`, leanfran writes the `App\Pricing\Functions` trait and public types such as `App\Pricing\Range` to `src/Pricing/`. The implementation lives under `src/Pricing/Internal/`, and `src/Pricing/leanfran.json` records the block hash and generated files. In the block class, add `use Pricing\Functions;` so callers can use `App\Pricing::width()`. Map `App\` to `src/` in the Composer PSR-4 autoloader.
+For `App\Pricing` in `src/Pricing.php`, leanfran writes the `App\Pricing\Functions` trait and public types such as `App\Pricing\Range` to `src/Pricing/`. The implementation lives under `src/Pricing/Internal/`. The `php` section of `leanfran.manifest.json` beside `composer.json` records the block hash and the generated files. In the block class, add `use Pricing\Functions;` so callers can use `App\Pricing::width()`. Map `App\` to `src/` in the Composer PSR-4 autoloader.
 
 ### Commands and configuration
 
@@ -27,17 +27,19 @@ Run the `leanfran` executable with `--lang php` from the application directory. 
 
 | Command | Effect |
 | --- | --- |
-| `leanfran --lang php sync` | Scans the package, builds the blocks in `.leanfran/workspace`, and replaces their generated PHP and manifests after every block succeeds. |
-| `leanfran --lang php status` | Reports stale or removed blocks, missing generated files, and saved proof states. It runs without Lean and exits 1 if outputs or proof results are stale. |
+| `leanfran --lang php sync` | Scans the package, builds the blocks in `.leanfran/php/workspace`, and installs their generated PHP and `leanfran.manifest.json` after every block succeeds. |
+| `leanfran --lang php status` | Prints `<class>: stale`, `<class>: missing <path>` and `<class>: removed` for blocks, and `<id> [<label>]: <state>` for saved proof states. It runs without Lean and exits 1 if outputs or proof results are stale. |
 | `leanfran --lang php check` | Runs `sync`, translates PHP models, and checks their Lean proofs. Accepts `--require proved` to enforce a proof policy. |
 
-Commit the generated PHP and manifests. In CI, install Composer dependencies and run `leanfran --lang php status` to verify that the checkout is up to date. Run `check` in jobs that also verify Lean proofs and regenerate the PHP. The CLI keeps its Lake workspace under the ignored `.leanfran/` directory.
+Commit the generated PHP, `leanfran.manifest.json` and `leanfran.lock`. In CI, install Composer dependencies and run `leanfran --lang php status` to verify that the checkout is up to date. Run `check` in jobs that also verify Lean proofs and regenerate the PHP. The CLI keeps its Lake workspace in `.leanfran/php/` and takes the lock file `.leanfran/lock`; `.leanfran/.gitignore` lists both. `sync` keeps files in an output directory that leanfran did not generate, and refuses with exit 254 to overwrite such a file.
 
 In `composer.json`, set `extra.leanfran.paths` to a list of package directories to scan. By default, the CLI scans the directories listed in `autoload.psr-4`. Set `extra.leanfran.require` to a list of Lake requirements using the keys from `[[require]]` in a Lake TOML file. Relative dependency paths resolve from the Composer package directory. Composer scripts can run the executable, for example `"lean:sync": "leanfran --lang php sync"`.
 
-The executable runs the package's `vendor/conao3/leanfran/bin/leanfran` with `php` from PATH and passes its own path in `LEANFRAN_CLI`. It returns that command's exit code and output. If the package has no `vendor/conao3/leanfran`, it prints how to install the package and exits 255. The Composer package installs no `leanfran` command. It uses the executable at `LEANFRAN_CLI` or, if unset, `leanfran` on PATH to compile. The output of `leanfran --lang php --generator-version` must match the installed Composer runtime. The CLI uses `lean` and `lake` from PATH. Both must match the package's `lean-toolchain`, which defaults to Lean 4.35.0.
+The executable reads the package with `php vendor/conao3/leanfran/bin/leanfran scan` and, during `check`, `translate`. These two commands print JSON and write no file; the executable builds the Lean workspace, generates the PHP and installs it. If the package has no `vendor/conao3/leanfran`, the executable prints how to install the package and exits 255. The Composer package installs no `leanfran` command. The release version, generator version and Lean version of the executable must match the installed Composer package, and `lean` and `lake` on PATH must have the executable's Lean version, Lean 4.35.0. A `lean-toolchain` beside `composer.json` must name the same version. A mismatch exits 255.
 
-A Lean error in a block starts with the PHP file, line, and column. The message also gives the block's fully qualified PHP class name and the Lean line and column within its source string. When a block fails to build, the previous generated PHP remains available. Proofs of PHP models run after sync has installed the generated files.
+Exit codes are 0 for success, 1 for stale outputs or proof results, 252 for an argument the command cannot read, 254 for an error in the package (a Lean diagnostic, a scan error) and 255 for an error in the environment (a missing package or tool, a version mismatch).
+
+A Lean error in a block has the form `<file>:<line>:<column>: error: (lean block <class>, Lean <line>:<column>) <message>`. It gives the block's fully qualified PHP class name and the Lean line and column within its source string. When a block fails to build, the previous generated PHP remains available. Proofs of PHP models run after sync has installed the generated files.
 
 ### Importing PHP models
 
@@ -143,7 +145,7 @@ end LeanPhpModel.App.Calc
 | `mismatch` | The theorem's type differs from the obligation. |
 | `unextracted` | The translator or Lean could not produce the obligation. |
 
-With `--require proved`, `check` exits 1 if any obligation has a state other than `proved`. Without the flag, `check` still exits 1 for an unextracted obligation, stale or missing block outputs, or a command or build error that aborts the check. `status` runs without Lean, parses the model source using the same PHP parser, and reads the lock and block manifests. It reports a model as `stale` when its saved result is missing or its model body, dependencies, selected Lean block, or translation inputs have changed. Stale or missing outputs, stale proof results, and command errors produce exit 1. A fresh saved non-proved state can still give a successful `status`.
+`check` and `status` print `<id> [<label>]: <state>` lines, where `<id>` is the namespaced function or method name such as `App\Calc\clamp`. An unextracted function also prints `<file>:<line>:<column>: unextracted <id>: <reason>` to standard error. `check` exits 1 if any obligation is `unextracted` or `failed`, and with `--require proved` if any obligation has a state other than `proved`. `status` runs without Lean, parses the model source using the same PHP parser, and compares the lock with the current model bodies, the Lean blocks, the translator sources and the proof files. It reports a function as `stale` when its saved result is missing or one of these inputs or a function it calls has changed, and a function that is no longer modeled as `removed`. Stale outputs and stale proof results produce exit 1. A fresh saved non-proved state can still give a successful `status`, unless `--require proved` is given.
 
 ### Property tests and CI
 
@@ -162,7 +164,7 @@ leanfran --lang php check --require proved
 php main.php
 ```
 
-You can run `leanfran --lang php status` in a job with PHP and the `leanfran` executable but no Lean toolchain to check freshness of committed outputs and proof results. Run `check` after editing proof files to refresh their results and enforce the `proved` policy.
+You can run `leanfran --lang php status` in a job with PHP, `sha256sum` or `shasum` and the `leanfran` executable but no Lean toolchain to check freshness of committed outputs and proof results. Run `check` after editing proof files to refresh their results and enforce the `proved` policy.
 
 ## The CLI
 

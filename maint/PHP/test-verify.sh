@@ -5,7 +5,7 @@ compiler="$(realpath ../../.lake/build/bin/leanfran)"
 app="$(realpath -m test-out/verify)"
 cd "$app"
 
-workspace="$app/.leanfran/workspace"
+workspace="$app/.leanfran/php/workspace"
 cp Oracle.lean Semantics.lean "$workspace/verification/"
 cat >> "$workspace/lakefile.toml" <<'TOML'
 
@@ -68,18 +68,19 @@ check_result() {
 php_only="$app-php-only"
 mkdir -p "$php_only"
 ln -sf "$(command -v php)" "$php_only/php"
+ln -sf "$(command -v sha256sum)" "$php_only/sha256sum"
 PATH="$php_only" "$compiler" --lang php status > status-fresh.out
-grep -Fx 'App\Calc\clamp refines: proved' status-fresh.out
+grep -Fx 'App\Calc\clamp [refines]: proved' status-fresh.out
 
 sed -i '0,/if (\$x < \$lo)/s//if ($x > $lo)/' src/Calc.php
 code=0
 PATH="$php_only" "$compiler" --lang php status > status-stale.out || code=$?
 test "$code" = 1
-grep -Fx 'App\Calc\clamp refines: stale' status-stale.out
-grep -Fx 'App\Calc\clamp in_range: stale' status-stale.out
-grep -Fx 'App\Calc\add refines: proved' status-stale.out
+grep -Fx 'App\Calc\clamp [refines]: stale' status-stale.out
+grep -Fx 'App\Calc\clamp [in_range]: stale' status-stale.out
+grep -Fx 'App\Calc\add [refines]: proved' status-stale.out
 check_result 1 comparison.out
-grep -Fx 'App\Calc\clamp refines: failed' comparison.out
+grep -Fx 'App\Calc\clamp [refines]: failed' comparison.out
 cp "$app/../../tests/fixtures/verify/src/Calc.php" src/Calc.php
 
 {
@@ -89,22 +90,23 @@ cp "$app/../../tests/fixtures/verify/src/Calc.php" src/Calc.php
 } > ClampSorry.lean
 cp ClampSorry.lean lean/Proofs/Calc.lean
 check_result 1 sorry.out
-grep -Fx 'App\Calc\clamp refines: sorry' sorry.out
-grep -Fx 'App\Calc\clamp in_range: proved' sorry.out
+grep -Fx 'App\Calc\clamp [refines]: sorry' sorry.out
+grep -Fx 'App\Calc\clamp [in_range]: proved' sorry.out
 cp "$app/../../tests/fixtures/verify/lean/Proofs/Calc.lean" lean/Proofs/Calc.lean
 
 cp negative/Negative.php src/
 cp negative/{States,Overflow}.lean lean/Proofs/
 check_result 1 states.out
-grep -Fx 'App\Calc\clamp refines: proved' states.out
-grep -Fx 'App\Negative\withSorry refines: sorry' states.out
-grep -Fx 'App\Negative\withAxiom refines: axioms' states.out
-grep -Fx 'App\Negative\unsafeAdd refines: failed' states.out
-grep -Fx 'App\Negative\missing refines: missing' states.out
-grep -Fx 'App\Negative\mismatch refines: mismatch' states.out
+grep -Fx 'App\Calc\clamp [refines]: proved' states.out
+grep -Fx 'App\Negative\withSorry [refines]: sorry' states.out
+grep -Fx 'App\Negative\withAxiom [refines]: axioms' states.out
+grep -Fx 'App\Negative\unsafeAdd [refines]: failed' states.out
+grep -Fx 'App\Negative\missing [refines]: missing' states.out
+grep -Fx 'App\Negative\mismatch [refines]: mismatch' states.out
 while IFS=$'\t' read -r method reason; do
-    row="$(grep -F "App\Negative\\${method} refines: unextracted (src/Negative.php:" states.out)"
-    grep -Eq 'src/Negative\.php:[1-9][0-9]*:' <<< "$row"
+    grep -Fx "App\Negative\\${method} [refines]: unextracted" states.out
+    row="$(grep -F ": unextracted App\Negative\\${method}: " states.out)"
+    grep -Eq '^src/Negative\.php:[1-9][0-9]*:[1-9][0-9]*: ' <<< "$row"
     grep -Fq "$reason" <<< "$row"
 done < negative/unextracted.tsv
 printf 'All seven proof states, source positions and stale status checked.\n'
@@ -112,5 +114,5 @@ printf 'All seven proof states, source positions and stale status checked.\n'
 composer install --no-dev --no-interaction --no-progress
 code=0
 PATH="$php_only" "$compiler" --lang php status > status-parser.out 2>&1 || code=$?
-test "$code" = 1
+test "$code" = 254
 grep -F 'composer require --dev nikic/php-parser:^5.9' status-parser.out
