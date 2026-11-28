@@ -1,7 +1,7 @@
 # Python development
 
 leanfran compiles Lean 4 IR to Python (`LeanPython/`, `LeanPython/Cli.lean`), exposes Lean types as pydantic
-models, and embeds Lean in Python (`src/leanfran/embed.py`, `sync.py`). See the [backend README](../langs/Python/README.md) for usage.
+models, and embeds Lean in Python (`src/leanfran/embed.py`, `scan.py`, `LeanPython/Embed.lean`). See the [backend README](../langs/Python/README.md) for usage.
 
 Paths in this guide are relative to `langs/Python/`.
 
@@ -16,7 +16,13 @@ Paths in this guide are relative to `langs/Python/`.
   CLI refuses to emit code calling a symbol not in the list.
 - `src/leanfran/marshal.py`: conversion between Python and runtime values, `LeanModel`,
   `LeanInductive` (Lean's JSON encoding), `adopt` for the user's models.
-- `src/leanfran/embed.py`, `sync.py`, `models.py`, `cli.py`: `lean(...)` and `leanfran --lang python sync`.
+- `src/leanfran/embed.py`, `models.py`: `lean(...)` and the Lean structures of the user's models.
+- `src/leanfran/cli.py`, `scan.py`, `translation.py`: the commands `scan` and `translate` of
+  `python3 -m leanfran.cli`. They print JSON and write no file.
+- `LeanPython/Embed.lean`: the Python `Backend` of `Leanfran.Embed` (`../../Leanfran/Embed/`), which
+  runs `leanfran --lang python sync|check|status`: it starts `scan` and `translate`, writes the Lake
+  workspace, runs `lake`, generates the modules, installs them, and writes `leanfran.manifest.json`
+  and `leanfran.lock`.
 - `LeanPythonTest/`: Lean test programs. `Vectors.lean` and `Io.lean` hold the diff-test cases;
   `*Main.lean` are the native oracles. `Public.lean`, `Json.lean`: the public API and JSON tests.
 - `tests/`: pytest. `test-out/` holds generated code (ignored by git).

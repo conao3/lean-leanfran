@@ -9,6 +9,7 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 - `maint/`: repository maintenance, version management, differential tests and extern-list generators.
 - `.github/`: CI and release automation.
 - `lakefile.toml`, `Main.lean`: the Lake package of the compiler. It links the library of every backend into the one executable `leanfran`, and `Main.lean` passes the arguments to the backend that `--lang` names.
+- `Leanfran/`: the compiler's shared Lean library. `Leanfran/Embed/` runs `sync`, `check` and `status` for C, Go, Python, TypeScript and PHP, and `Leanfran/Generate.lean` runs `leanfran generate`.
 - `flake.nix`, `flake.lock`, `lean-toolchain`: shared development dependencies, the compiler package and Lean version.
 - `LICENSE`: the Apache-2.0 text for the entire repository. Package builds include this file in their artifacts.
 
@@ -18,7 +19,8 @@ This repository contains Lean 4 compiler backends released together as leanfran.
 - Runtime externs follow Lean's C symbols, argument order, erased arguments and ownership conventions. Inspect the toolchain's Lean sources and `lean.h` when implementing an extern.
 - Add runtime behavior to the backend's native-oracle differential tests; compare the generated program with Lean's C backend.
 - Regenerate runtime extern lists with the backend's `make gen-externs` where available.
-- When generated code changes, update both the emitter's generator version and its host-side freshness version together. The C backend has one `generatorVersion`, which keys `leanfran.manifest.json` and `leanfran.lock`; raise it when the generated C, the block workspace, the C translation, or the obligations change.
+- Embedded Lean blocks of C, Go, Python, TypeScript and PHP go through `Leanfran.Embed`. A backend supplies a `Leanfran.Embed.Backend` value (`Lean<X>/Embed.lean`, `LeanC/Embed/Backend.lean`), and its language package supplies the runtime and the `scan` and `translate` commands that the compiler runs. Change the shared flow in `Leanfran/Embed/` and check it with `maint/test-embed.sh`.
+- When generated code changes, update both the emitter's generator version and its host-side freshness version together. `leanfran.manifest.json` and `leanfran.lock` record the generator version and the Lean version of each language. The C backend has one `generatorVersion`; raise it when the generated C, the block workspace, the C translation, or the obligations change.
 - Keep shared development rules here and backend implementation details in `docs/`.
 
 ## Verification and releases

@@ -19,15 +19,18 @@ which must belong to a package. The block's definitions live in the namespace
 uv run leanfran --lang python sync --package src/myapp
 ```
 
-`leanfran --lang python sync` imports every module of the package, writes each block to a Lake workspace in
-`.leanfran/workspace/`, builds it, and generates `src/myapp/_lean/<module>__<name>.py` and
-`src/myapp/_lean/blocks.json`. Lean errors point at the Python file:
+`leanfran --lang python sync` imports every module of the package, writes each block to a Lake
+workspace in `.leanfran/python/workspace/` next to `pyproject.toml`, builds it, and generates
+`src/myapp/_lean/<module>__<name>.py` and `src/myapp/_lean/blocks.json`. It records the blocks and
+the generated files in `leanfran.manifest.json` next to `pyproject.toml` and prints
+`leanfran: <N> blocks checked and generated`. Lean errors point at the Python file:
 
 ```
-leanfran: src/myapp/m.py:6: error: (lean block m, Lean 4:28) Tactic `rfl` failed: ...
+src/myapp/m.py:6:54: error: (lean block myapp.m:m, Lean 4:53) Tactic `rfl` failed: The left-hand side ...
 ```
 
-Add `.leanfran/` to `.gitignore` and commit `<package>/_lean/`.
+Commit `<package>/_lean/` and `leanfran.manifest.json`. `sync` writes `.leanfran/.gitignore`, which
+keeps the workspace and the lock file `.leanfran/lock` out of git.
 
 At run time `lean(...)` compares a hash of the block (its source, imports, uses, the Lean structures
 of its models and the generator version) with `blocks.json`. If the block changed since the last
@@ -190,18 +193,24 @@ def clamp(x: int, lo: int, hi: int) -> int:
     return x
 ```
 
-`leanfran --lang python check --package calc` writes the translation and one obligation per specification:
+`leanfran --lang python check --package calc` runs `sync`, then writes the translation and one
+obligation per specification to `.leanfran/python/workspace/LeanPythonModel/calc/calc.lean`. In
+`tests/verify`, where the block is in `calc/spec.py`, the file starts:
 
 ```lean
-def LeanPythonModel.calc.calc.clamp (x : Int) (lo : Int) (hi : Int) : Int := Id.run do
+import LeanPythonEmbed.calc.spec.spec
+import LeanPythonLib.Py
+
+/-- `calc.calc.clamp`, translated from Python. -/
+def LeanPythonModel.«calc».«calc».clamp (x : Int) (lo : Int) (hi : Int) : Int := Id.run do
   if ((decide (x < lo))) then
     return lo
   if ((decide (x > hi))) then
     return hi
   return x
 
-abbrev LeanPythonModel.calc.calc.clamp.obligation.refines : Prop :=
-  ∀ (x : Int) (lo : Int) (hi : Int), ordered x lo hi = true → clamp x lo hi = clampSpec x lo hi
+abbrev LeanPythonModel.«calc».«calc».clamp.obligation.refines : Prop :=
+  ∀ (x : Int) (lo : Int) (hi : Int), LeanPythonEmbed.calc.spec.spec.ordered x lo hi = true → (LeanPythonModel.«calc».«calc».clamp x lo hi) = (LeanPythonEmbed.calc.spec.spec.clampSpec x lo hi)
 ```
 
 Then it judges the theorems `<function>.proof.<label>` of `lean/Proofs/*.lean` next to
@@ -219,11 +228,15 @@ theorem clamp.proof.refines : clamp.obligation.refines := by
   split <;> (try split) <;> simp_all <;> omega
 ```
 
+It prints a row `<id> [<label>]: <state>` per obligation (`tests/verify`):
+
 ```
-proved     calc.calc:clamp refines
-proved     calc.calc:clamp in_range
-sorry      calc.calc:sum_to refines
-missing    calc.calc:sum_abs nonneg
+calc.calc:clamp [in_range]: proved
+calc.calc:clamp [refines]: proved
+calc.calc:first_or [refines]: proved
+calc.calc:sum_abs [nonneg]: proved
+calc.calc:sum_to [refines]: sorry
+calc.calc:sum_to [returns_nat]: missing
 ```
 
 Under `simp`, a `for` loop over a list becomes `List.foldl` (`forIn_pure_yield_eq_foldl`), so you
@@ -241,9 +254,22 @@ The states:
 | `mismatch`    | the theorem states something else         |
 | `unextracted` | the obligation's statement is not defined |
 
-With `--require proved`, `leanfran --lang python check` exits with 254 unless every obligation is proved. It
-writes the result to `leanfran.lock` with a hash of each function's source. `leanfran --lang python status`
-reads the lock file without Lean and marks changed functions `stale`.
+A function that cannot be translated also prints
+`<file>:<line>:<column>: unextracted <id>: <message>` on stderr, for example
+`calc/calc.py:40:16: unextracted calc.calc:distinct: unsupported expression SetComp`.
+`check` exits 1 when an obligation is `unextracted` or `failed`, and with `--require proved` when
+an obligation is not `proved`. It writes the results to `leanfran.lock` next to `pyproject.toml`;
+commit the lock with the manifest.
+
+`leanfran --lang python status` runs without Lean and Lake. It compares the blocks with the manifest
+and checks that the generated files exist, then compares the functions with the lock. It prints
+`<block>: stale`, `<block>: missing <path>` and `<block>: removed` for blocks
+(`calc.spec:spec: stale`), `python: missing <path>` for a missing `_lean/__init__.py` or
+`_lean/blocks.json`, and the function rows of `check`, with `stale` for a function whose source,
+blocks or proofs changed and `<id>: removed` for a locked function without `@model`. It prints no
+row for a fresh block. `status` exits 1 when it prints a block row or a `stale` or `removed`
+function, and with `--require proved` when an obligation is not `proved`. It hashes with
+`sha256sum` (`shasum` on macOS), so that command must be on `PATH`.
 
 - `refines=s`: `f x = s x` (`Except.ok (s x)` for a function that may fail); `requires=p`: `p x = true →`
   before each obligation; `ensures={"label": q}`: `q x (f x) = true`. A function annotated `-> Nat`
@@ -278,16 +304,34 @@ feature at a time, from functions on `Nat` (01) to types shared between blocks w
 Every command is a command of the executable `leanfran`:
 
 ```
-leanfran --lang python sync --package <dir>
-leanfran --lang python check --package <dir> [--require proved]
-leanfran --lang python status --package <dir>
+leanfran --lang python sync --package <dir> [--verbose]
+leanfran --lang python check --package <dir> [--verbose] [--require proved]
+leanfran --lang python status --package <dir> [--require proved]
 ```
 
-`sync`, `check` and `status` read the Python sources, so `leanfran` runs them as
-`python3 -m leanfran.cli` in the Python environment of the project and passes its own path on.
-Run `leanfran` where `python3` is the interpreter of the project, for example
-`uv run leanfran --lang python sync --package src/myapp`. The Python package itself installs no
-command. When it generates on its own (`LEANFRAN_PYTHON_AUTO_SYNC=1`), it takes the executable
+The project root is the nearest directory at or above the package with a `pyproject.toml`. The
+executable reads the package with `python3 -m leanfran.cli scan` and, during `check`,
+`translate`, run in the root. These two commands print JSON and write no file; the executable
+builds the Lake workspace in `.leanfran/python/workspace`, generates the Python, installs it, and
+writes `leanfran.manifest.json` and `leanfran.lock`. A failed install restores the previous
+files. `sync` and `check` take `.leanfran/lock` for the whole run and `status` shares it.
+
+Run `leanfran` where `python3` imports the project's `leanfran`, for example
+`uv run leanfran --lang python sync --package src/myapp`; otherwise it prints that example and
+exits 255. The Python package installs no command. The release version, generator version and
+Lean version of the executable must match the installed Python package, so install both from the
+same release. `lean` and `lake` on `PATH` must have the executable's Lean version, Lean 4.35.0,
+and a `lean-toolchain` next to `pyproject.toml` must name the same version for `sync` and `check`.
+A mismatch exits 255.
+
+`sync`, `check` and `status` exit 0 on success, 1 for the rows and states described in
+[Verifying Python functions](#verifying-python-functions), 252 for an argument they cannot read,
+254 for an error in the package (a Lean diagnostic, a module that fails to import such as
+`src/myapp/broken.py:1: RuntimeError: boom`, a file leanfran did not generate at a path that `sync`
+writes)
+and 255 for an error in the environment (a missing tool, a version mismatch).
+
+When the package generates on its own (`LEANFRAN_PYTHON_AUTO_SYNC=1`), it takes the executable
 from `$LEANFRAN_CLI`, then `leanfran` on `PATH`. The same executable does the compilation:
 
 ```
@@ -301,8 +345,8 @@ leanfran --lang python --version | --generator-version | help
 
 `module generate` writes one Python module with the IR of the roots and of everything they call
 (Init and Std included), and public functions and types for the roots. It reports the definitions it
-cannot expose (polymorphic functions, functions over functions) as skipped. Both CLIs use the exit
-codes 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors.
+cannot expose (polymorphic functions, functions over functions) as skipped. These commands use the
+exit codes 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors.
 
 ## Performance
 
@@ -332,9 +376,12 @@ nix develop ../..#python -c make bench
 - `LeanPython/EmitPy.lean`: IR → Python. `LeanPython/Marshal.lean`, `LeanPython/Generate.lean`: public
   types and functions. `LeanPython/Check.lean`: `obligations check`. `LeanPython/Cli.lean`: the CLI.
 - `src/leanfran/runtime.py`, `io_externs.py`: the runtime (`lean_*` are the C names of Lean's
-  externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `sync.py`, `models.py`, `cli.py`:
-  `lean(...)` and `leanfran --lang python sync`. `verify.py`, `translate.py`, `check.py`: `@model` and
-  `leanfran --lang python check`; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
+  externs). `marshal.py`, `types.py`: pydantic types. `embed.py`, `models.py`: `lean(...)`.
+  `cli.py`, `scan.py`, `translation.py`: the commands `scan` and `translate` that
+  `leanfran --lang python sync|check|status` runs. `verify.py`, `translate.py`: `@model` and its
+  translation; `lean/LeanPythonLib/Py.lean` holds Python's semantics in Lean.
+- `LeanPython/Embed.lean`: the Python `Backend` of the compiler's `Leanfran.Embed`, which runs
+  `sync`, `check` and `status`.
 - `LeanPythonTest/`: Lean programs of the tests; `../../maint/Python/test-diff.sh` runs `Vectors` and `Io` natively and
   as Python.
 

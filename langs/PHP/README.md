@@ -38,6 +38,8 @@ Save this as `composer.json` so Composer can autoload the application classes.
 composer require conao3/leanfran
 ```
 
+Use the compiler and `conao3/leanfran` from the same release; `leanfran` exits 255 when their versions differ.
+
 ## First embedded block
 
 Save this as `src/Pricing.php`. The nowdoc contains a structure with a proof field, a function, and a theorem about that function.
@@ -97,6 +99,8 @@ The application prints the width.
 3
 ```
 
+Commit the generated files under `src/Pricing/` and `leanfran.manifest.json`. `sync` writes `.leanfran/.gitignore`, which keeps its Lake workspace out of git. In CI, `leanfran --lang php status` checks that the committed files are up to date.
+
 ## Verify a PHP function
 
 Continue from the application directory. Save this as `src/Calc.php`. The `#[Model]` attribute links the PHP implementation to an executable Lean specification, an input condition, and a property of the result.
@@ -143,11 +147,11 @@ composer require --dev --no-interaction 'nikic/php-parser:^5.9'
 leanfran --lang php check --require proved
 ```
 
-The proof check reports both obligations as proved.
+The proof check reports both obligations as proved and writes `leanfran.lock`. Commit it with the manifest.
 
 ```text
-App\Calc\clamp refines: proved
-App\Calc\clamp in_range: proved
+App\Calc\clamp [in_range]: proved
+App\Calc\clamp [refines]: proved
 ```
 
 Run the property test and call the implementation.

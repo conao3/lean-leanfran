@@ -22,7 +22,7 @@ theorem twice_ge (n : Nat) : n ≤ twice n := by
 `)
 ```
 
-With Go 1.26 or later and Lean and Lake from Lean 4.35.0 on your PATH, run the following from the application module.
+With Go 1.26 or later and Lean and Lake from Lean 4.35.0 on your PATH, run the following from the application module. Use the Go module from the compiler's release: the compiler runs the module tool's `scan` and `translate` commands and stops with status 255 when the versions differ.
 
 ```sh
 go get github.com/conao3/leanfran-go
@@ -30,7 +30,7 @@ go get -tool github.com/conao3/leanfran-go/cmd/leanfran-go
 leanfran --lang go sync
 ```
 
-Go callers can use `value, err := arithmetic.Twice(big.NewInt(21))`. The error reports an invalid `Nat` input. Pure functions whose inputs need no validation return their result directly. Commit the generated Go and manifest so the application can build with Go alone.
+Go callers can use `value, err := arithmetic.Twice(big.NewInt(21))`. The error reports an invalid `Nat` input. Pure functions whose inputs need no validation return their result directly. Commit the generated Go files and `leanfran.manifest.json` so the application can build with Go alone. `leanfran --lang go status` checks them without Lean or Lake.
 
 ## Keep Lean values across calls
 
@@ -38,7 +38,7 @@ Use generated methods such as `arithmetic.Value.NewNat`, `arithmetic.Handle.Twic
 
 ## Verify a Go function
 
-Add `//leanfran:model refines=nibbleSpec ensures=in_range:inRange` to a top-level Go function. Define the executable specifications in a Lean block and prove the generated obligations under `lean/Proofs/`.
+Add `//leanfran:model refines=nibbleSpec ensures=in_range:inRange` to a top-level Go function. Define the executable specifications in a Lean block and prove the generated obligations under `lean/Proofs/`. `check` writes the results to `leanfran.lock`, which you commit.
 
 ```sh
 leanfran --lang go check --require proved

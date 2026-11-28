@@ -122,6 +122,42 @@ To compile the modules of a Lake package to several languages, list them in `lea
 
 Follow the [Go quick start](langs/Go/README.md) to add the Go module and tool to your application, and the [C quick start](langs/C/README.md) to generate and link a C library. Follow the other language quick starts for their dependencies, project setup, and generation commands.
 
+### Embedded Lean blocks
+
+In Python, TypeScript, PHP, Go, and C, Lean blocks live in your source files. The host package reads them, and the compiler builds and generates them with three commands:
+
+| Command | Effect |
+| --- | --- |
+| `leanfran --lang <language> sync` | Builds every block with Lake, generates the host-language files, and records them in `leanfran.manifest.json`. |
+| `leanfran --lang <language> check` | Runs `sync`, translates the functions bound to Lean specifications, checks their proofs, and records the results in `leanfran.lock`. |
+| `leanfran --lang <language> status` | Compares the sources with `leanfran.manifest.json`, the generated files, and `leanfran.lock` without Lean or Lake. |
+
+Python and TypeScript take the package directory with `--package <dir>`. PHP takes `--package <dir>`, and Go and C take `--dir <dir>`; these default to the working directory. Commit `leanfran.manifest.json` and `leanfran.lock`, which are at the project root, and the generated files; C keeps its output directory out of version control because its link settings hold absolute paths. `sync` keeps each language's Lake workspace in `.leanfran/<language>/` and writes `.leanfran/.gitignore`, which excludes that workspace and the lock file `.leanfran/lock`; commit `.leanfran/.gitignore` too.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Success. |
+| 1 | `status` printed a `stale`, `missing`, or `removed` line, `check` found an `unextracted` or `failed` obligation, or an obligation is not `proved` under `--require proved`. |
+| 252 | An argument is invalid. |
+| 254 | The project has an error: a Lean error (reported at the line in your source file), a block the host package cannot read, or a file in the way that leanfran did not generate. |
+| 255 | The environment has an error: the host package, `lake`, `lean`, or clang is missing, or versions differ. |
+
+Use the compiler and the host package from the same release; the host package stops with 255 when they differ. `status` runs `sha256sum` on Linux and `shasum` on macOS, so CI jobs that run it need that command on PATH.
+
+### Upgrade from 0.14.0
+
+Upgrade the compiler and the host package to the same release, then run the commands below once in each project and commit the result. `status` prints the files that `sync` will delete as `<path>: removed` lines. Delete `.leanfran/workspace/` and `.leanfran/sync.lock` if they are in the project.
+
+| Language | Run once | Commit |
+| --- | --- | --- |
+| Python | `leanfran --lang python sync --package <dir>` for each package, then `check` for a package with `@model` functions | `leanfran.manifest.json`, `.leanfran/.gitignore`, `leanfran.lock` |
+| TypeScript | `leanfran --lang typescript sync --package <dir>`, then `check` for a package with `model(...)` functions | the deletion of `.leanfran/blocks.json`, `leanfran.manifest.json`, `.leanfran/.gitignore`, `leanfran.lock` |
+| PHP | `leanfran --lang php sync`, then `check` for a project with `#[Model]` functions | the deletion of each output directory's `leanfran.json`, `leanfran.manifest.json`, `.leanfran/.gitignore`, `leanfran.lock` |
+| Go | `leanfran --lang go sync`, then `check` for a module with `//leanfran:model` functions | the deletion of each package's `leanfran.json`, `leanfran.manifest.json`, `.leanfran/.gitignore`, `leanfran.lock` |
+| C | `leanfran --lang c sync`, then `check` for a project with `LF_MODEL` functions | `leanfran.manifest.json`, `.leanfran/.gitignore`, `leanfran.lock` |
+
+`sync` deletes the files named in the deletions above. Commit after `check`: until then, `status` reports every function as `stale`, and in TypeScript the generated modules lack the calls into proved TypeScript functions. In C, `sync` also deletes `<out-dir>/leanfran.manifest.json`; if `.gitignore` lists `leanfran.lock`, remove that line so that the lock can be committed.
+
 ## Documentation
 
 | Language   | Quick start                                   | Full guide                                                | Examples                                           |

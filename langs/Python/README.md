@@ -9,7 +9,7 @@ uv add leanfran
 nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
-Generation also requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Generated modules run with the Python package and pydantic.
+Install the Python package and the compiler from the same release; `leanfran` exits 255 when their versions differ. Generation also requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Generated modules run with the Python package and pydantic.
 
 ## First Lean block
 
@@ -40,7 +40,7 @@ from myapp.arith import arith
 assert arith.double(21) == 42
 ```
 
-Commit `src/myapp/_lean/` and `leanfran.manifest.json` with your package. Run sync again when you change a Lean block.
+Commit `src/myapp/_lean/` and `leanfran.manifest.json` with your package. `sync` writes `.leanfran/.gitignore`, which keeps its workspace out of git. Run sync again when you change a Lean block, and run `uv run leanfran --lang python status --package src/myapp` in CI to check that the committed files are up to date.
 
 ## Next steps
 
