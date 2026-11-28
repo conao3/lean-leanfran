@@ -307,8 +307,7 @@ jobs:
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "GitHub Release $TAG already exists"
           else
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
-              --notes "Published to crates.io, PyPI, npm, Clojars, Packagist and the Go module mirror; the C compiler was verified from the tag."
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
