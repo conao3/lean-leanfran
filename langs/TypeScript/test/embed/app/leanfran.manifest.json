@@ -1,0 +1,51 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "typescript": {
+      "compiler": "10/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "7d1a678fd2dd13e5c9e1d0b4d79cd1a28fdd2b06d5087fa213f7c06a0167399b",
+      "blocks": [
+        {
+          "name": "src/arith.ts:arith",
+          "source": "src/arith.ts",
+          "hash": "07475bf8b744f6c1359b39f8abb1ceb1c1ece09a6f605c1f16c9245a85f9d229",
+          "files": ["src/_lean/arith.ts", "src/_lean/arith__arith.ts"]
+        },
+        {
+          "name": "src/geometry.ts:geometry",
+          "source": "src/geometry.ts",
+          "hash": "b0685a3ae058096bd874255172e2ea65368f78e8439672bab6c2007dd068a892",
+          "files": ["src/_lean/geometry.ts", "src/_lean/geometry__geometry.ts"]
+        },
+        {
+          "name": "src/pricing.ts:pricing",
+          "source": "src/pricing.ts",
+          "hash": "8d8f343b9ec3908f926e10de1191dc2deb952986ea890004908f108267d31587",
+          "files": ["src/_lean/pricing.ts", "src/_lean/pricing__pricing.ts"]
+        },
+        {
+          "name": "src/report.ts:report",
+          "source": "src/report.ts",
+          "hash": "feff876e7b5bd4389b2bcc9f1738ed01ac1726669965858936ad604870ccc38f",
+          "files": ["src/_lean/report.ts", "src/_lean/report__report.ts"]
+        },
+        {
+          "name": "src/text.ts:greeting",
+          "source": "src/text.ts",
+          "hash": "cf1f1ca47398b1a3efede8712163e94e3e713c227e33b50eaf3f8a69c7e58de7",
+          "files": ["src/_lean/text__greeting.ts"]
+        },
+        {
+          "name": "src/text.ts:words",
+          "source": "src/text.ts",
+          "hash": "75e1e7634f80db33fea2a480617947a8ca507092c47dcca7f29e5a91b1ccd3c3",
+          "files": ["src/_lean/text__words.ts"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "typescript": {
+      "compiler": "10/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "b55a64777f1aa238a0472a132630c279b4c3dc52074fcd52842d9c06bdc36c69",
+      "blocks": [
+        {
+          "name": "src/calendar.ts:calendar",
+          "source": "src/calendar.ts",
+          "hash": "e703841643241624210af731f9ce7d93da0307f567b640c4365835cfaaef30a1",
+          "files": ["src/_lean/calendar.ts", "src/_lean/calendar__calendar.block.ts", "src/_lean/calendar__calendar.ts"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

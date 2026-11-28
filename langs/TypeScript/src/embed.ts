@@ -4,6 +4,8 @@ import { type BlockEntry, blockRegistry, type BlockSettings } from "./runtime/bl
 
 export const GENERATOR_VERSION: string = "10"
 
+export const LEAN_VERSION: string = "4.35.0"
+
 export type LeanModel = StandardSchemaV1 & StandardJSONSchemaV1
 
 export interface OutputOptions {
@@ -140,17 +142,34 @@ function packageRoot(proc: NodeJS.Process, entries: readonly BlockEntry[]): stri
   }
 }
 
+function compiler(proc: NodeJS.Process): string | undefined {
+  const override = proc.env["LEANFRAN_CLI"]
+  if (override !== undefined && override !== "") return override
+  const fs = proc.getBuiltinModule("node:fs")
+  const path = proc.getBuiltinModule("node:path")
+  for (const dir of proc.env["PATH"]?.split(path.delimiter) ?? []) {
+    const candidate = path.resolve(dir, "leanfran")
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK)
+      if (fs.statSync(candidate).isFile()) return candidate
+    } catch {
+      continue
+    }
+  }
+  return undefined
+}
+
 function autoSync(proc: NodeJS.Process, name: string, entries: readonly BlockEntry[]): boolean {
   if (proc.env["LEANFRAN_TS_AUTO_SYNC"] !== "1") return false
   const root = packageRoot(proc, entries)
-  const cli = proc
-    .getBuiltinModule("node:url")
-    .fileURLToPath(
-      new URL(import.meta.url.endsWith(".ts") ? "./cli.ts" : "./cli.js", import.meta.url),
+  const cli = compiler(proc)
+  if (cli === undefined)
+    throw new LeanBlockStale(
+      "leanfran: LEANFRAN_TS_AUTO_SYNC=1 needs the compiler `leanfran` on PATH (or set LEANFRAN_CLI)",
     )
   const r = proc
     .getBuiltinModule("node:child_process")
-    .spawnSync(proc.execPath, [cli, "sync", "--package", root], {
+    .spawnSync(cli, ["--lang", "typescript", "sync", "--package", root], {
       stdio: "inherit",
       env: { ...proc.env, LEANFRAN_TS_AUTO_SYNC: "0" },
     })

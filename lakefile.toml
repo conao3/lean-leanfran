@@ -15,6 +15,7 @@ srcDir = "langs/Python"
 [[lean_lib]]
 name = "LeanTs"
 srcDir = "langs/TypeScript"
+needs = ["tsLib"]
 
 [[lean_lib]]
 name = "LeanClj"
@@ -47,6 +48,11 @@ text = true
 [[input_dir]]
 name = "goLib"
 path = "langs/Go/lean/LeanGoLib"
+text = true
+
+[[input_dir]]
+name = "tsLib"
+path = "langs/TypeScript/src/lean/LeanTsLib"
 text = true
 
 [[input_dir]]

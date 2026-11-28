@@ -1,9 +1,32 @@
 {
-  "src/account.ts:withdraw": {
-    "spec_hash": "982802d51ecfc59a12c70927773af4c5a978960a3db81a38bec3cb1081284cfd",
-    "lean": "LeanTsModel.account.withdraw",
-    "obligations": {
-      "inLimits": "proved"
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "typescript": {
+      "inputs": {
+        "compiler": "10/4.35.0",
+        "library": "527b379bb13b7cb7c7cb60333adeb1280bc6e804161bf8247d00e1f0590f881e",
+        "host": "",
+        "proofs": "754be48b6126a579a5a111ebce4e1f4ce3119875c046f68358b59aa99b1efba0"
+      },
+      "functions": [
+        {
+          "id": "src/account.ts:withdraw",
+          "hash": "982802d51ecfc59a12c70927773af4c5a978960a3db81a38bec3cb1081284cfd",
+          "model": "LeanTsModel.account.withdraw",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "inLimits",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Account.lean",
+              "line": 5
+            }
+          ],
+          "data": {}
+        }
+      ]
     }
   }
 }
