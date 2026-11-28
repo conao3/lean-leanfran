@@ -1,0 +1,20 @@
+sources = ["c/src/**/*.c"]
+lean-files = ["c/lean/*.lean"]
+cflags = ["-Ic/src"]
+out-dir = "c/embed"
+
+[[require]]
+name = "generate-test"
+path = "."
+
+[[generate]]
+lang = "c"
+lake-dir = "."
+out-dir = "c/external"
+modules = ["Choice", "Settings"]
+
+[[generate]]
+lang = "c"
+lake-dir = "."
+out-dir = "c/generated"
+modules = ["Report", "Shapes.+", "Shapes", { name = "Choice", as = "flags" }]

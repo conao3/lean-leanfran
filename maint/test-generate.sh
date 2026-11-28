@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php|clojure>}")
-lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php|clojure>}
+leanfran=$(realpath "${1:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php|clojure|c>}")
+lang=${2:?usage: maint/test-generate.sh <path to leanfran> <rust|python|go|typescript|php|clojure|c>}
 root=$(cd "$(dirname "$0")/.." && pwd)
 fixtures="$root/tests/generate"
 
@@ -21,7 +21,7 @@ expect_status() {
 }
 
 case "$lang" in
-    rust|python|go|typescript|php|clojure) ;;
+    rust|python|go|typescript|php|clojure|c) ;;
     *) fail "unknown language: $lang" ;;
 esac
 
@@ -49,9 +49,22 @@ if [[ $lang == clojure ]]; then
     printf '[[generate]]\nlang = "clojure"\nlake-dir = "."\nout-dir = "out"\npath = "p"\nmodules = [{ name = "Choice", as = "1st" }]\n' > leanfran.toml
     expect_status 252 "$leanfran" generate
 fi
+if [[ $lang == c ]]; then
+    printf '[[generate]]\nlang = "c"\nlake-dir = "."\nout-dir = "out"\nmodules = ["Choice"]\nbind = { "Choice" = "q" }\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+    printf '[[generate]]\nlang = "c"\nlake-dir = "."\nout-dir = "out"\nmodules = [{ name = "Choice", bind = { "Choice" = "q" } }]\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+    printf '[[generate]]\nlang = "c"\nlake-dir = "."\nout-dir = "out"\nmodules = [{ name = "Choice", as = "lf" }]\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+    printf '[[generate]]\nlang = "c"\nlake-dir = "."\nout-dir = "out"\nmodules = ["Choice", { name = "Settings", as = "Choice" }]\n' > leanfran.toml
+    expect_status 252 "$leanfran" generate
+fi
 
 cp "$lang/leanfran.toml" leanfran.toml
-"$leanfran" generate --output json > summary.json
+status=0
+"$leanfran" generate --output json > summary.json 2> generate.err || status=$?
+cat generate.err >&2
+[[ $status == 0 ]] || fail "leanfran generate exited with status $status"
 modules=$(grep -oE '"module":"[^"]+"' summary.json | cut -d '"' -f 4 | paste -sd ' ' -)
 expected='Choice Settings Report Shapes.Area Shapes Choice'
 if [[ $lang == rust ]]; then
@@ -60,7 +73,9 @@ elif [[ $lang == php ]]; then
     expected="$expected Inheritance"
 fi
 [[ $modules == "$expected" ]] || fail "expected summary order '$expected', found '$modules'"
-if [[ $lang != clojure ]]; then
+if [[ $lang == c ]]; then
+    grep -Fq "skipping 'Shapes.Unsupported.run'" generate.err || fail 'unsupported declaration missing from the warnings'
+elif [[ $lang != clojure ]]; then
     grep -Fq '"name":"Shapes.Unsupported"' summary.json || fail 'unsupported declared type missing from skipped'
 fi
 
@@ -117,6 +132,25 @@ MANIFEST
         io.github.conao3/leanfran {:local/root "$root/langs/Clojure"}}}
 DEPS
         clojure -M -e "(require 'check)"
+        ;;
+    c)
+        grep -Fq 'struct LF_LEAN("Shapes.Point") area_shapes_point' c/generated/area/area.h ||
+            fail 'area.h does not define its Shapes.Point'
+        grep -Fq 'struct LF_LEAN("Shapes.Packet") report_shapes_packet_shapes_status' c/generated/report/report.h ||
+            fail 'report.h does not define its Shapes.Packet Shapes.Status'
+        "$leanfran" --lang c generate --module-name Shapes.Area --out-dir compare/area
+        diff -r compare/area c/generated/area || fail 'c/generated/area differs from leanfran --lang c generate'
+        for dir in c/external/* c/generated/*; do
+            "$leanfran" --lang c build --out-dir "$dir" > /dev/null
+        done
+        "$leanfran" --lang c sync > /dev/null
+        "$leanfran" --lang c status
+        "$leanfran" generate > /dev/null
+        "$leanfran" --lang c status
+        make -C c > /dev/null
+        [[ $(c/main) == 'total=12 status=ready enabled=1 level=3' ]] || fail "c/main printed '$(c/main)'"
+        [[ $(c/flags) == 'flags enabled=1' ]] || fail "c/flags printed '$(c/flags)'"
+        [[ $(c/app) == 'area=12 doubled=24' ]] || fail "c/app printed '$(c/app)'"
         ;;
 esac
 

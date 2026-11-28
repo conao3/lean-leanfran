@@ -1,12 +1,12 @@
 .DEFAULT_GOAL := check
-.PHONY: build check check-models check-model check-translate check-fuzz check-verify check-integration check-random check-samples format format-check
+.PHONY: build check check-models check-model check-translate check-fuzz check-verify check-integration check-random check-samples test-generate format format-check
 
 c_sources := $(wildcard support/*.c support/*.h tests/*.c tests/link/*.c tests/types/*.c \
 	tests/embed/app/src/*.c tests/embed/app/src/*.h tests/embed/app/src/nested/*.h \
 	tests/verify/*.c tests/verify/translation/*.c tests/verify/translation/*.h \
 	tests/verify/states/src/*.c tests/verify/random/src/*.c tests/verify/trust/src/*.c \
 	tests/verify/records/*.c tests/verify/records/src/*.c tests/verify/records/src/*.h tests/verify/files/src/*.c \
-	samples/pricing/*.c samples/verified-clamp/src/*.c)
+	samples/pricing/*.c samples/verified-clamp/src/*.c ../../tests/generate/c/*.c ../../tests/generate/c/src/*.c)
 clang_format := clang-format --style='{BasedOnStyle: LLVM, IndentWidth: 4}'
 VERIFY_TARGET ?= check-verify
 
@@ -14,7 +14,7 @@ build:
 	lake --dir ../.. build leanfran
 	lake build LeanCLib
 
-check: check-models $(VERIFY_TARGET) check-integration
+check: check-models $(VERIFY_TARGET) check-integration test-generate
 
 check-models: build format-check check-model check-translate check-fuzz
 
@@ -41,6 +41,9 @@ check-random: build
 
 check-samples: build
 	../../maint/C/test-samples.sh
+
+test-generate: build
+	../../maint/test-generate.sh ../../.lake/build/bin/leanfran c
 
 format:
 	$(clang_format) -i $(c_sources)
