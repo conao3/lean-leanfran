@@ -9,12 +9,14 @@ import hashlib
 import importlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import typing
 from dataclasses import dataclass, field
 
 GENERATOR_VERSION = "6"
+LEAN_VERSION = "4.35.0"
 
 
 class LeanBlockStale(RuntimeError):
@@ -77,6 +79,11 @@ class _Placeholder:
         return typing.Any
 
 
+def find_cli():
+    """The executable ``leanfran``: ``$LEANFRAN_CLI``, then ``leanfran`` on PATH."""
+    return os.environ.get("LEANFRAN_CLI") or shutil.which("leanfran")
+
+
 def _registry(pkg):
     reg = _registries.get(pkg)
     if reg is None:
@@ -114,8 +121,14 @@ def lean(name, source, *, imports=(), uses=(), models=()):
     pkg = block.top_package
     if _registry(pkg).get(block.qualname) != block.key:
         if os.environ.get("LEANFRAN_PYTHON_AUTO_SYNC") == "1":
+            cli = find_cli()
+            if cli is None:
+                raise LeanBlockStale(
+                    f"the Lean block {name!r} of {block.module} has changed and the executable `leanfran` is not"
+                    " on PATH (set LEANFRAN_CLI)"
+                )
             r = subprocess.run(
-                [sys.executable, "-m", "leanfran.cli", "sync", "--package", sys.modules[pkg].__path__[0]],
+                [cli, "--lang", "python", "sync", "--package", sys.modules[pkg].__path__[0]],
                 check=False,
                 env={**os.environ, "LEANFRAN_PYTHON_AUTO_SYNC": "0"},
             )

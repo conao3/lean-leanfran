@@ -11,6 +11,7 @@ srcDir = "langs/Rust"
 [[lean_lib]]
 name = "LeanPython"
 srcDir = "langs/Python"
+needs = ["pythonLib"]
 
 [[lean_lib]]
 name = "LeanTs"
@@ -42,6 +43,11 @@ text = true
 [[input_dir]]
 name = "jsonSupport"
 path = "langs/C/lean/LeanfranC"
+text = true
+
+[[input_dir]]
+name = "pythonLib"
+path = "langs/Python/src/leanfran/lean/LeanPythonLib"
 text = true
 
 [[input_dir]]

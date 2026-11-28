@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "wordcount.count:wc",
+          "source": "wordcount/count.py",
+          "hash": "f0da85c22ca7b4895628aa95f14dcbe582bea304ccc41dd2a6d39ec0263b8718",
+          "files": ["wordcount/_lean/wordcount__count__wc.py"]
+        }
+      ],
+      "files": ["wordcount/_lean/__init__.py", "wordcount/_lean/blocks.json"]
+    }
+  }
+}

@@ -18,10 +18,9 @@ test: build
 test-generate: build
 	../../maint/test-generate.sh ../../.lake/build/bin/leanfran python
 
-# Sync, run and compare every sample; the committed generated modules must be up to date.
+# Check the committed samples with status, then sync, run and compare every sample.
 samples: build
-	for s in samples/*/ samples/steps/*/; do [ -f $$s/expected.txt ] || continue; LEANFRAN_CLI=$(abspath ../../.lake/build/bin/leanfran) samples/run.sh $$s || exit 1; done
-	git diff --exit-code -- samples
+	../../maint/Python/test-samples.sh
 
 format:
 	treefmt

@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "step08.code:bank",
+          "source": "step08/code.py",
+          "hash": "ed523e67680eda47b60694353c9260b8207e2ed0ea0def953982eb31006d0f7a",
+          "files": ["step08/_lean/step08__code__bank.py"]
+        }
+      ],
+      "files": ["step08/_lean/__init__.py", "step08/_lean/blocks.json"]
+    }
+  }
+}

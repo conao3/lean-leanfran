@@ -34,7 +34,12 @@ def project(tmp_path_factory):
 
 
 def statuses(stdout):
-    return {(q, label): st for st, q, label in (line.split() for line in stdout.splitlines() if line.strip())}
+    rows = {}
+    for line in stdout.splitlines():
+        head, status = line.rsplit(": ", 1)
+        q, label = head.removesuffix("]").split(" [")
+        rows[(q, label)] = status
+    return rows
 
 
 EXPECTED = {
@@ -49,10 +54,11 @@ EXPECTED = {
 
 def test_check(project):
     lock = json.loads((project / "leanfran.lock").read_text())
-    got = {(q, label): st for q, e in lock.items() for label, st in e["obligations"].items()}
+    functions = lock["languages"]["python"]["functions"]
+    got = {(f["id"], o["label"]): o["status"] for f in functions for o in f["obligations"]}
     assert got == EXPECTED
     r = run(["check", "--package", "calc", "--require", "proved"], project)
-    assert r.returncode == 254
+    assert r.returncode == 1
 
 
 def test_status_marks_changed_functions(project, tmp_path):
@@ -87,6 +93,26 @@ def test_wrong_proof_and_wrong_statement(project, tmp_path):
     assert got[("calc.calc:first_or", "refines")] == "mismatch"
     assert got[("calc.calc:sum_to", "returns_nat")] == "failed"
     assert got[("calc.calc:clamp", "refines")] == "proved"
+
+
+def test_untranslatable_function(project, tmp_path):
+    d = tmp_path / "u"
+    shutil.copytree(project, d)
+    calc = d / "calc/calc.py"
+    calc.write_text(
+        calc.read_text()
+        + '\n\n@model(ensures={"nonneg": spec.nonneg})\ndef loose(xs: list[int]) -> int:\n    return sum(x for x in xs)\n'
+    )
+    line = calc.read_text().splitlines().index("    return sum(x for x in xs)") + 1
+    r = run(["check", "--package", "calc"], d)
+    assert r.returncode == 1, r.stderr
+    got = statuses(r.stdout)
+    assert got[("calc.calc:loose", "nonneg")] == "unextracted"
+    assert got[("calc.calc:clamp", "refines")] == "proved"
+    assert f"calc/calc.py:{line}:" in r.stderr
+    assert "unextracted calc.calc:loose: unsupported expression GeneratorExp" in r.stderr
+    r = run(["status", "--package", "calc", "--require", "proved"], d)
+    assert r.returncode == 1
 
 
 def test_property_checks(project):

@@ -138,7 +138,8 @@ private def imports (text : String) : Array String :=
     if line.startsWith "import " then some (line.drop "import ".length).trimAscii.toString else none
 
 private def removeTree (path : FilePath) : IO Unit := do
-  if ← path.pathExists then IO.FS.removeDirAll path
+  if ← path.isDir then IO.FS.removeDirAll path
+  else if ← path.pathExists then IO.FS.removeFile path
 
 private def lakeIn (ctx : Context) (dir : FilePath) (args : Array String) : IO (UInt32 × String) := do
   let result ← IO.Process.output {cmd := ctx.lake, cwd := some dir, args := #["--no-ansi"] ++ args}

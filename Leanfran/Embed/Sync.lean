@@ -87,7 +87,8 @@ def install (backend : Backend) (ctx : Context) (state : backend.State) (scan : 
   let s : Manifest.Section := {
     compiler := backend.compiler, require := scan.require, inputs := scan.inputs
     support := ← supportHash supportModules
-    blocks := (blocks ++ kept).qsort (·.name < ·.name), files := sort languageFiles}
+    blocks := (blocks ++ kept).qsort (·.name < ·.name)
+    files := sort (languageFiles ++ ((previous.map (·.files)).getD #[]).filter (!inScope scan.scope ·))}
   let text := Manifest.render manifest backend.lang (some s)
   let manifestPlacement : Install.Placement := {path := Manifest.fileName, content := .text text}
   let manifestChanged ← Install.changed ctx.root manifestPlacement

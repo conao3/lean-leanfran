@@ -40,7 +40,7 @@ from myapp.arith import arith
 assert arith.double(21) == 42
 ```
 
-Commit `src/myapp/_lean/` with your package, and add `.leanfran/` to `.gitignore`. Run sync again when you change a Lean block.
+Commit `src/myapp/_lean/` and `leanfran.manifest.json` with your package. Run sync again when you change a Lean block.
 
 ## Next steps
 

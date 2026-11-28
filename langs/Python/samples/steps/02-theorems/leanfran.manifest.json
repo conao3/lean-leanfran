@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "step02.code:m",
+          "source": "step02/code.py",
+          "hash": "14401d8d9c5fa081789abac9fbfda3714868d1a3ad063885ce34016b8196ebb3",
+          "files": ["step02/_lean/step02__code__m.py"]
+        }
+      ],
+      "files": ["step02/_lean/__init__.py", "step02/_lean/blocks.json"]
+    }
+  }
+}

@@ -32,7 +32,7 @@ include = ["/src/leanfran", "/README.md", "/pyproject.toml", "/hatch_build.py"]
 
 [tool.ruff]
 line-length = 120
-extend-exclude = ["test-out", "samples/**/_lean"]
+extend-exclude = ["test-out", "samples/**/_lean", "tests/embed/**/_lean"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

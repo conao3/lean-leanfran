@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "roman.numerals:roman",
+          "source": "roman/numerals.py",
+          "hash": "7599dbd0e3f6fe0d9329ea39d710a33c9462fd43427129304a9dea4337c1dba5",
+          "files": ["roman/_lean/roman__numerals__roman.py"]
+        }
+      ],
+      "files": ["roman/_lean/__init__.py", "roman/_lean/blocks.json"]
+    }
+  }
+}
