@@ -1,0 +1,27 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "step09.code:report",
+          "source": "step09/code.py",
+          "hash": "f593ecf0c2f2acc2cea997b6c8e50e543ed5802ca3ea1ed1a81b7f1654fd5e25",
+          "files": ["step09/_lean/step09__code__report.py"]
+        },
+        {
+          "name": "step09.code:shapes",
+          "source": "step09/code.py",
+          "hash": "f79acdcd84320ee21ee3aa756b69adb75a7648a0875ea02fb03f46a4f08306d2",
+          "files": ["step09/_lean/step09__code__shapes.py"]
+        }
+      ],
+      "files": ["step09/_lean/__init__.py", "step09/_lean/blocks.json"]
+    }
+  }
+}

@@ -77,13 +77,17 @@ def blockStatus (root : FilePath) (lang : String) (compiler support : String) (m
     | none => rows := rows.push (block.name, s!"{block.name}: stale")
   if let some s := s then
     for file in s.files do
-      unless ← (root / file).pathExists do
+      unless !inScope scan.scope file || (← (root / file).pathExists) do
         rows := rows.push (lang, s!"{lang}: missing {file}")
     for entry in s.blocks do
       if inScope scan.scope entry.source && !scan.blocks.any (·.name == entry.name) then
         rows := rows.push (entry.name, s!"{entry.name}: removed")
+  let known : Std.HashSet String := .ofList (manifest.files lang ++ scan.files.map (·.path) ++ scan.blocks.filterMap fun b =>
+    match b.output with
+    | .file path => some path
+    | .dir _ => none).toList
   for path in scan.stray do
-    if ← (root / path).pathExists then rows := rows.push (path, s!"{path}: removed")
+    if !known.contains path && (← (root / path).pathExists) then rows := rows.push (path, s!"{path}: removed")
   return (rows.qsort (·.1 < ·.1)).map (·.2)
 
 end Leanfran.Embed.Manifest

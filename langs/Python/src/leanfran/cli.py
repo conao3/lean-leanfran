@@ -1,76 +1,86 @@
-"""The command line of the Python package."""
+"""The commands ``scan`` and ``translate`` that ``leanfran --lang python sync|check|status`` runs.
 
-import argparse
-import sys
-
-USAGE = """usage: leanfran --lang python <command> [parameters]
-
-commands:
-  sync     Check the Lean blocks of a package and generate their Python modules
-  check    Translate the @model functions to Lean and judge the proofs of their obligations
-  status   Show the states recorded by `check`, marking functions changed since then (no Lean)
-
-leanfran --lang python sync
-  --package <dir>        The Python package (the directory with __init__.py) (required)
-
-leanfran --lang python check
-  --package <dir>        as for sync
-  --require proved       Exit with 254 unless every obligation is proved
-
-leanfran --lang python status
-  --package <dir>        The Python package (required)
-
-exit codes: 0 success, 252 invalid parameters, 254 input that cannot be converted, 255 other errors
+``scan --root <root> --dir <package>`` prints the Lean blocks, models and ``@model`` functions of the
+package as JSON; ``translate --root <root>`` reads the request of ``check`` on standard input and
+prints the Lean translation of the functions. Neither writes a file. Exit codes: 0 success, 252
+invalid parameters, 254 an error in the project (printed as ``<file>:<line>: ...``), 255 an error of
+the environment (a compiler of another version).
 """
 
+import importlib.metadata
+import json
+import os
+import sys
 
-class _ArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        raise argparse.ArgumentError(None, message)
+from leanfran import embed
+
+USAGE = "usage: python -m leanfran.cli scan --root <root> --dir <package>\n       python -m leanfran.cli translate --root <root>"
+
+INSTALL = "use the leanfran Python package and the leanfran compiler of the same release"
+
+
+def package_version():
+    try:
+        return importlib.metadata.version("leanfran")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def check_versions(env):
+    for name, var, expected in (
+        ("release version", "LEANFRAN_VERSION", package_version()),
+        ("generator version", "LEANFRAN_GENERATOR_VERSION", embed.GENERATOR_VERSION),
+        ("Lean version", "LEANFRAN_LEAN_VERSION", embed.LEAN_VERSION),
+    ):
+        got = env.get(var)
+        if got is None:
+            print("leanfran: run leanfran --lang python sync, check or status in the Python project", file=sys.stderr)
+            return False
+        if got != expected:
+            print(f'leanfran: compiler {name} "{got}", expected {expected}; {INSTALL}', file=sys.stderr)
+            return False
+    return True
+
+
+def parse(args, names):
+    values = {}
+    rest = list(args)
+    while rest:
+        key = rest.pop(0)
+        if key not in names or key in values or not rest:
+            return None
+        values[key] = rest.pop(0)
+    return values if set(values) == set(names) else None
 
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    if not argv or argv[0] in ("help", "--help", "-h"):
-        print(USAGE, end="")
-        return 0
+    if not argv or argv[0] not in ("scan", "translate"):
+        print(USAGE, file=sys.stderr)
+        return 252
     command = argv[0]
-    if command not in ("sync", "check", "status"):
-        print(f"leanfran: unknown command {command!r} (see `leanfran --lang python help`)", file=sys.stderr)
+    values = parse(argv[1:], ("--root", "--dir") if command == "scan" else ("--root",))
+    if values is None:
+        print(USAGE, file=sys.stderr)
         return 252
-    p = _ArgumentParser(prog=f"leanfran --lang python {command}", exit_on_error=False)
-    p.add_argument("--package", required=True, help="Python package directory containing __init__.py")
-    p.add_argument(
-        "--require",
-        choices=["proved"],
-        help=argparse.SUPPRESS if command == "sync" else "require all reported obligations to be proved",
-    )
-    try:
-        args = p.parse_args(argv[1:])
-    except argparse.ArgumentError as e:
-        p.print_usage(sys.stderr)
-        print(f"leanfran: {e}", file=sys.stderr)
-        return 252
-    except SystemExit as e:
-        return e.code
-    from leanfran import check, sync
+    if not check_versions(os.environ):
+        return 255
+    from leanfran import scan, translation
 
+    out = sys.stdout
+    sys.stdout = sys.stderr
     try:
-        if command == "sync":
-            sync.sync_package(args.package)
-            return 0
-        if command == "check":
-            lock, _ = check.check_package(args.package)
-            rows = [(q, label, st) for q, e in sorted(lock.items()) for label, st in e["obligations"].items()]
+        if command == "scan":
+            result = scan.scan(values["--root"], values["--dir"])
         else:
-            rows = check.status(args.package)
-    except sync.SyncError as e:
-        print(f"leanfran: {e}", file=sys.stderr)
+            result = translation.translate_package(values["--root"], json.load(sys.stdin))
+    except scan.ScanError as e:
+        print(e, file=sys.stderr)
         return e.code
-    for q, label, st in rows:
-        print(f"{st:<10} {q} {label}")
-    if args.require == "proved" and any(st != "proved" for _, _, st in rows):
-        return 254
+    finally:
+        sys.stdout = out
+    json.dump(result, out, ensure_ascii=False)
+    out.write("\n")
     return 0
 
 

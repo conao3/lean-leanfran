@@ -1,0 +1,39 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "pricing.api:geometry",
+          "source": "pricing/api.py",
+          "hash": "39b5e5a4fb0e6466c76a01726989f84662ce3fe9ce05b2f95c9fba041e0ad17e",
+          "files": ["pricing/_lean/pricing__api__geometry.py"]
+        },
+        {
+          "name": "pricing.api:pricing",
+          "source": "pricing/api.py",
+          "hash": "d83049c70badbf244b444a8f1532d539c5906123bebbdb91afdaa1f0f40ce55f",
+          "files": ["pricing/_lean/pricing__api__pricing.py"]
+        },
+        {
+          "name": "pricing.api:report",
+          "source": "pricing/api.py",
+          "hash": "673c00743c37f524242eb5acc8b9ae8e9e93618a11a20c6fea5e3c4739c3dea4",
+          "files": ["pricing/_lean/pricing__api__report.py"]
+        },
+        {
+          "name": "pricing.orders:orders",
+          "source": "pricing/orders.py",
+          "hash": "1ea484d7f8d134971eb6aeaace566551bcff4926710a751e5dbf937e1a378a50",
+          "files": ["pricing/_lean/pricing__orders__orders.py"]
+        }
+      ],
+      "files": ["pricing/_lean/__init__.py", "pricing/_lean/blocks.json"]
+    }
+  }
+}

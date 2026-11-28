@@ -143,6 +143,7 @@
                   ./langs/Rust/LeanRust
                   ./langs/Python/LeanPython.lean
                   ./langs/Python/LeanPython
+                  ./langs/Python/src/leanfran/lean/LeanPythonLib
                   ./langs/TypeScript/LeanTs.lean
                   ./langs/TypeScript/LeanTs
                   ./langs/TypeScript/src/lean/LeanTsLib
@@ -249,10 +250,12 @@
             settings.formatter.ruff-check.excludes = [
               "langs/Python/test-out/*"
               "langs/Python/samples/**/_lean/*"
+              "langs/Python/tests/embed/**/_lean/*"
             ];
             settings.formatter.ruff-format.excludes = [
               "langs/Python/test-out/*"
               "langs/Python/samples/**/_lean/*"
+              "langs/Python/tests/embed/**/_lean/*"
             ];
           };
         };

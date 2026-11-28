@@ -1,5 +1,6 @@
 {
-  "pricing.api:geometry": "b1620d27424fe183110fba3b8adac50f89c25188d5e532b04c62fd5a35b258da",
-  "pricing.api:pricing": "becca34e8ee66da9adecfdbd661cdb1c6e796bfd393024aa5c20722f9e8e0886",
-  "pricing.api:report": "0445e4a35d258105ec57ec38b86a465253832ecb4f88600651e6263cdae73874"
+  "pricing.api:geometry": "39b5e5a4fb0e6466c76a01726989f84662ce3fe9ce05b2f95c9fba041e0ad17e",
+  "pricing.api:pricing": "d83049c70badbf244b444a8f1532d539c5906123bebbdb91afdaa1f0f40ce55f",
+  "pricing.api:report": "673c00743c37f524242eb5acc8b9ae8e9e93618a11a20c6fea5e3c4739c3dea4",
+  "pricing.orders:orders": "1ea484d7f8d134971eb6aeaace566551bcff4926710a751e5dbf937e1a378a50"
 }

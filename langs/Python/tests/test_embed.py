@@ -110,8 +110,8 @@ def test_lean_error_points_at_python(tmp_path):
     )
     r = run([str(CLI), "--lang", "python", "sync", "--package", "bad"], d)
     assert r.returncode == 254
-    assert f"{d / 'bad/m.py'}:6:" in r.stderr, r.stderr
-    assert "lean block m" in r.stderr
+    assert "bad/m.py:6:31: error:" in r.stderr, r.stderr
+    assert "lean block bad.m:m" in r.stderr
 
 
 def test_auto_sync(project, tmp_path):

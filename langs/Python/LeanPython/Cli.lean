@@ -1,4 +1,5 @@
 import LeanPython
+import LeanPython.Embed
 
 open Lean LeanPython
 
@@ -19,8 +20,8 @@ commands:
   module generate           Emit a Python module for functions of a Lean module
   obligations check         Judge the proofs of obligations (used by check)
 
-sync, check and status run `python3 -m leanfran.cli` of the project's Python environment;
-`leanfran --lang python sync --help` prints their parameters.
+sync, check and status run `python3 -m leanfran.cli scan` and `translate` in the project's Python
+environment. sync and check take --verbose; check and status take --require proved.
 
 leanfran --lang python module generate
   --module-name <Name>        Lean module to import (required unless --batch)
@@ -253,26 +254,12 @@ def obligationsCheck (o : Opts) : IO UInt32 := do
     IO.println (Json.arr out).compress
     return 0
 
-/-- `sync`, `check` and `status` run in the Python package of the project: it reads the Python
-    sources with Python and calls this executable back to generate. -/
-def packageCommand (args : List String) : IO UInt32 := do
-  let python := "python3"
-  let probe ← IO.Process.output { cmd := python, args := #["-c", "import leanfran.cli"] } |>.toBaseIO
-  match probe with
-  | .ok out =>
-    if out.exitCode != 0 then
-      return ← fail 255 s!"{python} cannot import the Python package `leanfran`; run this in the environment of the project, for example `uv run leanfran --lang python {" ".intercalate args}`"
-  | .error _ => return ← fail 255 s!"`{python}` is not on PATH"
-  let child ← IO.Process.spawn {
-    cmd := python
-    args := #["-m", "leanfran.cli"] ++ args.toArray
-    env := #[("LEANFRAN_CLI", some (← IO.appPath).toString)] }
-  child.wait
-
 unsafe def main (args : List String) : IO UInt32 := do
   enableInitializersExecution
   match args with
-  | "sync" :: _ | "check" :: _ | "status" :: _ => packageCommand args
+  | "sync" :: rest => Leanfran.Embed.run (LeanPython.Embed.backend version generatorVersion) "sync" rest
+  | "check" :: rest => Leanfran.Embed.run (LeanPython.Embed.backend version generatorVersion) "check" rest
+  | "status" :: rest => Leanfran.Embed.run (LeanPython.Embed.backend version generatorVersion) "status" rest
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
   | [] | ["help"] | ["--help"] => IO.print usage; return 0

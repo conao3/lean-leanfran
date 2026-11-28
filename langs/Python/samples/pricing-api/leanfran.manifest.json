@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "pricing.api:pricing",
+          "source": "pricing/api.py",
+          "hash": "5a1e010172fb51e0e76c6cd782726ac8199602f0e33368d6cbc4379a34e21ff3",
+          "files": ["pricing/_lean/pricing__api__pricing.py"]
+        }
+      ],
+      "files": ["pricing/_lean/__init__.py", "pricing/_lean/blocks.json"]
+    }
+  }
+}
