@@ -106,6 +106,7 @@ jobs:
       - run: nix build .#leanfran
       - run: maint/test-compiler.sh result/bin/leanfran
       - run: nix develop .#go -c maint/test-generate.sh result/bin/leanfran go
+      - run: nix develop .#c -c maint/test-embed.sh
   check-c-linux-models:
     name: C Linux (models and packaging)
     needs: changes

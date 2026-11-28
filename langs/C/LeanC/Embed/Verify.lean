@@ -1,13 +1,14 @@
 import LeanC.Verify.Translate
 import LeanC.Embed.Scan
+import Leanfran.Embed.Types
 
 open Lean System
 open LeanC.ClangAst
 open LeanC.Verify (leanIdent)
+open Leanfran.Embed (sha256)
 
 namespace LeanC.Embed
 
-def lockName := "leanfran.lock"
 def cLibSource : String := include_str "../../lean/LeanCLib/C.lean"
 private def supportHeader := include_str "../../support/leanfran.h"
 
@@ -16,14 +17,14 @@ def releaseVersion : String :=
 
 def generatorVersion : String := "2"
 
-def compilerKey : String := s!"{generatorVersion}/{Lean.versionString}"
+structure ModelError where
+  file : FilePath
+  line : Nat
+  column : Nat
+  message : String
 
-def sha256 (text : String) : IO String := do
-  let args : IO.Process.SpawnArgs := if Platform.isOSX then
-    {cmd := "shasum", args := #["-a", "256"]}
-  else {cmd := "sha256sum"}
-  let output ← IO.Process.run args (some text)
-  return (output.splitOn " ").head!
+def ModelError.report (e : ModelError) (name : String) : String :=
+  s!"{e.file}:{e.line}:{e.column}: unextracted {name}: {e.message}"
 
 structure ModelCheck where
   label : String
@@ -38,7 +39,7 @@ structure ModelFunction where
   requires : Option String := none
   checks : Array ModelCheck := #[]
   hash : String := ""
-  error : Option String := none
+  error : Option ModelError := none
   closure : Array Verify.Function := #[]
   callees : Std.HashMap String (Array String) := {}
   declaration : Bool := false
@@ -65,37 +66,8 @@ def ModelFunction.model (m : ModelFunction) : String :=
 def ModelFunction.labels (m : ModelFunction) : Array String :=
   if m.checks.isEmpty then #["model"] else m.checks.map (·.label)
 
-structure Obligation where
-  model : String
-  label : String
-  status : String
-  detail : String := ""
-  axioms : Array String := #[]
-  file : String := ""
-  line : Nat := 0
-
-private def Obligation.toJson (o : Obligation) : Json :=
-  Json.mkObj <| [("model", Lean.toJson o.model), ("label", Lean.toJson o.label), ("status", Lean.toJson o.status)] ++
-    (if o.detail.isEmpty then [] else [("detail", Lean.toJson o.detail)]) ++
-    (if o.axioms.isEmpty then [] else [("axioms", Lean.toJson o.axioms)]) ++
-    (if o.file.isEmpty then [] else [("file", Lean.toJson o.file), ("line", Lean.toJson o.line)])
-
-private def Obligation.fromJson (j : Json) : Except String Obligation := do
-  let model ← j.getObjValAs? String "model"
-  let label ← j.getObjValAs? String "label"
-  let status ← j.getObjValAs? String "status"
-  return {
-    model, label, status
-    detail := (j.getObjValAs? String "detail").toOption.getD ""
-    axioms := (j.getObjValAs? (Array String) "axioms").toOption.getD #[]
-    file := (j.getObjValAs? String "file").toOption.getD ""
-    line := (j.getObjValAs? Nat "line").toOption.getD 0 }
-
-private def displayName (model : String) : String :=
-  (model.drop "LeanCModel.".length).toString
-
-def Obligation.report (o : Obligation) : String :=
-  s!"{displayName o.model} [{o.label}]: {o.status}"
+def ModelFunction.id (m : ModelFunction) : String :=
+  (m.model.drop "LeanCModel.".length).toString
 
 private def annotation (attr : Node) : Option (Array String) := do
   guard (attr.kind == "AnnotateAttr")
@@ -112,7 +84,7 @@ private def annotations (node : Node) (kind : String) : Array (Array String) :=
 
 private partial def normalize : Json → Json
   | .obj fields => .obj <| fields.foldl (init := {}) fun acc key value =>
-    if ["loc", "range", "isUsed", "isReferenced"].contains key then acc
+    if ["loc", "range", "isUsed", "isReferenced", "mangledName"].contains key then acc
     else match value with
       | .str text => if text.startsWith "0x" then acc else acc.insert key value
       | value => acc.insert key (normalize value)
@@ -224,7 +196,6 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
     let name := node.string "name"
     let line := lineOf source node.location.offset
     let column := node.location.column
-    let place := s!"{relative}:{line}:{column}"
     let base : ModelFunction := {
       name, block := "", file := relative, line, column, isStatic := node.string "storageClass" == "static"}
     let parsed : Except String _ := do
@@ -243,7 +214,7 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
         let home := match localBlocks with
           | #[block] => block.name
           | _ => ""
-        pure {base with home, error := some s!"{place}: unextracted {name}: {message}"}
+        pure {base with home, error := some {file := relative, line, column, message}}
       | .ok (block, requires, checks) =>
         let model := {base with block, requires, checks}
         match translated[name]? with
@@ -255,8 +226,9 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
           pure {model with closure, callees}
         | none =>
           let reason := (output.unextracted.find? (·.1 == name)).map fun (_, problem) =>
-            s!"{relative}:{lineOf source problem.location.offset}:{problem.location.column}: unextracted {name}: {problem.reason}"
-          pure {model with error := some (reason.getD s!"{place}: unextracted {name}: not translated")}
+            ({file := relative, line := lineOf source problem.location.offset
+              column := problem.location.column, message := problem.reason} : ModelError)
+          pure {model with error := some (reason.getD {file := relative, line, column, message := "not translated"})}
     let names := calleeClosure byName name {}
     let closureDefs := defs.filter (names.contains <| ·.string "name")
     let asts := closureDefs.map (normalize ·.json)
@@ -285,7 +257,6 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
     if attrs.isEmpty then continue
     let name := node.string "name"
     let line := lineOf source node.location.offset
-    let place := s!"{relative}:{line}:{node.location.column}"
     let checks := match parseModel (attrs[0]!.extract 1 attrs[0]!.size) with
       | .ok (_, _, checks) => checks
       | .error _ => #[]
@@ -293,9 +264,12 @@ private def discoverFile (root : FilePath) (command : CompileCommand) (extra : A
       | .ok (some spec, _, _) => spec
       | _ => (localBlocks[0]?.map (·.name)).getD ""
     let hash ← sha256 (Json.compress (Lean.toJson #[Lean.toJson name, Lean.toJson attrs]))
+    let error : ModelError := {
+      file := relative, line := line, column := node.location.column
+      message := "LF_MODEL function has no definition in the configured sources"}
     result := result.push {
       name, block, file := relative, line, column := node.location.column, checks, hash, declaration := true
-      error := some s!"{place}: unextracted {name}: LF_MODEL function has no definition in the configured sources" }
+      error := some error }
   return result
 
 def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (sources : Array FilePath)
@@ -337,25 +311,6 @@ def discoverModels (root : FilePath) (config : Config) (blocks : Array Block) (s
         scope := if clashes m m.name then fileIdent m.file else ""
         fileScoped := m.closure.map (·.name) |>.filter (clashes m ·)}
 
-def proofSources (root : FilePath) : IO (Array (String × FilePath × String)) := do
-  let dir := root / "lean" / "Proofs"
-  unless ← dir.isDir do return #[]
-  let files ← dir.walkDir
-  let mut result := #[]
-  for path in files.qsort (·.toString < ·.toString) do
-    unless path.extension == some "lean" && !(← path.isDir) do continue
-    let rel := (path.toString.drop (dir.toString.length + 1)).toString
-    let parts := ((rel.dropEnd ".lean".length).toString.splitOn "/")
-    unless parts.all validLabel do
-      throw <| IO.userError s!"lean/Proofs/{rel}: invalid proof module name"
-    result := result.push ("Proofs." ++ ".".intercalate parts, path, ← IO.FS.readFile path)
-  return result
-
-def inputHash (config : Config) (proofs : Array (String × FilePath × String)) : IO String := do
-  sha256 (Json.compress (Lean.toJson #[
-    Json.str compilerKey, Json.str (← sha256 cLibSource),
-    Json.str config.source, Lean.toJson (proofs.map fun (m, _, s) => (m, s))]))
-
 private def qualified (name : String) : String :=
   "_root_." ++ ".".intercalate ((name.splitOn ".").map leanIdent)
 
@@ -388,212 +343,56 @@ private def obligations (m : ModelFunction) (fn : Verify.Function) : String := I
     out := out ++ s!"abbrev {fn.lean}.obligation.{leanIdent check.label} : Prop :=\n  {quantified}{requires}{prop}\n"
   return out
 
-private def writeChanged (path : FilePath) (text : String) : IO Unit := do
-  if (← (IO.FS.readFile path).toBaseIO).toOption == some text then return
-  if let some parent := path.parent then IO.FS.createDirAll parent
-  IO.FS.writeFile path text
-
-private def modulePath (dir : FilePath) (name : String) : FilePath :=
-  dir / (System.FilePath.mk ("/".intercalate (name.splitOn ".") ++ ".lean"))
-
-private def lakeOutput (dir : FilePath) (args : Array String) : IO (UInt32 × String) := do
-  let result ← IO.Process.output {cmd := "lake", cwd := some dir, args := #["--no-ansi"] ++ args}
-  return (result.exitCode, result.stdout ++ result.stderr)
+private def modulePath (name : String) : String :=
+  "/".intercalate (name.splitOn ".") ++ ".lean"
 
 private def functionModule (m : ModelFunction) (name : String) : String :=
   s!"LeanCModel.{m.block}.{fileIdent m.file}.Fn_{name}"
 
-private def removeTree (path : FilePath) : IO Unit := do
-  if ← path.pathExists then IO.FS.removeDirAll path
-
-private def deadProofs (proofs : Array (String × FilePath × String)) (dead : Array String) :
-    IO (Std.HashSet String) := do
-  let mut imports : Std.HashMap Name (Array Name) := {}
-  for (mod, path, source) in proofs do
-    let header ← (parseImports' source path.toString).toBaseIO
-    imports := imports.insert mod.toName ((header.toOption.map (·.imports.map (·.module))).getD #[])
-  let mut result := {}
-  for (mod, _) in proofs do
-    let mut pending := #[mod.toName]
-    let mut seen : NameSet := {}
-    let mut models := #[]
-    while let some next := pending.back? do
-      pending := pending.pop
-      if seen.contains next then continue
-      seen := seen.insert next
-      if (`LeanCModel).isPrefixOf next then models := models.push next
-      pending := pending ++ (imports[next]?.getD #[])
-    if !models.isEmpty && models.all (fun m => dead.any fun block => (Name.str `LeanCModel block).isPrefixOf m) then
-      result := result.insert mod
-  return result
-
-def runProofs (dir : FilePath) (models : Array ModelFunction) (proofs : Array (String × FilePath × String))
-    (hasModels : Bool) : IO (Array Obligation) := do
-  for path in [dir / "LeanCModel", dir / "Proofs", dir / ".lake" / "build" / "lib" / "lean" / "LeanCModel",
-      dir / ".lake" / "build" / "lib" / "lean" / "Proofs", dir / ".lake" / "build" / "ir" / "LeanCModel",
-      dir / ".lake" / "build" / "ir" / "Proofs"] do
-    removeTree path
-  writeChanged (dir / "LeanCLib" / "C.lean") cLibSource
-  let mut results := #[]
-  let mut refs := #[]
-  let mut built : Std.HashSet String := {}
-  let mut failedModules : Std.HashSet String := {}
-  let mut byBlock : Std.HashMap String (Array String) := {}
-  let mut live : Std.HashSet String := {}
-  let mut unextracted := #[]
+def translation (models : Array ModelFunction) (hasModels : Bool) : Leanfran.Embed.Translation := Id.run do
+  let mut modules : Array Leanfran.Embed.ModelModule := #[]
+  let mut byBlock : Array (String × Array String) := #[]
+  let addBlock := fun (byBlock : Array (String × Array String)) (block : String) (mod : Option String) =>
+    if block.isEmpty then byBlock
+    else match byBlock.findIdx? (·.1 == block) with
+      | some i => byBlock.modify i fun (b, mods) =>
+        (b, match mod with
+          | some mod => if mods.contains mod then mods else mods.push mod
+          | none => mods)
+      | none => byBlock.push (block, match mod with | some mod => #[mod] | none => #[])
+  let mut functions := #[]
   for m in models do
-    let mut error := m.error
-    if error.isNone then
-      for fn in m.closure do
-        let mod := functionModule m fn.name
-        if built.contains mod then continue
-        if failedModules.contains mod then
-          error := some s!"{m.file}:{m.line}:{m.column}: cannot elaborate dependency {fn.name}"
-          break
-        let callees := m.callees[fn.name]?.getD #[]
-        let deps := callees.map (functionModule m)
-        if let some dep := deps.find? (!built.contains ·) then
-          failedModules := failedModules.insert mod
-          error := some s!"{m.file}:{m.line}:{m.column}: cannot elaborate dependency {dep}"
-          break
-        let imports := #["LeanCLib.C", Block.moduleName m.block] ++
-          (if hasModels then #["LeanfranModels"] else #[]) ++ deps
-        let blockNs := s!"LeanCModel.{leanIdent m.block}"
-        let fileNs := s!"{blockNs}.{fileIdent m.file}"
-        let ns := if m.fileScoped.contains fn.name then fileNs else blockNs
-        let opens := if ns == blockNs && callees.any m.fileScoped.contains then s!"open {fileNs}\n\n" else ""
-        let checks := if fn.name == m.name then obligations m fn else ""
-        let source := String.join (imports.toList.map (s!"import {·}\n")) ++
-          s!"\nnamespace {ns}\n\n{opens}{fn.source}\n{checks}\nend {ns}\n"
-        writeChanged (modulePath dir mod) source
-        let (code, output) ← lakeOutput dir #["build", s!"+{mod}"]
-        if code != 0 then
-          IO.eprint output
-          failedModules := failedModules.insert mod
-          error := some s!"{m.file}:{m.line}:{m.column}: could not elaborate the translated definition of {fn.name} or its obligations"
-          break
-        built := built.insert mod
-        byBlock := byBlock.insert m.block (((byBlock[m.block]?.getD #[]).push mod).toList.eraseDups.toArray)
-    for label in m.labels do
-      match error with
-      | some detail =>
-        IO.eprintln detail
-        results := results.push {model := m.model, label, status := "unextracted", detail}
-      | none => refs := refs.push ({model := m.model, label, status := ""} : Obligation)
-    if error.isNone then live := live.insert m.block
-    else unextracted := unextracted.push (if m.block.isEmpty then m.home else m.block)
-  let dead := unextracted.filter fun block => !block.isEmpty && !live.contains block
-  let mut modules := #[]
-  for (block, mods) in byBlock.toArray.qsort (·.1 < ·.1) do
-    unless live.contains block do continue
-    let mod := s!"LeanCModel.{block}"
-    writeChanged (modulePath dir mod) (String.join (mods.toList.map (s!"import {·}\n")))
-    let (code, output) ← lakeOutput dir #["build", s!"+{mod}"]
-    if code != 0 then IO.eprint output; throw <| IO.userError s!"could not build {mod}"
-    modules := modules.push mod
-  let mut failedSources := #[]
-  let workProofs := (dir / "Proofs").toString ++ "/"
-  let skipped ← deadProofs proofs dead
-  for (mod, _, source) in proofs do
-    writeChanged (modulePath dir mod) source
-    if skipped.contains mod then
-      failedSources := failedSources.push source
+    functions := functions.push ({
+      id := m.id, model := m.model
+      error := m.error.map fun e => {file := e.file.toString, line := e.line, column := e.column, message := e.message}
+      } : Leanfran.Embed.TranslatedFunction)
+    if m.error.isSome then
+      byBlock := addBlock byBlock (if m.block.isEmpty then m.home else m.block) none
       continue
-    let (code, output) ← lakeOutput dir #["build", s!"+{mod}"]
-    if code != 0 then
-      IO.eprint ((output.replace workProofs "lean/Proofs/").replace "Proofs/" "lean/Proofs/"
-        |>.replace "lean/lean/Proofs/" "lean/Proofs/")
-      failedSources := failedSources.push source
-    else modules := modules.push mod
-  if !refs.isEmpty then
-    let request := dir / "obligations.json"
-    IO.FS.writeFile request (Json.compress (Json.arr (refs.map fun o =>
-      Json.mkObj [("model", Lean.toJson o.model), ("label", Lean.toJson o.label)])))
-    let self ← IO.appPath
-    let args := #["env", self.toString, "--lang", "c", "obligations", "check", "--modules"] ++ modules ++
-      #["--obligations", request.toString]
-    let output ← IO.Process.output {cmd := "lake", cwd := some dir, args}
-    unless output.exitCode == 0 do
-      IO.eprint output.stderr
-      throw <| IO.userError "leanfran --lang c obligations check failed"
-    let checked ← IO.ofExcept <| (Json.parse output.stdout >>= (·.getArr?) >>= (·.mapM Obligation.fromJson))
-    unless checked.size == refs.size do throw <| IO.userError s!"invalid obligations check response: {output.stdout}"
-    for o in checked do
-      let o := if o.file.startsWith "Proofs/" then {o with file := "lean/" ++ o.file} else o
-      if (o.status == "failed" || o.status == "unextracted") && !o.detail.isEmpty then IO.eprintln s!"error: {o.file}{if o.line == 0 then "" else s!":{o.line}"}: {o.detail}"
-      let fn := (o.model.splitOn ".").getLast!
-      let proof := s!"{fn}.proof.{o.label}"
-      let failed := o.status == "missing" &&
-        failedSources.any fun s => ((s.replace "«" "").replace "»" "").contains proof
-      results := results.push (if failed then {o with status := "failed"} else o)
-  return results.qsort fun a b => a.model < b.model || (a.model == b.model && a.label < b.label)
-
-structure Lock where
-  inputs : String
-  functions : Std.HashMap String String
-  obligations : Array Obligation
-
-private def Lock.toJson (lock : Lock) : Json :=
-  Json.mkObj [("version", Lean.toJson (1 : Nat)), ("inputs", Lean.toJson lock.inputs),
-    ("functions", Json.mkObj (lock.functions.toList.mergeSort (·.1 ≤ ·.1) |>.map fun (k, v) => (k, Lean.toJson v))),
-    ("obligations", Json.arr (lock.obligations.map (·.toJson)))]
-
-private def readLock (root : FilePath) : IO (Option Lock) := do
-  let .ok text ← (IO.FS.readFile (root / lockName)).toBaseIO | return none
-  let parsed : Except String Lock := do
-    let json ← Json.parse text
-    unless (← json.getObjValAs? Nat "version") == 1 do throw "unknown lock version"
-    let inputs ← json.getObjValAs? String "inputs"
-    let functions ← match ← json.getObjVal? "functions" with
-      | .obj fields => fields.foldlM (init := {}) fun m k v => return m.insert k (← v.getStr?)
-      | _ => throw "invalid functions"
-    let obligations ← (← (← json.getObjVal? "obligations").getArr?).mapM Obligation.fromJson
-    return {inputs, functions, obligations}
-  return parsed.toOption
-
-def checkModels (root dir : FilePath) (config : Config) (models : Array ModelFunction) (hasModels : Bool)
-    (require : Bool) : IO UInt32 := do
-  if models.isEmpty && !(← (root / lockName).pathExists) then return 0
-  let proofs ← proofSources root
-  let inputs ← inputHash config proofs
-  let results ← if models.isEmpty then pure #[] else runProofs dir models proofs hasModels
-  let functions := models.foldl (init := {}) fun m fn => m.insert fn.model fn.hash
-  IO.FS.writeFile (root / lockName) ((Lock.toJson {inputs, functions, obligations := results}).pretty ++ "\n")
-  let mut failed := false
-  for o in results do
-    IO.println o.report
-    failed := failed || o.status == "unextracted" || o.status == "failed" || (require && o.status != "proved")
-  if failed then
-    IO.eprintln "model obligations did not pass check"
-    return 1
-  return 0
-
-def modelStatus (root : FilePath) (config : Config) (models : Except String (Array ModelFunction)) : IO UInt32 := do
-  let lock ← readLock root
-  let models ← match models with
-    | .ok models => pure models
-    | .error message =>
-      IO.eprintln message
-      for o in (lock.map (·.obligations)).getD #[] do IO.println ({o with status := "stale"} : Obligation).report
-      return 1
-  if models.isEmpty && !(← (root / lockName).pathExists) then return 0
-  let inputs ← inputHash config (← proofSources root)
-  let fresh := lock.filter (·.inputs == inputs)
-  let mut stale := lock.isNone || fresh.isNone
-  for m in models do
-    let saved := fresh.bind fun lock => if lock.functions[m.model]? == some m.hash then some lock else none
-    for label in m.labels do
-      match saved.bind (·.obligations.find? fun o => o.model == m.model && o.label == label) with
-      | some o => IO.println o.report
-      | none =>
-        stale := true
-        IO.println ({model := m.model, label, status := "stale"} : Obligation).report
-  if let some lock := lock then
-    if lock.functions.size != models.size || lock.obligations.any (fun o => !models.any (·.model == o.model)) then
-      stale := true
-  if stale then
-    IO.eprintln "obligation results are out of date"
-    return 1
-  return 0
+    for fn in m.closure do
+      let mod := functionModule m fn.name
+      let callees := m.callees[fn.name]?.getD #[]
+      let deps := callees.map (functionModule m)
+      let imports := #["LeanCLib.C", Block.moduleName m.block] ++
+        (if hasModels then #["LeanfranModels"] else #[]) ++ deps
+      let blockNs := s!"LeanCModel.{leanIdent m.block}"
+      let fileNs := s!"{blockNs}.{fileIdent m.file}"
+      let ns := if m.fileScoped.contains fn.name then fileNs else blockNs
+      let opens := if ns == blockNs && callees.any m.fileScoped.contains then s!"open {fileNs}\n\n" else ""
+      let main := fn.name == m.name
+      let checks := if main then obligations m fn else ""
+      let text := String.join (imports.toList.map (s!"import {·}\n")) ++
+        s!"\nnamespace {ns}\n\n{opens}{fn.source}\n{checks}\nend {ns}\n"
+      let entry : Leanfran.Embed.ModelModule := {
+        module := mod, path := modulePath mod, text, functions := if main then #[m.id] else #[]}
+      match modules.findIdx? (·.module == mod) with
+      | some i => if main then modules := modules.set! i entry
+      | none => modules := modules.push entry
+      byBlock := addBlock byBlock m.block (some mod)
+  let aggregates := (byBlock.qsort (·.1 < ·.1)).map fun (block, mods) =>
+    let mod := s!"LeanCModel.{block}"
+    ({module := mod, path := modulePath mod, text := String.join (mods.toList.map (s!"import {·}\n"))} :
+      Leanfran.Embed.ModelModule)
+  return {modules, aggregates, functions}
 
 end LeanC.Embed

@@ -13,7 +13,7 @@ source="$app/src/states.c"
 run() {
     local expected=$1 status=0
     shift
-    "$compiler" --lang c "$@" --dir "$app" >"$scratch/out" 2>"$scratch/err" || status=$?
+    (cd "$app" && "$compiler" --lang c "$@" --dir "$app") >"$scratch/out" 2>"$scratch/err" || status=$?
     cat "$scratch/out"
     if [[ $status -ne $expected ]]; then
         cat "$scratch/err" >&2
@@ -37,7 +37,7 @@ for row in 'proved refines proved' 'proved changes proved' 'clamp refines proved
     expect_state "$fn" "$label" "$state"
 done
 test "$(grep -c '^states\.' "$scratch/out")" -eq 9
-grep -Fxq "src/states.c:39:57: unextracted unsupported: global variable 'counter'" "$scratch/err"
+grep -Fxq "src/states.c:39:57: unextracted states.unsupported: global variable 'counter'" "$scratch/err"
 grep -Eq '^error: lean/Proofs/Failed\.lean:7:[0-9]+: Type mismatch' "$scratch/err"
 grep -F '"status": "proved"' "$app/leanfran.lock"
 
@@ -79,7 +79,7 @@ sed 's/"refines=clampSpec", "requires=ordered"/"refines=clampSpec", "requires=no
     "$scratch/states.c" >"$source"
 run 1 check
 expect_state clamp refines unextracted
-grep -Fq 'src/states.c:15:9: could not elaborate the translated definition of clamp or its obligations' \
+grep -Fq 'src/states.c:15:9: unextracted states.clamp: could not elaborate the translated definition or its obligations' \
     "$scratch/err"
 expect_state missing_case refines missing
 sed 's/"refines=clampSpec", "requires=ordered"/"refines=clampSpec", "spec=missing"/' \
@@ -182,9 +182,9 @@ for row in 'inc refines missing' 'lost refines unextracted' 'add refines missing
     read -r fn label state <<<"$row"
     grep -Fxq "header.$fn [$label]: $state" "$scratch/out"
 done
-grep -Fxq 'include/header.h:13:10: unextracted lost: LF_MODEL function has no definition in the configured sources' \
+grep -Fxq 'include/header.h:13:10: unextracted header.lost: LF_MODEL function has no definition in the configured sources' \
     "$scratch/err"
-model="$app/.leanfran/workspace/LeanCModel/header/File_src_simpl_dc/Fn_add.lean"
+model="$app/.leanfran/c/workspace/LeanCModel/header/File_src_simpl_dc/Fn_add.lean"
 grep -Fq '= true → «add» «a» «b» = Except.ok (_root_.«addSpec» «a» «b»)' "$model"
 grep -Fq '= true → ∃ r, «add» «a» «b» = Except.ok r ∧ _root_.«addOk» «a» «b» r = true' "$model"
 
@@ -210,7 +210,7 @@ for model in keep_point point_one keep_parcel parcel_one; do
     expect_model "shop.$model [refines]" proved
 done
 grep -Fq '∀ («xs» : Array Int32) («d» : Int32), «xs».size < 2 ^ 64 → «first_or» «xs» «d» = Except.ok' \
-    "$app/.leanfran/workspace/LeanCModel/grade/File_src_sgrade_dc/Fn_first_or.lean"
+    "$app/.leanfran/c/workspace/LeanCModel/grade/File_src_sgrade_dc/Fn_first_or.lean"
 run 0 status
 
 ubsan=(-std=c11 -fno-wrapv -fsanitize=undefined -fno-sanitize-recover=all)
@@ -267,7 +267,7 @@ for model in fa fb File_src_sa_dc.twin File_src_sb_dc.twin; do
     expect_model "dup.$model [refines]" proved
 done
 test "$(grep -c '^dup\.' "$scratch/out")" -eq 4
-workspace="$app/.leanfran/workspace/LeanCModel/dup"
+workspace="$app/.leanfran/c/workspace/LeanCModel/dup"
 grep -Fq '(«x» + (1 : UInt32))' "$workspace/File_src_sa_dc/Fn_helper.lean"
 grep -Fq '(«x» + (2 : UInt32))' "$workspace/File_src_sb_dc/Fn_helper.lean"
 grep -Fxq 'namespace LeanCModel.«dup».File_src_sb_dc' "$workspace/File_src_sb_dc/Fn_twin.lean"
@@ -319,10 +319,10 @@ expect_model 'fp.muladd [refines]' stale
 expect_model 'fp.widen [refines]' proved
 run 1 check
 expect_model 'fp.muladd [refines]' unextracted
-grep -Fq 'src/fp.c:8:8: unextracted muladd: compiled with -ffast-math, which changes double results' "$scratch/err"
+grep -Fq 'src/fp.c:8:8: unextracted fp.muladd: compiled with -ffast-math, which changes double results' "$scratch/err"
 flags_case '"-ffp-contract=fast", '
 run 1 check
-grep -Fq 'src/fp.c:8:8: unextracted muladd: compiled with -ffp-contract=fast, which can contract double operations' \
+grep -Fq 'src/fp.c:8:8: unextracted fp.muladd: compiled with -ffp-contract=fast, which can contract double operations' \
     "$scratch/err"
 if [[ $(uname -s) == Linux ]]; then
     flags_case '"-mfma", '
@@ -330,13 +330,13 @@ else
     flags_case ''
 fi
 run 1 check
-grep -Fq 'src/fp.c:8:8: unextracted muladd: the target has FMA instructions and the flags do not contain -ffp-contract=off' \
+grep -Fq 'src/fp.c:8:8: unextracted fp.muladd: the target has FMA instructions and the flags do not contain -ffp-contract=off' \
     "$scratch/err"
 if [[ $(uname -s) == Linux ]]; then
     flags_case '"-m32", "-ffreestanding", "-ffp-contract=off", '
     expect_model 'fp.widen [refines]' stale
     run 1 check
-    grep -Fq 'src/fp.c:11:15: unextracted widen: the target is not LP64: long has 4 bytes, the translation needs 8' \
+    grep -Fq 'src/fp.c:11:15: unextracted fp.widen: the target is not LP64: long has 4 bytes, the translation needs 8' \
         "$scratch/err"
     expect_model 'fp.widen [refines]' unextracted
 fi

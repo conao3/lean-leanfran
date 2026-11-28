@@ -11,7 +11,7 @@ structure Config where
   leanFiles : Array String
   cflags : Array String
   out : FilePath
-  requirements : Toml.Table
+  requirements : Array Json
 
 private def failAt (file : FilePath) (line : Nat) (message : String) : IO α :=
   throw <| IO.userError s!"{file}:{line}:1: error: {message}"
@@ -30,6 +30,15 @@ private def relativeParts (path : String) : Except String (List String) := do
       parts.any (fun part => part.isEmpty || part == ".." || part.contains '\x00') then
     throw s!"expected a path inside the project, got '{path}'"
   return parts
+
+private partial def tomlJson : Toml.Value → Json
+  | .string _ value => .str value
+  | .integer _ value => toJson value
+  | .float _ value => (JsonNumber.fromFloat? value).elim (fun _ => .null) .num
+  | .boolean _ value => .bool value
+  | .dateTime _ value => .str (toString value)
+  | .array _ values => .arr (values.map tomlJson)
+  | .table' _ table => Json.mkObj (table.items.toList.map fun (k, v) => (k.toString (escape := false), tomlJson v))
 
 def readConfig (root : FilePath) : IO Config := do
   let path := root / "leanfran.toml"
@@ -53,19 +62,13 @@ def readConfig (root : FilePath) : IO Config := do
     if [".leanfran", ".git", "leanfran.toml"].contains parts.head!.toLower then
       throw s!"reserved output path '{out}'"
     let requirements ← match table.find? `require with
-      | none => pure Toml.Table.empty
-      | some (.array ref values) => do
-        let values ← values.mapM fun
+      | none => pure #[]
+      | some (.array _ values) => values.mapM fun
           | .table ref dep => do
-            let dep ← match dep.find? `path with
-              | some (.string ref path) =>
-                let path := FilePath.mk path
-                pure (dep.insert `path (.string ref (if path.isAbsolute then path else root / path).toString))
-              | none => pure dep
-              | _ => throw "a Lake dependency 'path' must be a string"
-            pure (.table ref dep)
+            match dep.find? `path with
+            | some (.string _ _) | none => pure (tomlJson (.table ref dep))
+            | _ => throw "a Lake dependency 'path' must be a string"
           | _ => throw "'require' must contain Lake dependency tables"
-        pure (Toml.Table.empty.insert `require (.array ref values))
       | _ => throw "'require' must contain Lake dependency tables"
     return {source, sources, leanFiles, cflags, out := root / String.intercalate "/" parts, requirements}
   match result with

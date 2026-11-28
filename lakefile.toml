@@ -52,3 +52,8 @@ text = true
 name = "leanfran"
 root = "Main"
 supportInterpreter = true
+
+[[lean_exe]]
+name = "leanfran-embed-test"
+srcDir = "tests/embed"
+root = "EmbedTest"

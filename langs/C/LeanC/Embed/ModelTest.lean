@@ -327,7 +327,7 @@ def modelTest (models : Array ModelFunction) (allBlocks : Array Block)
     let blocks := if m.block.isEmpty then #[] else
       (m.block :: (allBlocks.filter (·.name != m.block) |>.toList.map (·.name))).toArray
     let result : Except String _ := do
-      if let some error := m.error then throw error
+      if let some error := m.error then throw (error.report m.name)
       let some fn := m.closure.find? (·.name == m.name) | throw "not translated"
       testFunction m fn blocks exports types
     match result with
