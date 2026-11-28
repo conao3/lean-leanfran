@@ -1,0 +1,31 @@
+{
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "c": {
+      "inputs": {
+        "compiler": "2/4.35.0",
+        "library": "40a238d983bb3fbe8fa689e504b274d44545f035bed17e332d65409cc161101c",
+        "host": "57eb1fcd4b15a4e9e8d014aa38c79ff6a2068c4465ca38a5d51f6f461c89c7fc",
+        "proofs": "c2bf9f5c89b248fcdda552b765875bb2f1bce8bcf2088faf79871d66056cfb3e"
+      },
+      "functions": [
+        {
+          "id": "clamp.clamp",
+          "hash": "ffa037453d519d90d0c4ea20f9c86595bd87ba54f7fcee79e66555b8e26dfd96",
+          "model": "LeanCModel.clamp.clamp",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "refines",
+              "status": "proved",
+              "file": "lean/Proofs/Clamp.lean",
+              "line": 5
+            }
+          ],
+          "data": {}
+        }
+      ]
+    }
+  }
+}

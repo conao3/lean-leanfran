@@ -312,7 +312,11 @@ partial def Doc.render (doc : Doc) (indent : String := "") : String :=
   | .json (.obj fields) => Doc.render (Doc.ofJson (.obj fields)) indent
   | .json value => value.compress
   | .arr items =>
+    let scalar := items.all fun
+      | .json (.arr _) | .json (.obj _) | .arr _ | .obj _ => false
+      | .json _ => true
     if items.isEmpty then "[]"
+    else if scalar then "[" ++ ", ".intercalate (items.toList.map (·.render inner)) ++ "]"
     else "[\n" ++ ",\n".intercalate (items.toList.map fun item => inner ++ item.render inner) ++ "\n" ++ indent ++ "]"
   | .obj fields =>
     if fields.isEmpty then "{}"

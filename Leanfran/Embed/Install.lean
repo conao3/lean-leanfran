@@ -58,12 +58,21 @@ def changed (root : FilePath) (placement : Placement) : IO Bool := do
   | .ok current => return current != (← placement.content.bytes)
   | .error _ => return true
 
-private def place (root : FilePath) (pid counter : Nat) (placement : Placement) : IO Action := do
+private partial def missingDirs (root dir : FilePath) : IO (List FilePath) := do
+  if dir == root || dir.toString.length ≤ root.toString.length || (← dir.pathExists) then return []
+  return dir :: (← missingDirs root (dir.parent.getD root))
+
+private def place (root : FilePath) (pid counter : Nat) (placement : Placement) :
+    IO (List FilePath × Action) := do
   let dest := root / placement.path
   let dir := dest.parent.getD root
+  let created ← missingDirs root dir
   IO.FS.createDirAll dir
   let temp := dir / s!".leanfran-{pid}-{counter}"
-  IO.FS.writeBinFile temp (← placement.content.bytes)
+  try IO.FS.writeBinFile temp (← placement.content.bytes)
+  catch error =>
+    for d in created do try IO.FS.removeDir d catch _ => pure ()
+    throw error
   let action ← if ← dest.pathExists then
       let backup := dir / s!".leanfran-{pid}-{counter}.previous"
       IO.FS.rename dest backup
@@ -73,34 +82,37 @@ private def place (root : FilePath) (pid counter : Nat) (placement : Placement) 
   catch error =>
     try IO.FS.removeFile temp catch _ => pure ()
     undo action
+    for d in created do try IO.FS.removeDir d catch _ => pure ()
     throw error
-  return action
+  return (created, action)
 
 def install (root : FilePath) (placements : Array Placement) (removals : Array String) (manifest : Placement) :
     IO Unit := do
-  let pid ← IO.Process.getPID
-  let mut actions : Array Action := #[]
-  let mut counter := 0
+  let pid := (← IO.Process.getPID).toNat
+  let actions ← IO.mkRef (#[] : Array Action)
+  let created ← IO.mkRef (#[] : Array FilePath)
+  let counter ← IO.mkRef 0
+  let next := counter.modifyGet fun n => (n + 1, n + 1)
+  let record := fun (result : List FilePath × Action) => do
+    created.modify (· ++ result.1.toArray)
+    actions.modify (·.push result.2)
   try
     for placement in placements do
-      counter := counter + 1
-      actions := actions.push (← place root pid.toNat counter placement)
+      record (← place root pid (← next) placement)
     for path in removals do
       let dest := root / path
       unless ← dest.pathExists do continue
-      counter := counter + 1
-      let backup := (dest.parent.getD root) / s!".leanfran-{pid}-{counter}.previous"
+      let backup := (dest.parent.getD root) / s!".leanfran-{pid}-{← next}.previous"
       IO.FS.rename dest backup
-      actions := actions.push (.removed dest backup)
-    counter := counter + 1
-    actions := actions.push (← place root pid.toNat counter manifest)
+      actions.modify (·.push (.removed dest backup))
+    record (← place root pid (← next) manifest)
   catch error =>
-    for action in actions.reverse do
+    for action in (← actions.get).reverse do
       try undo action catch _ => pure ()
-    for placement in placements do
-      try prune root ((root / placement.path).parent.getD root) catch _ => pure ()
+    for dir in ← created.get do
+      try IO.FS.removeDir dir catch _ => pure ()
     throw error
-  for action in actions do
+  for action in ← actions.get do
     match action with
     | .replaced _ backup | .removed _ backup => try IO.FS.removeFile backup catch _ => pure ()
     | .created _ => pure ()

@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "c": {
+      "compiler": "2/4.35.0",
+      "require": [],
+      "inputs": "fb5c6fe0b6c55d053f11248bca501013c54e09160d5b1bd865cd4152a2452b60",
+      "support": "",
+      "blocks": [
+        {
+          "name": "clamp",
+          "source": "src/clamp.c",
+          "hash": "29b816bc106a396c54537939fb2eec6479b391c28c5bb81b41d49b5c8dd9ea86",
+          "files": ["leanfran/clamp.h"]
+        }
+      ],
+      "files": ["leanfran/leanfran-config.cmake", "leanfran/leanfran.h", "leanfran/leanfran.mk", "leanfran/leanfran.pc", "leanfran/leanfran_model_test.c", "leanfran/leanfran_model_test.h", "leanfran/libleanfran.a"]
+    }
+  }
+}

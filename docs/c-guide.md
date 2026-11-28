@@ -149,7 +149,7 @@ GMP is available under LGPLv3 or GPLv2. If you distribute a statically linked ex
 
 ## Embed Lean in C sources
 
-`leanfran --lang c sync` reads Lean from block comments in C files, builds them in a Lake workspace under `.leanfran/workspace`, and writes the headers, one static library, and link settings to an output directory. The C project does not need to be a Lake project. Add `.leanfran/` to `.gitignore`.
+`leanfran --lang c sync` reads Lean from block comments in C files, builds them in a Lake workspace under `.leanfran/c/workspace`, and writes the headers, one static library, and link settings to an output directory. The C project does not need to be a Lake project. `sync` writes `.leanfran/.gitignore`, which ignores the workspace and the lock file that keeps two commands from running at once.
 
 ```c
 /* leanfran:lean pricing
@@ -191,11 +191,12 @@ path = "../pricing-rules"
 | `cflags` | Compiler flags clang uses to read files with `LF_STRUCT` or `LF_MODEL` that `compile_commands.json` does not cover. |
 | `[[require]]` | Lake dependencies, copied to the workspace. A relative `path` is resolved from the project root. |
 
-The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, `leanfran-config.cmake`, and `leanfran.manifest.json`. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
+The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, and `leanfran-config.cmake`. `sync` writes `leanfran.manifest.json` in the project root with the hash of each block and the files it generated; commit it with the sources. `sync` replaces only files that it generated, and stops with status 254 before it would overwrite any other file. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
 
-- `leanfran --lang c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: …`. A failure leaves the previous output directory unchanged.
-- `leanfran --lang c status` exits with status 1 and names each changed block, `leanfran.toml`, `LF_STRUCT` inputs, a change of the compiler's generator version or Lean version (`leanfran --lang c`), or a missing output file. It exits with status 0 when the output is current.
-- `leanfran --lang c check` runs `sync`, checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean), and then runs `status`.
+- `leanfran --lang c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: (lean block pricing, Lean 3:4) …`. A failure leaves the previous outputs unchanged.
+- `leanfran --lang c status` prints `<block>: stale` for each block whose Lean changed and for every block after a change of `leanfran.toml`, the `LF_STRUCT` inputs, or the compiler's generator version or Lean version, `<block>: missing <file>` for a missing output file, and `<block>: removed` for a block that is gone, and then exits with status 1. It exits with status 0 when the output is current.
+- `leanfran --lang c check` runs `sync` and checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean).
+- The commands exit with status 252 for invalid parameters, 254 for an error in the project (a Lean diagnostic, an invalid block, `LF_STRUCT`, or `leanfran.toml`), and 255 when a tool such as `lake`, `lean`, or clang is missing or has another Lean version.
 
 ### Use C structs in Lean
 
@@ -269,7 +270,7 @@ Give at least one `refines=` or `ensures=`. An `LF_MODEL` on a declaration in a 
 
 ### Obligations and proof status
 
-`check` writes the translation of each function and its callees to modules that `LeanCModel.<block>` imports in `.leanfran/workspace`. Each obligation is an abbreviation such as `clamp.obligation.refines`. It quantifies over the arguments, assumes for each `LF_ARRAY` argument that its size fits the length argument's type (`xs.size < 2 ^ 64` for `size_t`, `2 ^ 31` for `int32_t`), and then assumes `requires`. Prove it in `lean/Proofs/*.lean` with a declaration named `clamp.proof.refines` in the namespace `LeanCModel.<block>`.
+`check` writes the translation of each function and its callees to modules that `LeanCModel.<block>` imports in `.leanfran/c/workspace`. Each obligation is an abbreviation such as `clamp.obligation.refines`. It quantifies over the arguments, assumes for each `LF_ARRAY` argument that its size fits the length argument's type (`xs.size < 2 ^ 64` for `size_t`, `2 ^ 31` for `int32_t`), and then assumes `requires`. Prove it in `lean/Proofs/*.lean` with a declaration named `clamp.proof.refines` in the namespace `LeanCModel.<block>`.
 
 When two or more C files that use the same block define functions with the same name, such as `static` helpers, each of those functions goes into a namespace for its file, `LeanCModel.<block>.<file>`. `<file>` is the C file's path relative to the project root, prefixed with `File_`, with `_` written as `__`, `/` as `_s`, `.` as `_d`, `-` as `_h`, and any other character that is not a letter or digit as `_x<hex code>_`. For `static uint32_t twin(uint32_t)` with `LF_MODEL` in both `src/a.c` and `src/b.c`, `check` reports `dup.File_src_sa_dc.twin [refines]` and `dup.File_src_sb_dc.twin [refines]`, and the proofs are `File_src_sa_dc.twin.proof.refines` and `File_src_sb_dc.twin.proof.refines` in the namespace `LeanCModel.dup`.
 

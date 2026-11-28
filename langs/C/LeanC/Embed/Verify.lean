@@ -84,7 +84,7 @@ private def annotations (node : Node) (kind : String) : Array (Array String) :=
 
 private partial def normalize : Json → Json
   | .obj fields => .obj <| fields.foldl (init := {}) fun acc key value =>
-    if ["loc", "range", "isUsed", "isReferenced"].contains key then acc
+    if ["loc", "range", "isUsed", "isReferenced", "mangledName"].contains key then acc
     else match value with
       | .str text => if text.startsWith "0x" then acc else acc.insert key value
       | value => acc.insert key (normalize value)

@@ -23,6 +23,7 @@ check-integration: build check-random check-samples
 	../../maint/C/test-link.sh
 	../../maint/C/test-embed.sh
 	../../maint/C/test-schema.sh
+	../../maint/test-embed.sh
 
 check-model: build
 	../../maint/C/test-model.sh

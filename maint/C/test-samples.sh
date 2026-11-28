@@ -38,9 +38,15 @@ eval 'cc -std=c11 -Wall -Wextra -Werror main.c -o pricing-demo '"$flags"
 test "$(./pricing-demo)" = 3600
 
 cd "$scratch/verified-clamp"
+"$compiler" --lang c sync
+cmp leanfran.manifest.json "$backend/samples/verified-clamp/leanfran.manifest.json"
+"$compiler" --lang c status >"$scratch/status.out"
+cat "$scratch/status.out"
+grep -Fx 'clamp.clamp [refines]: proved' "$scratch/status.out"
 "$compiler" --lang c check --require proved >"$scratch/check.out"
 cat "$scratch/check.out"
 grep -Fx 'clamp.clamp [refines]: proved' "$scratch/check.out"
+cmp leanfran.lock "$backend/samples/verified-clamp/leanfran.lock"
 "$compiler" --lang c status
 make --no-print-directory -s leanfran-model-test >"$scratch/model.out"
 cat "$scratch/model.out"
