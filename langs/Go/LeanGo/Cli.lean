@@ -1,5 +1,6 @@
 import LeanGo
 import LeanGo.Check
+import LeanGo.Embed
 
 open Lean LeanGo
 
@@ -11,7 +12,7 @@ def generatorVersion : String := "14"
 def usage : String := "leanfran --lang go --version | --generator-version | --lean-version
 leanfran --lang go sync [--dir <dir>] [--verbose]
 leanfran --lang go check [--dir <dir>] [--verbose] [--require proved]
-leanfran --lang go status [--dir <dir>]
+leanfran --lang go status [--dir <dir>] [--require proved]
 leanfran --lang go module generate --module-name <Name> [options]
 leanfran --lang go obligations check --modules <Name> ... --obligations <file>
 
@@ -340,27 +341,11 @@ unsafe def checkObligations (args : List String) : IO UInt32 := do
   IO.println (Json.arr results).compress
   return 0
 
-def packageCommand (args : List String) : IO UInt32 := do
-  let tool := "github.com/conao3/leanfran-go/cmd/leanfran-go"
-  let install := s!"in your Go project, run `go get -tool {tool}` with the Go module version that matches this compiler"
-  let probe ← IO.Process.output { cmd := "go", args := #["tool", "-n", tool] } |>.toBaseIO
-  match probe with
-  | .error e => return ← fail 255 s!"could not run Go ({e}); put Go on PATH, then {install}"
-  | .ok out =>
-    if out.exitCode != 0 then
-      IO.eprint out.stderr
-      return ← fail 255 s!"could not load the leanfran-go module tool; {install}"
-  try
-    let child ← IO.Process.spawn {
-      cmd := "go"
-      args := #["tool", tool] ++ args.toArray
-      env := #[("LEANFRAN_CLI", some (← IO.appPath).toString)] }
-    child.wait
-  catch e => fail 255 (toString e)
-
 unsafe def main (args : List String) : IO UInt32 := do
   match args with
-  | "sync" :: _ | "check" :: _ | "status" :: _ => packageCommand args
+  | "sync" :: rest => Leanfran.Embed.run (LeanGo.Embed.backend version generatorVersion) "sync" rest
+  | "check" :: rest => Leanfran.Embed.run (LeanGo.Embed.backend version generatorVersion) "check" rest
+  | "status" :: rest => Leanfran.Embed.run (LeanGo.Embed.backend version generatorVersion) "status" rest
   | ["--version"] => IO.println version; return 0
   | ["--generator-version"] => IO.println generatorVersion; return 0
   | ["--lean-version"] => IO.println Lean.versionString; return 0

@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "go": {
+      "compiler": "14/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "example.com/verified-clamp",
+          "source": "clamp.go",
+          "hash": "d757adec5fbca201550b8383c372fb959b8862cee27f659c5c55e2c7a429dd6c",
+          "files": ["leanfran_funcs_gen.go", "leanfran_lean_gen.go", "leanfran_types_gen.go"]
+        }
+      ],
+      "files": ["leanfran_model_test.go"]
+    }
+  }
+}

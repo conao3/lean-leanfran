@@ -27,6 +27,7 @@ srcDir = "langs/PHP"
 [[lean_lib]]
 name = "LeanGo"
 srcDir = "langs/Go"
+needs = ["goLib"]
 
 [[lean_lib]]
 name = "LeanC"
@@ -41,6 +42,11 @@ text = true
 [[input_dir]]
 name = "jsonSupport"
 path = "langs/C/lean/LeanfranC"
+text = true
+
+[[input_dir]]
+name = "goLib"
+path = "langs/Go/lean/LeanGoLib"
 text = true
 
 [[input_dir]]

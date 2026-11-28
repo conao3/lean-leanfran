@@ -1,29 +1,39 @@
 {
-  "version": 1,
-  "hash": "209e8247c71d2111ee704cb5fd68ed085772279a2befa6e507847ac58b485b1c",
-  "obligations": [
-    {
-      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d6e6962626c65.Nibble",
-      "label": "in_range",
-      "status": "proved",
-      "axioms": [
-        "Quot.sound",
-        "propext"
-      ],
-      "file": "lean/Proofs/Nibble.lean",
-      "line": 12
-    },
-    {
-      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d6e6962626c65.Nibble",
-      "label": "refines",
-      "status": "proved",
-      "axioms": [
-        "Classical.choice",
-        "Quot.sound",
-        "propext"
-      ],
-      "file": "lean/Proofs/Nibble.lean",
-      "line": 6
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "go": {
+      "inputs": {
+        "compiler": "14/4.35.0",
+        "library": "376c0a4e095ba373794c5d5a1c8eb6df1b964b7352e394670abdccc38071212b",
+        "host": "2852208c445e31311a4230c1e39a4a3e1b3ce9da5681d021ec870390536d1d99",
+        "proofs": "354d2da1a6fec3bd6def4ce256c8fabec5aa658f5dcc1e148d5d79dbfee797e2"
+      },
+      "functions": [
+        {
+          "id": "example.com/verified-nibble.Nibble",
+          "hash": "bfa8b49cd79e6c0cbd1036e1d7a833db50837330c0a8f5a9372642aa2572b31e",
+          "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d6e6962626c65.Nibble",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "in_range",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Nibble.lean",
+              "line": 12
+            },
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Nibble.lean",
+              "line": 6
+            }
+          ],
+          "data": {}
+        }
+      ]
     }
-  ]
+  }
 }

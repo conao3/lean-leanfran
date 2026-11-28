@@ -51,7 +51,8 @@ def checkVersions (ctx : Context) : IO (Except Failure Unit) := do
   versionOf ctx.lake s!"Lean version {Lean.versionString})"
 
 def runLake (ctx : Context) (unit : ColumnUnit) (scan : Scan) (args : Array String) : IO (Except Failure Unit) := do
-  let spawn : IO.Process.SpawnArgs := {cmd := ctx.lake, cwd := some ctx.workspace, args := #["--no-ansi"] ++ args}
+  let flags := if ctx.verbose then #["--no-ansi", "--verbose"] else #["--no-ansi"]
+  let spawn : IO.Process.SpawnArgs := {cmd := ctx.lake, cwd := some ctx.workspace, args := flags ++ args}
   let result ← match ← (IO.Process.output spawn).toBaseIO with
     | .ok result => pure result
     | .error error => return .error (.environment s!"could not run {ctx.lake}: {error}")

@@ -1,28 +1,39 @@
 {
-  "version": 1,
-  "hash": "57a14b4e0d7eed6704182bd8e9a90f9a56e80182250159f01a6322982f01df2d",
-  "obligations": [
-    {
-      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d636c616d70.Clamp",
-      "label": "in_range",
-      "status": "proved",
-      "axioms": [
-        "Quot.sound",
-        "propext"
-      ],
-      "file": "lean/Proofs/Clamp.lean",
-      "line": 14
-    },
-    {
-      "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d636c616d70.Clamp",
-      "label": "refines",
-      "status": "proved",
-      "axioms": [
-        "Quot.sound",
-        "propext"
-      ],
-      "file": "lean/Proofs/Clamp.lean",
-      "line": 6
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "go": {
+      "inputs": {
+        "compiler": "14/4.35.0",
+        "library": "376c0a4e095ba373794c5d5a1c8eb6df1b964b7352e394670abdccc38071212b",
+        "host": "36df8cd4028b49834906d26ce94417b115af26ec0a40bce70ba299aec7f2ebaa",
+        "proofs": "20a0666ce4b46b313492987e8e2a725eddd8a451790f6ebc3fe9278f2c32b04a"
+      },
+      "functions": [
+        {
+          "id": "example.com/verified-clamp.Clamp",
+          "hash": "80b65f14e29cc447269e42bf0040756ecb3d9e8bbeae43d7b2793e76a43fddb7",
+          "model": "LeanGoModel.B6578616d706c652e636f6d2f76657269666965642d636c616d70.Clamp",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "in_range",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Clamp.lean",
+              "line": 14
+            },
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Clamp.lean",
+              "line": 6
+            }
+          ],
+          "data": {}
+        }
+      ]
     }
-  ]
+  }
 }

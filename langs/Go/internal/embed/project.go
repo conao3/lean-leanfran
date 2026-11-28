@@ -16,11 +16,12 @@ import (
 	"github.com/conao3/leanfran-go/internal/verify"
 )
 
+const LeanVersion = "4.35.0"
+
 const (
-	runtimePath      = "github.com/conao3/leanfran-go"
-	defaultToolchain = "leanprover/lean4:v4.35.0"
-	configName       = "leanfran.config.json"
-	manifestName     = "leanfran.json"
+	runtimePath  = "github.com/conao3/leanfran-go"
+	configName   = "leanfran.config.json"
+	manifestName = "leanfran.json"
 )
 
 type config struct {
@@ -29,11 +30,13 @@ type config struct {
 }
 
 type project struct {
-	root, module, toolchain string
-	config                  config
-	blocks                  map[string]*block
-	packages                map[string]*goPackage
-	dirs                    []string
+	root, module string
+	generator    string
+	lean         string
+	config       config
+	blocks       map[string]*block
+	packages     map[string]*goPackage
+	dirs         []string
 }
 
 type goPackage struct {
@@ -48,7 +51,6 @@ type block struct {
 	pos           token.Position
 	source        source
 	imports, uses []string
-	wrappers      map[string]string
 	verifyTypes   []verify.NamedType
 	modelExprs    []ast.Expr
 	models        []*model
@@ -60,31 +62,36 @@ func (b *block) errorf(format string, args ...any) error {
 	return fmt.Errorf("%s: %s", b.pos, fmt.Sprintf(format, args...))
 }
 
-func loadProject(dir string) (*project, error) {
-	dir, err := filepath.Abs(dir)
+func command(dir, name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	return cmd
+}
+
+func loadProject(root string, versions Versions) (*project, error) {
+	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command("go", "list", "-m", "-json")
-	cmd.Dir = dir
+	cmd := command(root, "go", "list", "-m", "-json")
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	data, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("find Go module at %s: %w", dir, processError(err))
+		return nil, fmt.Errorf("find Go module at %s: %w", root, processError(err))
 	}
 	var module struct{ Path, Dir string }
 	if err := json.Unmarshal(data, &module); err != nil {
 		return nil, err
 	}
 	if module.Path == "" || module.Dir == "" {
-		return nil, fmt.Errorf("%s is outside a Go module", dir)
+		return nil, fmt.Errorf("%s is outside a Go module", root)
 	}
-	root, err := filepath.EvalSymlinks(module.Dir)
+	root, err = filepath.EvalSymlinks(module.Dir)
 	if err != nil {
 		return nil, err
 	}
 	p := &project{
-		root: root, module: module.Path, toolchain: defaultToolchain,
+		root: root, module: module.Path, generator: versions.Generator, lean: versions.Lean,
 		blocks: make(map[string]*block), packages: make(map[string]*goPackage),
 	}
 	if data, err := os.ReadFile(filepath.Join(root, configName)); err == nil {
@@ -97,11 +104,6 @@ func loadProject(dir string) (*project, error) {
 		if !json.Valid(data) {
 			return nil, fmt.Errorf("%s: trailing configuration data", configName)
 		}
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-	if data, err := os.ReadFile(filepath.Join(root, "lean-toolchain")); err == nil {
-		p.toolchain = strings.TrimSpace(string(data))
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -119,12 +121,16 @@ func processError(err error) error {
 	return err
 }
 
-func (p *project) order() ([]*block, error) {
-	var names []string
-	for name := range p.blocks {
-		names = append(names, name)
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
 	}
-	slices.Sort(names)
+	slices.Sort(keys)
+	return keys
+}
+
+func (p *project) order() ([]*block, error) {
 	var ordered []*block
 	active := make(map[string]bool)
 	var visit func(*block) error
@@ -162,7 +168,7 @@ func (p *project) order() ([]*block, error) {
 		}
 		values := []any{
 			b.pkg.path, b.pkg.name, b.source.text, b.imports, b.uses, dependencies,
-			b.models, modelSources, p.config, p.toolchain, generatorVersion,
+			b.models, modelSources, p.config, p.lean, p.generator,
 		}
 		data, err := json.Marshal(values)
 		if err != nil {
@@ -173,7 +179,7 @@ func (p *project) order() ([]*block, error) {
 		ordered = append(ordered, b)
 		return nil
 	}
-	for _, name := range names {
+	for _, name := range sortedKeys(p.blocks) {
 		if err := visit(p.blocks[name]); err != nil {
 			return nil, err
 		}

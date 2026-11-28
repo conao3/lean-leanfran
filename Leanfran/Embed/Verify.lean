@@ -144,9 +144,10 @@ private def lakeIn (ctx : Context) (dir : FilePath) (args : Array String) : IO (
   let result ← IO.Process.output {cmd := ctx.lake, cwd := some dir, args := #["--no-ansi"] ++ args}
   return (result.exitCode, result.stdout ++ result.stderr)
 
-private def proofOutput (dir : FilePath) (output : String) : String :=
-  ((output.replace s!"{dir}/Proofs/" "lean/Proofs/").replace "Proofs/" "lean/Proofs/")
-    |>.replace "lean/lean/Proofs/" "lean/Proofs/"
+private def proofOutput (dir : FilePath) (relative : String) (output : String) : String :=
+  let output := output.replace s!"{dir}/Proofs/" "lean/Proofs/"
+  let output := if relative == "." then output else output.replace s!"{relative}/Proofs/" "lean/Proofs/"
+  (output.replace "Proofs/" "lean/Proofs/").replace "lean/lean/Proofs/" "lean/Proofs/"
 
 structure Outcome where
   code : UInt32
@@ -168,7 +169,8 @@ def obligations (backend : Backend) (ctx : Context) (state : backend.State) (sca
     let relative := if vd == "." then m.path else (relativeTo ⟨vd⟩ ⟨m.path⟩).getD m.path
     (relative.splitOn "/").head?
   for top in tops.toList.eraseDups ++ ["Proofs"] do
-    for path in [dir / top, dir / ".lake" / "build" / "lib" / "lean" / top, dir / ".lake" / "build" / "ir" / top] do
+    let build := ctx.workspace / ".lake" / "build"
+    for path in [dir / top, build / "lib" / "lean" / top, build / "ir" / top] do
       removeTree path
   for (mod, _, text) in proofs do
     discard <| writeChanged (dir / FilePath.mk ("/".intercalate (mod.splitOn ".") ++ ".lean")) text
@@ -177,7 +179,7 @@ def obligations (backend : Backend) (ctx : Context) (state : backend.State) (sca
   let mut built : Std.HashSet String := {}
   let mut failed : Std.HashSet String := {}
   if !translation.modules.isEmpty then
-    let (code, _) ← lakeIn ctx dir (#["build"] ++ translation.modules.map (s!"+{·.module}"))
+    let (code, _) ← lakeIn ctx ctx.workspace (#["build"] ++ translation.modules.map (s!"+{·.module}"))
     if code == 0 then
       built := .ofList (translation.modules.toList.map (·.module))
     else
@@ -185,7 +187,7 @@ def obligations (backend : Backend) (ctx : Context) (state : backend.State) (sca
         if (imports m.text).any failed.contains then
           failed := failed.insert m.module
           continue
-        let (code, output) ← lakeIn ctx dir #["build", s!"+{m.module}"]
+        let (code, output) ← lakeIn ctx ctx.workspace #["build", s!"+{m.module}"]
         if code == 0 then built := built.insert m.module
         else
           IO.eprint output
@@ -220,7 +222,7 @@ def obligations (backend : Backend) (ctx : Context) (state : backend.State) (sca
       !line.startsWith "import " || built.contains (line.drop "import ".length).trimAscii.toString
     unless lines.any (·.startsWith "import ") do continue
     discard <| writeChanged (ctx.workspace / a.path) ("\n".intercalate lines)
-    let (code, output) ← lakeIn ctx dir #["build", s!"+{a.module}"]
+    let (code, output) ← lakeIn ctx ctx.workspace #["build", s!"+{a.module}"]
     if code != 0 then
       IO.eprint output
       throw (.content s!"could not build {a.module}")
@@ -245,9 +247,9 @@ def obligations (backend : Backend) (ctx : Context) (state : backend.State) (sca
     if !targets.isEmpty && !targets.any built.contains then
       failedSources := failedSources.push text
       continue
-    let (code, output) ← lakeIn ctx dir #["build", s!"+{mod}"]
+    let (code, output) ← lakeIn ctx ctx.workspace #["build", s!"+{mod}"]
     if code != 0 then
-      IO.eprint (proofOutput dir output)
+      IO.eprint (proofOutput dir vd output)
       failedSources := failedSources.push text
     else verified := verified.push mod
   let mut results : Std.HashMap (String × String) LockObligation := {}

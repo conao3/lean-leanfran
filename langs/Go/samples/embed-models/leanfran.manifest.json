@@ -1,0 +1,27 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "go": {
+      "compiler": "14/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "example.com/embed-models/orders",
+          "source": "orders/orders.go",
+          "hash": "7eb9e03c800f0c8d05daeeb0be7028c3bfdbadc178906f406881f54d31e5e918",
+          "files": ["orders/leanfran_funcs_gen.go", "orders/leanfran_lean_gen.go", "orders/leanfran_types_gen.go"]
+        },
+        {
+          "name": "example.com/embed-models/receipts",
+          "source": "receipts/receipt.lean",
+          "hash": "f84d0692980ea974e3985ce824bfd0675ba0cf9c9ff45e960ce24ef4a6ef6a66",
+          "files": ["receipts/leanfran_funcs_gen.go", "receipts/leanfran_lean_gen.go", "receipts/leanfran_types_gen.go"]
+        }
+      ],
+      "files": []
+    }
+  }
+}
