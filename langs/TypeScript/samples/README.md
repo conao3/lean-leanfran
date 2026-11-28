@@ -2,12 +2,15 @@
 
 Each sample is a package of the repository's pnpm workspace that depends on `leanfran` through
 `link:` (the packed `dist/`, so run `vp pack` first). `samples/run.sh <dir>` runs `leanfran --lang typescript sync`
-on it (checking the proofs and regenerating `src/_lean/`), runs `node src/main.ts` and compares
-the output with `expected.txt`. The samples that verify TypeScript functions also have
+on it (checking the proofs and regenerating `src/_lean/`; `roman-numerals` runs `leanfran --lang typescript generate`),
+runs `node src/main.ts` and compares the output with `expected.txt`. Each synced sample commits
+`src/_lean/` and `leanfran.manifest.json`; `make -C samples status` runs `leanfran --lang typescript status`
+on them. The samples that verify TypeScript functions also have
 `lean/Proofs/` and a committed `leanfran.lock`; `make -C samples verify` runs
-`leanfran --lang typescript check --require proved` on them. `make samples` in the repository root runs both and
-checks that the committed generated modules are up to date. Run them inside `nix develop` of the
-repository root.
+`leanfran --lang typescript check --require proved` on them. `make samples` in `langs/TypeScript` runs
+`status`, `verify` and `test` and checks that the committed generated modules, the manifests and the
+locks are up to date. The Makefile runs the compiler of `LEANFRAN_CLI` (default: the repository's
+`.lake/build/bin/leanfran`). Run them inside `nix develop` of the repository root.
 
 ## Writing functions in Lean
 

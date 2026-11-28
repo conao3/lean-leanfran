@@ -9,7 +9,7 @@ pnpm add leanfran
 nix profile install 'github:conao3/lean-leanfran#leanfran'
 ```
 
-Generation requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Generated modules run in Node 22.18 or later, Bun and browsers with the npm package.
+The npm package provides the runtime and the `scan` and `translate` commands that the compiler `leanfran` runs; install both from the same release. Generation requires Lean 4.35.0 (`lean` and `lake`) on `PATH`. Generated modules run in Node 22.18 or later, Bun and browsers with the npm package.
 
 ## First Lean block
 
@@ -38,7 +38,7 @@ Generate modules from the package root:
 leanfran --lang typescript sync --package .
 ```
 
-Commit `src/_lean/` and `leanfran.manifest.json`. Run sync again when you change a block; `leanfran --lang typescript status --package .` checks whether generated code is current.
+Commit `src/_lean/` and `leanfran.manifest.json`; `sync` writes `.leanfran/.gitignore`, which ignores `.leanfran/typescript/` and `.leanfran/lock`. Run sync again when you change a block; `leanfran --lang typescript status --package .` checks whether generated code is current without Lean, prints `src/arith.ts:arith: stale` for a changed block and exits with 1.
 
 ## Next steps
 

@@ -191,11 +191,12 @@ path = "../pricing-rules"
 | `cflags` | Compiler flags clang uses to read files with `LF_STRUCT` or `LF_MODEL` that `compile_commands.json` does not cover. |
 | `[[require]]` | Lake dependencies, copied to the workspace. A relative `path` is resolved from the project root. |
 
-The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, and `leanfran-config.cmake`. `sync` writes `leanfran.manifest.json` in the project root with the hash of each block and the files it generated; commit it with the sources. `sync` replaces only files that it generated, and stops with status 254 before it would overwrite any other file. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
+The output directory contains `<name>.h` for each block, `leanfran.h`, `libleanfran.a`, `leanfran.pc`, `leanfran.mk`, and `leanfran-config.cmake`. `sync` writes `leanfran.manifest.json` in the project root with the hash of each block and the files it generated; commit it with the sources, together with the `leanfran.lock` that `check` writes. The link settings in the output directory hold absolute paths, so keep the output directory out of version control and run `sync` in each checkout. `sync` replaces only files that it generated, and stops with status 254 before it would overwrite any other file. `leanfran_init` initializes every block, and each `<name>_init` calls it. Link with the generated settings as described in [Link the library](#link-the-library), using `leanfran` as the package name.
 
 - `leanfran --lang c sync` builds with warnings treated as errors, so a failed proof or a `sorry` stops the build. Lean diagnostics use the C file and line, as in `src/pricing.c:12:5: error: (lean block pricing, Lean 3:4) …`. A failure leaves the previous outputs unchanged.
-- `leanfran --lang c status` prints `<block>: stale` for each block whose Lean changed and for every block after a change of `leanfran.toml`, the `LF_STRUCT` inputs, or the compiler's generator version or Lean version, `<block>: missing <file>` for a missing output file, and `<block>: removed` for a block that is gone, and then exits with status 1. It exits with status 0 when the output is current.
+- `leanfran --lang c status` prints `<block>: stale` for each block whose Lean changed and for every block after a change of `leanfran.toml`, the `LF_STRUCT` inputs, or the compiler's generator version or Lean version, `<block>: missing <file>` for a missing block header, `c: missing <file>` for another missing output file, and `<block>: removed` for a block that is gone. It then prints the saved state of each `LF_MODEL` obligation, as described in [Obligations and proof status](#obligations-and-proof-status), and exits with status 1 when a block row or a `stale` obligation is printed. It exits with status 0 when the output and the obligations are current. `status` runs neither Lean nor Lake.
 - `leanfran --lang c check` runs `sync` and checks the `LF_MODEL` obligations described in [Verify a C function in Lean](#verify-a-c-function-in-lean).
+- `sync`, `status`, and `check` hash the blocks and inputs with `sha256sum`, or `shasum -a 256` on macOS, so put that command on PATH.
 - The commands exit with status 252 for invalid parameters, 254 for an error in the project (a Lean diagnostic, an invalid block, `LF_STRUCT`, or `leanfran.toml`), and 255 when a tool such as `lake`, `lean`, or clang is missing or has another Lean version.
 
 ### Use C structs in Lean
@@ -294,7 +295,7 @@ leanfran --lang c check --require proved
 leanfran --lang c status
 ```
 
-`check` prints one line per obligation, such as `clamp.clamp [refines]: proved`, and writes `leanfran.lock` in the project root with the states and SHA-256 hashes of the inputs.
+`check` prints one line per obligation, such as `clamp.clamp [refines]: proved`, and writes the `c` section of `leanfran.lock` in the project root with the states and SHA-256 hashes of the inputs. Commit the lock with the sources. For a function outside the translated subset, `check` also prints `<file>:<line>:<column>: unextracted <id>: <message>` on stderr.
 
 | State | Meaning |
 | --- | --- |
@@ -307,7 +308,7 @@ leanfran --lang c status
 | `unextracted` | The function is outside the translated subset, its translation does not elaborate, its compile flags do not match the translation (below), or the translated definition uses an instance on types from the Lean toolchain or `LeanCLib` that a module outside them declares, such as a Lean block or a Lake dependency. The diagnostic gives the file, position, and reason. |
 | `stale` | `status` found a change to the function, a function it calls, a struct or enum it uses, the spec block, the proofs, `leanfran.toml`, the compiler's generator version or Lean version, or the verdict on its compile flags since the lock was written. |
 
-`check --require proved` exits with status 1 unless every obligation is `proved`. Plain `check` exits with status 1 when a function is `unextracted` or a proof fails to build. `status` reads the lock and exits with status 1 when an obligation is stale. When every `LF_MODEL` function of a Lean block is `unextracted`, there is no `LeanCModel.<block>` module, and `check` skips the proof files whose `LeanCModel` imports, direct or through other proof files, name only such blocks.
+`check --require proved` exits with status 1 unless every obligation is `proved`. Plain `check` exits with status 1 when a function is `unextracted` or a proof fails to build. `status` reads the lock, prints each obligation's saved state in the same form, and exits with status 1 when an obligation is `stale` or, with `--require proved`, not `proved`. When every `LF_MODEL` function of a Lean block is `unextracted`, there is no `LeanCModel.<block>` module, and `check` skips the proof files whose `LeanCModel` imports, direct or through other proof files, name only such blocks.
 
 ### C subset and proof scope
 

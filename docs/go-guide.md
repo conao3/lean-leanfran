@@ -35,7 +35,7 @@ theorem width_le (r : Range) : width r ≤ r.hi := by
 `)
 ```
 
-Run `leanfran --lang go sync`. The Go package can now call `NewRange(big.NewInt(2), big.NewInt(5))` and `Width(r)`, which returns 3. See the [range sample](../langs/Go/samples/embed-range/) for the full call.
+Run `leanfran --lang go sync`. The Go package can then call `NewRange(big.NewInt(2), big.NewInt(5))` and `Width(r)`, which returns 3. See the [range sample](../langs/Go/samples/embed-range/) for the full call.
 
 Each package has one block, identified by its Go import path. Use a raw or interpreted string literal with `Lean`, or place the source in the same package directory and pass its filename to `LeanFile`. `Imports("Std.Data.HashMap")` imports a Lean module. `Uses("example.com/app/orders")` opens another block's Lean namespace and shares the Go types generated for it. Pass the options after the source. The options return `leanfran.BlockOption`.
 
@@ -68,13 +68,15 @@ Run `nix develop` from the application's flake directory. Pin `leanfran.url` to 
 
 | Command | Effect |
 | --- | --- |
-| `leanfran --lang go sync` | Scans the module, builds the Lean sources in `.leanfran/workspace`, and installs all generated packages after the build and generation succeed. |
-| `leanfran --lang go status` | Checks freshness without Lean or Lake. Reports stale or removed blocks and missing generated files, with exit status 1 when work is needed. |
-| `leanfran --lang go check` | Runs `sync` and verifies the result with `status`. |
+| `leanfran --lang go sync` | Scans the module, builds the Lean blocks in `.leanfran/go/workspace`, generates the Go files of every block, installs them, and writes the `go` section of `leanfran.manifest.json`. |
+| `leanfran --lang go status` | Compares the sources with `leanfran.manifest.json`, the generated files, and `leanfran.lock` without running Lean or Lake. |
+| `leanfran --lang go check` | Runs `sync`, translates the `//leanfran:model` functions, checks their proofs, and writes the `go` section of `leanfran.lock`. See [Verify a Go function in Lean](#verify-a-go-function-in-lean). |
 
-Run all three commands from the Go module where you registered the tool. They accept `--dir` to choose a directory within that module. The CLI reads the module from that directory and scans its packages.
+Run the commands from the Go module where you registered the tool. `--dir <dir>` selects another directory. The compiler takes the nearest directory at or above it that contains `go.mod` as the module root and scans the module's packages. `sync` prints `leanfran: <N> blocks checked and generated` on stderr, and `leanfran: removed <files>` when it deletes generated files that no block produces. Use `--verbose` on `sync` or `check` to include Lake trace lines in build diagnostics. `check` and `status` accept `--require proved`.
 
-The compiler runs the project's `leanfran-go` tool through `go tool` and passes its own path in `LEANFRAN_CLI`. The tool uses that path for generation and looks up `leanfran` on PATH when the variable is unset. The compiler must match the Go module release and the tool's generator version. The compiler, `lean`, and `lake` must all match the module's `lean-toolchain`. The default is `leanprover/lean4:v4.35.0`. Use `--verbose` on `sync` or `check` to include Lake trace lines in build diagnostics.
+`status` prints `<import path>: stale` for a block whose Lean or inputs changed, `<import path>: missing <file>` for a missing generated file, `go: missing <file>` for a missing `leanfran_model_test.go`, `<import path>: removed` for a block that is gone, and `<file>: removed` for a generated file that no block produces. It prints nothing for a current block. It then prints the saved state of each obligation, as described in [Obligations and proof status](#obligations-and-proof-status).
+
+The `leanfran-go` module tool provides two commands, `scan` and `translate`, which read the Go sources and print JSON. The compiler runs them with `go tool` in the module root and does the Lake build, the generation, and the installation itself. It passes its release, generator version, and Lean version to the tool. The tool exits with status 255 and names the version to install when they differ from its own, so install the compiler and the Go module from the same release. In a module without the registered tool, the commands print the `go get -tool` instruction and exit with status 255. Put `lean` and `lake` from Lean 4.35.0, the version the compiler was built with, on PATH. A `lean-toolchain` file at the module root is optional, and when present it must select `leanprover/lean4:v4.35.0`.
 
 An optional `leanfran.config.json` at the module root takes a `paths` array of directories to scan and a `require` array of Lake dependencies. Dependency entries use the keys of Lake's `[[require]]` entries. Relative dependency paths start at the Go module root.
 
@@ -85,11 +87,21 @@ An optional `leanfran.config.json` at the module root takes a `paths` array of d
 }
 ```
 
-Commit each block's `leanfran_types_gen.go`, `leanfran_funcs_gen.go`, `leanfran_lean_gen.go`, and `leanfran.json`. Ignore the module's `.leanfran/` directory. The application builds with the Go toolchain. Lean diagnostics point to the original Go literal or Lean file. When a build or proof fails, the previous generated files remain in place.
+Commit each block's `leanfran_types_gen.go`, `leanfran_funcs_gen.go`, and `leanfran_lean_gen.go`, the module's `leanfran.manifest.json`, and the `leanfran.lock` that `check` writes. The manifest records each block's hash and the files it generated. `sync` writes `.leanfran/.gitignore`, which ignores the workspace in `.leanfran/go/` and the file `.leanfran/lock` that keeps two commands from running at once. The application builds with the Go toolchain.
+
+Lean diagnostics point to the original Go literal or Lean file.
+
+```text
+clamp.go:8:24: error: (lean block example.com/verified-clamp, Lean 4:23) Type mismatch
+```
+
+When the Lean build or the generation fails, the previous generated files remain in place. `sync` replaces only files that it generated, and stops with status 254 before it would overwrite any other file.
+
+The commands exit with status 0 on success and 1 when `status` prints a `stale`, `missing`, or `removed` row or obligations do not pass `check` or `--require proved`. They exit with 252 for invalid arguments, 254 for an error in the project (a Lean diagnostic, a scan error such as an invalid block or `Models` type, or a file that leanfran did not generate), and 255 when Go, the module tool, `lake`, `lean`, or `sha256sum` is missing or a version differs.
 
 ### Check generated files in CI
 
-The freshness check for committed files requires Go and the `leanfran` compiler.
+The freshness check for committed files requires Go and the `leanfran` compiler. In a module with `//leanfran:model` functions or a `go` section in `leanfran.lock`, it also runs `sha256sum` (`shasum` on macOS), so put that command on PATH.
 
 ```sh
 leanfran --lang go status
@@ -149,7 +161,7 @@ Specify at least one refinement or postcondition. Use Lean names relative to the
 
 ### Obligations and proof status
 
-Find the generated module `LeanGoModel.B<hex>` under `.leanfran/workspace/verification` after running `leanfran --lang go check`. The suffix is the Go package import path encoded as hexadecimal UTF-8 bytes. Write the proofs in `lean/Proofs/` beside `go.mod` and import that module. Each obligation is an abbreviation such as `Nibble.obligation.refines`. Prove it with a declaration named `Nibble.proof.refines` in the model's namespace. The [nibble proof](../langs/Go/samples/verified-nibble/lean/Proofs/Nibble.lean) establishes the equality and range bound for every input. The [clamp proof](../langs/Go/samples/verified-clamp/lean/Proofs/Clamp.lean) compares early returns with nested Lean `min` and `max` under an ordered-bounds precondition.
+Find the generated module `LeanGoModel.B<hex>` under `.leanfran/go/workspace/verification` after running `leanfran --lang go check`. The suffix is the Go package import path encoded as hexadecimal UTF-8 bytes. Write the proofs in `lean/Proofs/` beside `go.mod` and import that module. Each obligation is an abbreviation such as `Nibble.obligation.refines`. Prove it with a declaration named `Nibble.proof.refines` in the model's namespace. The [nibble proof](../langs/Go/samples/verified-nibble/lean/Proofs/Nibble.lean) establishes the equality and range bound for every input. The [clamp proof](../langs/Go/samples/verified-clamp/lean/Proofs/Clamp.lean) compares early returns with nested Lean `min` and `max` under an ordered-bounds precondition.
 
 A refinement compares the translated return value with the specification for every input that satisfies `requires`. Where the model can fail, refinement requires `Except.ok` with the specified value. A postcondition for a fallible function constrains every successful return. General `for` loops use a partial fixed point. A diverging loop has no successful logical result.
 
@@ -159,7 +171,7 @@ go test ./...
 leanfran --lang go status
 ```
 
-`check` runs `sync`, type-checks Go with the generated files present, builds the translated models and proof modules, and writes `leanfran.lock` in the Go module root. It reports each obligation's state.
+`check` runs `sync`, type-checks Go with the generated files present, builds the translated models and proof modules, and writes the `go` section of `leanfran.lock` in the Go module root. Commit the lock with the sources. `check` prints one row per obligation on stdout, as in `example.com/verified-clamp.Clamp [refines]: proved`. For a function that the translator cannot handle, it also prints `<file>:<line>:<column>: unextracted <id>: <message>` on stderr.
 
 | State | Meaning |
 | --- | --- |
@@ -172,7 +184,7 @@ leanfran --lang go status
 | `unextracted` | The translator or Lean could not produce the obligation. Diagnostics include a Go source location. |
 | `stale` | `status` needs a fresh lock after a change to the Go sources, specs, proofs, configuration, or model library. |
 
-`check --require proved` exits with an error if any obligation has a state other than `proved`. Ordinary `check` exits with an error when extraction or a requested proof build fails. `status` reads the saved state and checks freshness with Go alone.
+`check --require proved` exits with status 1 if any obligation has a state other than `proved`. Ordinary `check` exits with status 1 when a function is `unextracted` or a proof build fails. `status` prints the saved state of each obligation in the same form, prints `<id>: removed` for a function that is gone, and exits with status 1 when an obligation is `stale` or, with `--require proved`, not `proved`. It runs Go and `sha256sum` (`shasum` on macOS) without Lean or Lake.
 
 ### Go subset and proof scope
 

@@ -2,8 +2,10 @@
 
 Each sample is a Python package with Lean blocks (`lean(...)`). `samples/run.sh <dir>` runs
 `leanfran --lang python sync` on it (checking the proofs and regenerating `<package>/_lean/`) and compares the
-output of `python -m <package>` with `expected.txt`. `make samples` runs all of them and checks that
-the committed generated modules are up to date.
+output of `python -m <package>` with `expected.txt`. `make samples` first runs
+`leanfran --lang python status` in every sample and checks that it leaves the checkout unchanged,
+then runs all of them and checks that the committed generated modules and `leanfran.manifest.json`
+are up to date.
 
 | sample | shows |
 |---|---|
