@@ -69,6 +69,8 @@ test-verify: build pack
 	test/verify/test.sh
 
 samples: build pack
+	$(MAKE) -C samples status
+	test -z "$$(git status --porcelain --untracked-files=all -- samples)"
 	$(MAKE) -C samples verify test
 	git diff --exit-code -- samples
 	test -z "$$(git ls-files --others --exclude-standard -- samples)"
