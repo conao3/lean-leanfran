@@ -13,7 +13,7 @@ out="$app/generated bindings"
 expect_status() {
     local expected=$1 status=0
     shift
-    "$compiler" --lang c "$@" --dir "$app" >"$scratch/diagnostics" 2>&1 || status=$?
+    (cd "$app" && "$compiler" --lang c "$@" --dir "$app") >"$scratch/diagnostics" 2>&1 || status=$?
     cat "$scratch/diagnostics"
     test "$status" -eq "$expected"
 }
@@ -33,8 +33,8 @@ else
 fi
 ln -s "$(command -v clang)" "$scratch/status-path/clang"
 PATH="$scratch/status-path" "$compiler" --lang c status --dir "$app"
-test -f "$app/.leanfran/workspace/LeanfranBlocks/invoice.lean"
-test -f "$out/leanfran.manifest.json"
+test -f "$app/.leanfran/c/workspace/LeanfranBlocks/invoice.lean"
+test -f "$app/leanfran.manifest.json"
 test "$(ar t "$out/libleanfran.a" | grep -c '^EmbedDependency\.c\.o\.export$')" -eq 1
 test ! -e "$out/libleanfran.a.rsp"
 
@@ -56,7 +56,7 @@ header="$app/src/nested/catalog.h"
 cp "$header" "$scratch/catalog.h"
 sed 's/basePrice = 16/basePrice = 17/' "$scratch/catalog.h" >"$header"
 expect_status 1 status
-grep -F 'stale: catalog' "$scratch/diagnostics"
+grep -Fx 'catalog: stale' "$scratch/diagnostics"
 expect_status 254 sync
 grep -E '^src/nested/catalog\.h:5:50: error:' "$scratch/diagnostics"
 diff -r "$scratch/previous" "$out"
@@ -83,18 +83,14 @@ grep -F "duplicate Lean block 'catalog'" "$scratch/diagnostics"
 diff -r "$scratch/previous" "$out"
 rm "$app/src/duplicate.h"
 
-manifest="$out/leanfran.manifest.json"
+manifest="$app/leanfran.manifest.json"
 lean_version=$(lean --version | sed -E 's/^Lean \(version ([0-9.]+).*/\1/')
 compiler_key="$("$compiler" --lang c --generator-version)/$lean_version"
-if [[ $(uname -s) == Darwin ]]; then
-    compiler_hash=$(printf '%s' "$compiler_key" | shasum -a 256 | cut -d ' ' -f 1)
-else
-    compiler_hash=$(printf '%s' "$compiler_key" | sha256sum | cut -d ' ' -f 1)
-fi
-grep -F "\"compiler\": \"$compiler_hash\"" "$scratch/previous/leanfran.manifest.json"
-sed -E 's/("compiler": ")[a-f0-9]+/\1different/' "$scratch/previous/leanfran.manifest.json" >"$manifest"
+grep -F "\"compiler\": \"$compiler_key\"" "$manifest"
+sed -E 's/("compiler": ")[^"]+/\1different/' "$manifest" >"$scratch/manifest.json"
+cp "$scratch/manifest.json" "$manifest"
 expect_status 1 status
-grep -F 'stale: leanfran --lang c' "$scratch/diagnostics"
+grep -Fx 'catalog: stale' "$scratch/diagnostics"
 
 printf '/* leanfran:lean twin\ndef basePrice : UInt32 := 1\n*/\n' >"$app/src/twin.h"
 expect_status 254 sync
@@ -107,7 +103,7 @@ printf '/* leanfran:lean extra\ndef extraPrice : UInt32 := 0\n*/\n' >"$app/src/e
 test -f "$out/extra.h"
 rm "$app/src/extra.h"
 expect_status 1 status
-grep -F 'stale: extra' "$scratch/diagnostics"
+grep -Fx 'extra: removed' "$scratch/diagnostics"
 "$compiler" --lang c sync --dir "$app"
 test ! -e "$out/extra.h"
 expect_status 0 status
@@ -120,7 +116,7 @@ if grep -E '^(typedef )?struct (order|cart) \{' "$out/pricing.h"; then exit 1; f
 
 sed 's/"ge=1", "le=1000"/"ge=1", "le=999"/' "$scratch/models.h" >"$models"
 expect_status 1 status
-grep -F 'stale: LF_STRUCT' "$scratch/diagnostics"
+grep -Fx 'pricing: stale' "$scratch/diagnostics"
 cp "$models" "$scratch/models-changed.h"
 cp -R "$out" "$scratch/models-previous"
 sed 's/"ge=1", "le=999"/"min_len=1"/' "$scratch/models-changed.h" >"$models"
@@ -171,7 +167,7 @@ for dir in "${path_dirs[@]}"; do
         [[ -x $tool && ! -e $noclang/$name ]] && ln -s "$tool" "$noclang/$name"
     done
 done
-LEAN_CC="$lean_cc" PATH="$noclang" expect_status 254 sync
+LEAN_CC="$lean_cc" PATH="$noclang" expect_status 255 sync
 grep -E '^src/models\.h:[0-9]+:1: error: LF_STRUCT requires clang on PATH' "$scratch/diagnostics"
 mv "$models" "$scratch/models-saved.h"
 LEAN_CC="$lean_cc" PATH="$noclang" "$compiler" --lang c check --dir "$app"

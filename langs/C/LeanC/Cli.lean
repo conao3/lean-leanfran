@@ -1,5 +1,5 @@
 import LeanC
-import LeanC.Embed.Workspace
+import LeanC.Embed.Backend
 import LeanC.Verify.Command
 import LeanC.Verify.Obligations
 
@@ -10,13 +10,13 @@ namespace LeanC.Cli
 inductive CliCommand where
   | generate (target : Target) (out : FilePath) (roots : Array Name) (checks : Checks) (renames : Renames)
   | build (out : FilePath) (shared : Bool)
-  | embed (command : Embed.Command) (dir : FilePath)
 
 def usage : String :=
   "Usage: leanfran --lang c generate --module-name M [--roots name,...] [--prefix prefix] [--rename Lean.Name=c_name] [--allow-sorry] [--allow-lean-import] --out-dir dir\n" ++
   "       leanfran --lang c build [--shared] --out-dir dir\n" ++
-  "       leanfran --lang c {sync|status} [--dir dir]\n" ++
-  "       leanfran --lang c check [--dir dir] [--require proved]\n" ++
+  "       leanfran --lang c sync [--dir dir] [--verbose]\n" ++
+  "       leanfran --lang c check [--dir dir] [--verbose] [--require proved]\n" ++
+  "       leanfran --lang c status [--dir dir] [--require proved]\n" ++
   "       leanfran --lang c translate --block name --out file.lean [--import Module]... file.c [-- clang-arg...]\n" ++
   "       leanfran --lang c obligations check --modules Module... --obligations file.json\n" ++
   "       leanfran --lang c --version | --generator-version | --help\n" ++
@@ -24,27 +24,6 @@ def usage : String :=
     "252 invalid parameters, 254 input that cannot be converted, 255 other errors"
 
 def parse (command : String) (args : List String) : Except String CliCommand := do
-  if ["sync", "status", "check"].contains command then
-    let mut dir := none
-    let mut require := false
-    let mut rest := args
-    while let key :: tail := rest do
-      match key, tail with
-      | "--dir", value :: tail =>
-        if dir.isSome then throw "duplicate option '--dir'"
-        unless !value.isEmpty && !value.startsWith "--" do throw "missing value for '--dir'"
-        dir := some value
-        rest := tail
-      | "--require", value :: tail =>
-        unless command == "check" && value == "proved" do
-          throw s!"expected '{command} [--dir dir]{if command == "check" then " [--require proved]" else ""}'"
-        if require then throw "duplicate option '--require'"
-        require := true
-        rest := tail
-      | _, _ => throw s!"expected '{command} [--dir dir]{if command == "check" then " [--require proved]" else ""}'"
-    let embed := if command == "sync" then Embed.Command.sync
-      else if command == "status" then .status else .check require
-    return .embed embed ⟨dir.getD "."⟩
   unless command == "generate" || command == "build" do throw s!"unknown command '{command}'"
   let mut remaining := args
   let mut renames : Renames := {}
@@ -97,14 +76,12 @@ unsafe def main (args : List String) : IO UInt32 := do
   let command :: rest := args | IO.eprintln usage; return 252
   if command == "translate" then return ← Verify.translateMain rest
   if command == "obligations" then return ← Verify.obligationsMain rest
+  if ["sync", "status", "check"].contains command then return ← Leanfran.Embed.run Embed.backend command rest
   let cmd ← match parse command rest with
     | .ok cmd => pure cmd
     | .error message => IO.eprintln s!"leanfran --lang c: {message}\n{usage}"; return 252
   try
     match cmd with
-    | .embed command dir =>
-      try return ← Embed.execute command dir
-      catch error => IO.eprintln error; return 254
     | .build out shared => build (← loadWorkspace (← IO.Process.getCurrentDir)) out shared
     | .generate target out roots checks renames =>
       if let .error message ← generate (← loadWorkspace (← IO.Process.getCurrentDir)) target out roots checks renames then
