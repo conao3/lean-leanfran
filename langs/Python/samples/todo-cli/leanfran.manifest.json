@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "python": {
+      "compiler": "6/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "todo.model:todos",
+          "source": "todo/model.py",
+          "hash": "633c58871c14f8b10c119cbb10131543cb956a1853b94b6c87cefd51f2d20ecb",
+          "files": ["todo/_lean/todo__model__todos.py"]
+        }
+      ],
+      "files": ["todo/_lean/__init__.py", "todo/_lean/blocks.json"]
+    }
+  }
+}

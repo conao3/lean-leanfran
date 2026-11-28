@@ -20,10 +20,19 @@ from leanfran.types import Nat
 
 class TranslateError(Exception):
     def __init__(self, msg, fn=None, node=None):
+        self.message = msg
+        self.file = None
+        self.line = None
+        self.column = 1
         where = ""
         if fn is not None:
-            line = fn.__code__.co_firstlineno + (node.lineno - 1 if node is not None and hasattr(node, "lineno") else 0)
-            where = f"{fn.__code__.co_filename}:{line}: "
+            located = node is not None and hasattr(node, "lineno")
+            self.file = fn.__code__.co_filename
+            self.line = fn.__code__.co_firstlineno + (node.lineno - 1 if located else 0)
+            if located:
+                first = inspect.getsourcelines(fn)[0][0]
+                self.column = node.col_offset + 1 + len(first) - len(first.lstrip())
+            where = f"{self.file}:{self.line}: "
         super().__init__(f"{where}{msg}")
 
 
