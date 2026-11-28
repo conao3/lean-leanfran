@@ -71,6 +71,9 @@ private def scanProject (ctx : Leanfran.Embed.Context) :
     if let some src := sources[0]? then
       unless ← clangFound do
         return .error (.environment s!"{relative root src.path}:{src.line}:1: error: LF_STRUCT requires clang on PATH")
+    if let some path := verified[0]? then
+      unless ← clangFound do
+        return .error (.environment s!"{relative root path}: error: LF_MODEL requires clang on PATH")
     let models ← readModels root config blocks sources
     let functions ← (discoverModels root config blocks verified models.source config.out).toBaseIO
     let out := outDir root config

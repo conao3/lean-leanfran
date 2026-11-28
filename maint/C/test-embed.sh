@@ -173,3 +173,12 @@ mv "$models" "$scratch/models-saved.h"
 LEAN_CC="$lean_cc" PATH="$noclang" "$compiler" --lang c check --dir "$app"
 test ! -e "$out/pricing.h"
 mv "$scratch/models-saved.h" "$models"
+cp -R "$backend/samples/verified-clamp" "$scratch/clamp"
+for command in status sync check; do
+    status=0
+    (cd "$scratch/clamp" && LEAN_CC="$lean_cc" PATH="$noclang" "$compiler" --lang c "$command") \
+        >"$scratch/diagnostics" 2>&1 || status=$?
+    cat "$scratch/diagnostics"
+    test "$status" -eq 255
+    grep -Fx 'src/clamp.c: error: LF_MODEL requires clang on PATH' "$scratch/diagnostics"
+done
