@@ -4,7 +4,7 @@ open Lean LeanClj
 
 namespace LeanClj.Cli
 
-def version : String := "0.13.3"
+def version : String := "0.14.0"
 
 def usage : String := "usage: leanfran --lang clojure [--version] <command> <subcommand> [parameters]
 

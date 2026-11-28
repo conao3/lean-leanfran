@@ -1,5 +1,5 @@
 package leanfran
 
-const Version = "0.13.3"
+const Version = "0.14.0"
 
 const GeneratorVersion = 14

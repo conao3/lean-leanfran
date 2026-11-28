@@ -25,7 +25,7 @@ def defaultRoots (env : Environment) (mod : Name) (includePrivate := false) : Ar
     if (IR.findEnvDecl env c).isSome then out := out.push c
   return out
 
-def version : String := "0.13.3"
+def version : String := "0.14.0"
 def generatorVersion : String := "7"
 
 def usage : String := "usage: leanfran --lang php [--version] [--generator-version] <command> <subcommand> [parameters]

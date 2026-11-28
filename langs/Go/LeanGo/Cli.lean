@@ -5,7 +5,7 @@ open Lean LeanGo
 
 namespace LeanGo.Cli
 
-def version : String := "0.13.3"
+def version : String := "0.14.0"
 def generatorVersion : String := "14"
 
 def usage : String := "leanfran --lang go --version | --generator-version | --lean-version

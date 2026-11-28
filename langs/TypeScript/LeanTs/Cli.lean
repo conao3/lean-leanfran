@@ -4,7 +4,7 @@ open Lean LeanTs
 
 namespace LeanTs.Cli
 
-def version : String := "0.13.3"
+def version : String := "0.14.0"
 
 /-- Version of the generated code. Raise it when the emitted code changes, together with
     `GENERATOR_VERSION` of `src/embed.ts`; `sync` checks it and puts it into its keys. -/

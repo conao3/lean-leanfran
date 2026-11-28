@@ -4,7 +4,7 @@ open Lean LeanPython
 
 namespace LeanPython.Cli
 
-def version : String := "0.13.3"
+def version : String := "0.14.0"
 
 /-- Version of the generated code. Raise it when the emitted code changes; `leanfran --lang python sync`
     checks it and puts it into its cache keys. -/

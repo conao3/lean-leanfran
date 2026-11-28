@@ -14,10 +14,10 @@ Use `leanfran --lang rust` to run the compiler directly. Generation requires Lea
 
 ```toml
 [dependencies]
-leanfran = "0.13.3"
+leanfran = "0.14.0"
 
 [build-dependencies]
-leanfran-build = "0.13.3"
+leanfran-build = "0.14.0"
 ```
 
 ## First Lean block
