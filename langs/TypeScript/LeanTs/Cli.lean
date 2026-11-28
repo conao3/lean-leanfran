@@ -1,4 +1,5 @@
 import LeanTs
+import LeanTs.Embed
 
 open Lean LeanTs
 
@@ -23,8 +24,7 @@ commands:
   project generate          Build a Lake project and emit a TypeScript module per Lean module
   obligations check         Judge the proofs of obligations (used by check)
 
-sync, check, status and generate use the project's npm package leanfran.
-Run generate from the TypeScript project directory.
+sync, check and status run the scan and translate commands of the package's npm package leanfran.
 
 leanfran --lang typescript module generate
   --module-name <Name>        Lean module to import (required unless --batch)
@@ -418,25 +418,6 @@ def withOpts (rest : List String) (k : Opts → IO UInt32) : IO UInt32 :=
     try k o
     catch e => fail 255 (toString e)
 
-def packageCommand (command : String) (rest : List String) : IO UInt32 := do
-  let root ← if command == "generate" then
-    IO.currentDir
-  else
-    let packages := (rest.zip (rest.drop 1)).filterMap fun (flag, value) =>
-      if flag == "--package" && !value.startsWith "--" then some value else none
-    let some dir := packages.getLast? | return ← fail 252 "--package is required"
-    pure (System.FilePath.mk dir)
-  let cli := root / "node_modules" / "leanfran" / "dist" / "cli.js"
-  unless ← cli.pathExists do
-    return ← fail 255 s!"cannot find the TypeScript package `leanfran` in {root / "node_modules"}; run `npm install leanfran` or `pnpm add leanfran` in {root}"
-  try
-    let child ← IO.Process.spawn {
-      cmd := "node"
-      args := #["--", cli.toString, command] ++ rest.toArray
-      env := #[("LEANFRAN_CLI", some (← IO.appPath).toString)] }
-    child.wait
-  catch e => fail 255 s!"cannot run node: {e}"
-
 unsafe def main (args : List String) : IO UInt32 := do
   enableInitializersExecution
   match args with
@@ -445,10 +426,10 @@ unsafe def main (args : List String) : IO UInt32 := do
   | [] | ["help"] | ["--help"] => IO.print usage; return 0
   | ["sync", "--help"] | ["check", "--help"] | ["status", "--help"] | ["generate", "--help"] =>
     IO.print usage; return 0
-  | "sync" :: rest => packageCommand "sync" rest
-  | "check" :: rest => packageCommand "check" rest
-  | "status" :: rest => packageCommand "status" rest
-  | "generate" :: rest => packageCommand "generate" rest
+  | "sync" :: rest => Leanfran.Embed.run (LeanTs.Embed.backend version generatorVersion) "sync" rest
+  | "check" :: rest => Leanfran.Embed.run (LeanTs.Embed.backend version generatorVersion) "check" rest
+  | "status" :: rest => Leanfran.Embed.run (LeanTs.Embed.backend version generatorVersion) "status" rest
+  | "generate" :: rest => withOpts (rest ++ ["--output", "text"]) projectGenerate
   | "module" :: "help" :: _ | "project" :: "help" :: _ => IO.print usage; return 0
   | "module" :: "generate" :: rest => withOpts rest moduleGenerate
   | "project" :: "generate" :: rest => withOpts rest projectGenerate

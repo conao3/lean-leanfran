@@ -38,7 +38,7 @@ Generate modules from the package root:
 leanfran --lang typescript sync --package .
 ```
 
-Commit `src/_lean/` and `.leanfran/blocks.json`. Run sync again when you change a block; `leanfran --lang typescript status --package .` checks whether generated code is current.
+Commit `src/_lean/` and `leanfran.manifest.json`. Run sync again when you change a block; `leanfran --lang typescript status --package .` checks whether generated code is current.
 
 ## Next steps
 

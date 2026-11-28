@@ -1,9 +1,32 @@
 {
-  "src/mid.ts:midpoint": {
-    "spec_hash": "e1cdc5d3e2d8900e6f84299efd80f2fff408c15b6e46b30cdb171b85ed382a7c",
-    "lean": "LeanTsModel.mid.midpoint",
-    "obligations": {
-      "between": "proved"
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "typescript": {
+      "inputs": {
+        "compiler": "10/4.35.0",
+        "library": "527b379bb13b7cb7c7cb60333adeb1280bc6e804161bf8247d00e1f0590f881e",
+        "host": "",
+        "proofs": "d3a47994b6976c0ce822a8a6c1539ce45bbeabd2387717269f9c1a939cb85151"
+      },
+      "functions": [
+        {
+          "id": "src/mid.ts:midpoint",
+          "hash": "e1cdc5d3e2d8900e6f84299efd80f2fff408c15b6e46b30cdb171b85ed382a7c",
+          "model": "LeanTsModel.mid.midpoint",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "between",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Mid.lean",
+              "line": 5
+            }
+          ],
+          "data": {}
+        }
+      ]
     }
   }
 }

@@ -22,54 +22,62 @@ scene() {
 
 expect_rows() {
   local got="$1" want="$2" what="$3"
-  if ! diff <(printf '%s\n' "$want") <(printf '%s\n' "$got" | grep -v '^fresh ' | grep ' src/calc.ts:' | sed -E 's/ +/ /'); then
+  if ! diff <(printf '%s\n' "$want") <(printf '%s\n' "$got" | grep '^src/calc.ts:'); then
     fail "$what: unexpected obligation states"
   fi
 }
 
-base_rows="proved src/calc.ts:clamp refines
-proved src/calc.ts:clamp inRange
-proved src/calc.ts:firstOr refines
-sorry src/calc.ts:sumTo refines
-missing src/calc.ts:sumTo returnsNat
-proved src/calc.ts:sumAbs nonneg
-axioms src/calc.ts:twice refines
-proved src/calc.ts:addOne refines"
+base_rows="src/calc.ts:addOne [refines]: proved
+src/calc.ts:clamp [inRange]: proved
+src/calc.ts:clamp [refines]: proved
+src/calc.ts:firstOr [refines]: proved
+src/calc.ts:sumAbs [nonneg]: proved
+src/calc.ts:sumTo [refines]: sorry
+src/calc.ts:sumTo [returnsNat]: missing
+src/calc.ts:twice [refines]: axioms"
 
 scene base "$root/test/verify/app"
-rm -rf "$out/base/node_modules/leanfran" "$out/base/src/_lean" "$out/base/.leanfran" "$out/base/leanfran.lock"
+rm -rf "$out/base/node_modules/leanfran" "$out/base/src/_lean" "$out/base/.leanfran" "$out/base/leanfran.lock" "$out/base/leanfran.manifest.json"
 ln -sfn ../../../.. "$out/base/node_modules/leanfran"
-rows="$(cd "$out/base" && "${lts[@]}" check --package .)"
+rows="$(cd "$out/base" && "${lts[@]}" check --package . 2>"$out/base.stderr")"
 expect_rows "$rows" "$base_rows" "check"
-more_rows="missing src/more.ts:manhattan refines
-proved src/more.ts:area refines
-proved src/more.ts:code refines
-proved src/more.ts:shift refines
-missing src/more.ts:evens refines
-proved src/more.ts:label refines
-missing src/more.ts:countDown refines
-missing src/more.ts:safeDiv refines
-missing src/more.ts:sumSquares refines
-missing src/more.ts:firstPositive refines
-proved src/more.ts:describe refines
-missing src/more.ts:nonNeg refines
-proved src/more.ts:swap refines
-missing src/more.ts:tag refines"
-diff <(printf '%s\n' "$more_rows") <(printf '%s\n' "$rows" | grep ' src/more.ts:' | sed -E 's/ +/ /') || fail "check: unexpected states of more.ts"
-orders_rows="proved src/orders.ts:lineTotal refines
-proved src/orders.ts:quantity positive
-missing src/orders.ts:hasNote refines"
-diff <(printf '%s\n' "$orders_rows") <(printf '%s\n' "$rows" | grep ' src/orders.ts:' | sed -E 's/ +/ /') || fail "check: unexpected states of orders.ts (the zod constraint qty >= 1 is an assumption of quantity)"
+[[ "$(grep -c 'blocks checked and generated' "$out/base.stderr")" == 2 ]] || fail "the first check did not generate again once after the proved refines changed LeanTsCsimp"
+more_rows="src/more.ts:area [refines]: proved
+src/more.ts:code [refines]: proved
+src/more.ts:countDown [refines]: missing
+src/more.ts:describe [refines]: proved
+src/more.ts:evens [refines]: missing
+src/more.ts:firstPositive [refines]: missing
+src/more.ts:label [refines]: proved
+src/more.ts:manhattan [refines]: missing
+src/more.ts:nonNeg [refines]: missing
+src/more.ts:safeDiv [refines]: missing
+src/more.ts:shift [refines]: proved
+src/more.ts:sumSquares [refines]: missing
+src/more.ts:swap [refines]: proved
+src/more.ts:tag [refines]: missing"
+diff <(printf '%s\n' "$more_rows") <(printf '%s\n' "$rows" | grep '^src/more.ts:') || fail "check: unexpected states of more.ts"
+orders_rows="src/orders.ts:hasNote [refines]: missing
+src/orders.ts:lineTotal [refines]: proved
+src/orders.ts:quantity [positive]: proved"
+diff <(printf '%s\n' "$orders_rows") <(printf '%s\n' "$rows" | grep '^src/orders.ts:') || fail "check: unexpected states of orders.ts (the zod constraint qty >= 1 is an assumption of quantity)"
 got="$(cd "$out/base" && node --input-type=module -e 'const s = await import("./src/_lean/more.ts"); console.log(String(s.area({ ctor: "rect", w: 3n, h: 4n })), String(s.code("blue")), s.swap([1n, 2n]).map(String).join(","))')"
 [[ "$got" == '12 3 2,1' ]] || fail "the specs of more.ts through the TypeScript functions printed: $got"
 [[ -f "$out/base/leanfran.lock" ]] || fail "check did not write leanfran.lock"
-grep -q '"spec_hash"' "$out/base/leanfran.lock" || fail "the lock has no spec_hash"
+grep -q '"hash"' "$out/base/leanfran.lock" || fail "the lock has no hash"
+snapshot() {
+  (cd "$1" && find . -path ./node_modules -prune -o -path ./.leanfran/typescript -prune -o -type f -print0 | sort -z | xargs -0 sha256sum)
+}
+before="$(snapshot "$out/base")"
+(cd "$out/base" && "${lts[@]}" check --package . >/dev/null 2>"$out/base-again.stderr")
+[[ "$(grep -c 'blocks checked and generated' "$out/base-again.stderr")" == 1 ]] || fail "a second check generated again"
+[[ "$(snapshot "$out/base")" == "$before" ]] || fail "a second check changed a file"
 
 set +e
 (cd "$out/base" && "${lts[@]}" check --package . --require proved >/dev/null 2>&1)
 code=$?
 set -e
-[[ $code -eq 254 ]] || fail "check --require proved exited with $code, expected 254"
+[[ $code -eq 1 ]] || fail "check --require proved exited with $code, expected 1"
 
 rows="$(cd "$out/base" && "${lts[@]}" status --package .)"
 expect_rows "$rows" "$base_rows" "status"
@@ -94,15 +102,15 @@ set +e
 rows="$(cd "$out/stale" && "${lts[@]}" status --package .)"
 code=$?
 set -e
-[[ $code -eq 254 ]] || fail "status of a changed function exited with $code, expected 254"
-expect_rows "$rows" "stale src/calc.ts:clamp refines
-stale src/calc.ts:clamp inRange
-proved src/calc.ts:firstOr refines
-sorry src/calc.ts:sumTo refines
-missing src/calc.ts:sumTo returnsNat
-proved src/calc.ts:sumAbs nonneg
-axioms src/calc.ts:twice refines
-proved src/calc.ts:addOne refines" "status after a change"
+[[ $code -eq 1 ]] || fail "status of a changed function exited with $code, expected 1"
+expect_rows "$rows" "src/calc.ts:addOne [refines]: proved
+src/calc.ts:clamp [inRange]: stale
+src/calc.ts:clamp [refines]: stale
+src/calc.ts:firstOr [refines]: proved
+src/calc.ts:sumAbs [nonneg]: proved
+src/calc.ts:sumTo [refines]: sorry
+src/calc.ts:sumTo [returnsNat]: missing
+src/calc.ts:twice [refines]: axioms" "status after a change"
 
 scene moved "$out/base"
 sed -i 's/^export function clamp/\/\/ a comment above the function\nexport function clamp/' "$out/moved/src/calc.ts"
@@ -119,15 +127,17 @@ theorem LeanTsModel.calc.sumTo.proof.returnsNat : LeanTsModel.calc.sumTo.obligat
   intro n
   rfl
 EOF
-rows="$(cd "$out/wrong-proof" && "${lts[@]}" check --package . 2>/dev/null)"
-expect_rows "$rows" "proved src/calc.ts:clamp refines
-proved src/calc.ts:clamp inRange
-mismatch src/calc.ts:firstOr refines
-sorry src/calc.ts:sumTo refines
-failed src/calc.ts:sumTo returnsNat
-proved src/calc.ts:sumAbs nonneg
-axioms src/calc.ts:twice refines
-proved src/calc.ts:addOne refines" "check with a wrong statement and a failing proof"
+code=0
+rows="$(cd "$out/wrong-proof" && "${lts[@]}" check --package . 2>/dev/null)" || code=$?
+[[ $code -eq 1 ]] || fail "check with a failing proof exited with $code, expected 1"
+expect_rows "$rows" "src/calc.ts:addOne [refines]: proved
+src/calc.ts:clamp [inRange]: proved
+src/calc.ts:clamp [refines]: proved
+src/calc.ts:firstOr [refines]: mismatch
+src/calc.ts:sumAbs [nonneg]: proved
+src/calc.ts:sumTo [refines]: sorry
+src/calc.ts:sumTo [returnsNat]: failed
+src/calc.ts:twice [refines]: axioms" "check with a wrong statement and a failing proof"
 
 scene outside "$out/base"
 cat >>"$out/outside/src/calc.ts" <<'EOF'
@@ -142,8 +152,8 @@ set +e
 msg="$(cd "$out/outside" && "${lts[@]}" check --package . 2>&1 >/dev/null)"
 code=$?
 set -e
-[[ $code -eq 254 ]] || fail "check of a function outside the subset exited with $code, expected 254"
-grep -q 'src/calc.ts:[0-9]*:[0-9]*: loose: == is outside the subset' <<<"$msg" || fail "no position for the untranslatable function: $msg"
+[[ $code -eq 1 ]] || fail "check of a function outside the subset exited with $code, expected 1"
+grep -q 'src/calc.ts:[0-9]*:[0-9]*: unextracted src/calc.ts:loose: == is outside the subset' <<<"$msg" || fail "no position for the untranslatable function: $msg"
 
 scene wrong-impl "$out/base"
 cat >"$out/wrong-impl/wrong.ts" <<'EOF'

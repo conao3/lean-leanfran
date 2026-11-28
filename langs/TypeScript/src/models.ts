@@ -1,5 +1,5 @@
 import { canonicalJson, type Json } from "./key.ts"
-import { SyncError } from "./scan.ts"
+import { ProjectError } from "./scan.ts"
 
 const LEAN_KEYWORDS: ReadonlySet<string> = new Set([
   "at",
@@ -129,7 +129,7 @@ interface StructSource {
 }
 
 function fail(cx: Context, path: string, msg: string): never {
-  throw new SyncError(
+  throw new ProjectError(
     `${cx.module}: the model ${cx.model}${path === "" ? "" : `.${path}`}: ${msg}`,
     254,
   )
@@ -398,7 +398,7 @@ function order(structs: ReadonlyMap<string, StructSource>, module: string): Stru
     const st = state.get(name)
     if (st === "done") return
     if (st === "visiting")
-      throw new SyncError(
+      throw new ProjectError(
         `${module}: the models refer to each other in a cycle through ${name}`,
         254,
       )
@@ -421,7 +421,7 @@ export function modelsLean(
   const schemas = new Map<string, Schema>()
   for (const [name, schema] of models) {
     if (!isSchema(schema))
-      throw new SyncError(`${module}: the model ${name} is not an object schema`, 254)
+      throw new ProjectError(`${module}: the model ${name} is not an object schema`, 254)
     schemas.set(name, schema)
   }
   const ns = namespace.map((p) => `«${p}»`).join(".")

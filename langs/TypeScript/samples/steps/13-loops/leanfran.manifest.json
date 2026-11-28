@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "typescript": {
+      "compiler": "10/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "73167b90a4498fe71096562152eea91449c7eadbd7ca76c545ea9c3bed243df1",
+      "blocks": [
+        {
+          "name": "src/sums.ts:spec",
+          "source": "src/sums.ts",
+          "hash": "0c4c06191f3af0b629dbe9116d65323336f4554618b3da4eaa9fb58415a6ceed",
+          "files": ["src/_lean/sums.ts", "src/_lean/sums__spec.block.ts", "src/_lean/sums__spec.ts"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

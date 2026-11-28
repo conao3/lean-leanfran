@@ -11,12 +11,12 @@ import {
   Visitor,
 } from "oxc-parser"
 
-export class SyncError extends Error {
+export class ProjectError extends Error {
   readonly code: number
 
   constructor(message: string, code: number) {
     super(message)
-    this.name = "SyncError"
+    this.name = "ProjectError"
     this.code = code
   }
 }
@@ -44,6 +44,8 @@ export interface ScannedBlock {
   readonly models: readonly ModelBinding[]
   readonly at: Position
   readonly sourceAt: Position
+  readonly raw: boolean
+  readonly rawSource: string
 }
 
 function lineStarts(text: string): number[] {
@@ -120,7 +122,7 @@ export function scanFile(root: string, file: string): ScannedBlock[] {
   const module = posixRelative(root, file)
   const fail = (offset: number, msg: string): never => {
     const p = position(starts, offset)
-    throw new SyncError(`${file}:${p.line}:${p.col}: ${msg}`, 252)
+    throw new ProjectError(`${file}:${p.line}:${p.col}: ${msg}`, 254)
   }
   const parsed = parseSync(file, text, { lang: "ts", sourceType: "module" })
   const firstError = parsed.errors[0]
@@ -231,11 +233,16 @@ export function scanFile(root: string, file: string): ScannedBlock[] {
       fail(nameArg?.start ?? c.start, "the block name of lean(...) must be a string literal")
     let source: string | undefined
     let sourceStart = 0
+    let raw = false
+    let rawSource = ""
     if (sourceArg?.type === "TemplateLiteral") {
       source = templateText(sourceArg, false)
+      rawSource = templateText(sourceArg, true) ?? ""
       sourceStart = sourceArg.start + 1
     } else if (sourceArg?.type === "TaggedTemplateExpression" && isStringRaw(sourceArg.tag)) {
       source = templateText(sourceArg.quasi, true)
+      rawSource = source ?? ""
+      raw = true
       sourceStart = sourceArg.quasi.start + 1
     }
     if (source === undefined)
@@ -283,6 +290,8 @@ export function scanFile(root: string, file: string): ScannedBlock[] {
       models,
       at: position(starts, c.start),
       sourceAt: position(starts, sourceStart),
+      raw,
+      rawSource,
     }
   }
   new Visitor({

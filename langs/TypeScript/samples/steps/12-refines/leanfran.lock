@@ -1,15 +1,40 @@
 {
-  "src/calendar.ts:isLeap": {
-    "spec_hash": "3bdd41394f571e86debd124f456bddbd13bfe659df1b6f790871148f741a3784",
-    "lean": "LeanTsModel.calendar.isLeap",
-    "obligations": {
-      "refines": "proved"
-    },
-    "csimp": {
-      "spec": "LeanTsEmbed.calendar.calendar.leap",
-      "module": "LeanTsEmbed.«calendar».«calendar»",
-      "modes": [
-        "n"
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "typescript": {
+      "inputs": {
+        "compiler": "10/4.35.0",
+        "library": "527b379bb13b7cb7c7cb60333adeb1280bc6e804161bf8247d00e1f0590f881e",
+        "host": "",
+        "proofs": "5611bd6eeeb536b60d7d5135bcd642bbe34f58e8aacaedbdfd5d627785a21422"
+      },
+      "functions": [
+        {
+          "id": "src/calendar.ts:isLeap",
+          "hash": "3bdd41394f571e86debd124f456bddbd13bfe659df1b6f790871148f741a3784",
+          "model": "LeanTsModel.calendar.isLeap",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Calendar.lean",
+              "line": 12
+            }
+          ],
+          "data": {
+            "csimp": {
+              "modes": ["n"],
+              "module": "LeanTsEmbed.«calendar».«calendar»",
+              "name": "isLeap",
+              "namespace": "LeanTsCsimp.«calendar»",
+              "path": "LeanTsCsimp/calendar.lean",
+              "spec": "LeanTsEmbed.calendar.calendar.leap"
+            }
+          }
+        }
       ]
     }
   }

@@ -4,11 +4,15 @@ export LEANFRAN_CLI
 SAMPLES := word-count roman-numerals todo-cli sorted-search inventory generic-search pricing-api verified-typescript
 STEPS := $(sort $(wildcard steps/*/))
 VERIFY := verified-typescript sorted-search inventory steps/10-ensures steps/11-requires steps/12-refines steps/13-loops steps/14-schemas
+SYNCED := $(filter-out roman-numerals,$(SAMPLES)) $(STEPS)
 
-.PHONY: test verify
+.PHONY: test verify status
 
 test:
 	for s in $(STEPS) $(SAMPLES); do ./run.sh $$s || exit 1; done
 
 verify:
 	for s in $(VERIFY); do (cd $$s && "$$LEANFRAN_CLI" --lang typescript check --package . --require proved) || exit 1; done
+
+status:
+	for s in $(SYNCED); do (cd $$s && "$$LEANFRAN_CLI" --lang typescript status --package .) || exit 1; done

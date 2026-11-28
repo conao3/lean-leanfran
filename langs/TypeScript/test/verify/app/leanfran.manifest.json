@@ -1,0 +1,33 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "typescript": {
+      "compiler": "10/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "dbb60da76fe8a2f45d3e5eb7820233710cd21cf08b0d0a0c3686f63265bf3708",
+      "blocks": [
+        {
+          "name": "src/calc.ts:spec",
+          "source": "src/calc.ts",
+          "hash": "3f2f3406444fea383170f260f1a8830885f5c5f2f61077a421cbb8379c44ec0d",
+          "files": ["src/_lean/calc.ts", "src/_lean/calc__spec.block.ts", "src/_lean/calc__spec.ts"]
+        },
+        {
+          "name": "src/more.ts:more",
+          "source": "src/more.ts",
+          "hash": "cad7cf4a4916f06e23c6058e0d8eeddfe1c04c80da782f37c53fc4e9b71d1022",
+          "files": ["src/_lean/more.ts", "src/_lean/more__more.block.ts", "src/_lean/more__more.ts"]
+        },
+        {
+          "name": "src/orders.ts:orders",
+          "source": "src/orders.ts",
+          "hash": "e0b2a69cfe9e69b835acfc407e7dd948102d008510407520f9106dc46145423c",
+          "files": ["src/_lean/orders.ts", "src/_lean/orders__orders.block.ts", "src/_lean/orders__orders.ts"]
+        }
+      ],
+      "files": []
+    }
+  }
+}
