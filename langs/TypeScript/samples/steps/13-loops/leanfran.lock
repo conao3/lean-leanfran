@@ -1,23 +1,63 @@
 {
-  "src/sums.ts:sumAbs": {
-    "spec_hash": "8d642026abc10cf82ad91548ab8fc189bd10100f7cab8acbdcf8d04ccec6178f",
-    "lean": "LeanTsModel.sums.sumAbs",
-    "obligations": {
-      "nonneg": "proved"
-    }
-  },
-  "src/sums.ts:sumOdd": {
-    "spec_hash": "84b24a7bef6e138341af195fd02cfc9c700f0714f432381675227710ca7264d2",
-    "lean": "LeanTsModel.sums.sumOdd",
-    "obligations": {
-      "refines": "proved",
-      "returnsNat": "proved"
-    },
-    "csimp": {
-      "spec": "LeanTsEmbed.sums.spec.square",
-      "module": "LeanTsEmbed.«sums».«spec»",
-      "modes": [
-        "_"
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "typescript": {
+      "inputs": {
+        "compiler": "10/4.35.0",
+        "library": "527b379bb13b7cb7c7cb60333adeb1280bc6e804161bf8247d00e1f0590f881e",
+        "host": "",
+        "proofs": "7808b05be7010dcea109b7998f592f4fceb791705cf6a5143765427dcf57cbd3"
+      },
+      "functions": [
+        {
+          "id": "src/sums.ts:sumAbs",
+          "hash": "8d642026abc10cf82ad91548ab8fc189bd10100f7cab8acbdcf8d04ccec6178f",
+          "model": "LeanTsModel.sums.sumAbs",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "nonneg",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Sums.lean",
+              "line": 36
+            }
+          ],
+          "data": {}
+        },
+        {
+          "id": "src/sums.ts:sumOdd",
+          "hash": "84b24a7bef6e138341af195fd02cfc9c700f0714f432381675227710ca7264d2",
+          "model": "LeanTsModel.sums.sumOdd",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Sums.lean",
+              "line": 15
+            },
+            {
+              "label": "returnsNat",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Sums.lean",
+              "line": 21
+            }
+          ],
+          "data": {
+            "csimp": {
+              "modes": ["_"],
+              "module": "LeanTsEmbed.«sums».«spec»",
+              "name": "sumOdd",
+              "namespace": "LeanTsCsimp.«sums»",
+              "path": "LeanTsCsimp/sums.lean",
+              "spec": "LeanTsEmbed.sums.spec.square"
+            }
+          }
+        }
       ]
     }
   }

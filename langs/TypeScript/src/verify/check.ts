@@ -1,16 +1,7 @@
 import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
-import { dirname, join, relative, resolve, sep } from "node:path"
-import { fileURLToPath } from "node:url"
+import { readFileSync } from "node:fs"
+import { dirname, join, resolve } from "node:path"
 import {
   type ArrowFunctionExpression,
   type Expression,
@@ -19,24 +10,19 @@ import {
   type Program,
   Visitor,
 } from "oxc-parser"
-import { canonicalJson, type Json } from "../key.ts"
+import { type Json } from "../key.ts"
 import { leanIdent as modelIdent } from "../models.ts"
-import { resolve as resolveDesc, type TypeDesc } from "../runtime/marshal.ts"
-import { posixRelative, SyncError, tsFiles } from "../scan.ts"
 import {
   aliasFile,
   type Block,
-  findCompiler,
   isRecord,
   leanName,
-  type Log,
   moduleParts,
   type Package,
-  run,
   type Summary,
-  syncPackage,
-  TYPESCRIPT_LANG,
-} from "../sync.ts"
+} from "../project.ts"
+import { resolve as resolveDesc, type TypeDesc } from "../runtime/marshal.ts"
+import { posixRelative, ProjectError, tsFiles } from "../scan.ts"
 import {
   astHash,
   BIG,
@@ -54,38 +40,9 @@ import {
   type TypeResolver,
 } from "./translate.ts"
 
-export const STATUSES = [
-  "proved",
-  "sorry",
-  "axioms",
-  "failed",
-  "missing",
-  "mismatch",
-  "unextracted",
-  "stale",
-] as const
-
-export type Status = (typeof STATUSES)[number]
-
-function isStatus(s: unknown): s is Status {
-  return typeof s === "string" && (STATUSES as readonly string[]).includes(s)
-}
-
 function isDesc(x: unknown): x is TypeDesc {
   return isRecord(x) && typeof x["kind"] === "string"
 }
-
-const LAKEFILE_EXTRA = `
-[[lean_lib]]
-name = "LeanTsLib"
-
-[[lean_lib]]
-name = "LeanTsModel"
-
-[[lean_lib]]
-name = "Proofs"
-globs = ["Proofs.+"]
-`
 
 interface Import {
   readonly from: string
@@ -118,27 +75,6 @@ export interface Source extends Located {
   readonly models: readonly ModelCall[]
 }
 
-export interface Row {
-  readonly fn: string
-  readonly label: string
-  readonly status: Status
-}
-
-interface Csimp {
-  readonly spec: string
-  readonly module: string
-  readonly modes: readonly string[]
-}
-
-interface LockEntry {
-  readonly spec_hash: string
-  readonly lean: string
-  readonly obligations: Readonly<Record<string, Status>>
-  readonly csimp?: Csimp
-}
-
-type Lock = Readonly<Record<string, LockEntry>>
-
 function lineStarts(text: string): number[] {
   const starts = [0]
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") starts.push(i + 1)
@@ -169,7 +105,7 @@ export function readSource(root: string, file: string): Source {
   const parsed = parseSync(file, text, { lang: "ts", sourceType: "module", preserveParens: false })
   const err = parsed.errors[0]
   if (err !== undefined)
-    throw new SyncError(`${where(err.labels[0]?.start ?? 0)}: cannot parse: ${err.message}`, 252)
+    throw new ProjectError(`${where(err.labels[0]?.start ?? 0)}: cannot parse: ${err.message}`, 254)
   const imports = new Map<string, Import>()
   const fns = new Map<string, FunctionNode | ArrowFunctionExpression>()
   const modelNames = new Set<string>()
@@ -204,9 +140,9 @@ export function readSource(root: string, file: string): Source {
   const models: ModelCall[] = []
   const specRef = (e: Expression, label: string): SpecRef => {
     const bad = (): never => {
-      throw new SyncError(
+      throw new ProjectError(
         `${where(e.start)}: the ${label} specification must be a function of a generated module (a named import or a property of a namespace import of _lean/)`,
-        252,
+        254,
       )
     }
     if (e.type === "Identifier") {
@@ -244,48 +180,49 @@ export function readSource(root: string, file: string): Source {
         options?.type !== "ObjectExpression" ||
         rest.length !== 0
       )
-        throw new SyncError(
+        throw new ProjectError(
           `${where(c.start)}: model takes a function of the module and an object literal`,
-          252,
+          254,
         )
       const fnNode = fns.get(target.name)
       if (fnNode === undefined)
-        throw new SyncError(
+        throw new ProjectError(
           `${where(target.start)}: ${target.name} must be a function declaration or a const arrow function of the module`,
-          252,
+          254,
         )
       let refines: SpecRef | undefined
       let requires: SpecRef | undefined
       const ensures: [string, SpecRef][] = []
       for (const p of options.properties) {
         if (p.type !== "Property" || p.computed || p.key.type !== "Identifier")
-          throw new SyncError(
+          throw new ProjectError(
             `${where(p.start)}: the options of model must be plain properties`,
-            252,
+            254,
           )
         if (p.key.name === "refines") refines = specRef(p.value, "refines")
         else if (p.key.name === "requires") requires = specRef(p.value, "requires")
         else if (p.key.name === "ensures") {
           if (p.value.type !== "ObjectExpression")
-            throw new SyncError(
+            throw new ProjectError(
               `${where(p.value.start)}: ensures must be an object literal of labelled specifications`,
-              252,
+              254,
             )
           for (const q of p.value.properties) {
             if (q.type !== "Property" || q.computed || q.key.type !== "Identifier")
-              throw new SyncError(`${where(q.start)}: the labels of ensures must be names`, 252)
+              throw new ProjectError(`${where(q.start)}: the labels of ensures must be names`, 254)
             if (
               !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(q.key.name) ||
               q.key.name === "refines" ||
               q.key.name === "returnsNat"
             )
-              throw new SyncError(
+              throw new ProjectError(
                 `${where(q.start)}: ${q.key.name} cannot be a label of ensures`,
-                252,
+                254,
               )
             ensures.push([q.key.name, specRef(q.value, q.key.name)])
           }
-        } else throw new SyncError(`${where(p.start)}: unknown option ${p.key.name} of model`, 252)
+        } else
+          throw new ProjectError(`${where(p.start)}: unknown option ${p.key.name} of model`, 254)
       }
       models.push({
         file,
@@ -322,9 +259,9 @@ function blockOf(pkg: Package, file: string): Block | undefined {
 function specBlock(pkg: Package, src: Source, ref: SpecRef): Block {
   const b = blockOf(pkg, ref.outFile)
   if (b === undefined)
-    throw new SyncError(
+    throw new ProjectError(
       `${src.where(ref.at)}: ${ref.outFile} is not a module generated from a lean(...) block`,
-      252,
+      254,
     )
   return b
 }
@@ -403,10 +340,10 @@ function loadDescs(pkg: Package, sources: readonly Source[]): Descs {
     { encoding: "utf8", maxBuffer: 1 << 28 },
   )
   if (r.status !== 0)
-    throw new SyncError(`reading the types of the generated modules: ${r.stderr}`, 254)
+    throw new ProjectError(`reading the types of the generated modules: ${r.stderr}`, 254)
   const parsed: unknown = JSON.parse(r.stdout)
   if (!isRecord(parsed))
-    throw new SyncError("reading the types of the generated modules returned no object", 255)
+    throw new ProjectError("reading the types of the generated modules returned no object", 255)
   for (const [f, ds] of Object.entries(parsed)) {
     const m = new Map<string, TypeDesc>()
     if (isRecord(ds)) for (const [k, d] of Object.entries(ds)) if (isDesc(d)) m.set(k, d)
@@ -600,9 +537,9 @@ function specName(
   const b = specBlock(pkg, src, ref)
   const p = summaries.get(b.outFile)?.public.find((x) => x.typescript === ref.exportName)
   if (p === undefined)
-    throw new SyncError(
+    throw new ProjectError(
       `${src.where(ref.at)}: ${ref.exportName} is not a public function of the block ${b.name}`,
-      252,
+      254,
     )
   return { lean: p.lean, module: leanName(b.leanModule) }
 }
@@ -648,247 +585,6 @@ function obligations(
   return { props, imports }
 }
 
-function libDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url))
-  const dev = join(here, "..", "lean")
-  return existsSync(join(dev, "LeanTsLib")) ? dev : join(here, "..", "src", "lean")
-}
-
-function leanFiles(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  const out: string[] = []
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, e.name)
-    if (e.isDirectory()) out.push(...leanFiles(p))
-    else if (e.name.endsWith(".lean")) out.push(p)
-  }
-  return out.toSorted()
-}
-
-function lockFile(root: string): string {
-  return join(root, "leanfran.lock")
-}
-
-function readLock(root: string): Lock {
-  const f = lockFile(root)
-  if (!existsSync(f)) return {}
-  const j: unknown = JSON.parse(readFileSync(f, "utf8"))
-  if (!isRecord(j)) throw new SyncError(`${f}: not a JSON object`, 254)
-  const out: Record<string, LockEntry> = {}
-  for (const [k, v] of Object.entries(j)) {
-    if (
-      !isRecord(v) ||
-      typeof v["spec_hash"] !== "string" ||
-      typeof v["lean"] !== "string" ||
-      !isRecord(v["obligations"])
-    )
-      throw new SyncError(`${f}: the entry ${k} is malformed`, 254)
-    const obls: Record<string, Status> = {}
-    for (const [l, s] of Object.entries(v["obligations"])) {
-      if (!isStatus(s))
-        throw new SyncError(`${f}: the entry ${k} has an unknown status for ${l}`, 254)
-      obls[l] = s
-    }
-    const c = v["csimp"]
-    const csimp =
-      isRecord(c) &&
-      typeof c["spec"] === "string" &&
-      typeof c["module"] === "string" &&
-      Array.isArray(c["modes"]) &&
-      c["modes"].every((x: unknown) => typeof x === "string")
-        ? { spec: c["spec"], module: c["module"], modes: c["modes"].map(String) }
-        : undefined
-    if (c !== undefined && csimp === undefined)
-      throw new SyncError(`${f}: the csimp of ${k} is malformed`, 254)
-    out[k] = {
-      spec_hash: v["spec_hash"],
-      lean: v["lean"],
-      obligations: obls,
-      ...(csimp === undefined ? {} : { csimp }),
-    }
-  }
-  return out
-}
-
-function moduleFileOf(ws: string, parts: readonly string[]): string {
-  return join(ws, `${parts.join("/")}.lean`)
-}
-
-export interface Checked {
-  readonly rows: readonly Row[]
-  readonly lock: Lock
-}
-
-export async function checkPackage(dir: string, log: Log): Promise<Checked> {
-  const cli = findCompiler()
-  const first = await syncPackage(dir, cli, log, csimpFiles)
-  const { pkg, summaries } = first
-  const before = canonicalJson(Object.fromEntries(csimpFiles(pkg)))
-  const ws = join(pkg.root, ".leanfran", "workspace")
-  const sources = readSources(pkg.root).filter((s) => s.models.length !== 0)
-  const descs = loadDescs(pkg, sources)
-  rmSync(join(ws, "LeanTsLib"), { recursive: true, force: true })
-  cpSync(join(libDir(), "LeanTsLib"), join(ws, "LeanTsLib"), { recursive: true })
-  writeFileSync(join(ws, "LeanTsLib.lean"), "import LeanTsLib.Ts\n")
-  rmSync(join(ws, "LeanTsModel"), { recursive: true, force: true })
-  rmSync(join(ws, "Proofs"), { recursive: true, force: true })
-  const proofsSrc = join(pkg.root, "lean", "Proofs")
-  if (existsSync(proofsSrc)) cpSync(proofsSrc, join(ws, "Proofs"), { recursive: true })
-  else mkdirSync(join(ws, "Proofs"), { recursive: true })
-  writeFileSync(join(ws, "Proofs", "Empty.lean"), "")
-  writeFileSync(
-    join(ws, "lakefile.toml"),
-    readFileSync(join(ws, "lakefile.toml"), "utf8") + LAKEFILE_EXTRA,
-  )
-  const refs: { m: ModelCall; label: string; lean: string }[] = []
-  const modelModules: string[] = []
-  const hashes = new Map<string, string>()
-  const candidates = new Map<string, Csimp>()
-  for (const src of sources) {
-    const types = typeResolver(pkg, src, summaries, descs)
-    const fns = src.models.map((m) => new Fn(m.fn, m.fnNode, src, types))
-    const seen = new Set<string>()
-    for (const m of src.models) {
-      if (seen.has(m.fn))
-        throw new SyncError(`${src.where(m.at)}: ${m.fn} has two model(...) calls`, 252)
-      seen.add(m.fn)
-    }
-    const tr = new Translator(fns, types)
-    const defs = tr.definitions()
-    const parts = modelModule(src.module)
-    const ns = leanName(parts)
-    const imports = new Set(["LeanTsLib"])
-    for (const i of src.imports.values()) {
-      const b = blockOf(pkg, i.from)
-      if (b !== undefined) imports.add(leanName(b.leanModule))
-    }
-    const body: string[] = []
-    src.models.forEach((m, k) => {
-      const fn = fns[k]
-      if (fn === undefined) return
-      const modes = fn.params.map((p) => modeOf(p.type))
-      const target = `ts:${m.module}#${m.fn}(${modes.map((x) => (x === "mixed" ? "_" : x)).join(",")})`
-      body.push(
-        `/-- \`${m.module}\` ${m.fn}, translated from TypeScript. -/\n@[extern ${JSON.stringify(target)}]\n${defs.get(m.fn) ?? ""}`,
-      )
-      if (m.refines !== undefined && m.requires === undefined && !modes.includes("mixed")) {
-        const n = specName(pkg, src, m.refines, summaries)
-        candidates.set(qualified(m), { spec: n.lean, module: n.module, modes })
-      }
-      const o = obligations(m, fn, pkg, src, summaries)
-      for (const i of o.imports) imports.add(i)
-      for (const [label, prop] of o.props) {
-        body.push(`abbrev ${ident(m.fn)}.obligation.${label} : Prop :=\n  ${prop}`)
-        refs.push({ m, label, lean: `${parts.join(".")}.${m.fn}` })
-      }
-      hashes.set(qualified(m), specHash(pkg, src, m))
-    })
-    const text =
-      [...imports]
-        .toSorted()
-        .map((i) => `import ${i}\n`)
-        .join("") + `\nnamespace ${ns}\n\n${body.join("\n\n")}\n\nend ${ns}\n`
-    const file = moduleFileOf(ws, parts)
-    mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, text)
-    modelModules.push(ns)
-  }
-  writeFileSync(
-    join(ws, "LeanTsModel.lean"),
-    modelModules.map((m) => `import ${m}\n`).join("") || "\n",
-  )
-  const proofModules = leanFiles(join(ws, "Proofs")).map((p) =>
-    relative(ws, p)
-      .replace(/\.lean$/u, "")
-      .split(sep)
-      .map((c) => (/^[A-Za-z_][A-Za-z0-9_]*$/u.test(c) ? c : `«${c}»`))
-      .join("."),
-  )
-  writeFileSync(join(ws, "Proofs.lean"), proofModules.map((m) => `import ${m}\n`).join(""))
-  const lake = process.env["LAKE"] ?? "lake"
-  const built = run(lake, ["build", "LeanTsLib", "LeanTsModel"], ws)
-  if (built.status !== 0) {
-    log(built.stdout + built.stderr)
-    throw new SyncError("lake build of the translated functions failed", 254)
-  }
-  const failedText: string[] = []
-  const okProofs: string[] = []
-  for (const m of proofModules) {
-    const r = run(lake, ["build", m], ws)
-    if (r.status === 0) {
-      okProofs.push(m)
-      continue
-    }
-    failedText.push(
-      readFileSync(join(ws, `${m.replaceAll(/[«»]/gu, "").split(".").join("/")}.lean`), "utf8"),
-    )
-    for (const line of (r.stdout + r.stderr).split("\n"))
-      if (/^(error:|  |⊢|case )/u.test(line) || line.includes(": error")) log(`leanfran: ${line}`)
-  }
-  const oblFile = join(ws, "obligations.json")
-  writeFileSync(oblFile, JSON.stringify(refs.map((r) => ({ model: r.lean, label: r.label }))))
-  let results: unknown[] = []
-  if (refs.length !== 0) {
-    const r = run(cli, [
-      ...TYPESCRIPT_LANG,
-      "obligations",
-      "check",
-      "--search-path",
-      join(ws, ".lake", "build", "lib", "lean"),
-      "--obligations",
-      oblFile,
-      "--modules",
-      ...modelModules.map((m) => m.replaceAll(/[«»]/gu, "")),
-      ...okProofs.map((m) => m.replaceAll(/[«»]/gu, "")),
-    ])
-    if (r.status !== 0) {
-      log(r.stderr)
-      throw new SyncError("leanfran --lang typescript obligations check failed", r.status)
-    }
-    const parsed: unknown = JSON.parse(r.stdout)
-    if (!Array.isArray(parsed) || parsed.length !== refs.length)
-      throw new SyncError(
-        "leanfran --lang typescript obligations check returned an unexpected result",
-        255,
-      )
-    results = parsed
-  }
-  const lock: Record<
-    string,
-    { spec_hash: string; lean: string; obligations: Record<string, Status>; csimp?: Csimp }
-  > = {}
-  const rows: Row[] = []
-  refs.forEach((ref, k) => {
-    const res = results[k]
-    const raw = isRecord(res) ? res["status"] : undefined
-    if (!isStatus(raw))
-      throw new SyncError(
-        `leanfran --lang typescript obligations check returned no status for ${ref.lean} ${ref.label}`,
-        255,
-      )
-    let status: Status = raw
-    if (
-      status === "missing" &&
-      failedText.some((t) => t.includes(`${ref.m.fn}.proof.${ref.label}`))
-    )
-      status = "failed"
-    if (isRecord(res) && typeof res["detail"] === "string" && status === "mismatch")
-      log(`leanfran: ${res["detail"]}`)
-    const q = qualified(ref.m)
-    const entry = lock[q] ?? { spec_hash: hashes.get(q) ?? "", lean: ref.lean, obligations: {} }
-    entry.obligations[ref.label] = status
-    const cand = candidates.get(q)
-    if (ref.label === "refines" && status === "proved" && cand !== undefined) entry.csimp = cand
-    lock[q] = entry
-    rows.push({ fn: q, label: ref.label, status })
-  })
-  const sorted = Object.fromEntries(Object.entries(lock).toSorted(([a], [b]) => a.localeCompare(b)))
-  writeFileSync(lockFile(pkg.root), JSON.stringify(sorted, null, 2) + "\n")
-  if (canonicalJson(Object.fromEntries(csimpFiles(pkg))) !== before)
-    await syncPackage(dir, cli, log, csimpFiles)
-  return { rows, lock: sorted }
-}
-
 function modeOf(t: TsType): "n" | "_" | "mixed" {
   const kinds = new Set<string>()
   const walk = (x: TsType): void => {
@@ -903,56 +599,255 @@ function modeOf(t: TsType): "n" | "_" | "mixed" {
   return kinds.has("num") ? "n" : "_"
 }
 
-export function csimpFiles(pkg: Package): Map<string, string> {
-  const lock = readLock(pkg.root)
-  const out = new Map<string, string>()
-  for (const src of readSources(pkg.root)) {
-    const parts = ["LeanTsCsimp", ...moduleParts(src.module)]
-    const ns = leanName(parts)
-    const imports = new Set<string>()
-    const defs: string[] = []
-    for (const m of src.models) {
-      const e = lock[qualified(m)]
-      if (e?.csimp === undefined || e.obligations["refines"] !== "proved") continue
-      if (e.spec_hash !== specHash(pkg, src, m)) continue
-      imports.add(e.csimp.module)
-      const target = `ts:${m.module}#${m.fn}(${e.csimp.modes.join(",")})`
-      defs.push(
-        `@[extern ${JSON.stringify(target)}]\ndef ${ident(m.fn)} := @_root_.${e.csimp.spec}\n\n@[csimp] theorem ${ident(m.fn)}.csimp : @_root_.${e.csimp.spec} = @${ident(m.fn)} := rfl`,
-      )
-    }
-    if (defs.length === 0) continue
-    out.set(
-      `${parts.join("/")}.lean`,
-      [...imports]
-        .toSorted()
-        .map((i) => `import ${i}\n`)
-        .join("") + `\nnamespace ${ns}\n\n${defs.join("\n\n")}\n\nend ${ns}\n`,
-    )
-  }
-  return out
+export interface SourceError {
+  readonly file: string
+  readonly line: number
+  readonly column: number
+  readonly message: string
 }
 
-export function statusModels(pkg: Package): Row[] {
-  const lock = readLock(pkg.root)
-  const rows: Row[] = []
-  for (const src of readSources(pkg.root)) {
-    for (const m of src.models) {
-      const q = qualified(m)
-      const entry = lock[q]
-      const types = typeResolver(pkg, src, undefined, undefined)
-      const fn = new Fn(m.fn, m.fnNode, src, types)
-      const labels = [
-        ...(m.refines === undefined ? [] : ["refines"]),
-        ...m.ensures.map(([l]) => l),
-        ...(fn.retNat ? ["returnsNat"] : []),
-      ]
-      const stale = entry === undefined || entry.spec_hash !== specHash(pkg, src, m)
-      for (const label of labels) {
-        const st = entry?.obligations[label]
-        rows.push({ fn: q, label, status: stale || st === undefined ? "stale" : st })
+export interface ScannedFunction {
+  readonly id: string
+  readonly labels: readonly string[]
+  readonly hash: string
+  readonly origin: { readonly file: string; readonly line: number; readonly column: number }
+  readonly data: Json
+}
+
+export interface ModelModuleOut {
+  readonly module: string
+  readonly path: string
+  readonly text: string
+  readonly functions: readonly string[]
+}
+
+export interface TranslatedFunction {
+  readonly id: string
+  readonly model: string
+  readonly dependencies: readonly string[]
+  readonly error?: SourceError
+  readonly data: Json
+}
+
+export interface Translation {
+  readonly modules: readonly ModelModuleOut[]
+  readonly aggregates: readonly Omit<ModelModuleOut, "functions">[]
+  readonly functions: readonly TranslatedFunction[]
+}
+
+function originOf(root: string, src: Source, offset: number): ScannedFunction["origin"] {
+  const m = /^(.*):(\d+):(\d+)$/u.exec(src.where(offset))
+  return {
+    file: posixRelative(root, src.file),
+    line: Number(m?.[2] ?? 1),
+    column: Number(m?.[3] ?? 1),
+  }
+}
+
+export function errorOf(
+  root: string,
+  e: unknown,
+  fallback: ScannedFunction["origin"],
+  fn?: string,
+): SourceError {
+  const text = e instanceof Error ? e.message : String(e)
+  const m = /^(.+?):(\d+):(\d+): ([\s\S]*)$/u.exec(text)
+  const strip = (msg: string): string =>
+    fn !== undefined && msg.startsWith(`${fn}: `) ? msg.slice(fn.length + 2) : msg
+  if (m === null) return { ...fallback, message: strip(text) }
+  const file = m[1] ?? ""
+  return {
+    file: file.startsWith("/") ? posixRelative(root, file) : file,
+    line: Number(m[2]),
+    column: Number(m[3]),
+    message: strip(m[4] ?? ""),
+  }
+}
+
+function labelsOf(pkg: Package, src: Source, m: ModelCall): string[] {
+  let retNat = false
+  try {
+    retNat = new Fn(m.fn, m.fnNode, src, typeResolver(pkg, src, undefined, undefined)).retNat
+  } catch (e) {
+    if (!(e instanceof ProjectError)) throw e
+  }
+  return [
+    ...(m.refines === undefined ? [] : ["refines"]),
+    ...m.ensures.map(([l]) => l),
+    ...(retNat ? ["returnsNat"] : []),
+  ]
+}
+
+export function scanFunctions(
+  pkg: Package,
+): { readonly functions: readonly ScannedFunction[] } | { readonly error: SourceError } {
+  try {
+    const out: ScannedFunction[] = []
+    for (const src of readSources(pkg.root)) {
+      const seen = new Set<string>()
+      for (const m of src.models) {
+        if (seen.has(m.fn))
+          throw new ProjectError(`${src.where(m.at)}: ${m.fn} has two model(...) calls`, 254)
+        seen.add(m.fn)
+        out.push({
+          id: qualified(m),
+          labels: labelsOf(pkg, src, m),
+          hash: specHash(pkg, src, m),
+          origin: originOf(pkg.root, src, m.fnNode.start),
+          data: {},
+        })
       }
     }
+    return { functions: out }
+  } catch (e) {
+    if (!(e instanceof ProjectError)) throw e
+    return { error: errorOf(pkg.root, e, { file: "", line: 0, column: 0 }) }
   }
-  return rows
+}
+
+function calls(node: unknown, names: ReadonlySet<string>, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const x of node) calls(x, names, out)
+    return
+  }
+  if (!isRecord(node)) return
+  const callee = node["callee"]
+  if (
+    node["type"] === "CallExpression" &&
+    isRecord(callee) &&
+    callee["type"] === "Identifier" &&
+    typeof callee["name"] === "string" &&
+    names.has(callee["name"])
+  )
+    out.add(callee["name"])
+  for (const v of Object.values(node)) if (typeof v === "object" && v !== null) calls(v, names, out)
+}
+
+export function translatePackage(
+  pkg: Package,
+  summaries: ReadonlyMap<string, Summary>,
+): Translation {
+  const sources = readSources(pkg.root).filter((s) => s.models.length !== 0)
+  const descs = loadDescs(pkg, sources)
+  const modules: ModelModuleOut[] = []
+  const functions: TranslatedFunction[] = []
+  for (const src of sources) {
+    const types = typeResolver(pkg, src, summaries, descs)
+    const parts = modelModule(src.module)
+    const ns = leanName(parts)
+    const failures = new Map<string, SourceError>()
+    const fail = (m: ModelCall, e: unknown): void => {
+      if (!(e instanceof ProjectError)) throw e
+      failures.set(m.fn, errorOf(pkg.root, e, originOf(pkg.root, src, m.fnNode.start), m.fn))
+    }
+    let fns: { readonly m: ModelCall; readonly fn: Fn }[] = []
+    for (const m of src.models) {
+      try {
+        fns.push({ m, fn: new Fn(m.fn, m.fnNode, src, types) })
+      } catch (e) {
+        fail(m, e)
+      }
+    }
+    let defs = new Map<string, string>()
+    for (;;) {
+      const tr = new Translator(
+        fns.map((x) => x.fn),
+        types,
+      )
+      const bad: [ModelCall, unknown][] = []
+      for (let round = 0; round <= fns.length + 1; round++) {
+        const before = fns.map((x) => x.fn.fails).join()
+        defs = new Map()
+        bad.length = 0
+        for (const x of fns) {
+          try {
+            defs.set(x.m.fn, tr.definition(x.fn))
+          } catch (e) {
+            bad.push([x.m, e])
+          }
+        }
+        if (bad.length !== 0 || fns.map((x) => x.fn.fails).join() === before) break
+      }
+      if (bad.length === 0) break
+      for (const [m, e] of bad) fail(m, e)
+      fns = fns.filter((x) => !failures.has(x.m.fn))
+    }
+    const imports = new Set(["LeanTsLib"])
+    for (const i of src.imports.values()) {
+      const b = blockOf(pkg, i.from)
+      if (b !== undefined) imports.add(leanName(b.leanModule))
+    }
+    const names = new Set(fns.map((x) => x.m.fn))
+    const body: string[] = []
+    const ids: string[] = []
+    for (const { m, fn } of fns) {
+      let o: ReturnType<typeof obligations>
+      let csimp: Json = {}
+      const modes = fn.params.map((p) => modeOf(p.type))
+      try {
+        o = obligations(m, fn, pkg, src, summaries)
+        if (m.refines !== undefined && m.requires === undefined && !modes.includes("mixed")) {
+          const n = specName(pkg, src, m.refines, summaries)
+          const csimpParts = ["LeanTsCsimp", ...moduleParts(src.module)]
+          csimp = {
+            csimp: {
+              spec: n.lean,
+              module: n.module,
+              modes,
+              path: `${csimpParts.join("/")}.lean`,
+              namespace: leanName(csimpParts),
+              name: ident(m.fn),
+            },
+          }
+        }
+      } catch (e) {
+        fail(m, e)
+        continue
+      }
+      const target = `ts:${m.module}#${m.fn}(${modes.map((x) => (x === "mixed" ? "_" : x)).join(",")})`
+      body.push(
+        `/-- \`${m.module}\` ${m.fn}, translated from TypeScript. -/\n@[extern ${JSON.stringify(target)}]\n${defs.get(m.fn) ?? ""}`,
+      )
+      for (const i of o.imports) imports.add(i)
+      for (const [label, prop] of o.props)
+        body.push(`abbrev ${ident(m.fn)}.obligation.${label} : Prop :=\n  ${prop}`)
+      const called = new Set<string>()
+      calls(m.fnNode.body, names, called)
+      called.delete(m.fn)
+      functions.push({
+        id: qualified(m),
+        model: `${parts.join(".")}.${m.fn}`,
+        dependencies: [...called].toSorted().map((f) => `${m.module}:${f}`),
+        data: csimp,
+      })
+      ids.push(qualified(m))
+    }
+    for (const m of src.models) {
+      const error = failures.get(m.fn)
+      if (error !== undefined)
+        functions.push({ id: qualified(m), model: "", dependencies: [], error, data: {} })
+    }
+    if (ids.length === 0) continue
+    modules.push({
+      module: parts.join("."),
+      path: `${parts.join("/")}.lean`,
+      text:
+        [...imports]
+          .toSorted()
+          .map((i) => `import ${i}\n`)
+          .join("") + `\nnamespace ${ns}\n\n${body.join("\n\n")}\n\nend ${ns}\n`,
+      functions: ids,
+    })
+  }
+  const aggregates =
+    modules.length === 0
+      ? []
+      : [
+          {
+            module: "LeanTsModel",
+            path: "LeanTsModel.lean",
+            text: modules.map((m) => `import ${m.module}\n`).join(""),
+          },
+        ]
+  return { modules, aggregates, functions }
 }

@@ -8,7 +8,7 @@ import type {
   Statement,
   TSType,
 } from "oxc-parser"
-import { SyncError } from "../scan.ts"
+import { ProjectError } from "../scan.ts"
 
 export interface FieldType {
   readonly key: string
@@ -55,7 +55,7 @@ export const BIG: TsType = { k: "big" }
 export const BOOL: TsType = { k: "bool" }
 export const STR: TsType = { k: "str" }
 
-export class TranslateError extends SyncError {
+export class TranslateError extends ProjectError {
   constructor(message: string) {
     super(message, 254)
     this.name = "TranslateError"

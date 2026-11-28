@@ -1,10 +1,39 @@
 {
-  "src/dist.ts:distance": {
-    "spec_hash": "76cc7726c29f4252b3bfd11c1d7b42d435f517c4b12c59db678b12a1ccc579f6",
-    "lean": "LeanTsModel.dist.distance",
-    "obligations": {
-      "nonneg": "proved",
-      "symmetric": "proved"
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "typescript": {
+      "inputs": {
+        "compiler": "10/4.35.0",
+        "library": "527b379bb13b7cb7c7cb60333adeb1280bc6e804161bf8247d00e1f0590f881e",
+        "host": "",
+        "proofs": "ba37deed0399a7dcfd0c034c482f4611446ed2421745b212dae0f01706ae6129"
+      },
+      "functions": [
+        {
+          "id": "src/dist.ts:distance",
+          "hash": "76cc7726c29f4252b3bfd11c1d7b42d435f517c4b12c59db678b12a1ccc579f6",
+          "model": "LeanTsModel.dist.distance",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "nonneg",
+              "status": "proved",
+              "axioms": ["Quot.sound", "propext"],
+              "file": "lean/Proofs/Dist.lean",
+              "line": 5
+            },
+            {
+              "label": "symmetric",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Dist.lean",
+              "line": 10
+            }
+          ],
+          "data": {}
+        }
+      ]
     }
   }
 }

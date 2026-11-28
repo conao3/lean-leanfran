@@ -1,0 +1,27 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "typescript": {
+      "compiler": "10/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "8f8cf623cd3a043feebefec3e75ed1b0a688f8a5d93c0ac7e01644f33a284810",
+      "blocks": [
+        {
+          "name": "src/sort.ts:spec",
+          "source": "src/sort.ts",
+          "hash": "d1f594355d1b72f71e5f40a211768fefc2fa622b4b80c7a03756df3adaf61739",
+          "files": ["src/_lean/sort.ts", "src/_lean/sort__spec.ts"]
+        },
+        {
+          "name": "src/sum.ts:sums",
+          "source": "src/sum.ts",
+          "hash": "7fc05783cb9f5aa28cb817b556be0fd532425e888d16afbc765f6f2dc95da3f4",
+          "files": ["src/_lean/sum.ts", "src/_lean/sum__sums.block.ts", "src/_lean/sum__sums.ts"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

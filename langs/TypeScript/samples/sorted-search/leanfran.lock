@@ -1,9 +1,32 @@
 {
-  "src/search.ts:sortedIncludes": {
-    "spec_hash": "d17fa076a9b16f9c11c49af590f10b3a3a85320225ac25687c729477194f383f",
-    "lean": "LeanTsModel.search.sortedIncludes",
-    "obligations": {
-      "refines": "proved"
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "typescript": {
+      "inputs": {
+        "compiler": "10/4.35.0",
+        "library": "527b379bb13b7cb7c7cb60333adeb1280bc6e804161bf8247d00e1f0590f881e",
+        "host": "",
+        "proofs": "f50504f342a39258a9f11c9d6717efe79836c7c02177497207027d5a76558923"
+      },
+      "functions": [
+        {
+          "id": "src/search.ts:sortedIncludes",
+          "hash": "d17fa076a9b16f9c11c49af590f10b3a3a85320225ac25687c729477194f383f",
+          "model": "LeanTsModel.search.sortedIncludes",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Search.lean",
+              "line": 5
+            }
+          ],
+          "data": {}
+        }
+      ]
     }
   }
 }

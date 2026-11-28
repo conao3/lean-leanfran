@@ -146,6 +146,7 @@
                   ./langs/Python/src/leanfran/lean/LeanPythonLib
                   ./langs/TypeScript/LeanTs.lean
                   ./langs/TypeScript/LeanTs
+                  ./langs/TypeScript/src/lean/LeanTsLib
                   ./langs/Clojure/LeanClj.lean
                   ./langs/Clojure/LeanClj
                   ./langs/PHP/LeanPhp.lean

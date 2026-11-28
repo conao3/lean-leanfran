@@ -20,7 +20,7 @@
 /langs/TypeScript/node_modules
 /langs/TypeScript/dist
 /langs/TypeScript/test-out
-/langs/TypeScript/**/.leanfran/workspace/
+/langs/TypeScript/**/.leanfran/
 /langs/TypeScript/test/embed/app/node_modules
 /langs/TypeScript/test/verify/app/node_modules
 /langs/TypeScript/samples/**/node_modules

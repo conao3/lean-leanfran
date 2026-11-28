@@ -11,7 +11,7 @@ import {
 } from "node:fs"
 import { delimiter, dirname, join, relative, resolve } from "node:path"
 import { beforeAll, describe, expect, test } from "vite-plus/test"
-import { GENERATOR_VERSION } from "../src/embed.ts"
+import { GENERATOR_VERSION, LEAN_VERSION } from "../src/embed.ts"
 
 const ROOT = resolve(import.meta.dirname, "..")
 const LEANFRAN_CLI = join(ROOT, "../../.lake/build/bin/leanfran")
@@ -45,7 +45,10 @@ function copyProject(from: string, name: string): string {
   rmSync(dir, { recursive: true, force: true })
   cpSync(from, dir, {
     recursive: true,
-    filter: (src) => !src.includes("/.leanfran/workspace") && !src.includes("/node_modules"),
+    filter: (src) =>
+      !src.includes("/.leanfran/typescript") &&
+      !src.endsWith("/.leanfran/lock") &&
+      !src.includes("/node_modules"),
   })
   mkdirSync(join(dir, "node_modules"), { recursive: true })
   symlinkSync(relative(join(dir, "node_modules"), ROOT), join(dir, "node_modules/leanfran"))
@@ -80,7 +83,7 @@ function generatedFiles(dir: string): Map<string, string> {
     }
   }
   walk(join(dir, "src"))
-  out.set(".leanfran/blocks.json", readFileSync(join(dir, ".leanfran/blocks.json"), "utf8"))
+  out.set("leanfran.manifest.json", readFileSync(join(dir, "leanfran.manifest.json"), "utf8"))
   return out
 }
 
@@ -131,13 +134,17 @@ beforeAll(() => {
   rmSync(NODE_ONLY, { recursive: true, force: true })
   mkdirSync(NODE_ONLY)
   symlinkSync(process.execPath, join(NODE_ONLY, "node"))
+  for (const cmd of ["sha256sum", "shasum"]) {
+    const found = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" }).stdout.trim()
+    if (found !== "") symlinkSync(found, join(NODE_ONLY, cmd))
+  }
   app = copyProject(FIXTURE, "app")
   appSync = leanTs(["sync", "--package", app], ROOT, { LEANFRAN_CLI: "unused" })
 }, TIMEOUT)
 
 describe("leanfran --lang typescript sync", () => {
   test("checks the proofs and generates modules whose functions run", () => {
-    expect(appSync.stderr).toContain("6 blocks of")
+    expect(appSync.stderr).toContain("6 blocks checked and generated")
     expect(appSync.status).toBe(0)
     const r = run(process.execPath, ["--test", "--test-reporter=tap", "test/"], app)
     expect(r.stdout).toContain("# pass 5")
@@ -150,7 +157,10 @@ describe("leanfran --lang typescript sync", () => {
 
   test("a block shares the types of the block it uses", () => {
     expect(
-      readFileSync(join(app, ".leanfran/workspace/LeanTsEmbed/report/report.lean"), "utf8"),
+      readFileSync(
+        join(app, ".leanfran/typescript/workspace/LeanTsEmbed/report/report.lean"),
+        "utf8",
+      ),
     ).toContain(
       "import LeanTsEmbed.«geometry».«geometry»\n\nnamespace LeanTsEmbed.«report».«report»\nopen LeanTsEmbed.«geometry».«geometry»\n",
     )
@@ -161,7 +171,10 @@ describe("leanfran --lang typescript sync", () => {
   })
 
   test("a model becomes a Lean structure whose constraints are proof fields", () => {
-    const models = readFileSync(join(app, ".leanfran/workspace/LeanTsModels/pricing.lean"), "utf8")
+    const models = readFileSync(
+      join(app, ".leanfran/typescript/workspace/LeanTsModels/pricing.lean"),
+      "utf8",
+    )
     expect(models).toContain(
       "structure LineItem where\n  kind : LeanTsEnums.«pricing».LineItem_kind\n  note? : Option String\n  qty : Nat\n  qty_ge : 1 ≤ qty\n",
     )
@@ -170,7 +183,10 @@ describe("leanfran --lang typescript sync", () => {
     )
     expect(models).toContain("structure Order where\n  buyer : String\n  item : LineItem\n")
     expect(
-      readFileSync(join(app, ".leanfran/workspace/LeanTsEmbed/pricing/pricing.lean"), "utf8"),
+      readFileSync(
+        join(app, ".leanfran/typescript/workspace/LeanTsEmbed/pricing/pricing.lean"),
+        "utf8",
+      ),
     ).toContain(
       "import LeanTsModels.«pricing»\n\nnamespace LeanTsEmbed.«pricing».«pricing»\nopen LeanTsModels.«pricing»\n",
     )
@@ -200,7 +216,7 @@ describe("leanfran --lang typescript sync", () => {
         "{ models: { LineItem: z.object({}) },",
       )
       const inline = sync(named)
-      expect(inline.status).toBe(252)
+      expect(inline.status).toBe(254)
       expect(inline.stderr).toContain(
         "the model LineItem must be an exported variable of the module",
       )
@@ -217,21 +233,38 @@ describe("leanfran --lang typescript sync", () => {
       const r = sync(dir)
       expect(r.status).toBe(254)
       expect(r.stderr).toContain(
-        `${file}:10:18: error: (lean block arith, Lean 5:17) Tactic \`rfl\` failed`,
+        `${relative(ROOT, file)}:10:18: error: (lean block src/arith.ts:arith, Lean 5:17) Tactic \`rfl\` failed`,
       )
     },
     TIMEOUT,
   )
 
-  test("a block with an unknown use stops with 252", () => {
+  test(
+    "a Lean error after an escape of a template literal is at its UTF-16 column",
+    () => {
+      const dir = copyProject(FIXTURE, "escape")
+      writeFileSync(
+        join(dir, "src/escape.ts"),
+        'import { lean } from "leanfran"\n\nexport const escapeBlock = lean(\n  "accent",\n  `\ndef accent : String := "\\u00e9𝔸" ++ missing\n`,\n)\n',
+      )
+      const r = sync(dir)
+      expect(r.status).toBe(254)
+      expect(r.stderr).toContain(
+        `${relative(ROOT, join(dir, "src/escape.ts"))}:6:38: error: (lean block src/escape.ts:accent, Lean 2:31)`,
+      )
+    },
+    TIMEOUT,
+  )
+
+  test("a block with an unknown use stops with 254", () => {
     const dir = copyProject(FIXTURE, "unknown-use")
     edit(join(dir, "src/report.ts"), "./geometry.ts:geometry", "./geometry.ts:shapes")
     const r = sync(dir)
-    expect(r.status).toBe(252)
+    expect(r.status).toBe(254)
     expect(r.stderr).toContain('uses "./geometry.ts:shapes", which is not a block of the package')
   })
 
-  test("a source that is not a literal stops with 252", () => {
+  test("a source that is not a literal stops with 254", () => {
     const dir = copyProject(FIXTURE, "dynamic-source")
     edit(
       join(dir, "src/arith.ts"),
@@ -239,7 +272,7 @@ describe("leanfran --lang typescript sync", () => {
       'lean(\n  "arith",\n  String.raw`${"x"}',
     )
     const r = sync(dir)
-    expect(r.status).toBe(252)
+    expect(r.status).toBe(254)
     expect(r.stderr).toContain(
       `${join(dir, "src/arith.ts")}:6:3: the Lean source of lean(...) must be a template literal`,
     )
@@ -268,18 +301,8 @@ describe("stale blocks", () => {
       expect(r.status).not.toBe(0)
       expect(r.stderr).toContain('LeanBlockStale: the Lean block "arith" is stale')
       const s = leanTs(["status", "--package", dir], ROOT, { PATH: NODE_ONLY })
-      expect(s.stdout).toBe(
-        [
-          "stale   src/arith.ts:arith",
-          "fresh   src/geometry.ts:geometry",
-          "fresh   src/pricing.ts:pricing",
-          "fresh   src/report.ts:report",
-          "fresh   src/text.ts:greeting",
-          "fresh   src/text.ts:words",
-          "",
-        ].join("\n"),
-      )
-      expect(s.status).toBe(254)
+      expect(s.stdout).toBe("src/arith.ts:arith: stale\n")
+      expect(s.status).toBe(1)
       expect(leanTs(["status", "--package", app], ROOT, { PATH: NODE_ONLY }).status).toBe(0)
     },
     TIMEOUT,
@@ -313,7 +336,7 @@ describe("stale blocks", () => {
       writeFileSync(join(dir, "src/schemas.ts"), SCHEMAS)
       writeFileSync(join(dir, "src/priced.ts"), PRICED)
       const r = sync(dir)
-      expect(r.stderr).toContain("7 blocks of")
+      expect(r.stderr).toContain("7 blocks checked and generated")
       expect(r.status).toBe(0)
       const ok = nodeEval(
         dir,
@@ -322,12 +345,12 @@ describe("stale blocks", () => {
       expect(ok.stdout).toBe("5 true\n")
       expect(ok.status).toBe(0)
       edit(join(dir, "src/schemas.ts"), "schema(1)", "schema(2)")
-      expect(leanTs(["status", "--package", dir]).stdout).toContain("stale   src/priced.ts:priced")
+      expect(leanTs(["status", "--package", dir]).stdout).toContain("src/priced.ts:priced: stale")
       const stale = nodeEval(dir, 'await import("./src/priced.ts")')
       expect(stale.stderr).toContain('LeanBlockStale: the Lean block "priced" is stale')
       edit(join(dir, "src/schemas.ts"), "schema(2)", "schema(1)")
       edit(join(dir, "src/priced.ts"), 'tagKey: "kind"', 'tagKey: "type"')
-      expect(leanTs(["status", "--package", dir]).stdout).toContain("stale   src/priced.ts:priced")
+      expect(leanTs(["status", "--package", dir]).stdout).toContain("src/priced.ts:priced: stale")
       edit(join(dir, "src/priced.ts"), 'tagKey: "type"', 'tagKey: "kind"')
       const pkg = join(dir, "package.json")
       expect(leanTs(["status", "--package", dir]).status).toBe(0)
@@ -338,7 +361,7 @@ describe("stale blocks", () => {
           leanfran: { option: "undefined" },
         }),
       )
-      expect(leanTs(["status", "--package", dir]).stdout).toContain("stale   src/arith.ts:arith")
+      expect(leanTs(["status", "--package", dir]).stdout).toContain("src/arith.ts:arith: stale")
       const pkgStale = nodeEval(dir, 'await import("./src/arith.ts")')
       expect(pkgStale.stderr).toContain(
         'LeanBlockStale: the Lean block "arith" is stale (the leanfran settings of its package.json changed since `leanfran --lang typescript sync` generated it)',
@@ -392,6 +415,32 @@ describe("versions", () => {
     expect(run(LEANFRAN_CLI, ["--lang", "typescript", "--generator-version"], ROOT).stdout).toBe(
       `${GENERATOR_VERSION}\n`,
     )
+  })
+
+  test("LEAN_VERSION is the Lean version of lean-toolchain", () => {
+    expect(readFileSync(join(ROOT, "../../lean-toolchain"), "utf8")).toBe(
+      `leanprover/lean4:v${LEAN_VERSION}\n`,
+    )
+  })
+
+  test.each([
+    ["LEANFRAN_VERSION", "release version"],
+    ["LEANFRAN_GENERATOR_VERSION", "generator version"],
+    ["LEANFRAN_LEAN_VERSION", "Lean version"],
+  ])("a compiler whose %s differs from the npm package exits with 255", (variable, name) => {
+    const bin = join(OUT, `wrong-${variable}`)
+    rmSync(bin, { recursive: true, force: true })
+    mkdirSync(bin)
+    writeFileSync(
+      join(bin, "node"),
+      `#!/bin/sh\n${variable}=0.0.0 exec ${JSON.stringify(process.execPath)} "$@"\n`,
+      { mode: 0o755 },
+    )
+    const r = leanTs(["status", "--package", app], ROOT, {
+      PATH: [bin, NODE_ONLY].join(delimiter),
+    })
+    expect(r.stderr).toContain(`compiler ${name} "0.0.0", expected `)
+    expect(r.status).toBe(255)
   })
 
   test("leanfran --version is the package version", () => {
