@@ -31,6 +31,8 @@ lake env leanfran --lang c build --out-dir out
 
 Pass a comma-separated list of fully qualified declarations to `--roots`. Omit it to select supported public definitions declared in the module. The default prefix is the last component of the module name in snake case, such as `core` for `Pricing.Core`. Use the same output directory for generation and build. `generate` writes `<prefix>.h`, `<prefix>.c`, `leanfran.h`, `leanfran.c`, `leanfran.json`, the Lean export module under `LeanfranExport/`, and the JSON runtime under `LeanfranC/`, which `build` compiles, together with `<prefix>.externs.txt`, `<prefix>.implemented-by.txt`, and `<prefix>.schema.json`, described in [Generation checks](#generation-checks) and [Validation and JSON](#validation-and-json).
 
+To generate several modules with one command, list them in a `[[generate]]` table with `lang = "c"` in `leanfran.toml` and run `leanfran generate`. It runs `generate` for each module with its own prefix and output directory. See the [generation guide](generate-guide.md) for the table keys, prefixes, and output directories.
+
 Save this consumer as `main.c` in the Lake workspace.
 
 ```c
