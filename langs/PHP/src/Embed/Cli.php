@@ -47,7 +47,10 @@ final class Cli
                 json_decode((string) stream_get_contents(STDIN), flags: JSON_THROW_ON_ERROR);
                 $result = Check::run($root);
             }
-            fwrite(STDOUT, json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+            fwrite(
+                STDOUT,
+                json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n",
+            );
             return 0;
         } catch (EnvironmentError $error) {
             fwrite(STDERR, $error->getMessage() . "\n");
@@ -69,26 +72,43 @@ final class Cli
             'translate' => ['--root'],
             default => null,
         };
-        if ($flags === null || count($args) !== 2 * count($flags)) {
+        if ($flags === null || count($args) !== (2 * count($flags))) {
             return null;
         }
         $options = [];
-        foreach (array_chunk($args, 2) as [$flag, $value]) {
-            if (!in_array($flag, $flags, true) || isset($options[$flag]) || $value === '') {
+        while ($args !== []) {
+            $flag = array_shift($args);
+            $value = array_shift($args);
+            if (!in_array($flag, $flags, true) || isset($options[$flag]) || $value === null || $value === '') {
                 return null;
             }
             $options[$flag] = $value;
         }
-        return $options['--root'];
+        return $options['--root'] ?? null;
     }
 
     private static function versions(): ?string
     {
         $install = sprintf(self::INSTALL, Lean::VERSION);
         foreach ([
-            ['LEANFRAN_VERSION', 'release version', Lean::VERSION, 'use a compiler from the release of conao3/leanfran or update conao3/leanfran to the release of the compiler'],
-            ['LEANFRAN_GENERATOR_VERSION', 'generator version', Lean::GENERATOR_VERSION, 'rebuild the compiler from the source revision of conao3/leanfran'],
-            ['LEANFRAN_LEAN_VERSION', 'Lean version', Lean::LEAN_VERSION, 'use a compiler built with the Lean version of the release of conao3/leanfran'],
+            [
+                'LEANFRAN_VERSION',
+                'release version',
+                Lean::VERSION,
+                'use a compiler from the release of conao3/leanfran or update conao3/leanfran to the release of the compiler',
+            ],
+            [
+                'LEANFRAN_GENERATOR_VERSION',
+                'generator version',
+                Lean::GENERATOR_VERSION,
+                'rebuild the compiler from the source revision of conao3/leanfran',
+            ],
+            [
+                'LEANFRAN_LEAN_VERSION',
+                'Lean version',
+                Lean::LEAN_VERSION,
+                'use a compiler built with the Lean version of the release of conao3/leanfran',
+            ],
         ] as [$variable, $name, $expected, $fix]) {
             $actual = getenv($variable);
             if ($actual === false || $actual === '') {

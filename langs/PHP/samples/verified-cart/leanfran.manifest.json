@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "php": {
+      "compiler": "7/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "App\\Cart",
+          "source": "src/Cart.php",
+          "hash": "cc69be9e0e6cde7dfebdd37f3cb2497c709952648e9178db536d4a56f4b5ae56",
+          "files": ["src/Cart/Functions.php", "src/Cart/Internal/LeanCart.php"]
+        }
+      ],
+      "files": []
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "format": "leanfran-lock",
+  "version": 2,
+  "languages": {
+    "php": {
+      "inputs": {
+        "compiler": "7/4.35.0",
+        "library": "58fd39a147692115a785968d9a7585874f39221bac84ed919006fbac32b7359b",
+        "host": "21fd59243e0fb47cc7f1590bb6b9139f9ee1ab0b6fd30e567de7d55ea030d34b",
+        "proofs": "76cd4edd77a5fc426df6a6ec0d6f44a8c5ee4a5c52b8c839a84c5f25dd2078c8"
+      },
+      "functions": [
+        {
+          "id": "App\\Cart\\total",
+          "hash": "957430278e5aba2cee5d5cb1c6a1fb7606a57b0912914b070a97645803a747cc",
+          "model": "LeanPhpModel.App.Cart.total",
+          "dependencies": [],
+          "obligations": [
+            {
+              "label": "refines",
+              "status": "proved",
+              "axioms": ["Classical.choice", "Quot.sound", "propext"],
+              "file": "lean/Proofs/Cart.lean",
+              "line": 46
+            }
+          ],
+          "data": {}
+        }
+      ]
+    }
+  }
+}

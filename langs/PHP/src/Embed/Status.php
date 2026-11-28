@@ -114,13 +114,12 @@ final class Status
             return null;
         }
         $data = json_decode((string) @file_get_contents($file));
-        return
-            $data instanceof stdClass
-            && ($data->format ?? null) === 'leanfran-php-embed'
-            && is_string($data->block ?? null)
-            && $data->block !== ''
-                ? $data->block
-                : null;
+        return $data instanceof stdClass
+        && ($data->format ?? null) === 'leanfran-php-embed'
+        && is_string($data->block ?? null)
+        && $data->block !== ''
+            ? $data->block
+            : null;
     }
 
     private static function facade(string $file): ?string

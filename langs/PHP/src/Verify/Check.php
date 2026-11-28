@@ -71,7 +71,9 @@ final class Check
     private static function error(Declaration $model, string $message): array
     {
         $prefix = $model->file . ':';
-        if (str_starts_with($message, $prefix) && preg_match('/^(\d+): (.*)$/sD', substr($message, strlen($prefix)), $m)) {
+        if (
+            str_starts_with($message, $prefix) && preg_match('/^(\d+): (.*)$/sD', substr($message, strlen($prefix)), $m)
+        ) {
             return ['file' => $model->file, 'line' => (int) $m[1], 'column' => 1, 'message' => $m[2]];
         }
         return ['file' => $model->file, 'line' => $model->node->getStartLine(), 'column' => 1, 'message' => $message];
@@ -138,7 +140,8 @@ final class Check
             foreach ($definition->dependencies as $child) {
                 $imports[] = $this->module($child);
             }
-            $translated[] = self::file($module, self::imports($imports) . "\n" . $definition->source) + [
+            $translated[] = self::file($module, self::imports($imports) . "\n" . $definition->source)
+            + [
                 'functions' => [$model->name],
             ];
             $block = $model->block;
@@ -214,7 +217,11 @@ final class Check
     /** @return array{module: string, path: string, text: string} */
     private static function file(string $name, string $text): array
     {
-        return ['module' => Translate::leanName($name), 'path' => 'verification/' . str_replace('.', '/', $name) . '.lean', 'text' => $text];
+        return [
+            'module' => Translate::leanName($name),
+            'path' => 'verification/' . str_replace('.', '/', $name) . '.lean',
+            'text' => $text,
+        ];
     }
 
     /** @param list<string> $modules */

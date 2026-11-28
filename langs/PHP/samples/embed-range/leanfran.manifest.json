@@ -1,0 +1,21 @@
+{
+  "format": "leanfran-manifest",
+  "version": 1,
+  "languages": {
+    "php": {
+      "compiler": "7/4.35.0",
+      "require": [],
+      "inputs": "",
+      "support": "",
+      "blocks": [
+        {
+          "name": "App\\Pricing",
+          "source": "src/Pricing.php",
+          "hash": "ba2d241a718e46e755b15b93051b48d65273eb6300e6734ae7e77f2d45db44a7",
+          "files": ["src/Pricing/Functions.php", "src/Pricing/Internal/LeanPricing.php", "src/Pricing/Range.php"]
+        }
+      ],
+      "files": []
+    }
+  }
+}
